@@ -5,6 +5,7 @@ services:
     ports:
     - "1883:1883"
     - "9001:9001"
+    restart: always
   nodered:
     build: nodered
     ports:
@@ -13,3 +14,4 @@ services:
     - broker
     volumes:
     - ./data/nodered:/data
+    restart: always
