@@ -1,1 +1,412 @@
-[{"id":"7f69ac0c.ea2e54","type":"tab","label":"Flow 1","disabled":false,"info":""},{"id":"1a2ea69e.012e49","type":"mqtt-broker","z":"","name":"broker","broker":"broker","port":"1883","clientid":"nodered","usetls":false,"compatmode":false,"keepalive":"60","cleansession":true,"birthTopic":"","birthQos":"0","birthPayload":"","closeTopic":"","closeQos":"0","closePayload":"","willTopic":"","willQos":"0","willPayload":""},{"id":"184db820.fcc528","type":"mqtt in","z":"7f69ac0c.ea2e54","name":"ard1_input","topic":"/homy/ard1/input","qos":"2","datatype":"json","broker":"1a2ea69e.012e49","x":210,"y":140,"wires":[["d1590503.656708","5c33237a.a6628c"]]},{"id":"357c5f83.e0f7b","type":"mqtt out","z":"7f69ac0c.ea2e54","name":"ard1_output","topic":"/homy/ard1/output","qos":"0","retain":"false","broker":"1a2ea69e.012e49","x":650,"y":140,"wires":[]},{"id":"16840608.add49a","type":"mqtt in","z":"7f69ac0c.ea2e54","name":"","topic":"/homy/ard1/status","qos":"2","datatype":"json","broker":"1a2ea69e.012e49","x":260,"y":240,"wires":[["d0a8b37f.6c691"]]},{"id":"d0a8b37f.6c691","type":"debug","z":"7f69ac0c.ea2e54","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"payload","targetType":"msg","x":480,"y":260,"wires":[]},{"id":"d1590503.656708","type":"function","z":"7f69ac0c.ea2e54","name":"toggle_outputs","func":"if (msg.payload.t === 'ic') {\n    switch (msg.payload.p) {\n        case 22:\n        case 30:\n        case 38:\n            return { payload: {pin: 14, value: msg.payload.v} }\n    }\n}\n","outputs":1,"noerr":0,"x":450,"y":140,"wires":[["357c5f83.e0f7b"]]},{"id":"5c33237a.a6628c","type":"debug","z":"7f69ac0c.ea2e54","name":"","active":false,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":420,"y":60,"wires":[]}]
+[
+    {
+        "id": "7f69ac0c.ea2e54",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "184db820.fcc528",
+        "type": "mqtt in",
+        "z": "7f69ac0c.ea2e54",
+        "name": "ard1_input",
+        "topic": "/homy/ard1/input",
+        "qos": "2",
+        "datatype": "json",
+        "broker": "1a2ea69e.012e49",
+        "x": 80,
+        "y": 260,
+        "wires": [
+            [
+                "f94543ec.c5dce",
+                "d1590503.656708"
+            ]
+        ]
+    },
+    {
+        "id": "357c5f83.e0f7b",
+        "type": "mqtt out",
+        "z": "7f69ac0c.ea2e54",
+        "name": "ard1_output",
+        "topic": "/homy/ard1/output",
+        "qos": "0",
+        "retain": "false",
+        "broker": "1a2ea69e.012e49",
+        "x": 1230,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "d1590503.656708",
+        "type": "function",
+        "z": "7f69ac0c.ea2e54",
+        "name": "TEST",
+        "func": "if (msg.payload.t === 'ic') {\n    const pin = msg.payload.p\n    const value = msg.payload.v\n    \n    switch (pin) {\n        case 22:\n        case 30:\n        case 38:\n            return { payload: {pin: 14, value: msg.payload.v} }\n    }\n}\n",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 430,
+        "y": 180,
+        "wires": [
+            [
+                "357c5f83.e0f7b"
+            ]
+        ]
+    },
+    {
+        "id": "1d8c052d.362f53",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "ON",
+        "topic": "",
+        "payload": "{\"pin\":21,\"value\":1}",
+        "payloadType": "json",
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "x": 90,
+        "y": 120,
+        "wires": [
+            [
+                "357c5f83.e0f7b"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "8c0cd068.fea0e8",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "OFF",
+        "topic": "",
+        "payload": "{\"pin\":21,\"value\":0}",
+        "payloadType": "json",
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "x": 90,
+        "y": 160,
+        "wires": [
+            [
+                "357c5f83.e0f7b"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "5e0006cb.1796b8",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "2531",
+        "property": "payload.p",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "43",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "42",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 390,
+        "y": 360,
+        "wires": [
+            [],
+            [
+                "6a60ea05.e37f44"
+            ]
+        ]
+    },
+    {
+        "id": "f94543ec.c5dce",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "input change",
+        "property": "payload.t",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "ic",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 110,
+        "y": 360,
+        "wires": [
+            [
+                "7d6bba2a.66a5f4"
+            ]
+        ]
+    },
+    {
+        "id": "7d6bba2a.66a5f4",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "onPress",
+        "property": "payload.v",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 260,
+        "y": 360,
+        "wires": [
+            [
+                "5e0006cb.1796b8",
+                "ba8a9bee.549488"
+            ]
+        ]
+    },
+    {
+        "id": "1c94edfa.cd9c62",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "2528",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "21",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1090,
+        "y": 360,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ]
+    },
+    {
+        "id": "4d713e7a.df6f5",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "TOGGLE",
+        "topic": "",
+        "payload": "{\"pin\":21,\"value\":-1}",
+        "payloadType": "json",
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "x": 100,
+        "y": 80,
+        "wires": [
+            [
+                "357c5f83.e0f7b"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "6a60ea05.e37f44",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 970,
+        "y": 360,
+        "wires": [
+            [
+                "1c94edfa.cd9c62"
+            ]
+        ]
+    },
+    {
+        "id": "bffab49.406b148",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "cleanup",
+        "rules": [
+            {
+                "t": "delete",
+                "p": "payload.p",
+                "pt": "msg"
+            },
+            {
+                "t": "delete",
+                "p": "payload.v",
+                "pt": "msg"
+            },
+            {
+                "t": "delete",
+                "p": "payload.t",
+                "pt": "msg"
+            },
+            {
+                "t": "delete",
+                "p": "payload.l",
+                "pt": "msg"
+            },
+            {
+                "t": "delete",
+                "p": "payload.i",
+                "pt": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1060,
+        "y": 100,
+        "wires": [
+            [
+                "357c5f83.e0f7b"
+            ]
+        ]
+    },
+    {
+        "id": "ba8a9bee.549488",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1202",
+        "property": "payload.p",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "45",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "44",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 390,
+        "y": 400,
+        "wires": [
+            [
+                "914cc6f7.11d748"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "31c292aa.3ec3be",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1200",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "20",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1090,
+        "y": 400,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ]
+    },
+    {
+        "id": "914cc6f7.11d748",
+        "type": "trigger",
+        "z": "7f69ac0c.ea2e54",
+        "op1": "{\"value\": 1}",
+        "op2": "{\"value\": 0}",
+        "op1type": "json",
+        "op2type": "json",
+        "duration": "50",
+        "extend": false,
+        "units": "ms",
+        "reset": "",
+        "bytopic": "all",
+        "name": "pulse",
+        "x": 970,
+        "y": 400,
+        "wires": [
+            [
+                "31c292aa.3ec3be"
+            ]
+        ]
+    },
+    {
+        "id": "f5496637.f23598",
+        "type": "comment",
+        "z": "7f69ac0c.ea2e54",
+        "name": "Нощна лампа Таня",
+        "info": "",
+        "x": 110,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "1a2ea69e.012e49",
+        "type": "mqtt-broker",
+        "z": "",
+        "name": "broker",
+        "broker": "broker",
+        "port": "1883",
+        "clientid": "nodered",
+        "usetls": false,
+        "compatmode": false,
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    }
+]
