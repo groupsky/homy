@@ -99,7 +99,7 @@
         "id": "5e0006cb.1796b8",
         "type": "switch",
         "z": "7f69ac0c.ea2e54",
-        "name": "2531",
+        "name": "2531 нощно ляво",
         "property": "payload.p",
         "propertyType": "msg",
         "rules": [
@@ -117,14 +117,21 @@
         "checkall": "true",
         "repair": false,
         "outputs": 2,
-        "x": 390,
+        "x": 430,
         "y": 360,
         "wires": [
-            [],
+            [
+                "29018208.31a26e"
+            ],
             [
                 "6a60ea05.e37f44"
             ]
-        ]
+        ],
+        "outputLabels": [
+            "ляв ключ",
+            "десен ключ"
+        ],
+        "icon": "font-awesome/fa-pause"
     },
     {
         "id": "f94543ec.c5dce",
@@ -173,7 +180,8 @@
         "wires": [
             [
                 "5e0006cb.1796b8",
-                "ba8a9bee.549488"
+                "ba8a9bee.549488",
+                "6204187a.fdcc48"
             ]
         ]
     },
@@ -181,7 +189,7 @@
         "id": "1c94edfa.cd9c62",
         "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "2528",
+        "name": "2528 нощна лява",
         "rules": [
             {
                 "t": "set",
@@ -196,13 +204,14 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 1090,
+        "x": 1130,
         "y": 360,
         "wires": [
             [
                 "bffab49.406b148"
             ]
-        ]
+        ],
+        "icon": "node-red/light.svg"
     },
     {
         "id": "4d713e7a.df6f5",
@@ -301,7 +310,7 @@
         "id": "ba8a9bee.549488",
         "type": "switch",
         "z": "7f69ac0c.ea2e54",
-        "name": "1202",
+        "name": "1202 кабинет",
         "property": "payload.p",
         "propertyType": "msg",
         "rules": [
@@ -319,20 +328,25 @@
         "checkall": "true",
         "repair": false,
         "outputs": 2,
-        "x": 390,
+        "x": 420,
         "y": 400,
         "wires": [
             [
                 "914cc6f7.11d748"
             ],
             []
-        ]
+        ],
+        "outputLabels": [
+            "ляв ключ",
+            "десен ключ"
+        ],
+        "icon": "font-awesome/fa-pause"
     },
     {
         "id": "31c292aa.3ec3be",
         "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "1200",
+        "name": "1200 кабинет",
         "rules": [
             {
                 "t": "set",
@@ -347,13 +361,14 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 1090,
+        "x": 1120,
         "y": 400,
         "wires": [
             [
                 "bffab49.406b148"
             ]
-        ]
+        ],
+        "icon": "node-red/light.svg"
     },
     {
         "id": "914cc6f7.11d748",
@@ -386,6 +401,142 @@
         "x": 110,
         "y": 40,
         "wires": []
+    },
+    {
+        "id": "2dcb7c15.ce5d04",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1100 баня 1",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "19",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1110,
+        "y": 440,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "88be9dab.000db",
+        "type": "trigger",
+        "z": "7f69ac0c.ea2e54",
+        "op1": "{\"value\": 1}",
+        "op2": "{\"value\": 0}",
+        "op1type": "json",
+        "op2type": "json",
+        "duration": "50",
+        "extend": false,
+        "units": "ms",
+        "reset": "",
+        "bytopic": "all",
+        "name": "pulse",
+        "x": 970,
+        "y": 440,
+        "wires": [
+            [
+                "2dcb7c15.ce5d04"
+            ]
+        ]
+    },
+    {
+        "id": "da3e1a29.f16fd8",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "2000 коридор 2",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "18",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1120,
+        "y": 480,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "29018208.31a26e",
+        "type": "trigger",
+        "z": "7f69ac0c.ea2e54",
+        "op1": "{\"value\": 1}",
+        "op2": "{\"value\": 0}",
+        "op1type": "json",
+        "op2type": "json",
+        "duration": "50",
+        "extend": false,
+        "units": "ms",
+        "reset": "",
+        "bytopic": "all",
+        "name": "pulse",
+        "x": 970,
+        "y": 480,
+        "wires": [
+            [
+                "da3e1a29.f16fd8"
+            ]
+        ]
+    },
+    {
+        "id": "6204187a.fdcc48",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1002 баня 1",
+        "property": "payload.p",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "39",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "38",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 410,
+        "y": 440,
+        "wires": [
+            [],
+            [
+                "88be9dab.000db"
+            ]
+        ],
+        "outputLabels": [
+            "ляв ключ",
+            "десен ключ"
+        ],
+        "icon": "font-awesome/fa-pause"
     },
     {
         "id": "1a2ea69e.012e49",
