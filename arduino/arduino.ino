@@ -41,6 +41,7 @@ char logTopic[] = "/homy/ard1/log";
 char publishTopic[] = "/homy/ard1/input";
 char statusTopic[] = "/homy/ard1/status";
 long statusInterval = 60000;
+long connectedInterval = 60000;
 
 // pin setup
 int peripheralPin = 12;
@@ -75,6 +76,7 @@ char lastInvertedOutputValues[sizeof(invertedOutputPins)/sizeof(invertedOutputPi
 long lastStatus = 0;
 long statusCnt = 0;
 boolean dhcp = false;
+long lastConnected = 0;
 
 #define STATE_INIT 0
 #define STATE_LINK_UP 1
@@ -345,6 +347,21 @@ void setup()
 
 void loop() {
   delay(10);
+
+  // restart ethernet if couldn't connect in some time
+  if (millis() - lastConnected > connectedInterval) {
+    Serial.print(" restarting periferials...");
+    delay(10);
+    digitalWrite(ethernetPin, LOW);
+    delay(1000);
+    digitalWrite(ethernetPin, HIGH);
+    delay(500);
+    Serial.println(" done");
+    delay(10);
+    state = STATE_INIT;
+    return;
+  }
+  
   if (Ethernet.linkStatus() != LinkON) {
     delay(10);
     Serial.print(" waiting for link...");
@@ -481,6 +498,7 @@ void loop() {
       };
     case STATE_ON:
       long now = millis();
+      lastConnected = millis();
       if (now - lastStatus > statusInterval) {
         pubStatus();
       }
