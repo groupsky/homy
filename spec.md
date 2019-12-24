@@ -1,4 +1,4 @@
-Arduino mega pins
+Arduino mega pins wiring
 
 0 - RX0
 1 - TX0
@@ -6,13 +6,13 @@ Arduino mega pins
 12 - PW Switch
 
 14 - OUT1 10A
-15 - OUT2 10A
-16 - OUT3 10A
-17 - OUT4 10A
-18 - OUT5 10A
-19 - OUT6 10A
-20 - OUT7 10A
-21 - OUT8 10A
+15 - OUT2 10A - hall
+16 - OUT3 10A - corridor 1
+17 - OUT4 10A - kitchen
+18 - OUT5 10A - corridor 2
+19 - OUT6 10A - bath 1
+20 - OUT7 10A - cabinet
+21 - OUT8 10A - master bed lamp left
 
 22 - IN RJ1A
 23 - IN RJ1B
@@ -35,7 +35,7 @@ Arduino mega pins
 40 - IN RJ10A
 41 - IN RJ10B
 42 - IN RJ11A
-43 - IN RJ12B
+43 - IN RJ11B
 44 - IN RJ12A
 45 - IN RJ12B
 
@@ -51,4 +51,4 @@ Arduino mega pins
 66 - A12 - OUT12 2A
 67 - A13 - OUT11 2A
 68 - A14 - OUT10 2A
-69 - A15 - OUT9 2A
+69 - A15 - OUT9 2A - living room
