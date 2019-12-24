@@ -99,7 +99,7 @@
         "id": "5e0006cb.1796b8",
         "type": "switch",
         "z": "7f69ac0c.ea2e54",
-        "name": "2531 нощно ляво",
+        "name": "2531 master bed left",
         "property": "payload.p",
         "propertyType": "msg",
         "rules": [
@@ -117,7 +117,7 @@
         "checkall": "true",
         "repair": false,
         "outputs": 2,
-        "x": 430,
+        "x": 440,
         "y": 360,
         "wires": [
             [
@@ -128,8 +128,8 @@
             ]
         ],
         "outputLabels": [
-            "ляв ключ",
-            "десен ключ"
+            "left button",
+            "right button"
         ],
         "icon": "font-awesome/fa-pause"
     },
@@ -189,7 +189,7 @@
         "id": "1c94edfa.cd9c62",
         "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "2528 нощна лява",
+        "name": "2528 master bed lamp left",
         "rules": [
             {
                 "t": "set",
@@ -204,7 +204,7 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 1130,
+        "x": 1150,
         "y": 360,
         "wires": [
             [
@@ -310,7 +310,7 @@
         "id": "ba8a9bee.549488",
         "type": "switch",
         "z": "7f69ac0c.ea2e54",
-        "name": "1202 кабинет",
+        "name": "1202 office",
         "property": "payload.p",
         "propertyType": "msg",
         "rules": [
@@ -328,17 +328,19 @@
         "checkall": "true",
         "repair": false,
         "outputs": 2,
-        "x": 420,
+        "x": 410,
         "y": 400,
         "wires": [
-            [],
             [
-                "914cc6f7.11d748"
+                "88be9dab.000db"
+            ],
+            [
+                "d191d2df.3e835"
             ]
         ],
         "outputLabels": [
-            "ляв ключ",
-            "десен ключ"
+            "left button",
+            "right button"
         ],
         "icon": "font-awesome/fa-pause"
     },
@@ -346,7 +348,7 @@
         "id": "31c292aa.3ec3be",
         "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "1200 кабинет",
+        "name": "1200 office",
         "rules": [
             {
                 "t": "set",
@@ -361,7 +363,7 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 1120,
+        "x": 1110,
         "y": 400,
         "wires": [
             [
@@ -385,10 +387,10 @@
         "bytopic": "all",
         "name": "pulse",
         "x": 970,
-        "y": 400,
+        "y": 520,
         "wires": [
             [
-                "31c292aa.3ec3be"
+                "f921244e.da2ff8"
             ]
         ]
     },
@@ -396,7 +398,7 @@
         "id": "f5496637.f23598",
         "type": "comment",
         "z": "7f69ac0c.ea2e54",
-        "name": "Нощна лампа Таня",
+        "name": "Master bed left lamp",
         "info": "",
         "x": 110,
         "y": 40,
@@ -406,7 +408,7 @@
         "id": "2dcb7c15.ce5d04",
         "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "1100 баня 1",
+        "name": "1100 bath 1",
         "rules": [
             {
                 "t": "set",
@@ -445,10 +447,10 @@
         "bytopic": "all",
         "name": "pulse",
         "x": 970,
-        "y": 440,
+        "y": 560,
         "wires": [
             [
-                "2dcb7c15.ce5d04"
+                "f7a80e88.e31d7"
             ]
         ]
     },
@@ -456,7 +458,7 @@
         "id": "da3e1a29.f16fd8",
         "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "2000 коридор 2",
+        "name": "2000 corridor 2",
         "rules": [
             {
                 "t": "set",
@@ -506,7 +508,7 @@
         "id": "6204187a.fdcc48",
         "type": "switch",
         "z": "7f69ac0c.ea2e54",
-        "name": "1002 баня 1",
+        "name": "1002 bath 1",
         "property": "payload.p",
         "propertyType": "msg",
         "rules": [
@@ -527,16 +529,233 @@
         "x": 410,
         "y": 440,
         "wires": [
-            [],
             [
                 "88be9dab.000db"
+            ],
+            [
+                "fd93126.a90d8f"
             ]
         ],
         "outputLabels": [
-            "ляв ключ",
-            "десен ключ"
+            "left button",
+            "right button"
         ],
         "icon": "font-awesome/fa-pause"
+    },
+    {
+        "id": "d191d2df.3e835",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 970,
+        "y": 400,
+        "wires": [
+            [
+                "31c292aa.3ec3be"
+            ]
+        ]
+    },
+    {
+        "id": "fd93126.a90d8f",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 970,
+        "y": 440,
+        "wires": [
+            [
+                "2dcb7c15.ce5d04"
+            ]
+        ]
+    },
+    {
+        "id": "f921244e.da2ff8",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1400 kitchen",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "17",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1110,
+        "y": 520,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "f7a80e88.e31d7",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1000 corridor 1",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "16",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1120,
+        "y": 560,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "b5ae42d0.0275a",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 970,
+        "y": 600,
+        "wires": [
+            [
+                "63561875.095658"
+            ]
+        ]
+    },
+    {
+        "id": "63561875.095658",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "hall",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "15",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1090,
+        "y": 600,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "1614c3b.4f9653c",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1300 living room",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "69",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1120,
+        "y": 640,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "ce929fca.22a48",
+        "type": "trigger",
+        "z": "7f69ac0c.ea2e54",
+        "op1": "{\"value\": 1}",
+        "op2": "{\"value\": 0}",
+        "op1type": "json",
+        "op2type": "json",
+        "duration": "50",
+        "extend": false,
+        "units": "ms",
+        "reset": "",
+        "bytopic": "all",
+        "name": "pulse",
+        "x": 970,
+        "y": 640,
+        "wires": [
+            [
+                "1614c3b.4f9653c"
+            ]
+        ]
     },
     {
         "id": "1a2ea69e.012e49",

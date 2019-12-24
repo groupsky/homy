@@ -7,12 +7,12 @@ Arduino mega pins wiring
 
 14 - OUT1 10A
 15 - OUT2 10A - hall
-16 - OUT3 10A - corridor 1
-17 - OUT4 10A - kitchen
-18 - OUT5 10A - corridor 2
-19 - OUT6 10A - bath 1
-20 - OUT7 10A - cabinet
-21 - OUT8 10A - master bed lamp left
+16 - OUT3 10A - imp - 1000 corridor 1
+17 - OUT4 10A - imp - 1400 kitchen
+18 - OUT5 10A - imp - 2000 corridor 2
+19 - OUT6 10A - 1100 bath 1
+20 - OUT7 10A - 1200 office
+21 - OUT8 10A - 2528 master bed lamp left
 
 22 - IN RJ1A
 23 - IN RJ1B
@@ -30,14 +30,14 @@ Arduino mega pins wiring
 35 - IN RJ7B
 36 - IN RJ8A
 37 - IN RJ8B
-38 - IN RJ9A
-39 - IN RJ9B
+38 - IN RJ9A - 1002 bath 1 | right button
+39 - IN RJ9B - 1002 bath 1 | left button
 40 - IN RJ10A
 41 - IN RJ10B
-42 - IN RJ11A
-43 - IN RJ11B
-44 - IN RJ12A
-45 - IN RJ12B
+42 - IN RJ11A - 2531 master bed left | right button
+43 - IN RJ11B - 2531 master bed left | left button
+44 - IN RJ12A - 1202 office | right button
+45 - IN RJ12B - 1202 office | left button
 
 50 - ETH MISO
 51 - ETH MOSI
@@ -51,4 +51,4 @@ Arduino mega pins wiring
 66 - A12 - OUT12 2A
 67 - A13 - OUT11 2A
 68 - A14 - OUT10 2A
-69 - A15 - OUT9 2A - living room
+69 - A15 - OUT9 2A - 1300 living room
