@@ -1,42 +1,39 @@
 version: '3'
 services:
-  broker:
-    image: eclipse-mosquitto:1.6.8
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    restart: always
-  nodered:
-    build: nodered
-    depends_on:
-      - broker
-    ports:
-      - "1880:1880"
-    links:
-      - broker
-    volumes:
-      - ./data/nodered:/data
-    restart: always
-  ha:
-    image: homeassistant/home-assistant:stable
-    depends_on:
-      - broker
-    links:
-      - broker
-    ports:
-      - "8123:8123"
-    volumes:
-      - ./data/home-assistant:/config
-    environment:
-      - TZ=Europe/Sofia
-    restart: always
   openvpn:
     cap_add:
       - NET_ADMIN
     image: kylemanna/openvpn:2.4
     container_name: openvpn
     ports:
+      # openvpn
       - "1194:1194/udp"
+      # nodered web
+      - "1880:1880"
+      # mqtt
+      - "1883:1883"
+      # home-assistant web
+      - "8123:8123"
+      # mqtt websocket
+      - "9001:9001"
     volumes:
       - ./data/openvpn:/etc/openvpn
     restart: always
+  broker:
+    image: eclipse-mosquitto:1.6.8
+    restart: always
+    network_mode: service:openvpn
+  nodered:
+    build: nodered
+    volumes:
+      - ./data/nodered:/data
+    restart: always
+    network_mode: service:openvpn
+  ha:
+    image: homeassistant/home-assistant:stable
+    volumes:
+      - ./data/home-assistant:/config
+    environment:
+      - TZ=Europe/Sofia
+    restart: always
+    network_mode: service:openvpn
