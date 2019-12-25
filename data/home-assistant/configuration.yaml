@@ -1,0 +1,62 @@
+homeassistant:
+  # Name of the location where Home Assistant is running
+  name: Homy
+  # Location required to calculate the time the sun rises and sets
+  latitude: !secret latitude
+  longitude: !secret longitude
+  # Impacts weather/sunrise data
+  elevation: 164
+  # Pick yours from here: http://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+  time_zone: Europe/Sofia
+  unit_system: metric
+
+
+# Configure a default setup of Home Assistant (frontend, api, etc)
+default_config:
+
+# Uncomment this if you are using SSL/TLS, running in Docker container, etc.
+# http:
+#   base_url: example.duckdns.org:8123
+
+updater:
+  reporting: no
+  include_used_components: false
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+group: !include groups.yaml
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+mqtt:
+  broker: broker
+  port: 1883
+  client_id: home-assistant
+
+light:
+  - platform: mqtt
+    name: "Баня 1 (1100)"
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":19,"value":1}'
+    payload_off: '{"pin":19,"value":0}'
+
+  - platform: mqtt
+    name: "Офис (1200)"
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":20,"value":1}'
+    payload_off: '{"pin":20,"value":0}'
+
+  - platform: mqtt
+    name: "Спалня лява нощна лампа (2528)"
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":21,"value":1}'
+    payload_off: '{"pin":21,"value":0}'
+
+  - platform: mqtt
+    name: "Антре"
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":15,"value":1}'
+    payload_off: '{"pin":15,"value":0}'

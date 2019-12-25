@@ -1,17 +1,32 @@
 version: '3'
 services:
   broker:
-    image: eclipse-mosquitto
+    image: eclipse-mosquitto:1.6.8
     ports:
-    - "1883:1883"
-    - "9001:9001"
+      - "1883:1883"
+      - "9001:9001"
     restart: always
   nodered:
     build: nodered
+    depends_on:
+      - broker
     ports:
-    - "1880:1880"
+      - "1880:1880"
     links:
-    - broker
+      - broker
     volumes:
-    - ./data/nodered:/data
+      - ./data/nodered:/data
+    restart: always
+  ha:
+    image: homeassistant/home-assistant:stable
+    depends_on:
+      - broker
+    links:
+      - broker
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./data/home-assistant:/config
+    environment:
+      - TZ=Europe/Sofia
     restart: always
