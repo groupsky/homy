@@ -30,3 +30,13 @@ services:
     environment:
       - TZ=Europe/Sofia
     restart: always
+  openvpn:
+    cap_add:
+      - NET_ADMIN
+    image: kylemanna/openvpn:2.4
+    container_name: openvpn
+    ports:
+      - "1194:1194/udp"
+    volumes:
+      - ./data/openvpn:/etc/openvpn
+    restart: always
