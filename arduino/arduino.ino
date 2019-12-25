@@ -222,14 +222,14 @@ boolean pubStatus() {
     Serial.write(buffer, len);
     Serial.println("");
   } else {
-    Serial.println(" failed");
+    Serial.println(" failed ");
   }
   delay(10);
 
   return res;
 }
 
-void pubInputChange(int idx, int pin, int lastValue, int value) {
+boolean pubInputChange(int idx, int pin, int lastValue, int value) {
   delay(10);
   Serial.print("INPUT CHANGE");
   Serial.print(pin);
@@ -247,18 +247,21 @@ void pubInputChange(int idx, int pin, int lastValue, int value) {
   
   char buffer[256];
   size_t len = serializeJson(doc, buffer);
-  client.publish(publishTopic, buffer, len);
+  return client.publish(publishTopic, buffer, len);
 }
 
-void readInputs() {
+boolean readInputs() {
   int l = sizeof(inputPins) / sizeof(inputPins[0]);
   for (int i=0; i<l; i++) {
     int value = HIGH-digitalRead(inputPins[i]);
     if (value != lastInputValues[i]) {
-      pubInputChange(i, inputPins[i], lastInputValues[i], value);
+      if (!pubInputChange(i, inputPins[i], lastInputValues[i], value)) {
+        return false;
+      }
       lastInputValues[i] = value;
     }
   }
+  return true;
 }
 
 void testPeripherials() {
@@ -498,13 +501,21 @@ void loop() {
       };
     case STATE_ON:
       long now = millis();
-      lastConnected = millis();
       if (now - lastStatus > statusInterval) {
-        pubStatus();
+        if (!pubStatus()) {
+          state = STATE_ETHERNET_UP;
+          delay(100);
+          return;
+        }
       }
       client.loop();
       delay(25);
-      readInputs();
+      if (!readInputs()) {
+        state = STATE_ETHERNET_UP;
+        delay(100);
+        return;
+      }
       delay(25);
+      lastConnected = millis();
   }
 }
