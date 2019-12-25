@@ -1,16 +1,3 @@
-homeassistant:
-  # Name of the location where Home Assistant is running
-  name: Homy
-  # Location required to calculate the time the sun rises and sets
-  latitude: !secret latitude
-  longitude: !secret longitude
-  # Impacts weather/sunrise data
-  elevation: 164
-  # Pick yours from here: http://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-  time_zone: Europe/Sofia
-  unit_system: metric
-
-
 # Configure a default setup of Home Assistant (frontend, api, etc)
 default_config:
 
