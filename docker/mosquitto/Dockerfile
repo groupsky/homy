@@ -1,3 +1,3 @@
 FROM eclipse-mosquitto:1.6.8
 
-HEALTHCHECK CMD timeout -t 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1
+HEALTHCHECK CMD timeout -t 5 mosquitto_sub -t '$SYS/#' -C 1 | grep -v Error || exit 1
