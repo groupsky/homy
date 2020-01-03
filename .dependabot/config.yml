@@ -1,20 +1,38 @@
 version: 1
 update_configs:
-  - package_manager: "javascript"
-    directory: "/nodered"
-    update_schedule: "live"
-    default_reviewers: 
-      - "groupsky"
-
-  - package_manager: "docker"
-    directory: "/nodered"
-    update_schedule: "daily"
-    default_reviewers: 
-      - "groupsky"
-
   # requires dependabot/dependabot-core#390
   # - package_manager: "docker"
   #   directory: "/"
   #   update_schedule: "daily"
-  #   default_reviewers: 
+  #   default_reviewers:
   #     - "groupsky"
+
+  - package_manager: "docker"
+    directory: "/docker/homeassistant"
+    update_schedule: "daily"
+    default_reviewers:
+      - "groupsky"
+
+  - package_manager: "docker"
+    directory: "/docker/mosquitto"
+    update_schedule: "daily"
+    default_reviewers:
+      - "groupsky"
+
+  - package_manager: "docker"
+    directory: "/docker/nodered"
+    update_schedule: "daily"
+    default_reviewers:
+      - "groupsky"
+
+  - package_manager: "docker"
+    directory: "/docker/openvpn"
+    update_schedule: "daily"
+    default_reviewers:
+      - "groupsky"
+
+  - package_manager: "javascript"
+    directory: "/nodered"
+    update_schedule: "live"
+    default_reviewers:
+      - "groupsky"

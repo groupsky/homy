@@ -3,7 +3,7 @@ services:
   openvpn:
     cap_add:
       - NET_ADMIN
-    image: kylemanna/openvpn:2.4
+    build: docker/openvpn
     container_name: openvpn
     ports:
       # openvpn
@@ -20,17 +20,17 @@ services:
       - ./data/openvpn:/etc/openvpn
     restart: always
   broker:
-    image: eclipse-mosquitto:1.6.8
+    build: docker/mosquitto
     restart: always
     network_mode: service:openvpn
   nodered:
-    build: nodered
+    build: docker/nodered
     volumes:
       - ./data/nodered:/data
     restart: always
     network_mode: service:openvpn
   ha:
-    image: homeassistant/home-assistant:stable
+    build: docker/homeassistant
     volumes:
       - ./data/home-assistant:/config
     environment:
