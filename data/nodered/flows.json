@@ -7,6 +7,28 @@
         "info": ""
     },
     {
+        "id": "1a2ea69e.012e49",
+        "type": "mqtt-broker",
+        "z": "",
+        "name": "broker",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "nodered",
+        "usetls": false,
+        "compatmode": false,
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    },
+    {
         "id": "184db820.fcc528",
         "type": "mqtt in",
         "z": "7f69ac0c.ea2e54",
@@ -20,7 +42,7 @@
         "wires": [
             [
                 "f94543ec.c5dce",
-                "d1590503.656708"
+                "d27c3aa8.3ec6d"
             ]
         ]
     },
@@ -36,22 +58,6 @@
         "x": 1230,
         "y": 40,
         "wires": []
-    },
-    {
-        "id": "d1590503.656708",
-        "type": "function",
-        "z": "7f69ac0c.ea2e54",
-        "name": "TEST",
-        "func": "if (msg.payload.t === 'ic') {\n    const pin = msg.payload.p\n    const value = msg.payload.v\n    \n    switch (pin) {\n        case 22:\n        case 30:\n        case 38:\n            return { payload: {pin: 14, value: msg.payload.v} }\n    }\n}\n",
-        "outputs": 1,
-        "noerr": 0,
-        "x": 430,
-        "y": 180,
-        "wires": [
-            [
-                "357c5f83.e0f7b"
-            ]
-        ]
     },
     {
         "id": "1d8c052d.362f53",
@@ -181,7 +187,8 @@
             [
                 "5e0006cb.1796b8",
                 "ba8a9bee.549488",
-                "6204187a.fdcc48"
+                "6204187a.fdcc48",
+                "211c81c7.3d086e"
             ]
         ]
     },
@@ -302,7 +309,8 @@
         "y": 100,
         "wires": [
             [
-                "357c5f83.e0f7b"
+                "357c5f83.e0f7b",
+                "1fd9ea88.4c1285"
             ]
         ]
     },
@@ -758,25 +766,311 @@
         ]
     },
     {
-        "id": "1a2ea69e.012e49",
-        "type": "mqtt-broker",
-        "z": "",
-        "name": "broker",
-        "broker": "localhost",
-        "port": "1883",
-        "clientid": "nodered",
-        "usetls": false,
-        "compatmode": false,
-        "keepalive": "60",
-        "cleansession": true,
-        "birthTopic": "",
-        "birthQos": "0",
-        "birthPayload": "",
-        "closeTopic": "",
-        "closeQos": "0",
-        "closePayload": "",
-        "willTopic": "",
-        "willQos": "0",
-        "willPayload": ""
+        "id": "3a50707.3d5719",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle living",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "x": 330,
+        "y": 40,
+        "wires": [
+            [
+                "ce929fca.22a48"
+            ]
+        ]
+    },
+    {
+        "id": "211c81c7.3d086e",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "P4 veranda 1",
+        "property": "payload.p",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "40",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "41",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 410,
+        "y": 480,
+        "wires": [
+            [
+                "ce929fca.22a48",
+                "b5ae42d0.0275a"
+            ],
+            [
+                "9d9aea0b.9c5a4"
+            ]
+        ],
+        "outputLabels": [
+            "left button",
+            "right button"
+        ],
+        "icon": "font-awesome/fa-pause"
+    },
+    {
+        "id": "d27c3aa8.3ec6d",
+        "type": "debug",
+        "z": "7f69ac0c.ea2e54",
+        "name": "",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "x": 290,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "9d9aea0b.9c5a4",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 970,
+        "y": 680,
+        "wires": [
+            [
+                "3944e844.0a1078"
+            ]
+        ]
+    },
+    {
+        "id": "3944e844.0a1078",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "veranda",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "62",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1100,
+        "y": 680,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "1fd9ea88.4c1285",
+        "type": "debug",
+        "z": "7f69ac0c.ea2e54",
+        "name": "",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "x": 1230,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "b50743de.23004",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "cmd",
+        "property": "payload.cmd",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "toggle",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 210,
+        "y": 740,
+        "wires": [
+            [
+                "72d4e837.cf25a8"
+            ]
+        ]
+    },
+    {
+        "id": "dbee9590.e7a458",
+        "type": "mqtt in",
+        "z": "7f69ac0c.ea2e54",
+        "name": "logic",
+        "topic": "/homy/logic",
+        "qos": "2",
+        "datatype": "json",
+        "broker": "1a2ea69e.012e49",
+        "x": 70,
+        "y": 740,
+        "wires": [
+            [
+                "b50743de.23004",
+                "1b584eee.e03ad1"
+            ]
+        ]
+    },
+    {
+        "id": "1b584eee.e03ad1",
+        "type": "debug",
+        "z": "7f69ac0c.ea2e54",
+        "name": "",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "x": 170,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "72d4e837.cf25a8",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "",
+        "property": "payload.pin",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "18",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "17",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "16",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "69",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 4,
+        "x": 400,
+        "y": 740,
+        "wires": [
+            [
+                "29018208.31a26e"
+            ],
+            [
+                "914cc6f7.11d748"
+            ],
+            [
+                "88be9dab.000db"
+            ],
+            [
+                "ce929fca.22a48"
+            ]
+        ]
+    },
+    {
+        "id": "e9fe2ff2.d558c",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle corridor 2",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "x": 340,
+        "y": 160,
+        "wires": [
+            [
+                "29018208.31a26e"
+            ]
+        ]
+    },
+    {
+        "id": "a6393678.14ae58",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle kitchen",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "x": 330,
+        "y": 80,
+        "wires": [
+            [
+                "914cc6f7.11d748"
+            ]
+        ]
+    },
+    {
+        "id": "8831c285.c813b",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle corridor 1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "x": 340,
+        "y": 120,
+        "wires": [
+            [
+                "88be9dab.000db"
+            ]
+        ]
     }
 ]
