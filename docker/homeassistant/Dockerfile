@@ -1,3 +1,3 @@
-FROM homeassistant/home-assistant:0.109.4
+FROM homeassistant/home-assistant:0.112.0
 
 HEALTHCHECK CMD curl --fail http://localhost:8123/ || exit 1
