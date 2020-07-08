@@ -3,13 +3,14 @@
 
  It connects to an MQTT server then:
   - publishes change of each input gpio to the topic "/homy/ard1/input"
-  - subscribes to the topic "/home/ard1/output", and updates each output gpio 
+  - subscribes to the topic "/homy/ard1/output", and updates each output gpio
     requested.
-  
+
  Note all communication is json.
- 
+
 */
 
+#include <avr/wdt.h>
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
@@ -19,7 +20,7 @@
 // CONFIGURATION
 // **************
 
-#define USE_DNS
+//#define USE_DNS
 
 // mac address
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
@@ -30,8 +31,8 @@ IPAddress sn(  255, 255, 255,   0 );
 IPAddress dns(   1,   1,   1,   1 );
 
 // mqtt broker
-//IPAddress mqttBrokerServer(46,101,200,133);
-char mqttBrokerServer[] = "homy-srv1.roupsky.name";
+IPAddress mqttBrokerServer(192,168,0,2);
+// char mqttBrokerServer[] = "homy-srv1.roupsky.name";
 int mqttBrokerPort = 1883;
 //char mqttBrokerUsername[] = "";
 //char mqttBrokerPassword[] = "";
@@ -46,7 +47,7 @@ long connectedInterval = 60000;
 // pin setup
 int peripheralPin = 12;
 int ethernetPin = 53;
-int inputPins[] = { 
+int inputPins[] = {
   22, 23, 24, 25, 26, 27, 28, 29,
   30, 31, 32, 33, 34, 35, 36, 37,
   38, 39, 40, 41, 42, 43, 44, 45
@@ -112,7 +113,7 @@ boolean setPinValue(int pin, int value) {
         case VAL_ON:
           newValue = HIGH;
           break;
-        default: 
+        default:
           Serial.println("unknown value");
           return false;
       }
@@ -153,11 +154,11 @@ boolean setPinValue(int pin, int value) {
   delay(10);
 
   StaticJsonDocument<128> doc;
-  
+
   doc["t"] = "oc";
   doc["p"] = pin;
-  doc["v"] = newValue; 
-  
+  doc["v"] = newValue;
+
   char buffer[256];
   size_t len = serializeJson(doc, buffer);
   client.publish(publishTopic, buffer, len);
@@ -211,7 +212,7 @@ boolean pubStatus() {
   sprintf(a, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
   doc["ip"] = a;
   doc["cnt"] = statusCnt++;
-  
+
   char buffer[256];
   size_t len = serializeJson(doc, buffer);
   boolean res = client.publish(statusTopic, buffer, len);
@@ -238,13 +239,13 @@ boolean pubInputChange(int idx, int pin, int lastValue, int value) {
   delay(10);
 
   StaticJsonDocument<128> doc;
-  
+
   doc["t"] = "ic";
   doc["i"] = idx;
   doc["p"] = pin;
   doc["l"] = lastValue;
-  doc["v"] = value; 
-  
+  doc["v"] = value;
+
   char buffer[256];
   size_t len = serializeJson(doc, buffer);
   return client.publish(publishTopic, buffer, len);
@@ -278,7 +279,7 @@ void testPeripherials() {
     lastInvertedOutputValues[i] = LOW;
     delay(100);
   }
-  
+
   // deactivate all output
   for (int i=0; i<lo; i++) {
     digitalWrite(outputPins[i], LOW);
@@ -294,6 +295,7 @@ void testPeripherials() {
 
 void setup()
 {
+  wdt_enable(WDTO_8S);
   Serial.begin(57600);
   delay(10);
   Serial.println("initializing...");
@@ -339,13 +341,14 @@ void setup()
   Serial.println(" done");
   delay(100);
 
-  testPeripherials();
-  delay(100);
+//   testPeripherials();
+//   delay(100);
 
   client.setServer(mqttBrokerServer, mqttBrokerPort);
   client.setCallback(mqttCallback);
 
   state = STATE_INIT;
+  wdt_reset();
 }
 
 void loop() {
@@ -364,7 +367,7 @@ void loop() {
     state = STATE_INIT;
     return;
   }
-  
+
   if (Ethernet.linkStatus() != LinkON) {
     delay(10);
     Serial.print(" waiting for link...");
@@ -450,9 +453,11 @@ void loop() {
         delay(100);
         return;
       }
+#ifdef USE_DNS
       dhcp = true;
       delay(10);
       Serial.println(" done");
+#endif
       state = STATE_ETHERNET_UP;
       delay(1000);
       return;
@@ -517,5 +522,6 @@ void loop() {
       }
       delay(25);
       lastConnected = millis();
+      wdt_reset();
   }
 }
