@@ -30,9 +30,3 @@ update_configs:
     update_schedule: "daily"
     default_reviewers:
       - "groupsky"
-
-  - package_manager: "javascript"
-    directory: "/nodered"
-    update_schedule: "live"
-    default_reviewers:
-      - "groupsky"
