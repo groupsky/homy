@@ -1,0 +1,31 @@
+name: lights-test
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup ovpn
+        run: |
+          docker-compose build ovpn
+          docker-compose run --rm openvpn ovpn_genconfig -Ddbu udp://VPN.SERVERNAME.COM
+          echo "test\n" | docker-compose run --rm openvpn ovpn_initpki nopass
+
+      - name: Run containers
+        run: |
+          docker-compose up -d
+
+      - name: Run tests
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14
+        working-directory: docker/test
+        run: |
+          npm ci
+          npm start
