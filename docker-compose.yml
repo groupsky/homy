@@ -29,6 +29,9 @@ services:
       - ./data/nodered:/data
     restart: always
     network_mode: service:openvpn
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    privileged: true
   ha:
     build: docker/homeassistant
     volumes:

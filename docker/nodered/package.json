@@ -27,7 +27,8 @@
         }
     ],
     "dependencies": {
-        "node-red": "1.0.3"
+        "node-red": "1.0.3",
+        "node-red-contrib-modbus": "5.13.3"
     },
     "engines": {
         "node": ">=10"
