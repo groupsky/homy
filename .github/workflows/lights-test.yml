@@ -26,4 +26,10 @@ jobs:
           node-version: 14
 
       - name: Run tests
-        run: cd docker/test && npm ci && npm start
+        run: |
+          docker-compose ps
+          cd docker/test
+          npm ci
+          sleep 30
+          docker ps
+          npm start
