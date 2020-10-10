@@ -36,6 +36,7 @@ services:
     build: docker/homeassistant
     volumes:
       - ./data/home-assistant:/config
+      - /etc/localtime:/etc/localtime:ro
     environment:
       - TZ=Europe/Sofia
     restart: always
