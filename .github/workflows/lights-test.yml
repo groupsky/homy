@@ -18,14 +18,12 @@ jobs:
           echo "test\n" | docker-compose run --rm openvpn ovpn_initpki nopass
 
       - name: Run containers
-        run: |
-          docker-compose up -d
+        run: docker-compose up -d
 
-      - name: Run tests
+      - name: Setup node
         uses: actions/setup-node@v1
         with:
           node-version: 14
-        working-directory: docker/test
-        run: |
-          npm ci
-          npm start
+          
+      - name: Run tests
+        run: cd docker/test && npm ci && npm start
