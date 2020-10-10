@@ -18,7 +18,9 @@ jobs:
           echo "test\n" | docker-compose run --rm openvpn ovpn_initpki nopass
 
       - name: Run containers
-        run: docker-compose up -d
+        run: |
+          chown -r 1000:1000 data/nodered
+          docker-compose up -d
 
       - name: Setup node
         uses: actions/setup-node@v1
@@ -30,7 +32,7 @@ jobs:
           docker-compose ps
           cd docker/test
           npm ci
-          sleep 60
+          sleep 30
           docker ps
           docker-compose logs
           npm start
