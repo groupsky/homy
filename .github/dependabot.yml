@@ -2,38 +2,38 @@ version: 2
 
 updates:
   # requires dependabot/dependabot-core#390
-  # - package_ecosystem: "docker"
+  # - package-ecosystem: "docker"
   #  <<: *shared
   #   directory: "/"
 
-  - package_ecosystem: "docker"
+  - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
     schedule:
       interval: "daily"
     reviewers:
       - "groupsky"
 
-  - package_ecosystem: "docker"
+  - package-ecosystem: "docker"
     directory: "/docker/mosquitto"
     schedule:
       interval: "daily"
     reviewers:
       - "groupsky"
 
-  - package_ecosystem: "docker"
+  - package-ecosystem: "docker"
     directory: "/docker/nodered"
     schedule:
       interval: "daily"
     reviewers:
       - "groupsky"
-  - package_ecosystem: "npm"
+  - package-ecosystem: "npm"
     directory: "/docker/nodered"
     schedule:
       interval: "daily"
     reviewers:
       - "groupsky"
 
-  - package_ecosystem: "docker"
+  - package-ecosystem: "docker"
     directory: "/docker/openvpn"
     schedule:
       interval: "daily"
