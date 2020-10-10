@@ -13,7 +13,7 @@ jobs:
 
       - name: Setup ovpn
         run: |
-          docker-compose build ovpn
+          docker-compose build openvpn
           docker-compose run --rm openvpn ovpn_genconfig -Ddbu udp://VPN.SERVERNAME.COM
           echo "test\n" | docker-compose run --rm openvpn ovpn_initpki nopass
 
@@ -24,6 +24,6 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: 14
-          
+
       - name: Run tests
         run: cd docker/test && npm ci && npm start
