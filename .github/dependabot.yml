@@ -1,0 +1,32 @@
+version: 2
+
+shared: &shared
+  schedule:
+    interval: "daily"
+  reviewers:
+    - "groupsky"
+
+updates:
+  # requires dependabot/dependabot-core#390
+  # - package_ecosystem: "docker"
+  #  <<: *shared
+  #   directory: "/"
+
+  - package_ecosystem: "docker"
+    <<: *shared
+    directory: "/docker/homeassistant"
+
+  - package_ecosystem: "docker"
+    <<: *shared
+    directory: "/docker/mosquitto"
+
+  - package_ecosystem: "docker"
+    <<: *shared
+    directory: "/docker/nodered"
+  - package_ecosystem: "npm"
+    <<: *shared
+    directory: "/docker/nodered"
+
+  - package_ecosystem: "docker"
+    <<: *shared
+    directory: "/docker/openvpn"
