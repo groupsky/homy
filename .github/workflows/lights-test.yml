@@ -19,7 +19,7 @@ jobs:
 
       - name: Run containers
         run: |
-          chown -r 1000:1000 data/nodered
+          sudo chown -R 1000:1000 data/nodered
           docker-compose up -d
 
       - name: Setup node
