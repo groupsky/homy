@@ -30,6 +30,7 @@ jobs:
           docker-compose ps
           cd docker/test
           npm ci
-          sleep 30
+          sleep 60
           docker ps
+          docker-compose logs
           npm start
