@@ -66,7 +66,7 @@ COPY --from=build /usr/src/node-red/prod_node_modules ./node_modules
 # Chown, install devtools & Clean up
 RUN chown -R node-red:node-red /usr/src/node-red && \
     /tmp/install_devtools.sh && \
-    rm /tmp/*
+    rm -rf /tmp/*
 
 USER node-red
 
