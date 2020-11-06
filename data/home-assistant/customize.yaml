@@ -1,0 +1,31 @@
+switch.living_tv:
+  friendly_name: 'Power'
+  icon: mdi:power-standby
+
+switch.living_tv_vol_p:
+  friendly_name: 'Vol+'
+  icon: mdi:volume-plus
+
+switch.living_tv_vol_m:
+  friendly_name: 'Vol-'
+  icon: mdi:volume-minus
+
+switch.living_tv_mute:
+  friendly_name: 'Mute'
+  icon: mdi:volume-off
+
+switch.living_tv_source:
+  friendly_name: 'Source'
+  icon: mdi:video-switch-outline
+
+switch.living_tv_ok:
+  friendly_name: 'OK'
+  icon: mdi:check
+
+switch.living_tv_back:
+  friendly_name: 'Return'
+  icon: mdi:restore
+
+switch.living_tv_exit:
+  friendly_name: 'Exit'
+  icon: mdi:exit-to-app

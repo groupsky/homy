@@ -1,0 +1,8 @@
+living_tv:
+  name: 'ТВ Хол'
+  icon: mdi:television
+  entities:
+    - switch.living_tv
+    - switch.living_tv_vol_p
+    - switch.living_tv_vol_m
+    - switch.living_tv_mute
