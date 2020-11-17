@@ -1,37 +1,70 @@
 version: '3'
 services:
-  openvpn:
+
+  ingress:
+    build: docker/nginx-proxy
+    restart: unless-stopped
+    networks:
+      - ingress
+      - public
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  vpn:
+    build: docker/wireguard
+    restart: unless-stopped
+    networks:
+      - public
     cap_add:
       - NET_ADMIN
-    build: docker/openvpn
-    container_name: openvpn
-    ports:
-      # openvpn
-      - "1194:1194/udp"
-      # nodered web
-      - "1880:1880"
-      # mqtt
-      - "1883:1883"
-      # home-assistant web
-      - "8123:8123"
-      # mqtt websocket
-      - "9001:9001"
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Sofia
+      - SERVERURL="${VPN_PUBLIC_URL}"
+      - SERVERPORT="${VPN_PUBLIC_PORT}"
+      - PEERS="${VPN_PEERS}"
+      - PEERDNS=auto
+      - INTERNAL_SUBNET="${VPN_SUBNET}"
     volumes:
-      - ./data/openvpn:/etc/openvpn
-    restart: always
+      - ./data/wireguard:/config
+      - /lib/modules:/lib/modules
+    ports:
+      - "${VPN_PUBLIC_PORT}:51820/udp"
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+
   broker:
     build: docker/mosquitto
-    restart: always
-    network_mode: service:openvpn
+    restart: unless-stopped
+    networks:
+      - automation
+
+  whoami:
+    image: jwilder/whoami
+    networks:
+      - ingress
+    environment:
+      - VIRTUAL_HOST=whoami.local
+
   nodered:
     build: docker/nodered
     volumes:
       - ./data/nodered:/data
-    restart: always
-    network_mode: service:openvpn
+    environment:
+      - VIRTUAL_HOST=nodered.local
+      - VIRTUAL_PORT=1880
+    restart: unless-stopped
+    networks:
+      - automation
+      - ingress
     devices:
       - /dev/bus/usb:/dev/bus/usb
     privileged: true
+
   ha:
     build: docker/homeassistant
     volumes:
@@ -39,5 +72,17 @@ services:
       - /etc/localtime:/etc/localtime:ro
     environment:
       - TZ=Europe/Sofia
-    restart: always
-    network_mode: service:openvpn
+      - VIRTUAL_HOST=ha.local
+      - VIRTUAL_PORT=8123
+    restart: unless-stopped
+    networks:
+      - automation
+      - ingress
+
+networks:
+  automation:
+    internal: true
+  ingress:
+    internal: true
+  public:
+
