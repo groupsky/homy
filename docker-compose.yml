@@ -55,6 +55,9 @@ services:
     restart: unless-stopped
     networks:
       - automation
+      - dmz
+    ports:
+      - "1883:1883"
 
   whoami:
     image: jwilder/whoami
