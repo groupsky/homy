@@ -14,7 +14,7 @@ jobs:
       - name: Run containers
         run: |
           sudo chown -R 1000:1000 data/nodered
-          docker-compose --env-file test.env up -d
+          docker-compose --env-file test.env up --build --force-recreate -d
 
       - name: Setup node
         uses: actions/setup-node@v2.1.2
@@ -23,10 +23,10 @@ jobs:
 
       - name: Run tests
         run: |
-          docker-compose ps
+          docker-compose --env-file test.env ps
           cd docker/test
           npm ci
           sleep 30
           docker ps
-          docker-compose logs
+          docker-compose --env-file test.env logs
           npm start
