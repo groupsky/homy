@@ -6,6 +6,13 @@ updates:
   #  <<: *shared
   #   directory: "/"
 
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
   - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
     schedule:
@@ -26,6 +33,7 @@ updates:
       interval: "daily"
     reviewers:
       - "groupsky"
+
   - package-ecosystem: "npm"
     directory: "/docker/nodered"
     schedule:
@@ -35,6 +43,14 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/openvpn"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+
+  - package-ecosystem: "npm"
+    directory: "/docker/test"
     schedule:
       interval: "daily"
     reviewers:
