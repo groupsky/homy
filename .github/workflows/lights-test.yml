@@ -11,16 +11,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2.3.4
 
-      - name: Setup ovpn
-        run: |
-          docker-compose build openvpn
-          docker-compose run --rm openvpn ovpn_genconfig -Ddbu udp://VPN.SERVERNAME.COM
-          echo "test\n" | docker-compose run --rm openvpn ovpn_initpki nopass
-
       - name: Run containers
         run: |
           sudo chown -R 1000:1000 data/nodered
-          docker-compose up -d
+          docker-compose --env-file test.env up --build --force-recreate -d
 
       - name: Setup node
         uses: actions/setup-node@v2.1.2
@@ -29,10 +23,10 @@ jobs:
 
       - name: Run tests
         run: |
-          docker-compose ps
+          docker-compose --env-file test.env ps
           cd docker/test
           npm ci
           sleep 30
           docker ps
-          docker-compose logs
+          docker-compose --env-file ../../test.env logs
           npm start

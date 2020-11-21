@@ -22,7 +22,7 @@ script: !include scripts.yaml
 scene: !include scenes.yaml
 
 mqtt:
-  broker: localhost
+  broker: broker
   port: 1883
   client_id: home-assistant
 

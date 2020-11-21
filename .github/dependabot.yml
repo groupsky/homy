@@ -14,6 +14,13 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/dockergen"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
     schedule:
       interval: "daily"
@@ -28,29 +35,35 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
-    directory: "/docker/nodered"
-    schedule:
-      interval: "daily"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/nodered"
+    directory: "/docker/nginx"
     schedule:
       interval: "daily"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
-    directory: "/docker/openvpn"
+    directory: "/docker/nodered"
     schedule:
       interval: "daily"
     reviewers:
       - "groupsky"
 
+  - package-ecosystem: "npm"
+    directory: "/docker/nodered"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/test"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/wireguard"
     schedule:
       interval: "daily"
     reviewers:

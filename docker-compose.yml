@@ -1,43 +1,111 @@
 version: '3'
 services:
-  openvpn:
+
+  ingress:
+    build: docker/nginx
+    restart: unless-stopped
+    container_name: $INGRESS_NAME
+    networks:
+      ingress:
+      dmz:
+        ipv4_address: $INGRESS_ADDRESS
+    volumes:
+      - nginx-config:/etc/nginx/conf.d
+
+  ingressgen:
+    build: docker/dockergen
+    restart: unless-stopped
+    command: -notify-sighup $INGRESS_NAME -watch /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
+    network_mode: none
+    environment:
+      - TARGET_CONTAINER=$INGRESS_NAME
+    volumes:
+      - nginx-config:/etc/nginx/conf.d
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./data/dockergen/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl
+
+  vpn:
+    build: docker/wireguard
+    restart: unless-stopped
+    networks:
+      - dmz
     cap_add:
       - NET_ADMIN
-    build: docker/openvpn
-    container_name: openvpn
-    ports:
-      # openvpn
-      - "1194:1194/udp"
-      # nodered web
-      - "1880:1880"
-      # mqtt
-      - "1883:1883"
-      # home-assistant web
-      - "8123:8123"
-      # mqtt websocket
-      - "9001:9001"
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Sofia
+      - SERVERURL=$VPN_PUBLIC_URL
+      - SERVERPORT=$VPN_PUBLIC_PORT
+      - PEERS=$VPN_PEERS
+      - PEERDNS=auto
+      - INTERNAL_SUBNET=$VPN_SUBNET
+      - ALLOWEDIPS=$INGRESS_SUBNET
     volumes:
-      - ./data/openvpn:/etc/openvpn
-    restart: always
+      - ./data/wireguard:/config
+      - /lib/modules:/lib/modules
+    ports:
+      - "${VPN_PUBLIC_PORT}:51820/udp"
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+
   broker:
     build: docker/mosquitto
-    restart: always
-    network_mode: service:openvpn
+    restart: unless-stopped
+    networks:
+      - automation
+      - dmz
+    ports:
+      - "1883:1883"
+
+  whoami:
+    image: jwilder/whoami
+    restart: unless-stopped
+    networks:
+      - ingress
+    environment:
+      - VIRTUAL_HOST=whoami.${DOMAIN}
+      - VIRTUAL_PORT=8000
+
   nodered:
     build: docker/nodered
+    restart: unless-stopped
+    networks:
+      - automation
+      - ingress
+    environment:
+      - VIRTUAL_HOST=nodered.${DOMAIN}
+      - VIRTUAL_PORT=1880
     volumes:
       - ./data/nodered:/data
-    restart: always
-    network_mode: service:openvpn
-    devices:
-      - /dev/bus/usb:/dev/bus/usb
-    privileged: true
+
   ha:
     build: docker/homeassistant
+    restart: unless-stopped
+    networks:
+      - automation
+      - ingress
+    environment:
+      - TZ=Europe/Sofia
+      - VIRTUAL_HOST=ha.${DOMAIN}
+      - VIRTUAL_PORT=8123
     volumes:
       - ./data/home-assistant:/config
       - /etc/localtime:/etc/localtime:ro
-    environment:
-      - TZ=Europe/Sofia
-    restart: always
-    network_mode: service:openvpn
+
+networks:
+  # internal for the automation services - mqtt, node red, ah
+  automation:
+    internal: true
+  # ingress proxy and exposed services
+  ingress:
+    internal: true
+  # vpn, proxy
+  dmz:
+    ipam:
+      config:
+        - subnet: $INGRESS_SUBNET
+
+volumes:
+  nginx-config:

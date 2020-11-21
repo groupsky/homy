@@ -11,7 +11,7 @@
         "type": "mqtt-broker",
         "z": "",
         "name": "broker",
-        "broker": "localhost",
+        "broker": "broker",
         "port": "1883",
         "clientid": "nodered",
         "usetls": false,
