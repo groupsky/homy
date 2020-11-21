@@ -28,5 +28,5 @@ jobs:
           npm ci
           sleep 30
           docker ps
-          docker-compose --env-file test.env logs
+          docker-compose --env-file ../../test.env logs
           npm start
