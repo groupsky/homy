@@ -171,6 +171,7 @@ services:
   telegraf:
     build: docker/telegraf
     restart: unless-stopped
+    privileged: true
     networks:
       - automation
     environment:
@@ -182,12 +183,7 @@ services:
       - HOST_MOUNT_PREFIX=/hostfs
     volumes:
       - ./config/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /:/hostfs:ro
-      - /etc:/hostfs/etc:ro
-      - /proc:/hostfs/proc:ro
-      - /sys:/hostfs/sys:ro
-      - /var/run/utmp:/var/run/utmp:ro
+      - /dev/bus/usb:/dev/bus/usb
     healthcheck:
       test: wget localhost:8080 -q -O - > /dev/null 2>&1
 
