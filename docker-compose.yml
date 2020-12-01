@@ -86,6 +86,7 @@ services:
     networks:
       - automation
       - ingress
+      - egress
     environment:
       - TZ=Europe/Sofia
       - VIRTUAL_HOST=ha.${DOMAIN}
@@ -101,6 +102,8 @@ networks:
   # ingress proxy and exposed services
   ingress:
     internal: true
+  # egress for containers needing access to external networks
+  egress:
   # vpn, proxy
   dmz:
     ipam:
