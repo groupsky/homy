@@ -21,7 +21,21 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/grafana"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/influxdb"
     schedule:
       interval: "daily"
     reviewers:
@@ -71,6 +85,13 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/docker/nodered"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/telegraf"
     schedule:
       interval: "daily"
     reviewers:
