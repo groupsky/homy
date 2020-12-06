@@ -26,6 +26,8 @@ RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python
 #### Stage RELEASE #####################################################################################################
 FROM base AS RELEASE
 
+ENV NODE_OPTIONS="--unhandled-rejections=strict"
+
 COPY --from=build /usr/src/app/prod_node_modules ./node_modules
 COPY . .
 
