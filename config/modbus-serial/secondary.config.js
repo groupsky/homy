@@ -1,5 +1,5 @@
 module.exports = {
-  device: '/dev/ttyUSB1',
+  port: '/dev/ttyUSB1',
   baudRate: 9600,
   parity: 'even',
   devices: [
