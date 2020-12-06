@@ -6,7 +6,7 @@ const MongoClient = require('mongodb').MongoClient
 const url = process.env.DATABASE
 const collection = process.env.COLLECTION
 const { port, devices, ...portConfig } = require(process.env.CONFIG)
-const client = new ModbusRTU()
+const modbusClient = new ModbusRTU()
 
 const readers = devices.reduce((map, {reader}) => {
   if (!(reader in map)) {
@@ -22,11 +22,11 @@ const getValues = async () => {
     // get value of all meters
     for (let device of devices) {
       // output value to console
-      await client.setID(device.address)
+      await modbusClient.setID(device.address)
       try {
         const reader = readers[device.reader]
         const start = Date.now()
-        const val = await reader(client)
+        const val = await reader(modbusClient)
         val._tz = Date.now()
         val._ms = val._tz - start
         val._addr = device.address
@@ -54,10 +54,11 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 Promise.all([
   MongoClient.connect(url),
-  client.connectRTUBuffered(port, portConfig)
-]).then(([db]) => {
+  modbusClient.connectRTUBuffered(port, portConfig)
+]).then(([mongoClient]) => {
+  const db = mongoClient.db()
   col = db.collection(collection)
-  client.setTimeout(1000)
+  modbusClient.setTimeout(1000)
 
   return getValues()
 })
