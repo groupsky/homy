@@ -4,11 +4,6 @@ module.exports = {
   parity: 'even',
   devices: [
     {
-      name: 'main',
-      address: 0x01,
-      reader: 'dds024mr',
-    },
-    {
       name: 'water_pump',
       address: 0x01,
       reader: 'ex9em',
