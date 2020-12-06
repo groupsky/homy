@@ -6,6 +6,7 @@ RUN set -ex && \
     mkdir -p /usr/src/app && \
     deluser --remove-home node && \
     adduser -h /usr/src/app -D -H node-app -u 1000 && \
+    addgroup node-app dialout && \
     chown -R node-app:node-app /usr/src/app
 
 # Set work directory
