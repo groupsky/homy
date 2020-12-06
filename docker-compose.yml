@@ -114,7 +114,7 @@ services:
     networks:
       - automation
     environment:
-      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
       - COLLECTION=main
       - CONFIG=/etc/config.js
     volumes:
@@ -128,7 +128,7 @@ services:
     networks:
       - automation
     environment:
-      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
       - COLLECTION=secondary
       - CONFIG=/etc/config.js
     volumes:
