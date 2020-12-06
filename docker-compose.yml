@@ -95,6 +95,43 @@ services:
       - ./data/home-assistant:/config
       - /etc/localtime:/etc/localtime:ro
 
+  mongo:
+    build: docker/mongo
+    restart: unless-stopped
+    networks:
+      - automation
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+
+  main-power:
+    build: docker/modbus-serial
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    environment:
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power
+      - COLLECTION=main
+      - CONFIG=/etc/config.js
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ./config/modbus-serial/main.config.js:/etc/config.js:ro
+
+  secondary-power:
+    build: docker/modbus-serial
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    environment:
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power
+      - COLLECTION=secondary
+      - CONFIG=/etc/config.js
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ./config/modbus-serial/secondary.config.js:/etc/config.js:ro
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:
