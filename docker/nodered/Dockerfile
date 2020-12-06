@@ -1,9 +1,5 @@
-ARG ARCH=amd64
-ARG NODE_VERSION=14
-ARG OS=alpine
-
 #### Stage BASE ########################################################################################################
-FROM ${ARCH}/node:${NODE_VERSION}-${OS} AS base
+FROM node:14.15.1-alpine AS base
 
 # Install tools, create Node-RED app and data dir, add user and set rights
 RUN set -ex && \
@@ -42,25 +38,7 @@ RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python
 
 #### Stage RELEASE #####################################################################################################
 FROM base AS RELEASE
-ARG BUILD_DATE
-ARG BUILD_VERSION
-ARG BUILD_REF
 ARG NODE_RED_VERSION
-ARG ARCH
-ARG TAG_SUFFIX=default
-
-LABEL org.label-schema.build-date=${BUILD_DATE} \
-    org.label-schema.docker.dockerfile=".docker/Dockerfile.alpine" \
-    org.label-schema.license="Apache-2.0" \
-    org.label-schema.name="Node-RED" \
-    org.label-schema.version=${BUILD_VERSION} \
-    org.label-schema.description="Low-code programming for event-driven applications." \
-    org.label-schema.url="https://nodered.org" \
-    org.label-schema.vcs-ref=${BUILD_REF} \
-    org.label-schema.vcs-type="Git" \
-    org.label-schema.vcs-url="https://github.com/node-red/node-red-docker" \
-    org.label-schema.arch=${ARCH} \
-    authors="Dave Conway-Jones, Nick O'Leary, James Thomas, Raymond Mouthaan"
 
 COPY --from=build /usr/src/node-red/prod_node_modules ./node_modules
 
