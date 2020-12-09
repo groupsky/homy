@@ -12,7 +12,7 @@ module.exports = {
   writers: {
     console: {},
     mqtt: {
-      url: process.env.BROKER_URL,
+      url: process.env.BROKER,
       topic: process.env.TOPIC,
     },
     mongodb: {
