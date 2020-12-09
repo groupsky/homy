@@ -117,6 +117,8 @@ services:
       - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
       - COLLECTION=main
       - CONFIG=/etc/config.js
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/main/{name}/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       - ./config/modbus-serial/main.config.js:/etc/config.js:ro
@@ -131,6 +133,8 @@ services:
       - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
       - COLLECTION=secondary
       - CONFIG=/etc/config.js
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/secondary/{name}/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       - ./config/modbus-serial/secondary.config.js:/etc/config.js:ro

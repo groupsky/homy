@@ -9,4 +9,15 @@ module.exports = {
       reader: 'dds024mr',
     },
   ],
+  writers: {
+    console: {},
+    mqtt: {
+      url: process.env.BROKER_URL,
+      topic: process.env.TOPIC,
+    },
+    mongodb: {
+      collection: process.env.COLLECTION,
+      url: process.env.DATABASE,
+    },
+  },
 }

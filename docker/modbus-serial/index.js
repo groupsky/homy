@@ -1,21 +1,18 @@
 #!/usr/bin/env node
 /* eslint-env node */
 const ModbusRTU = require('modbus-serial')
-const MongoClient = require('mongodb').MongoClient
-
-const url = process.env.DATABASE
-const collection = process.env.COLLECTION
-const { port, devices, ...portConfig } = require(process.env.CONFIG)
+const { port, devices, ...portConfig, writers: writersConfig } = require(process.env.CONFIG)
 const modbusClient = new ModbusRTU()
 
-const readers = devices.reduce((map, {reader}) => {
-  if (!(reader in map)) {
-    map[reader] = require(`./readers/${reader}`)
+const readers = devices.reduce((map, { reader: readerName }) => {
+  if (!(readerName in map)) {
+    map[readerName] = require(`./readers/${readerName}`)
   }
   return map
 }, {})
-
-let col
+const writers = Object.entries(writersConfig.writers).map(
+  ([writerName, writerConfig]) => require(`./writers/${writerName}`)(writerConfig)
+)
 
 const getValues = async () => {
   try {
@@ -32,10 +29,13 @@ const getValues = async () => {
         val._addr = device.address
         val._type = device.reader
         val.device = device.name
-        console.log(`[${device.name}]:`, val)
-        if (col) {
-          col.insert(val)
-        }
+        writers.forEach((writer) => {
+          try {
+            writer(val, device)
+          } catch (e) {
+            console.error('Error writing', writer)
+          }
+        })
       } catch (e) {
         console.error('Error reading', device, e)
       }
@@ -53,11 +53,8 @@ const getValues = async () => {
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 Promise.all([
-  MongoClient.connect(url),
   modbusClient.connectRTUBuffered(port, portConfig)
-]).then(([mongoClient]) => {
-  const db = mongoClient.db()
-  col = db.collection(collection)
+]).then(() => {
   modbusClient.setTimeout(1000)
 
   return getValues()
