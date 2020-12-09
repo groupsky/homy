@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-env node */
 const ModbusRTU = require('modbus-serial')
-const { port, devices, ...portConfig, writers: writersConfig } = require(process.env.CONFIG)
+const { port, devices, writers: writersConfig, ...portConfig } = require(process.env.CONFIG)
 const modbusClient = new ModbusRTU()
 
 const readers = devices.reduce((map, { reader: readerName }) => {
