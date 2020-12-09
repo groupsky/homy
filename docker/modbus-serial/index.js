@@ -10,7 +10,7 @@ const readers = devices.reduce((map, { reader: readerName }) => {
   }
   return map
 }, {})
-const writers = Object.entries(writersConfig.writers).map(
+const writers = Object.entries(writersConfig).map(
   ([writerName, writerConfig]) => require(`./writers/${writerName}`)(writerConfig)
 )
 
