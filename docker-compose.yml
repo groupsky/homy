@@ -45,8 +45,9 @@ services:
       - INTERNAL_SUBNET=$VPN_SUBNET
       - ALLOWEDIPS=$INGRESS_SUBNET
     volumes:
-      - ./data/wireguard:/config
       - /lib/modules:/lib/modules
+      - ./data/wireguard:/config
+      - ./config/wireguard/templates:/config/templates:ro
     ports:
       - "${VPN_PUBLIC_PORT}:51820/udp"
     sysctls:
