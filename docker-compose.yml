@@ -22,7 +22,7 @@ services:
     volumes:
       - ./data/ingress:/etc/nginx/conf.d
       - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ./config/dockergen/templates:/etc/docker-gen/templates:ro
+      - ./config/ingressgen/templates:/etc/docker-gen/templates:ro
 
   vpn:
     build: docker/wireguard
