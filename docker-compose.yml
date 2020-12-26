@@ -82,6 +82,9 @@ services:
       - VIRTUAL_PORT=1880
     volumes:
       - ./data/nodered:/data
+      - ./config/nodered/flows.json:/data/flows.json:ro
+      - ./config/nodered/package.json:/data/package.json:ro
+      - ./config/nodered/settings.js:/data/settings.js:ro
 
   ha:
     build: docker/homeassistant
