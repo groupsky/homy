@@ -84,6 +84,13 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/test"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/wireguard"
     schedule:
       interval: "daily"
