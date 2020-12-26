@@ -10,7 +10,7 @@ services:
       dmz:
         ipv4_address: $INGRESS_ADDRESS
     volumes:
-      - nginx-config:/etc/nginx/conf.d
+      - ./data/ingress:/etc/nginx/conf.d:ro
 
   ingressgen:
     build: docker/dockergen
@@ -20,7 +20,7 @@ services:
     environment:
       - TARGET_CONTAINER=$INGRESS_NAME
     volumes:
-      - nginx-config:/etc/nginx/conf.d
+      - ./data/ingress:/etc/nginx/conf.d
       - /var/run/docker.sock:/tmp/docker.sock:ro
       - ./config/dockergen/templates:/etc/docker-gen/templates:ro
 
@@ -161,6 +161,3 @@ networks:
     internal: true
   test-internal2:
     internal: true
-
-volumes:
-  nginx-config:
