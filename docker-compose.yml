@@ -99,6 +99,8 @@ services:
       - VIRTUAL_PORT=8123
     volumes:
       - ./data/home-assistant:/config
+      - ./config/home-assistant/configuration.yaml:/config/configuration.yaml:ro
+      - ./config/home-assistant/configuration:/config/configuration:ro
       - /etc/localtime:/etc/localtime:ro
 
   mongo:
