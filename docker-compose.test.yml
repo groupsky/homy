@@ -1,0 +1,39 @@
+version: '3'
+services:
+
+  test-external:
+    build: docker/test
+    networks:
+      - test-internal
+
+  test-vpn:
+    build: docker/wireguard
+    networks:
+      - test-internal
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=$UID
+      - PGID=$GID
+    volumes:
+      - /lib/modules:/lib/modules
+      - ./data/wireguard/peer_node1/peer_node1.conf:/config/wg0.conf:ro
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  test-vpn2:
+    build: docker/wireguard
+    networks:
+      - test-internal2
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=$UID
+      - PGID=$GID
+    volumes:
+      - /lib/modules:/lib/modules
+      - ./data/wireguard/peer_node2/peer_node1.conf:/config/wg0.conf:ro
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1

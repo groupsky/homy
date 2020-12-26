@@ -29,6 +29,8 @@ services:
     restart: unless-stopped
     networks:
       - dmz
+      - test-internal
+      - test-internal2
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -153,6 +155,11 @@ networks:
     ipam:
       config:
         - subnet: $INGRESS_SUBNET
+  # internal networks for testing vpn access
+  test-internal:
+    internal: true
+  test-internal2:
+    internal: true
 
 volumes:
   nginx-config:
