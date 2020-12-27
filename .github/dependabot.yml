@@ -90,6 +90,13 @@ updates:
     reviewers:
       - "groupsky"
 
+  - package-ecosystem: "docker"
+    directory: "/docker/telegraf"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
   - package-ecosystem: "npm"
     directory: "/docker/test"
     schedule:

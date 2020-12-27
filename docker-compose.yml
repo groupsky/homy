@@ -186,6 +186,21 @@ services:
       - ./config/influxdb/init:/docker-entrypoint-initdb.d:ro
       - ./data/influxdb:/var/lib/influxdb
 
+  mqtt-consumer:
+    build: docker/telegraf
+    restart: unless-stopped
+    networks:
+      - automation
+    environment:
+      - MQTT_CLIENT_ID=influxdb-consumer
+      - INFLUX_DATABASE=${INFLUX_DATABASE}
+      - INFLUX_OUTPUT_USER=writer
+      - INFLUX_OUTPUT_USER_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+    volumes:
+      - ./config/telegraf/mqtt-consumer.conf:/etc/telegraf/telegraf.conf:ro
+    healthcheck:
+      test: wget localhost:8080 -q -O - > /dev/null 2>&1
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:
