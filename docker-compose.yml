@@ -201,6 +201,25 @@ services:
     healthcheck:
       test: wget localhost:8080 -q -O - > /dev/null 2>&1
 
+  grafana:
+    build: docker/grafana
+    restart: unless-stopped
+    networks:
+      - automation
+      - ingress
+    environment:
+      - TZ=Europe/Sofia
+      - VIRTUAL_HOST=grafana.${DOMAIN}
+      - VIRTUAL_PORT=3000
+      - INFLUXDB_DATABASE=${INFLUX_DATABASE}
+      - INFLUXDB_USER_PASSWORD=${INFLUXDB_READ_USER_PASSWORD}
+    volumes:
+      - ./config/grafana/config.ini:/etc/grafana/grafana.ini:ro
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./data/grafana:/var/lib/grafana
+      - /etc/localtime:/etc/localtime:ro
+    user: ${UID}:${GID}
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:
