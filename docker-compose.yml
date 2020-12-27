@@ -115,6 +115,22 @@ services:
     volumes:
       - ./data/mongo:/data/db
 
+  mongo-express:
+    build: docker/mongo-express
+    restart: unless-stopped
+    networks:
+      - automation
+      - ingress
+    environment:
+      - TZ=Europe/Sofia
+      - VIRTUAL_HOST=me.${DOMAIN}
+      - VIRTUAL_PORT=8081
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USERNAME}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD}
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USERNAME}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD}
+
   main-power:
     build: docker/modbus-serial
     restart: unless-stopped

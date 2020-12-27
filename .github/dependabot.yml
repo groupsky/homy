@@ -49,6 +49,13 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/mongo-express"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/mosquitto"
     schedule:
       interval: "daily"
