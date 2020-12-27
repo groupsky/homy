@@ -28,6 +28,13 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+      directory: "/docker/influxdb"
+      schedule:
+        interval: "daily"
+      reviewers:
+        - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/modbus-serial"
     schedule:
       interval: "daily"
