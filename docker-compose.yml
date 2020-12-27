@@ -191,6 +191,7 @@ services:
     restart: unless-stopped
     networks:
       - automation
+      - egress
     environment:
       - MQTT_CLIENT_ID=influxdb-consumer
       - INFLUX_DATABASE=${INFLUX_DATABASE}
