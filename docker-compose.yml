@@ -10,7 +10,7 @@ services:
       dmz:
         ipv4_address: $INGRESS_ADDRESS
     volumes:
-      - nginx-config:/etc/nginx/conf.d
+      - ./data/ingress:/etc/nginx/conf.d:ro
 
   ingressgen:
     build: docker/dockergen
@@ -20,9 +20,9 @@ services:
     environment:
       - TARGET_CONTAINER=$INGRESS_NAME
     volumes:
-      - nginx-config:/etc/nginx/conf.d
+      - ./data/ingress:/etc/nginx/conf.d
       - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ./data/dockergen/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl
+      - ./config/ingressgen/templates:/etc/docker-gen/templates:ro
 
   vpn:
     build: docker/wireguard
@@ -45,8 +45,9 @@ services:
       - INTERNAL_SUBNET=$VPN_SUBNET
       - ALLOWEDIPS=$INGRESS_SUBNET
     volumes:
-      - ./data/wireguard:/config
       - /lib/modules:/lib/modules
+      - ./data/wireguard:/config
+      - ./config/wireguard/templates:/config/templates:ro
     ports:
       - "${VPN_PUBLIC_PORT}:51820/udp"
     sysctls:
@@ -81,6 +82,9 @@ services:
       - VIRTUAL_PORT=1880
     volumes:
       - ./data/nodered:/data
+      - ./config/nodered/flows.json:/data/flows.json:ro
+      - ./config/nodered/package.json:/data/package.json:ro
+      - ./config/nodered/settings.js:/data/settings.js:ro
 
   ha:
     build: docker/homeassistant
@@ -95,6 +99,8 @@ services:
       - VIRTUAL_PORT=8123
     volumes:
       - ./data/home-assistant:/config
+      - ./config/home-assistant/configuration.yaml:/config/configuration.yaml:ro
+      - ./config/home-assistant/configuration:/config/configuration:ro
       - /etc/localtime:/etc/localtime:ro
 
   mongo:
@@ -160,6 +166,3 @@ networks:
     internal: true
   test-internal2:
     internal: true
-
-volumes:
-  nginx-config:
