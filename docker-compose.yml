@@ -252,6 +252,22 @@ services:
       - INFLUX_DATABASE=${INFLUX_DATABASE}
       - TAGS={"bus":"primary"}
 
+  mqtt-influx-secondary:
+    build: docker/mqtt-influx
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://192.168.0.2
+      - TOPIC=/modbus/secondary/+/reading
+      - MQTT_CLIENT_ID=mqtt-influx-secondary
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_USERNAME=writer
+      - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+      - INFLUX_DATABASE=${INFLUX_DATABASE}
+      - TAGS={"bus":"secondary"}
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:
