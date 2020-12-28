@@ -171,6 +171,7 @@ services:
     networks:
       - automation
     environment:
+      - TZ=Europe/Sofia
       - INFLUXDB_DB=${INFLUX_DATABASE}
       - INFLUXDB_HTTP_AUTH_ENABLED=true
       - INFLUXDB_ADMIN_USER=admin
@@ -185,6 +186,7 @@ services:
       - ./config/influxdb/influxdb.conf:/etc/influxdb/influxdb.conf:ro
       - ./config/influxdb/init:/docker-entrypoint-initdb.d:ro
       - ./data/influxdb:/var/lib/influxdb
+      - /etc/localtime:/etc/localtime:ro
 
   mqtt-consumer:
     build: docker/telegraf
@@ -220,6 +222,35 @@ services:
       - ./data/grafana:/var/lib/grafana
       - /etc/localtime:/etc/localtime:ro
     user: ${UID}:${GID}
+
+  mqtt-mongo-primary:
+    build: docker/mqtt-mongo
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    environment:
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+      - COLLECTION=primary
+      - BROKER=mqtt://192.168.0.2
+      - TOPIC=/modbus/main/+/reading
+      - MQTT_CLIENT_ID=mqtt-mongo-primary
+
+  mqtt-influx-primary:
+    build: docker/mqtt-influx
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://192.168.0.2
+      - TOPIC=/modbus/main/+/reading
+      - MQTT_CLIENT_ID=mqtt-influx-primary
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_USERNAME=writer
+      - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+      - INFLUX_DATABASE=${INFLUX_DATABASE}
+      - TAGS={"bus":"primary"}
 
 networks:
   # internal for the automation services - mqtt, node red, ah
