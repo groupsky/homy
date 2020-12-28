@@ -188,21 +188,22 @@ services:
       - ./data/influxdb:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
 
-  mqtt-consumer:
-    build: docker/telegraf
-    restart: unless-stopped
-    networks:
-      - automation
-      - egress
-    environment:
-      - MQTT_CLIENT_ID=influxdb-consumer
-      - INFLUX_DATABASE=${INFLUX_DATABASE}
-      - INFLUX_OUTPUT_USER=writer
-      - INFLUX_OUTPUT_USER_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
-    volumes:
-      - ./config/telegraf/mqtt-consumer.conf:/etc/telegraf/telegraf.conf:ro
-    healthcheck:
-      test: wget localhost:8080 -q -O - > /dev/null 2>&1
+# WIP - attempt to process raw readings with telegraf, failed with processing into multiple events
+#  mqtt-consumer:
+#    build: docker/telegraf
+#    restart: unless-stopped
+#    networks:
+#      - automation
+#      - egress
+#    environment:
+#      - MQTT_CLIENT_ID=influxdb-consumer
+#      - INFLUX_DATABASE=${INFLUX_DATABASE}
+#      - INFLUX_OUTPUT_USER=writer
+#      - INFLUX_OUTPUT_USER_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+#    volumes:
+#      - ./config/telegraf/mqtt-consumer.conf:/etc/telegraf/telegraf.conf:ro
+#    healthcheck:
+#      test: wget localhost:8080 -q -O - > /dev/null 2>&1
 
   grafana:
     build: docker/grafana
@@ -223,18 +224,19 @@ services:
       - /etc/localtime:/etc/localtime:ro
     user: ${UID}:${GID}
 
-  mqtt-mongo-primary:
-    build: docker/mqtt-mongo
-    restart: unless-stopped
-    networks:
-      - automation
-      - egress
-    environment:
-      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
-      - COLLECTION=primary
-      - BROKER=mqtt://192.168.0.2
-      - TOPIC=/modbus/main/+/reading
-      - MQTT_CLIENT_ID=mqtt-mongo-primary
+# WIP - records mqtt in mongo
+#  mqtt-mongo-primary:
+#    build: docker/mqtt-mongo
+#    restart: unless-stopped
+#    networks:
+#      - automation
+#      - egress
+#    environment:
+#      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+#      - COLLECTION=primary
+#      - BROKER=mqtt://broker
+#      - TOPIC=/modbus/main/+/reading
+#      - MQTT_CLIENT_ID=mqtt-mongo-primary
 
   mqtt-influx-primary:
     build: docker/mqtt-influx
@@ -243,8 +245,8 @@ services:
       - automation
       - egress
     environment:
-      - BROKER=mqtt://192.168.0.2
-      - TOPIC=/modbus/main/+/reading
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/main/+/+
       - MQTT_CLIENT_ID=mqtt-influx-primary
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_USERNAME=writer
@@ -259,14 +261,44 @@ services:
       - automation
       - egress
     environment:
-      - BROKER=mqtt://192.168.0.2
-      - TOPIC=/modbus/secondary/+/reading
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/secondary/+/+
       - MQTT_CLIENT_ID=mqtt-influx-secondary
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_USERNAME=writer
       - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
       - INFLUX_DATABASE=${INFLUX_DATABASE}
       - TAGS={"bus":"secondary"}
+
+  # Manualy run with
+  # dc run historian-primary node index.js
+  historian-primary:
+    build: docker/historian
+    restart: 'no'
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/main/{device}/history
+      - MQTT_CLIENT_ID=historian-primary
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+      - COLLECTION=main
+
+  # Manualy run with
+  # dc run historian-secondary node index.js
+  historian-secondary:
+    build: docker/historian
+    restart: 'no'
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/secondary/{device}/history
+      - MQTT_CLIENT_ID=historian-secondary
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+      - COLLECTION=secondary
 
 networks:
   # internal for the automation services - mqtt, node red, ah
