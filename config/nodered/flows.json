@@ -1128,7 +1128,8 @@
             [
                 "f2fb1a95.73e708"
             ]
-        ]
+        ],
+        "icon": "font-awesome/fa-power-off"
     },
     {
         "id": "8f24442c.101ae8",
@@ -1157,7 +1158,8 @@
             [
                 "3118770c.bec328"
             ]
-        ]
+        ],
+        "icon": "font-awesome/fa-power-off"
     },
     {
         "id": "bcffd1f9.fe733",
@@ -1186,7 +1188,8 @@
             [
                 "d40604d.9cf8ef8"
             ]
-        ]
+        ],
+        "icon": "font-awesome/fa-volume-up"
     },
     {
         "id": "3d78faef.884276",
@@ -1215,7 +1218,8 @@
             [
                 "d60ecbde.0e7f28"
             ]
-        ]
+        ],
+        "icon": "font-awesome/fa-volume-down"
     },
     {
         "id": "d40604d.9cf8ef8",
@@ -1233,7 +1237,8 @@
             [
                 "f2fb1a95.73e708"
             ]
-        ]
+        ],
+        "icon": "font-awesome/fa-volume-up"
     },
     {
         "id": "d60ecbde.0e7f28",
@@ -1251,7 +1256,8 @@
             [
                 "f2fb1a95.73e708"
             ]
-        ]
+        ],
+        "icon": "font-awesome/fa-volume-down"
     },
     {
         "id": "a5aa7e92.62b0c",
