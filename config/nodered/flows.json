@@ -1070,8 +1070,8 @@
             },
             {
                 "t": "eq",
-                "v": "disabled",
-                "vt": "str"
+                "v": "37",
+                "vt": "num"
             }
         ],
         "checkall": "true",
@@ -1083,7 +1083,205 @@
             [
                 "ce929fca.22a48"
             ],
+            [
+                "3118770c.bec328"
+            ]
+        ],
+        "outputLabels": [
+            "left button",
+            "right button"
+        ],
+        "icon": "font-awesome/fa-pause"
+    },
+    {
+        "id": "f2fb1a95.73e708",
+        "type": "RM",
+        "z": "7f69ac0c.ea2e54",
+        "name": "living room ir",
+        "device": "f2414fc3.f8896",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 1210,
+        "y": 860,
+        "wires": [
             []
+        ]
+    },
+    {
+        "id": "3118770c.bec328",
+        "type": "function",
+        "z": "7f69ac0c.ea2e54",
+        "name": "tv power",
+        "func": "const cmd = \"JgCMAJOSEzYTNxI3EhISEhMSFBAUERM2EjcUNRISExMSERMSFBATEhM4ERMSERMTERMSEhISEzYTEhM2EzYSNxQ2EjYTNxIABf2UkhE3FDUTNxIRFRATEhMRExETNxQ1EzcRExITERMSEhISExMSNhYOExMVDhMSExISEhM3ExETNhU0EzcRNxM2EzcTAA0FAAAAAAAAAAAAAAAA\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 1060,
+        "y": 860,
+        "wires": [
+            [
+                "f2fb1a95.73e708"
+            ]
+        ]
+    },
+    {
+        "id": "8f24442c.101ae8",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "TV ON/OFF",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 570,
+        "y": 40,
+        "wires": [
+            [
+                "3118770c.bec328"
+            ]
+        ]
+    },
+    {
+        "id": "bcffd1f9.fe733",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "TV Vol+",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 550,
+        "y": 80,
+        "wires": [
+            [
+                "d40604d.9cf8ef8"
+            ]
+        ]
+    },
+    {
+        "id": "3d78faef.884276",
+        "type": "inject",
+        "z": "7f69ac0c.ea2e54",
+        "name": "TV Vol-",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 550,
+        "y": 120,
+        "wires": [
+            [
+                "d60ecbde.0e7f28"
+            ]
+        ]
+    },
+    {
+        "id": "d40604d.9cf8ef8",
+        "type": "function",
+        "z": "7f69ac0c.ea2e54",
+        "name": "tv vol+",
+        "func": "const cmd = \"JgDSAJKSEzcRNxM3EhEUEhISEhITEhQ1EjgSNhQREhMSERQRExMRNxM2EjcTERMSEhMTERISFBEUEBMTEzUSOBI2EzYUNRMABf2VkRE3FDUTNxESExMSExIRExMRNxI3EzYSEhMSExEUERMRFTUSNxI3ExETEhQQFBIREhQRExEUERM2EzYTNxI2FDUTAAX9k5ITNhQ2EjYTExETExIRExISEzYSOBM2ExAUEhISEhIUERM2EzcSNxESExITEhMRExIUEBMSFBATNhM2EzcTNhI3EgANBQAAAAAAAA==\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 1050,
+        "y": 900,
+        "wires": [
+            [
+                "f2fb1a95.73e708"
+            ]
+        ]
+    },
+    {
+        "id": "d60ecbde.0e7f28",
+        "type": "function",
+        "z": "7f69ac0c.ea2e54",
+        "name": "tv vol-",
+        "func": "const cmd = \"JgDSAJOSEjgROBE3ExISExETExETERQ2EjcTNhQQExMREhQSEhETNhM2ExQRNhQRExISEhMSExISERM2ExITNxI2FDUTNhMABf2TkhI3EzcSNhMSFBESExMQExISNxM2EjcTERMSExETEhMREzcSNxISEzUUEhMRExISEhQRExITNxESEzYUNhM1FDYSAAX9k5ITNhM2EzcSExIRExITERMSEzYTNxM1ExITERYPEhMSEhM3ETgTERI4ERMSEhQQExITERMSEjcTEhI2FDUUNhI4EgANBQAAAAAAAA==\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 1050,
+        "y": 940,
+        "wires": [
+            [
+                "f2fb1a95.73e708"
+            ]
+        ]
+    },
+    {
+        "id": "a5aa7e92.62b0c",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1304 living",
+        "property": "payload.p",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "35",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "34",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 410,
+        "y": 560,
+        "wires": [
+            [
+                "d40604d.9cf8ef8"
+            ],
+            [
+                "d60ecbde.0e7f28"
+            ]
         ],
         "outputLabels": [
             "left button",
@@ -1111,5 +1309,13 @@
         "willTopic": "",
         "willQos": "0",
         "willPayload": ""
+    },
+    {
+        "id": "f2414fc3.f8896",
+        "type": "rmdevice",
+        "folder": "",
+        "mac": "B4430DB602E2",
+        "host": "192.168.0.41",
+        "devType": "272a"
     }
 ]
