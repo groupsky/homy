@@ -1056,6 +1056,42 @@
         ]
     },
     {
+        "id": "31866796.59f7c8",
+        "type": "switch",
+        "z": "7f69ac0c.ea2e54",
+        "name": "1303 living",
+        "property": "payload.p",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "36",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "disabled",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 410,
+        "y": 520,
+        "wires": [
+            [
+                "ce929fca.22a48"
+            ],
+            []
+        ],
+        "outputLabels": [
+            "left button",
+            "right button"
+        ],
+        "icon": "font-awesome/fa-pause"
+    },
+    {
         "id": "1a2ea69e.012e49",
         "type": "mqtt-broker",
         "name": "broker",
