@@ -77,6 +77,8 @@ services:
     networks:
       - automation
       - ingress
+      # needed to connect to broadcom rm+ pro ir remote
+      - egress
     environment:
       - VIRTUAL_HOST=nodered.${DOMAIN}
       - VIRTUAL_PORT=1880
