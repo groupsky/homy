@@ -165,6 +165,141 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - ./config/modbus-serial/secondary.config.js:/etc/config.js:ro
 
+  influxdb:
+    build: docker/influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+    environment:
+      - TZ=Europe/Sofia
+      - INFLUXDB_DB=${INFLUX_DATABASE}
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=${INFLUXDB_ADMIN_PASSWORD}
+      - INFLUXDB_USER=user
+      - INFLUXDB_USER_PASSWORD=${INFLUXDB_USER_PASSWORD}
+      - INFLUXDB_READ_USER=reader
+      - INFLUXDB_READ_USER_PASSWORD=${INFLUXDB_READ_USER_PASSWORD}
+      - INFLUXDB_WRITE_USER=writer
+      - INFLUXDB_WRITE_USER_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+    volumes:
+      - ./config/influxdb/influxdb.conf:/etc/influxdb/influxdb.conf:ro
+      - ./config/influxdb/init:/docker-entrypoint-initdb.d:ro
+      - ./data/influxdb:/var/lib/influxdb
+      - /etc/localtime:/etc/localtime:ro
+
+# WIP - attempt to process raw readings with telegraf, failed with processing into multiple events
+#  mqtt-consumer:
+#    build: docker/telegraf
+#    restart: unless-stopped
+#    networks:
+#      - automation
+#      - egress
+#    environment:
+#      - MQTT_CLIENT_ID=influxdb-consumer
+#      - INFLUX_DATABASE=${INFLUX_DATABASE}
+#      - INFLUX_OUTPUT_USER=writer
+#      - INFLUX_OUTPUT_USER_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+#    volumes:
+#      - ./config/telegraf/mqtt-consumer.conf:/etc/telegraf/telegraf.conf:ro
+#    healthcheck:
+#      test: wget localhost:8080 -q -O - > /dev/null 2>&1
+
+  grafana:
+    build: docker/grafana
+    restart: unless-stopped
+    networks:
+      - automation
+      - ingress
+    environment:
+      - TZ=Europe/Sofia
+      - VIRTUAL_HOST=grafana.${DOMAIN}
+      - VIRTUAL_PORT=3000
+      - INFLUXDB_DATABASE=${INFLUX_DATABASE}
+      - INFLUXDB_USER_PASSWORD=${INFLUXDB_READ_USER_PASSWORD}
+    volumes:
+      - ./config/grafana/config.ini:/etc/grafana/grafana.ini:ro
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./data/grafana:/var/lib/grafana
+      - /etc/localtime:/etc/localtime:ro
+    user: ${UID}:${GID}
+
+# WIP - records mqtt in mongo
+#  mqtt-mongo-primary:
+#    build: docker/mqtt-mongo
+#    restart: unless-stopped
+#    networks:
+#      - automation
+#      - egress
+#    environment:
+#      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+#      - COLLECTION=primary
+#      - BROKER=mqtt://broker
+#      - TOPIC=/modbus/main/+/reading
+#      - MQTT_CLIENT_ID=mqtt-mongo-primary
+
+  mqtt-influx-primary:
+    build: docker/mqtt-influx
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/main/+/+
+      - MQTT_CLIENT_ID=mqtt-influx-primary
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_USERNAME=writer
+      - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+      - INFLUX_DATABASE=${INFLUX_DATABASE}
+      - TAGS={"bus":"primary"}
+
+  mqtt-influx-secondary:
+    build: docker/mqtt-influx
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/secondary/+/+
+      - MQTT_CLIENT_ID=mqtt-influx-secondary
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_USERNAME=writer
+      - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+      - INFLUX_DATABASE=${INFLUX_DATABASE}
+      - TAGS={"bus":"secondary"}
+
+  # Manualy run with
+  # dc run historian-primary node index.js
+  historian-primary:
+    build: docker/historian
+    restart: 'no'
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/main/{device}/history
+      - MQTT_CLIENT_ID=historian-primary
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+      - COLLECTION=main
+
+  # Manualy run with
+  # dc run historian-secondary node index.js
+  historian-secondary:
+    build: docker/historian
+    restart: 'no'
+    networks:
+      - automation
+      - egress
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/secondary/{device}/history
+      - MQTT_CLIENT_ID=historian-secondary
+      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+      - COLLECTION=secondary
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:

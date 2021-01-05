@@ -1,0 +1,16 @@
+{
+  "name": "homy-modbus-serial-docker",
+  "version": "1.0.0",
+  "description": "Serial modbus reader",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "start": "index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.9.0",
+    "mqtt": "^4.2.6"
+  }
+}
