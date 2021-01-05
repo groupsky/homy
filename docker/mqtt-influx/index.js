@@ -2,7 +2,7 @@
 /* eslint-env node */
 
 const mqtt = require('mqtt')
-const {InfluxDB, Point, HttpError} = require('@influxdata/influxdb-client')
+const {InfluxDB} = require('@influxdata/influxdb-client')
 
 const mqttUrl = process.env.BROKER
 const topic = process.env.TOPIC
