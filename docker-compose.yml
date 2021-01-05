@@ -14,7 +14,7 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - ${INGRESS_DATA}:/etc/nginx/conf.d:ro
+      - ${INGRESS_DATA_PATH}:/etc/nginx/conf.d:ro
 
   ingressgen:
     build: docker/dockergen
@@ -29,7 +29,7 @@ services:
     environment:
       - TARGET_CONTAINER=$INGRESS_NAME
     volumes:
-      - ${INGRESS_DATA}:/etc/nginx/conf.d
+      - ${INGRESS_DATA_PATH}:/etc/nginx/conf.d
       - /var/run/docker.sock:/tmp/docker.sock:ro
       # fallback in case configs are not supported
       - ${INGRESSGEN_TEMPLATE_NGINX_FILE}:/etc/docker-gen/templates/nginx.tmpl:ro
@@ -191,9 +191,9 @@ services:
       - VIRTUAL_PORT=8081
       - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
       - ME_CONFIG_MONGODB_ADMINUSERNAME_FILE=/run/secrets/mongo_root_username
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=/run/secrets/mongo_root_password
-      - ME_CONFIG_BASICAUTH_USERNAME=/run/secrets/mongo_express_username
-      - ME_CONFIG_BASICAUTH_PASSWORD=/run/secrets/mongo_express_password
+      - ME_CONFIG_MONGODB_ADMINPASSWORD_FILE=/run/secrets/mongo_root_password
+      - ME_CONFIG_BASICAUTH_USERNAME_FILE=/run/secrets/mongo_express_username
+      - ME_CONFIG_BASICAUTH_PASSWORD_FILE=/run/secrets/mongo_express_password
     volumes:
       - /etc/localtime:/etc/localtime:ro
 
