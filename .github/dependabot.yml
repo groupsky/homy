@@ -28,6 +28,20 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/historian"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/historian"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
     schedule:
       interval: "daily"
@@ -71,6 +85,34 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/mosquitto"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/mqtt-influx"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/mqtt-influx"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/mqtt-mongo"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/mqtt-mongo"
     schedule:
       interval: "daily"
     reviewers:
