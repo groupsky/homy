@@ -1,28 +1,38 @@
-version: '3'
+version: '3.8'
 services:
 
   ingress:
     build: docker/nginx
+    depends_on:
+      - ingressgen
     restart: unless-stopped
     container_name: $INGRESS_NAME
     networks:
       ingress:
       dmz:
         ipv4_address: $INGRESS_ADDRESS
+    security_opt:
+      - no-new-privileges:true
     volumes:
-      - ./data/ingress:/etc/nginx/conf.d:ro
+      - ${INGRESS_DATA}:/etc/nginx/conf.d:ro
 
   ingressgen:
     build: docker/dockergen
     restart: unless-stopped
     command: -notify-sighup $INGRESS_NAME -watch /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
     network_mode: none
+    security_opt:
+      - no-new-privileges:true
+    configs:
+      - source: ingressgen_template_nginx
+        target: /etc/docker-gen/templates/nginx.tmpl
     environment:
       - TARGET_CONTAINER=$INGRESS_NAME
     volumes:
-      - ./data/ingress:/etc/nginx/conf.d
+      - ${INGRESS_DATA}:/etc/nginx/conf.d
       - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ./config/ingressgen/templates:/etc/docker-gen/templates:ro
+      # fallback in case configs are not supported
+      - ${INGRESSGEN_TEMPLATE_NGINX_FILE}:/etc/docker-gen/templates/nginx.tmpl:ro
 
   vpn:
     build: docker/wireguard
@@ -31,12 +41,19 @@ services:
       - dmz
       - test-internal
       - test-internal2
+    security_opt:
+      - no-new-privileges:true
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
+    configs:
+      - source: vpn_template_peer
+        target: /config/templates/peer.conf
+      - source: vpn_template_server
+        target: /config/templates/server.conf
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${PUID}
+      - PGID=${PGID}
       - TZ=Europe/Sofia
       - SERVERURL=$VPN_PUBLIC_URL
       - SERVERPORT=$VPN_PUBLIC_PORT
@@ -45,9 +62,11 @@ services:
       - INTERNAL_SUBNET=$VPN_SUBNET
       - ALLOWEDIPS=$INGRESS_SUBNET
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /lib/modules:/lib/modules
-      - ./data/wireguard:/config
-      - ./config/wireguard/templates:/config/templates:ro
+      - ${VPN_DATA_PATH}:/config
+      - ${VPN_TEMPLATE_PEER_FILE}:/config/templates/peer.conf:ro
+      - ${VPN_TEMPLATE_SERVER_FILE}:/config/templates/server.conf:ro
     ports:
       - "${VPN_PUBLIC_PORT}:51820/udp"
     sysctls:
@@ -59,79 +78,124 @@ services:
     networks:
       - automation
       - dmz
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "1883:1883"
 
-  whoami:
-    image: jwilder/whoami
-    restart: unless-stopped
-    networks:
-      - ingress
-    environment:
-      - VIRTUAL_HOST=whoami.${DOMAIN}
-      - VIRTUAL_PORT=8000
-
   nodered:
     build: docker/nodered
+    depends_on:
+      - broker
     restart: unless-stopped
     networks:
       - automation
       - ingress
       # needed to connect to broadcom rm+ pro ir remote
       - egress
+    security_opt:
+      - no-new-privileges:true
+    configs:
+      - source: nodered_flows
+        target: /data/flows.json
+      - source: nodered_package
+        target: /data/package.json
+      - source: nodered_settings
+        target: /data/settings.js
+    secrets:
+      - nodered_credentials_key
     environment:
-      - VIRTUAL_HOST=nodered.${DOMAIN}
+      - CREDENTIALS_KEY_FILE=/run/secrets/nodered_credentials_key
+      - VIRTUAL_HOST=${NODERED_DOMAIN}
       - VIRTUAL_PORT=1880
     volumes:
-      - ./data/nodered:/data
-      - ./config/nodered/flows.json:/data/flows.json:ro
-      - ./config/nodered/package.json:/data/package.json:ro
-      - ./config/nodered/settings.js:/data/settings.js:ro
+      - ${NODERED_DATA}:/data
+      - ${NODERED_CONFIG_FLOWS_FILE}:/data/flows.json:ro
+      - ${NODERED_CONFIG_PACKAGE_FILE}:/data/package.json:ro
+      - ${NODERED_CONFIG_SETTINGS_FILE}:/data/settings.js:ro
 
   ha:
     build: docker/homeassistant
+    depends_on:
+      - broker
     restart: unless-stopped
     networks:
       - automation
       - ingress
       - egress
+    security_opt:
+      - no-new-privileges:true
+    configs:
+      - source: homeassistant_configuration
+        target: /config/configuration.yaml
+      - source: homeassistant_automations
+        target: /config/configuration/automations.yaml
+      - source: homeassistant_customize
+        target: /config/configuration/customize.yaml
+      - source: homeassistant_groups
+        target: /config/configuration/groups.yaml
+      - source: homeassistant_scenes
+        target: /config/configuration/scenes.yaml
+      - source: homeassistant_scripts
+        target: /config/configuration/scripts.yaml
     environment:
       - TZ=Europe/Sofia
-      - VIRTUAL_HOST=ha.${DOMAIN}
+      - VIRTUAL_HOST=${HOMEASSISTANT_DOMAIN}
       - VIRTUAL_PORT=8123
     volumes:
-      - ./data/home-assistant:/config
-      - ./config/home-assistant/configuration.yaml:/config/configuration.yaml:ro
-      - ./config/home-assistant/configuration:/config/configuration:ro
       - /etc/localtime:/etc/localtime:ro
+      - ${HOMEASSISTANT_DATA_PATH}:/config
+      - ${HOMEASSISTANT_CONFIG_CONFIGURATION_FILE}:/config/configuration.yaml:ro
+      - ${HOMEASSISTANT_CONFIG_AUTOMATIONS_FILE}:/config/configuration/automations.yaml:ro
+      - ${HOMEASSISTANT_CONFIG_CUSTOMIZE_FILE}:/config/configuration/customize.yaml:ro
+      - ${HOMEASSISTANT_CONFIG_GROUPS_FILE}:/config/configuration/groups.yaml:ro
+      - ${HOMEASSISTANT_CONFIG_SCENES_FILE}:/config/configuration/scenes.yaml:ro
+      - ${HOMEASSISTANT_CONFIG_SCRIPTS_FILE}:/config/configuration/scripts.yaml:ro
 
   mongo:
     build: docker/mongo
     restart: unless-stopped
     networks:
       - automation
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
-      - MONGO_INITDB_DATABASE=power
+      - MONGO_INITDB_ROOT_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGO_INITDB_ROOT_PASSWORD_FILE=/run/secrets/mongo_root_password
+      - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
     volumes:
-      - ./data/mongo:/data/db
+      - ${MONGO_DATA_PATH}:/data
+#    user: ${PUID}:${PGID}
 
   mongo-express:
     build: docker/mongo-express
+    depends_on:
+      - mongo
     restart: unless-stopped
     networks:
       - automation
       - ingress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+      - mongo_express_username
+      - mongo_express_password
     environment:
       - TZ=Europe/Sofia
-      - VIRTUAL_HOST=me.${DOMAIN}
+      - VIRTUAL_HOST=${MONGO_EXPRESS_DOMAIN}
       - VIRTUAL_PORT=8081
       - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USERNAME}
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD}
-      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USERNAME}
-      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD}
+      - ME_CONFIG_MONGODB_ADMINUSERNAME_FILE=/run/secrets/mongo_root_username
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=/run/secrets/mongo_root_password
+      - ME_CONFIG_BASICAUTH_USERNAME=/run/secrets/mongo_express_username
+      - ME_CONFIG_BASICAUTH_PASSWORD=/run/secrets/mongo_express_password
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
 
   main-power:
     build: docker/modbus-serial
@@ -188,23 +252,6 @@ services:
       - ./data/influxdb:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
 
-# WIP - attempt to process raw readings with telegraf, failed with processing into multiple events
-#  mqtt-consumer:
-#    build: docker/telegraf
-#    restart: unless-stopped
-#    networks:
-#      - automation
-#      - egress
-#    environment:
-#      - MQTT_CLIENT_ID=influxdb-consumer
-#      - INFLUX_DATABASE=${INFLUX_DATABASE}
-#      - INFLUX_OUTPUT_USER=writer
-#      - INFLUX_OUTPUT_USER_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
-#    volumes:
-#      - ./config/telegraf/mqtt-consumer.conf:/etc/telegraf/telegraf.conf:ro
-#    healthcheck:
-#      test: wget localhost:8080 -q -O - > /dev/null 2>&1
-
   grafana:
     build: docker/grafana
     restart: unless-stopped
@@ -222,7 +269,7 @@ services:
       - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
       - ./data/grafana:/var/lib/grafana
       - /etc/localtime:/etc/localtime:ro
-    user: ${UID}:${GID}
+    user: ${PUID}:${PGID}
 
 # WIP - records mqtt in mongo
 #  mqtt-mongo-primary:
@@ -319,3 +366,29 @@ networks:
     internal: true
   test-internal2:
     internal: true
+
+configs:
+  ingressgen_template_nginx:
+    file: ${INGRESSGEN_TEMPLATE_NGINX_FILE}
+  vpn_template_peer:
+    file: ${VPN_TEMPLATE_PEER_FILE}
+  vpn_template_server:
+    file: ${VPN_TEMPLATE_SERVER_FILE}
+  nodered_flows:
+    file: ${NODERED_CONFIG_FLOWS_FILE}
+  nodered_package:
+    file: ${NODERED_CONFIG_PACKAGE_FILE}
+  nodered_settings:
+    file: ${NODERED_CONFIG_SETTINGS_FILE}
+
+secrets:
+  mongo_express_password:
+    file: ${MONGO_EXPRESS_SECRET_PASSWORD_FILE}
+  mongo_express_username:
+    file: ${MONGO_EXPRESS_SECRET_USERNAME_FILE}
+  mongo_root_password:
+    file: ${MONGO_SECRET_ROOT_PASSWORD_FILE}
+  mongo_root_username:
+    file: ${MONGO_SECRET_ROOT_USERNAME_FILE}
+  nodered_credentials_key:
+    file: ${NODERED_SECRET_CREDENTIALS_KEY_FILE}
