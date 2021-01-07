@@ -54,7 +54,7 @@ services:
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
-      - TZ=Europe/Sofia
+      - TZ=${TZ}
       - SERVERURL=$VPN_PUBLIC_URL
       - SERVERPORT=$VPN_PUBLIC_PORT
       - PEERS=$VPN_PEERS
@@ -139,7 +139,7 @@ services:
       - source: homeassistant_scripts
         target: /config/configuration/scripts.yaml
     environment:
-      - TZ=Europe/Sofia
+      - TZ=${TZ}
       - VIRTUAL_HOST=${HOMEASSISTANT_DOMAIN}
       - VIRTUAL_PORT=8123
     volumes:
@@ -168,7 +168,6 @@ services:
       - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
     volumes:
       - ${MONGO_DATA_PATH}:/data
-#    user: ${PUID}:${PGID}
 
   mongo-express:
     build: docker/mongo-express
@@ -186,7 +185,7 @@ services:
       - mongo_express_username
       - mongo_express_password
     environment:
-      - TZ=Europe/Sofia
+      - TZ=${TZ}
       - VIRTUAL_HOST=${MONGO_EXPRESS_DOMAIN}
       - VIRTUAL_PORT=8081
       - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
@@ -245,7 +244,7 @@ services:
     networks:
       - automation
     environment:
-      - TZ=Europe/Sofia
+      - TZ=${TZ}
       - INFLUXDB_DB=${INFLUX_DATABASE}
       - INFLUXDB_HTTP_AUTH_ENABLED=true
       - INFLUXDB_ADMIN_USER=admin
@@ -269,7 +268,7 @@ services:
       - automation
       - ingress
     environment:
-      - TZ=Europe/Sofia
+      - TZ=${TZ}
       - VIRTUAL_HOST=grafana.${DOMAIN}
       - VIRTUAL_PORT=3000
       - INFLUXDB_DATABASE=${INFLUX_DATABASE}
