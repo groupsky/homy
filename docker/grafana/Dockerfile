@@ -41,3 +41,8 @@ RUN if [ ! -z "${GF_INSTALL_PLUGINS}" ]; then \
         grafana-cli --pluginsDir "$GF_PATHS_PLUGINS" plugins install ${plugin}; \
     done; \
 fi
+
+COPY load-env-files.sh /load-env-files.sh
+COPY secure-entrypoint.sh /secure-entrypoint.sh
+
+ENTRYPOINT ["/secure-entrypoint.sh"]

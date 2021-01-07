@@ -292,20 +292,34 @@ services:
 
   grafana:
     build: docker/grafana
+    depends_on:
+      - influxdb
     restart: unless-stopped
     networks:
       - automation
       - ingress
+    security_opt:
+      - no-new-privileges:true
+    configs:
+      - source: grafana_config
+        target: /etc/grafana/grafana.ini
+      - source: grafana_datasource_influxdb
+        target: /etc/grafana/provisioning/datasources/influxdb.yaml
+    secrets:
+      - influxdb_read_user
+      - influxdb_read_user_password
     environment:
       - TZ=${TZ}
       - VIRTUAL_HOST=grafana.${DOMAIN}
       - VIRTUAL_PORT=3000
+      - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
-      - INFLUXDB_USER_PASSWORD=${INFLUXDB_READ_USER_PASSWORD}
+      - INFLUXDB_USER_FILE=/run/secrets/influxdb_read_user
+      - INFLUXDB_USER_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
     volumes:
-      - ./config/grafana/config.ini:/etc/grafana/grafana.ini:ro
-      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./data/grafana:/var/lib/grafana
+      - ${GRAFANA_CONFIG_FILE}:/etc/grafana/grafana.ini:ro
+      - ${GRAFANA_CONFIG_DATASOURCE_INFLUXDB_FILE}:/etc/grafana/provisioning/datasources/influxdb.yaml:ro
+      - ${GRAFANA_DATA_PATH}:/var/lib/grafana
       - /etc/localtime:/etc/localtime:ro
     user: ${PUID}:${PGID}
 
@@ -406,6 +420,10 @@ networks:
     internal: true
 
 configs:
+  grafana_config:
+    file: ${GRAFANA_CONFIG_FILE}
+  grafana_datasource_influxdb:
+    file: ${GRAFANA_CONFIG_DATASOURCE_INFLUXDB_FILE}
   influxdb_config:
     file: ${INFLUXDB_CONFIG_FILE}
   ingressgen_template_nginx:
