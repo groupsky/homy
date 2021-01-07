@@ -207,6 +207,9 @@ services:
       - automation
     security_opt:
       - no-new-privileges:true
+    configs:
+      - source: main_power
+        target: /etc/config.js
     secrets:
       - mongo_root_username
       - mongo_root_password
@@ -220,23 +223,36 @@ services:
       - TOPIC=/modbus/main/{name}/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
-      - ./config/modbus-serial/main.config.js:/etc/config.js:ro
+      - ${MAIN_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   secondary-power:
     build: docker/modbus-serial
+    depends_on:
+      - broker
+      - mongo
     restart: unless-stopped
     privileged: true
     networks:
       - automation
+    security_opt:
+      - no-new-privileges:true
+    configs:
+      - source: secondary_power
+        target: /etc/config.js
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
     environment:
-      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+      - MONGODB_URL=mongodb://mongo:27017/power?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=secondary
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/secondary/{name}/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
-      - ./config/modbus-serial/secondary.config.js:/etc/config.js:ro
+      - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   influxdb:
     build: docker/influxdb
@@ -383,12 +399,16 @@ configs:
     file: ${VPN_TEMPLATE_PEER_FILE}
   vpn_template_server:
     file: ${VPN_TEMPLATE_SERVER_FILE}
+  main_power:
+    file: ${MAIN_POWER_CONFIG_FILE}
   nodered_flows:
     file: ${NODERED_CONFIG_FLOWS_FILE}
   nodered_package:
     file: ${NODERED_CONFIG_PACKAGE_FILE}
   nodered_settings:
     file: ${NODERED_CONFIG_SETTINGS_FILE}
+  secondary_power:
+    file: ${SECONDARY_POWER_CONFIG_FILE}
 
 secrets:
   mongo_express_password:
