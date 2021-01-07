@@ -1,5 +1,5 @@
 function getFile(filePath) {
-  if (typeof filePath !== 'undefined' && filePath) {
+  if (filePath) {
     const fs = require('fs');
 
     try {
