@@ -14,8 +14,8 @@ services:
       - NET_ADMIN
       - SYS_MODULE
     environment:
-      - PUID=$UID
-      - PGID=$GID
+      - PUID=$PUID
+      - PGID=$PGID
     volumes:
       - /lib/modules:/lib/modules
       - ./data/wireguard/peer_node1/peer_node1.conf:/config/wg0.conf:ro
@@ -30,8 +30,8 @@ services:
       - NET_ADMIN
       - SYS_MODULE
     environment:
-      - PUID=$UID
-      - PGID=$GID
+      - PUID=$PUID
+      - PGID=$PGID
     volumes:
       - /lib/modules:/lib/modules
       - ./data/wireguard/peer_node2/peer_node1.conf:/config/wg0.conf:ro

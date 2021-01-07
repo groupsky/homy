@@ -5,7 +5,7 @@ services:
     build: docker/nginx
     depends_on:
       - ingressgen
-    restart: unless-stopped
+    restart: on-failure
     container_name: $INGRESS_NAME
     networks:
       ingress:
