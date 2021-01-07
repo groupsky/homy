@@ -259,21 +259,34 @@ services:
     restart: unless-stopped
     networks:
       - automation
+    security_opt:
+      - no-new-privileges:true
+    configs:
+      - source: influxdb_config
+        target: /etc/influxdb/influxdb.conf
+    secrets:
+      - influxdb_admin_user
+      - influxdb_admin_password
+      - influxdb_user
+      - influxdb_user_password
+      - influxdb_read_user
+      - influxdb_read_user_password
+      - influxdb_write_user
+      - influxdb_write_user_password
     environment:
       - TZ=${TZ}
-      - INFLUXDB_DB=${INFLUX_DATABASE}
+      - INFLUXDB_DB=${INFLUXDB_DATABASE}
       - INFLUXDB_HTTP_AUTH_ENABLED=true
-      - INFLUXDB_ADMIN_USER=admin
-      - INFLUXDB_ADMIN_PASSWORD=${INFLUXDB_ADMIN_PASSWORD}
-      - INFLUXDB_USER=user
-      - INFLUXDB_USER_PASSWORD=${INFLUXDB_USER_PASSWORD}
-      - INFLUXDB_READ_USER=reader
-      - INFLUXDB_READ_USER_PASSWORD=${INFLUXDB_READ_USER_PASSWORD}
-      - INFLUXDB_WRITE_USER=writer
-      - INFLUXDB_WRITE_USER_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
+      - INFLUXDB_ADMIN_USER_FILE=/run/secrets/influxdb_admin_user
+      - INFLUXDB_ADMIN_PASSWORD_FILE=/run/secrets/influxdb_admin_password
+      - INFLUXDB_USER_FILE=/run/secrets/influxdb_user
+      - INFLUXDB_USER_PASSWORD_FILE=/run/secrets/influxdb_user_password
+      - INFLUXDB_READ_USER_FILE=/run/secrets/influxdb_read_user
+      - INFLUXDB_READ_USER_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
+      - INFLUXDB_WRITE_USER_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_WRITE_USER_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
     volumes:
-      - ./config/influxdb/influxdb.conf:/etc/influxdb/influxdb.conf:ro
-      - ./config/influxdb/init:/docker-entrypoint-initdb.d:ro
+      - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
       - ./data/influxdb:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
 
@@ -287,7 +300,7 @@ services:
       - TZ=${TZ}
       - VIRTUAL_HOST=grafana.${DOMAIN}
       - VIRTUAL_PORT=3000
-      - INFLUXDB_DATABASE=${INFLUX_DATABASE}
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - INFLUXDB_USER_PASSWORD=${INFLUXDB_READ_USER_PASSWORD}
     volumes:
       - ./config/grafana/config.ini:/etc/grafana/grafana.ini:ro
@@ -323,7 +336,7 @@ services:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_USERNAME=writer
       - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
-      - INFLUX_DATABASE=${INFLUX_DATABASE}
+      - INFLUX_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"primary"}
 
   mqtt-influx-secondary:
@@ -339,7 +352,7 @@ services:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_USERNAME=writer
       - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
-      - INFLUX_DATABASE=${INFLUX_DATABASE}
+      - INFLUX_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"secondary"}
 
   # Manualy run with
@@ -393,6 +406,8 @@ networks:
     internal: true
 
 configs:
+  influxdb_config:
+    file: ${INFLUXDB_CONFIG_FILE}
   ingressgen_template_nginx:
     file: ${INGRESSGEN_TEMPLATE_NGINX_FILE}
   vpn_template_peer:
@@ -411,6 +426,22 @@ configs:
     file: ${SECONDARY_POWER_CONFIG_FILE}
 
 secrets:
+  influxdb_admin_user:
+    file: ${INFLUXDB_SECRET_ADMIN_USER_FILE}
+  influxdb_admin_password:
+    file: ${INFLUXDB_SECRET_ADMIN_PASSWORD_FILE}
+  influxdb_user:
+    file: ${INFLUXDB_SECRET_USER_FILE}
+  influxdb_user_password:
+    file: ${INFLUXDB_SECRET_USER_PASSWORD_FILE}
+  influxdb_read_user:
+    file: ${INFLUXDB_SECRET_READ_USER_FILE}
+  influxdb_read_user_password:
+    file: ${INFLUXDB_SECRET_READ_USER_PASSWORD_FILE}
+  influxdb_write_user:
+    file: ${INFLUXDB_SECRET_WRITE_USER_FILE}
+  influxdb_write_user_password:
+    file: ${INFLUXDB_SECRET_WRITE_USER_PASSWORD_FILE}
   mongo_express_password:
     file: ${MONGO_EXPRESS_SECRET_PASSWORD_FILE}
   mongo_express_username:
