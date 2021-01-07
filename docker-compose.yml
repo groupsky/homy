@@ -214,7 +214,7 @@ services:
       - mongo_root_username
       - mongo_root_password
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/power?authSource=admin
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=main
@@ -243,7 +243,7 @@ services:
       - mongo_root_username
       - mongo_root_password
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/power?authSource=admin
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=secondary
@@ -331,7 +331,7 @@ services:
 #      - automation
 #      - egress
 #    environment:
-#      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
+#      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DATABASE}?authSource=admin
 #      - COLLECTION=primary
 #      - BROKER=mqtt://broker
 #      - TOPIC=/modbus/main/+/reading
@@ -389,30 +389,50 @@ services:
   # dc run historian-primary node index.js
   historian-primary:
     build: docker/historian
+    depends_on:
+      - broker
+      - mongo
     restart: 'no'
     networks:
       - automation
       - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
     environment:
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - BROKER=mqtt://broker
       - TOPIC=/modbus/main/{device}/history
       - MQTT_CLIENT_ID=historian-primary
-      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
       - COLLECTION=main
 
   # Manualy run with
   # dc run historian-secondary node index.js
   historian-secondary:
     build: docker/historian
+    depends_on:
+      - broker
+      - mongo
     restart: 'no'
     networks:
       - automation
       - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
     environment:
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - BROKER=mqtt://broker
       - TOPIC=/modbus/secondary/{device}/history
       - MQTT_CLIENT_ID=historian-secondary
-      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/power?authSource=admin
       - COLLECTION=secondary
 
 networks:
