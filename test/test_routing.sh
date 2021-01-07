@@ -6,9 +6,11 @@ TIMEOUT=3
 EXTERNAL_SUBNET=203.0.113.0/24
 prefix=tr
 
-source ../test.env
+source ../example.env
 
-dc="docker-compose --env-file ../test.env -f ../docker-compose.yml"
+export DOMAIN=
+
+dc="docker-compose --env-file ../example.env -f ../docker-compose.yml"
 
 sudo iptables-save > /tmp/iptables.backup
 

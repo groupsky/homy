@@ -6,10 +6,10 @@ const {InfluxDB} = require('@influxdata/influxdb-client')
 
 const mqttUrl = process.env.BROKER
 const topic = process.env.TOPIC
-const influxUrl = process.env.INFLUX_URL
-const influxToken = process.env.INFLUX_TOKEN || `${process.env.INFLUX_USERNAME}:${process.env.INFLUX_PASSWORD}`
-const influxOrg = process.env.INFLUX_ORG || ''
-const influxBucket = process.env.INFLUX_BUCKET || `${process.env.INFLUX_DATABASE}/${process.env.INFLUX_RP || 'autogen'}`
+const influxUrl = process.env.INFLUXDB_URL
+const influxToken = process.env.INFLUXDB_TOKEN || `${process.env.INFLUXDB_USERNAME}:${process.env.INFLUXDB_PASSWORD}`
+const influxOrg = process.env.INFLUXDB_ORG || ''
+const influxBucket = process.env.INFLUXDB_BUCKET || `${process.env.INFLUXDB_DATABASE}/${process.env.INFLUXDB_RP || 'autogen'}`
 const tags = process.env.TAGS ? JSON.parse(process.env.TAGS) : []
 
 const client = mqtt.connect(mqttUrl, {

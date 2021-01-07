@@ -1,10 +1,10 @@
 const { MongoClient } = require('mongodb')
 
-module.exports = ({ url, collection }) => {
+module.exports = ({ url, options, collection }) => {
   let col
 
   MongoClient
-    .connect(url)
+    .connect(url, options)
     .then((mongoClient) => {
       const db = mongoClient.db()
       col = db.collection(collection)

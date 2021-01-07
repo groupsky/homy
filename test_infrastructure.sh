@@ -2,11 +2,13 @@
 
 set -eux
 
-source test.env
+source example.env
 
 TIMEOUT=3
 
-dc="docker-compose --env-file test.env"
+export DOMAIN=
+
+dc="docker-compose --env-file example.env"
 dct="$dc --file docker-compose.yml --file docker-compose.test.yml"
 vpn="$dct run test-vpn"
 ext="$dct run test-external"
@@ -23,7 +25,7 @@ echo ingress works across vpn
 $vpn bash -c "sleep ${TIMEOUT}; curl -m ${TIMEOUT} -H 'Host: whoami.$DOMAIN' ${INGRESS_ADDRESS}"
 
 echo ingress not accessible outside vpn
-$ext sh -c "! curl -m ${TIMEOUT} -H 'Host: whoami.$DOMAIN' ${INGRESS_ADDRESS}"
+$ext sh -c "sleep ${TIMEOUT}; ! curl -m ${TIMEOUT} -H 'Host: whoami.$DOMAIN' ${INGRESS_ADDRESS}"
 
 ## TODO
 #echo vpn allows access between clients
