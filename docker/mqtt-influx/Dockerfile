@@ -35,6 +35,10 @@ COPY . .
 RUN chown -R node-app:node-app /usr/src/app && \
     rm -rf /tmp/*
 
+COPY load-env-files.sh /load-env-files.sh
+COPY secure-entrypoint.sh /secure-entrypoint.sh
+
 USER node-app
 
-ENTRYPOINT ["node", "index.js"]
+ENTRYPOINT ["/secure-entrypoint.sh"]
+CMD ["node", "index.js"]

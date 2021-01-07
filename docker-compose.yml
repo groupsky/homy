@@ -339,34 +339,50 @@ services:
 
   mqtt-influx-primary:
     build: docker/mqtt-influx
+    depends_on:
+      - broker
+      - influxdb
     restart: unless-stopped
     networks:
       - automation
       - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
     environment:
       - BROKER=mqtt://broker
       - TOPIC=/modbus/main/+/+
       - MQTT_CLIENT_ID=mqtt-influx-primary
-      - INFLUX_URL=http://influxdb:8086
-      - INFLUX_USERNAME=writer
-      - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
-      - INFLUX_DATABASE=${INFLUXDB_DATABASE}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"primary"}
 
   mqtt-influx-secondary:
     build: docker/mqtt-influx
+    depends_on:
+      - broker
+      - influxdb
     restart: unless-stopped
     networks:
       - automation
       - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
     environment:
       - BROKER=mqtt://broker
       - TOPIC=/modbus/secondary/+/+
       - MQTT_CLIENT_ID=mqtt-influx-secondary
-      - INFLUX_URL=http://influxdb:8086
-      - INFLUX_USERNAME=writer
-      - INFLUX_PASSWORD=${INFLUXDB_WRITE_USER_PASSWORD}
-      - INFLUX_DATABASE=${INFLUXDB_DATABASE}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"secondary"}
 
   # Manualy run with
