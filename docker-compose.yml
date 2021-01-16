@@ -448,11 +448,12 @@ services:
     restart: on-failure
     environment:
       - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+      # allowed from all since it's in a private network and only accessed through ingress
+      - ALLOWED_NETWORKS=0.0.0.0/0
       - PLEX_CLAIM=${PLEX_CLAIM}
       - TZ=${TZ}
       - VIRTUAL_HOST=${PLEX_DOMAIN}
       - VIRTUAL_PORT=32400
-      - DOMAIN=${DOMAIN}
     networks:
       - ingress
       # needed to fetch covers/subtitles/etc.
@@ -477,7 +478,7 @@ services:
       - no-new-privileges:true
     volumes:
       - plex_config:/config
-      - plex_data:/data:ro
+      - plex_data:/data
       - plex_transcode:/transcode
 
 networks:
