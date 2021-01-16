@@ -166,3 +166,10 @@ updates:
       interval: "daily"
     reviewers:
       - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/services/plex/docker/plex"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"

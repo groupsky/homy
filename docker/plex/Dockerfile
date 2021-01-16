@@ -1,0 +1,1 @@
+FROM plexinc/pms-docker:1.21.1.3842-b0c7a97d9

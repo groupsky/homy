@@ -443,6 +443,43 @@ services:
       - MQTT_CLIENT_ID=historian-secondary
       - COLLECTION=secondary
 
+  plex:
+    build: docker/plex
+    restart: on-failure
+    environment:
+      - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${PLEX_DOMAIN}
+      - VIRTUAL_PORT=32400
+      - DOMAIN=${DOMAIN}
+    networks:
+      - ingress
+      # needed to fetch covers/subtitles/etc.
+      - egress
+    ports:
+      # controlling Plex Home Theater via Plex Companion
+      - 3005:3005/tcp
+      # older Bonjour/Avahi network discovery
+      # - 5353:5353/udp
+      # controlling Plex for Roku via Plex Companion
+      - 8324:8324/tcp
+      # access to the Plex DLNA Server
+      - 32469:32469/tcp
+      # access to the Plex DLNA Server
+      - 1900:1900/udp
+      # current GDM network discovery
+      - 32410:32410/udp
+      - 32412:32412/udp
+      - 32413:32413/udp
+      - 32414:32414/udp
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - plex_config:/config
+      - plex_data:/data:ro
+      - plex_transcode:/transcode
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:
@@ -514,3 +551,8 @@ secrets:
     file: ${MONGO_SECRET_ROOT_USERNAME_FILE}
   nodered_credentials_key:
     file: ${NODERED_SECRET_CREDENTIALS_KEY_FILE}
+
+volumes:
+  plex_config:
+  plex_data:
+  plex_transcode:
