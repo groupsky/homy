@@ -500,7 +500,7 @@ services:
       - no-new-privileges:true
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - sonar_config:/config
+      - sonarr_config:/config
       - plex_data:/downloads
 
   jackett:
@@ -557,6 +557,50 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - deluge_config:/config
+      - plex_data:/downloads
+
+  radarr:
+    build: docker/radarr
+    depends_on:
+      - deluge
+      - jackett
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${RADARR_DOMAIN}
+      - VIRTUAL_PORT=7878
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - radarr_config:/config
+      - plex_data:/downloads
+
+  bazarr:
+    build: docker/bazarr
+    depends_on:
+      - deluge
+      - jackett
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${BAZARR_DOMAIN}
+      - VIRTUAL_PORT=6767
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - bazarr_config:/config
       - plex_data:/downloads
 
 networks:
@@ -632,9 +676,11 @@ secrets:
     file: ${NODERED_SECRET_CREDENTIALS_KEY_FILE}
 
 volumes:
+  bazarr_config:
   deluge_config:
   jacket_config:
   plex_config:
   plex_data:
   plex_transcode:
-  sonar_config:
+  radarr_config:
+  sonarr_config:
