@@ -584,8 +584,8 @@ services:
   bazarr:
     build: docker/bazarr
     depends_on:
-      - deluge
-      - jackett
+      - radarr
+      - sonarr
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
