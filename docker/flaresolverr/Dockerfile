@@ -1,1 +1,1 @@
-FROM ghcr.io/flaresolverr/flaresolverr:
+FROM ghcr.io/flaresolverr/flaresolverr:v1.2.2
