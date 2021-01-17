@@ -481,6 +481,84 @@ services:
       - plex_data:/data
       - plex_transcode:/transcode
 
+  sonarr:
+    build: docker/sonarr
+    depends_on:
+      - deluge
+      - jackett
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${SONARR_DOMAIN}
+      - VIRTUAL_PORT=8989
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - sonar_config:/config
+      - plex_data:/downloads
+
+  jackett:
+    build: docker/jackett
+    depends_on:
+      - flaresolverr
+    environment:
+      - AUTO_UPDATE=false
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${JACKETT_DOMAIN}
+      - VIRTUAL_PORT=9117
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - jacket_config:/config
+      - plex_data:/downloads
+
+  flaresolverr:
+    build: docker/flaresolverr
+    restart: on-failure
+    environment:
+      - LOG_LEVEL=info
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      # need to connect to external services
+      - egress
+
+  deluge:
+    build: docker/deluge
+    restart: on-failure
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${DELUGE_DOMAIN}
+      - VIRTUAL_PORT=8112
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    ports:
+      - "${DELUGE_PORT}:${DELUGE_PORT}/tcp"
+      - "${DELUGE_PORT}:${DELUGE_PORT}/udp"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - deluge_config:/config
+      - plex_data:/downloads
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:
@@ -554,6 +632,9 @@ secrets:
     file: ${NODERED_SECRET_CREDENTIALS_KEY_FILE}
 
 volumes:
+  deluge_config:
+  jacket_config:
   plex_config:
   plex_data:
   plex_transcode:
+  sonar_config:
