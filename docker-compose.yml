@@ -323,19 +323,27 @@ services:
       - /etc/localtime:/etc/localtime:ro
     user: ${PUID}:${PGID}
 
-# WIP - records mqtt in mongo
-#  mqtt-mongo-primary:
-#    build: docker/mqtt-mongo
-#    restart: unless-stopped
-#    networks:
-#      - automation
-#      - egress
-#    environment:
-#      - DATABASE=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DATABASE}?authSource=admin
-#      - COLLECTION=primary
-#      - BROKER=mqtt://broker
-#      - TOPIC=/modbus/main/+/reading
-#      - MQTT_CLIENT_ID=mqtt-mongo-primary
+  mqtt-mongo-history:
+    build: docker/mqtt-mongo
+    depends_on:
+      - broker
+      - mongo
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
+      - COLLECTION=history
+      - BROKER=mqtt://broker
+      - TOPIC=/homy/br1/temp
+      - MQTT_CLIENT_ID=mqtt-mongo-history
 
   mqtt-influx-primary:
     build: docker/mqtt-influx
