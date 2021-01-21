@@ -2,7 +2,7 @@
     {
         "id": "7f69ac0c.ea2e54",
         "type": "tab",
-        "label": "Flow 1",
+        "label": "Lightning",
         "disabled": false,
         "info": ""
     },
@@ -1325,5 +1325,91 @@
         "mac": "B4430DB602E2",
         "host": "192.168.0.41",
         "devType": "272a"
+    },
+    {
+        "id": "f7a1080f.734998",
+        "type": "tab",
+        "label": "Temperature",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "1dbb46a0.7909d9",
+        "type": "RM",
+        "z": "f7a1080f.734998",
+        "name": "living room ir",
+        "device": "f2414fc3.f8896",
+        "action": "temperature",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 290,
+        "y": 40,
+        "wires": [
+            [
+                "a8d3644c.4f5968"
+            ]
+        ]
+    },
+    {
+        "id": "aa3fe295.ac2cc",
+        "type": "inject",
+        "z": "f7a1080f.734998",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 110,
+        "y": 40,
+        "wires": [
+            [
+                "1dbb46a0.7909d9"
+            ]
+        ]
+    },
+    {
+        "id": "a01da160.7bc4b",
+        "type": "mqtt out",
+        "z": "f7a1080f.734998",
+        "name": "/homy/br1/temp",
+        "topic": "/homy/br1/temp",
+        "qos": "0",
+        "retain": "false",
+        "broker": "1a2ea69e.012e49",
+        "x": 630,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "a8d3644c.4f5968",
+        "type": "function",
+        "z": "f7a1080f.734998",
+        "name": "",
+        "func": "msg.payload._tz = Date.now()\nmsg.payload._type = 'broadcom rm+'\nmsg.payload.device = 'livingroom'\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 460,
+        "y": 40,
+        "wires": [
+            [
+                "a01da160.7bc4b"
+            ]
+        ]
     }
 ]
