@@ -53,33 +53,39 @@ light:
 
   - platform: mqtt
     name: "Коридор 2"
-    command_topic: "/homy/logic"
-    payload_on: '{"pin":18,"cmd":"toggle"}'
-    payload_off: '{"pin":18,"cmd":"toggle"}'
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":66,"value":"1"}'
+    payload_off: '{"pin":66,"value":"0"}'
 
   - platform: mqtt
     name: "Кухня"
-    command_topic: "/homy/logic"
-    payload_on: '{"pin":17,"cmd":"toggle"}'
-    payload_off: '{"pin":17,"cmd":"toggle"}'
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":67,"value":"1"}'
+    payload_off: '{"pin":67,"value":"0"}'
 
   - platform: mqtt
     name: "Коридор 1"
-    command_topic: "/homy/logic"
-    payload_on: '{"pin":16,"cmd":"toggle"}'
-    payload_off: '{"pin":16,"cmd":"toggle"}'
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":68,"value":"1"}'
+    payload_off: '{"pin":68,"value":"0"}'
 
   - platform: mqtt
     name: "Хол"
-    command_topic: "/homy/logic"
-    payload_on: '{"pin":69,"cmd":"toggle"}'
-    payload_off: '{"pin":69,"cmd":"toggle"}'
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":69,"value":"1"}'
+    payload_off: '{"pin":69,"value":"0"}'
 
   - platform: mqtt
     name: "Веранда"
     command_topic: "/homy/ard1/output"
     payload_on: '{"pin":62,"value":1}'
     payload_off: '{"pin":62,"value":0}'
+
+  - platform: mqtt
+    name: "Мокро"
+    command_topic: "/homy/ard1/output"
+    payload_on: '{"pin":65,"value":1}'
+    payload_off: '{"pin":65,"value":0}'
 
 switch:
   - platform: broadlink
