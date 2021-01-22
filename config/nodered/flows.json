@@ -362,19 +362,23 @@
     },
     {
         "id": "914cc6f7.11d748",
-        "type": "trigger",
+        "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "pulse",
-        "op1": "{\"value\": 1}",
-        "op2": "{\"value\": 0}",
-        "op1type": "json",
-        "op2type": "json",
-        "duration": "50",
-        "extend": false,
-        "units": "ms",
-        "reset": "",
-        "bytopic": "all",
-        "outputs": 1,
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
         "x": 970,
         "y": 520,
         "wires": [
@@ -423,19 +427,23 @@
     },
     {
         "id": "88be9dab.000db",
-        "type": "trigger",
+        "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "pulse",
-        "op1": "{\"value\": 1}",
-        "op2": "{\"value\": 0}",
-        "op1type": "json",
-        "op2type": "json",
-        "duration": "50",
-        "extend": false,
-        "units": "ms",
-        "reset": "",
-        "bytopic": "all",
-        "outputs": 1,
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
         "x": 970,
         "y": 560,
         "wires": [
@@ -448,13 +456,13 @@
         "id": "da3e1a29.f16fd8",
         "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "2000 corridor 2",
+        "name": "2000 corridor 2 (4001+4013)",
         "rules": [
             {
                 "t": "set",
                 "p": "payload.pin",
                 "pt": "msg",
-                "to": "18",
+                "to": "66",
                 "tot": "num"
             }
         ],
@@ -463,7 +471,7 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 1120,
+        "x": 1160,
         "y": 480,
         "wires": [
             [
@@ -474,19 +482,23 @@
     },
     {
         "id": "29018208.31a26e",
-        "type": "trigger",
+        "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "pulse",
-        "op1": "{\"value\": 1}",
-        "op2": "{\"value\": 0}",
-        "op1type": "json",
-        "op2type": "json",
-        "duration": "50",
-        "extend": false,
-        "units": "ms",
-        "reset": "",
-        "bytopic": "all",
-        "outputs": 1,
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
         "x": 970,
         "y": 480,
         "wires": [
@@ -597,7 +609,7 @@
                 "t": "set",
                 "p": "payload.pin",
                 "pt": "msg",
-                "to": "17",
+                "to": "67",
                 "tot": "num"
             }
         ],
@@ -625,7 +637,7 @@
                 "t": "set",
                 "p": "payload.pin",
                 "pt": "msg",
-                "to": "16",
+                "to": "68",
                 "tot": "num"
             }
         ],
@@ -728,19 +740,23 @@
     },
     {
         "id": "ce929fca.22a48",
-        "type": "trigger",
+        "type": "change",
         "z": "7f69ac0c.ea2e54",
-        "name": "pulse",
-        "op1": "{\"value\": 1}",
-        "op2": "{\"value\": 0}",
-        "op1type": "json",
-        "op2type": "json",
-        "duration": "50",
-        "extend": false,
-        "units": "ms",
-        "reset": "",
-        "bytopic": "all",
-        "outputs": 1,
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
         "x": 970,
         "y": 640,
         "wires": [
@@ -975,11 +991,16 @@
                 "t": "eq",
                 "v": "69",
                 "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "laundry",
+                "vt": "str"
             }
         ],
         "checkall": "true",
         "repair": false,
-        "outputs": 4,
+        "outputs": 5,
         "x": 400,
         "y": 740,
         "wires": [
@@ -994,6 +1015,9 @@
             ],
             [
                 "ce929fca.22a48"
+            ],
+            [
+                "bb0847c5.a449d8"
             ]
         ]
     },
@@ -1296,6 +1320,61 @@
             "right button"
         ],
         "icon": "font-awesome/fa-pause"
+    },
+    {
+        "id": "ddd47dc1.733ba",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "4007 laundry",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.pin",
+                "pt": "msg",
+                "to": "65",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1110,
+        "y": 720,
+        "wires": [
+            [
+                "bffab49.406b148"
+            ]
+        ],
+        "icon": "node-red/light.svg"
+    },
+    {
+        "id": "bb0847c5.a449d8",
+        "type": "change",
+        "z": "7f69ac0c.ea2e54",
+        "name": "toggle",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload.value",
+                "pt": "msg",
+                "to": "-1",
+                "tot": "num"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 970,
+        "y": 720,
+        "wires": [
+            [
+                "ddd47dc1.733ba"
+            ]
+        ]
     },
     {
         "id": "1a2ea69e.012e49",
