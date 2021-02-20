@@ -1,6 +1,6 @@
 const ieee754 = require('ieee754')
 
-const r = (value, offset) => ieee754.read(value.buffer, offset, false, 23, 4)
+const r = (value, offset) => ieee754.read(value.buffer, offset << 1, false, 23, 4)
 
 module.exports = async function sdm630modbus (client) {
   const in1 = await client.readInputRegisters(0x00, 80)
