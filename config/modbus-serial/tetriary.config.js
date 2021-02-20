@@ -28,7 +28,7 @@ function getFileEnv(envVariable) {
 module.exports = {
   port: '/dev/ttyUSB2',
   baudRate: 9600,
-  parity: 'even',
+  parity: 'none',
   devices: [
     {
       name: 'heat_pump',
@@ -52,5 +52,13 @@ module.exports = {
     //     }
     //   }
     // },
+    influxdb: {
+      url: process.env.INFLUXDB_URL,
+      username: getFileEnv('INFLUXDB_USERNAME'),
+      password: getFileEnv('INFLUXDB_PASSWORD'),
+      database: process.env.INFLUXDB_DATABASE,
+      tags: process.env.INFLUXDB_TAGS ? JSON.parse(process.env.INFLUXDB_TAGS) : [],
+      measurement: process.env.INFLUXDB_MEASUREMENT
+    }
   },
 }

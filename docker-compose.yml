@@ -269,6 +269,8 @@ services:
       - source: tetriary_power
         target: /etc/config.js
     secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
       - mongo_root_username
       - mongo_root_password
     environment:
@@ -279,6 +281,12 @@ services:
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/tetriary/{name}/reading
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - INFLUXDB_TAGS={"bus":"tetriary"}
+      - INFLUXDB_MEASUREMENT=sdm630raw
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
