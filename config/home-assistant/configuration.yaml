@@ -21,6 +21,12 @@ automation: !include configuration/automations.yaml
 script: !include configuration/scripts.yaml
 scene: !include configuration/scenes.yaml
 
+logger:
+  default: warning
+  logs:
+    # warning is generated from lights when status is for another light
+    homeassistant.components.mqtt.light.schema_template: error
+
 mqtt:
   broker: broker
   port: 1883
