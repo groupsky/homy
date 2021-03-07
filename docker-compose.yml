@@ -254,6 +254,43 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
 
+  tetriary-power:
+    build: docker/modbus-serial
+    depends_on:
+      - broker
+      - mongo
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    configs:
+      - source: tetriary_power
+        target: /etc/config.js
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+      - mongo_root_username
+      - mongo_root_password
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
+      - COLLECTION=tetriary
+      - CONFIG=/etc/config.js
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/tetriary/{name}/reading
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - INFLUXDB_TAGS={"bus":"tetriary"}
+      - INFLUXDB_MEASUREMENT=sdm630raw
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
+
   influxdb:
     build: docker/influxdb
     restart: unless-stopped
@@ -486,6 +523,8 @@ configs:
     file: ${NODERED_CONFIG_SETTINGS_FILE}
   secondary_power:
     file: ${SECONDARY_POWER_CONFIG_FILE}
+  tetriary_power:
+    file: ${TETRIARY_POWER_CONFIG_FILE}
 
 secrets:
   influxdb_admin_user:
