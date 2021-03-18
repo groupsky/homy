@@ -10,7 +10,7 @@
   name: "Front side door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'on' if value_json.inputs|bitwise_and(2) else 'off' }}"
+  value_template: "{{ 'off' if value_json.inputs|bitwise_and(2) else 'on' }}"
   payload_on: "on"
   payload_off: "off"
 
@@ -18,7 +18,7 @@
   name: "Living room window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'on' if value_json.inputs|bitwise_and(4) else 'off' }}"
+  value_template: "{{ 'off' if value_json.inputs|bitwise_and(4) else 'on' }}"
   payload_on: "on"
   payload_off: "off"
 
@@ -26,7 +26,7 @@
   name: "Cabinet south window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'on' if value_json.inputs|bitwise_and(8) else 'off' }}"
+  value_template: "{{ 'off' if value_json.inputs|bitwise_and(8) else 'on' }}"
   payload_on: "on"
   payload_off: "off"
 
@@ -34,6 +34,6 @@
   name: "Cabinet west window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'on' if value_json.inputs|bitwise_and(16) else 'off' }}"
+  value_template: "{{ 'off' if value_json.inputs|bitwise_and(16) else 'on' }}"
   payload_on: "on"
   payload_off: "off"
