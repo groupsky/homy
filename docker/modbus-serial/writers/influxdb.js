@@ -25,6 +25,7 @@ module.exports = ({
       .timestamp(entry._tz)
 
     for (const key in entry) {
+      if (!Object.hasOwnProperty.call(entry, key)) continue
       if (['device', '_type', '_addr', '_ms', '_tz'].includes(key)) continue
       const value = entry[key]
       switch (typeof value) {

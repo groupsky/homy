@@ -291,6 +291,32 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
 
+  dry-switches:
+    build: docker/modbus-serial
+    depends_on:
+      - broker
+      - mongo
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
+      - COLLECTION=dry-switches
+      - CONFIG=/etc/config.js
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/dry-switches/{name}/reading
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
+
   influxdb:
     build: docker/influxdb
     restart: unless-stopped
