@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 /* eslint-env node */
 const ModbusRTU = require('modbus-serial')
-const { port, devices, writers: writersConfig, ...portConfig } = require(process.env.CONFIG)
+const {
+  devices,
+  msDelayBetweenDevices = 150,
+  msTimeout = 1000,
+  port,
+  writers: writersConfig,
+  ...portConfig
+} = require(process.env.CONFIG)
 const modbusClient = new ModbusRTU()
 
 const readers = devices.reduce((map, { reader: readerName }) => {
@@ -44,7 +51,7 @@ const getValues = async () => {
       } catch (e) {
         console.error('Error reading', device, e)
       }
-      await sleep(150)
+      await sleep(msDelayBetweenDevices)
     }
   } catch (e) {
     // if error, handle them here (it should not)
@@ -60,7 +67,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 Promise.all([
   modbusClient.connectRTUBuffered(port, portConfig)
 ]).then(() => {
-  modbusClient.setTimeout(1000)
+  modbusClient.setTimeout(msTimeout)
 
   return getValues()
 })

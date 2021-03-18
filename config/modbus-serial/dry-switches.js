@@ -29,6 +29,8 @@ module.exports = {
   port: '/dev/ttyUSB3',
   baudRate: 115200,
   parity: 'even',
+  msDelayBetweenDevices: 0,
+  msTimeout: 50,
   devices: [
     {
       name: 'mbsl32di1',
