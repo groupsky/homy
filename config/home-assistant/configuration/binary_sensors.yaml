@@ -2,7 +2,7 @@
   name: "Front door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'on' if value_json.inputs|bitwise_and(1) else 'off' }}"
+  value_template: "{{ 'off' if value_json.inputs|bitwise_and(1) else 'on' }}"
   payload_on: "on"
   payload_off: "off"
 
