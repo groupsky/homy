@@ -9,5 +9,7 @@ module.exports = async function mbsl32di (client, { maxMsBetweenReports = 0 } = 
   }
 
   state.lastReport = Date.now()
-  return state.flags = newFlags
+  state.flags = newFlags
+
+  return { inputs: newFlags }
 }
