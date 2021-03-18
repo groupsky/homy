@@ -29,20 +29,17 @@ const getValues = async () => {
         const start = Date.now()
         const val = await reader(modbusClient, device.readerOptions, device.state)
         if (val == null) continue
-        const values = Array.isArray(val) ? val : [val]
-        values.forEach((val) => {
-          val._tz = Date.now()
-          val._ms = val._tz - start
-          val._addr = device.address
-          val._type = device.reader
-          val.device = device.name
-          writers.forEach((writer) => {
-            try {
-              writer(val, device)
-            } catch (e) {
-              console.error('Error writing', writer)
-            }
-          })
+        val._tz = Date.now()
+        val._ms = val._tz - start
+        val._addr = device.address
+        val._type = device.reader
+        val.device = device.name
+        writers.forEach((writer) => {
+          try {
+            writer(val, device)
+          } catch (e) {
+            console.error('Error writing', writer)
+          }
         })
       } catch (e) {
         console.error('Error reading', device, e)

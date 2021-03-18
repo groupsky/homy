@@ -31,17 +31,11 @@ module.exports = {
   parity: 'even',
   devices: [
     {
-      name: 'di1',
-      address: 0x01,
+      name: 'mbsl32di1',
+      address: 31,
       reader: 'mbsl32di',
       readerOptions: {
-        inputs: {
-          0: 'front door left',
-          1: 'front door right',
-          2: 'window livingroom',
-          3: 'window cabinet south',
-          4: 'window cabinet west'
-        }
+        maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
       }
     },
   ],
@@ -58,8 +52,8 @@ module.exports = {
         auth: {
           user: getFileEnv('MONGODB_USERNAME'),
           password: getFileEnv('MONGODB_PASSWORD'),
-        }
-      }
+        },
+      },
     },
   },
 }

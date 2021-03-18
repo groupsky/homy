@@ -303,8 +303,6 @@ services:
     security_opt:
       - no-new-privileges:true
     secrets:
-      - influxdb_write_user
-      - influxdb_write_user_password
       - mongo_root_username
       - mongo_root_password
     environment:
@@ -315,12 +313,6 @@ services:
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/dry-switches/{name}/reading
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
-      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
-      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
-      - INFLUXDB_TAGS={"bus":"dry-switches"}
-      - INFLUXDB_MEASUREMENT=switches
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
