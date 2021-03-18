@@ -1,0 +1,5 @@
+- platform: mqtt
+  name: "Door"
+  device_class: "door"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ value_json.inputs & 1 ? 'on' : 'off' }}"

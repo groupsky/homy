@@ -151,6 +151,8 @@ services:
       - ${HOMEASSISTANT_CONFIG_GROUPS_FILE}:/config/configuration/groups.yaml:ro
       - ${HOMEASSISTANT_CONFIG_SCENES_FILE}:/config/configuration/scenes.yaml:ro
       - ${HOMEASSISTANT_CONFIG_SCRIPTS_FILE}:/config/configuration/scripts.yaml:ro
+      - ${HOMEASSISTANT_CONFIG}/configuration/lights.yaml:/config/configuration/lights.yaml:ro
+      - ${HOMEASSISTANT_CONFIG}/configuration/sensors.yaml:/config/configuration/sensors.yaml:ro
 
   mongo:
     build: docker/mongo
