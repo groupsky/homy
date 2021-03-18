@@ -4,7 +4,10 @@ module.exports = ({ url, options, collection }) => {
   let col
 
   MongoClient
-    .connect(url, options)
+    .connect(url, {
+      ...options,
+      useUnifiedTopology: true,
+    })
     .then((mongoClient) => {
       const db = mongoClient.db()
       col = db.collection(collection)
@@ -12,7 +15,7 @@ module.exports = ({ url, options, collection }) => {
 
   const logger = (entry) => {
     if (col) {
-      col.insert(entry)
+      col.insertOne(entry)
     }
   }
 
