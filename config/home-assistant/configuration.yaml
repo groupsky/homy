@@ -34,6 +34,7 @@ mqtt:
 
 binary_sensor: !include configuration/binary_sensors.yaml
 light: !include configuration/lights.yaml
+sensor: !include configuration/sensors.yaml
 
 switch:
   - platform: broadlink

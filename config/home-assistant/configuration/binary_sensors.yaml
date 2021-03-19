@@ -2,38 +2,48 @@
   name: "Front door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'off' if value_json.inputs|bitwise_and(1) else 'on' }}"
-  payload_on: "on"
-  payload_off: "off"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(1) else 'ON' }}"
 
 - platform: mqtt
   name: "Front side door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'off' if value_json.inputs|bitwise_and(2) else 'on' }}"
-  payload_on: "on"
-  payload_off: "off"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2) else 'ON' }}"
 
 - platform: mqtt
   name: "Living room window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'off' if value_json.inputs|bitwise_and(4) else 'on' }}"
-  payload_on: "on"
-  payload_off: "off"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(4) else 'ON' }}"
 
 - platform: mqtt
   name: "Cabinet south window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'off' if value_json.inputs|bitwise_and(8) else 'on' }}"
-  payload_on: "on"
-  payload_off: "off"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(8) else 'ON' }}"
 
 - platform: mqtt
   name: "Cabinet west window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'off' if value_json.inputs|bitwise_and(16) else 'on' }}"
-  payload_on: "on"
-  payload_off: "off"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(16) else 'ON' }}"
+
+- platform: mqtt
+  name: Dishwasher
+  state_topic: "/modbus/secondary/dishwasher/reading"
+  value_template: "{{ 'ON' if value_json.p|float > 10 else 'OFF' }}"
+
+- platform: mqtt
+  name: Laundry
+  state_topic: "/modbus/secondary/laundry/reading"
+  value_template: "{{ 'ON' if value_json.p|float > 1 else 'OFF' }}"
+
+- platform: mqtt
+  name: Oven
+  state_topic: "/modbus/secondary/oven/reading"
+  value_template: "{{ 'ON' if value_json.p|float > 1 else 'OFF' }}"
+
+- platform: mqtt
+  name: Stove
+  state_topic: "/modbus/secondary/stove/reading"
+  value_template: "{{ 'ON' if value_json.p|float > 10 else 'OFF' }}"
