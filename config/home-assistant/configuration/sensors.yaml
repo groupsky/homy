@@ -30,7 +30,9 @@
         {% else %}
           Off
         {% endif %}
-      icon_template: >-
+      entity_picture_template: >-
         {% if is_state('sensor.oven_electricity', 'on') %}
           mdi:stove
+        {% else %}
+          mdi:check
         {% endif %}
