@@ -65,3 +65,10 @@
   value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
   payload_on: "on"
   payload_off: "off"
+
+- platform: mqtt
+  name: "Boiler"
+  state_topic: "/modbus/secondary/boiler/reading"
+  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
+  payload_on: "on"
+  payload_off: "off"

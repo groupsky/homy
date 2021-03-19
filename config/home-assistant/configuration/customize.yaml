@@ -41,3 +41,6 @@ binary_sensor.dishwasher:
 
 binary_sensor.laundry:
   icon: mdi:washing-machine
+
+binary_sensor.boiler:
+  icon: mdi:water-boiler
