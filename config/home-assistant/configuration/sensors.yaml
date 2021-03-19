@@ -3,4 +3,4 @@
   device_class: power
   unit_of_measurement: kW
   state_topic: "/modbus/main/main/reading"
-  value_template: "{{ '%+.1f'|format(value_json.sum_ap|float / 1000) }}"
+  value_template: "{{ '%.1f'|format(value_json.sum_ap|float / 1000) }}"
