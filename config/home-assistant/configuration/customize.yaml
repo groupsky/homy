@@ -45,6 +45,6 @@ binary_sensor.laundry:
 binary_sensor.boiler:
   icon: mdi:water-boiler
 
-sensor.boiler.electricity:
-  friendly_name: 'Boiler'
-  icon: mdi:water-boiler
+#sensor.boiler-electricity:
+#  friendly_name: 'Boiler'
+#  icon: mdi:water-boiler
