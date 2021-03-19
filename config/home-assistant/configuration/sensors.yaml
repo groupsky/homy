@@ -22,5 +22,5 @@
   sensors:
     oven_state:
       friendly_name: "Oven"
-      value_template: {{ 'on' if state_attr('sensor.oven_electricity', 'p')|float > 1 else 'off' }}
+      value_template: "{{ 'on' if state_attr('sensor.oven_electricity', 'p')|float > 1 else 'off' }}"
       icon_template: mdi:stove
