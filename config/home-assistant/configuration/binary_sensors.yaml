@@ -40,7 +40,6 @@
 
 - platform: mqtt
   name: "Stove"
-  icon: mdi:stove
   state_topic: "/modbus/secondary/stove/reading"
   value_template: "{{ 'on' if value_json.p > 35 else 'off' }}"
   payload_on: "on"
@@ -48,7 +47,6 @@
 
 - platform: mqtt
   name: "Oven"
-  icon: mdi:stove
   state_topic: "/modbus/secondary/oven/reading"
   value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
   payload_on: "on"
@@ -56,7 +54,6 @@
 
 - platform: mqtt
   name: "Dishwasher"
-  icon: mdi:dishwasher
   state_topic: "/modbus/secondary/dishwasher/reading"
   value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
   payload_on: "on"
@@ -64,7 +61,6 @@
 
 - platform: mqtt
   name: "Laundry"
-  icon: mdi:laundry
   state_topic: "/modbus/secondary/laundry/reading"
   value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
   payload_on: "on"

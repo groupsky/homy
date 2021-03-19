@@ -29,3 +29,15 @@ switch.living_tv_back:
 switch.living_tv_exit:
   friendly_name: 'Exit'
   icon: mdi:exit-to-app
+
+binary_sensor.stove:
+  icon: mdi:stove
+
+binary_sensor.oven:
+  icon: mdi:stove
+
+binary_sensor.dishwasher:
+  icon: mdi:dishwasher
+
+binary_sensor.laundry:
+  icon: mdi:laundry
