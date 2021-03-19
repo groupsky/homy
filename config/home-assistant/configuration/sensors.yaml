@@ -1,6 +1,6 @@
 - platform: mqtt
-  name: boiler.electricity
+  name: boiler_electricity
   state_topic: "/modbus/secondary/boiler/reading"
-  value_template: "{{ value_json.p }}"
+  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
   json_attributes_topic: "/modbus/secondary/boiler/reading"
   json_attributes_template: "{{ value_json }}"
