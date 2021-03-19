@@ -19,3 +19,18 @@
   name: stove_electricity
   state_topic: "/modbus/secondary/stove/reading"
   value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
+
+- platform: template
+  sensors:
+    oven_state:
+      friendly_name: "Day/Night"
+      value_template: >-
+        {% if is_state('sensor.oven_electricity', 'on') %}
+          On
+        {% else %}
+          Off
+        {% endif %}
+      icon_template: >-
+        {% if is_state('sensor.oven_electricity', 'on') %}
+          mdi:stove
+        {% endif %}
