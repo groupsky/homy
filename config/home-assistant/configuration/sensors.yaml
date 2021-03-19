@@ -1,5 +1,5 @@
 - platform: mqtt
-  name: Main power
+  name: Main
   device_class: power
   unit_of_measurement: kW
   state_topic: "/modbus/main/main/reading"
