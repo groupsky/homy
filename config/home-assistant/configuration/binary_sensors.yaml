@@ -37,38 +37,3 @@
   value_template: "{{ 'off' if value_json.inputs|bitwise_and(16) else 'on' }}"
   payload_on: "on"
   payload_off: "off"
-
-- platform: mqtt
-  name: "Stove"
-  state_topic: "/modbus/secondary/stove/reading"
-  value_template: "{{ 'on' if value_json.p > 35 else 'off' }}"
-  payload_on: "on"
-  payload_off: "off"
-
-- platform: mqtt
-  name: "Oven"
-  state_topic: "/modbus/secondary/oven/reading"
-  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
-  payload_on: "on"
-  payload_off: "off"
-
-- platform: mqtt
-  name: "Dishwasher"
-  state_topic: "/modbus/secondary/dishwasher/reading"
-  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
-  payload_on: "on"
-  payload_off: "off"
-
-- platform: mqtt
-  name: "Laundry"
-  state_topic: "/modbus/secondary/laundry/reading"
-  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
-  payload_on: "on"
-  payload_off: "off"
-
-- platform: mqtt
-  name: "Boiler"
-  state_topic: "/modbus/secondary/boiler/reading"
-  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
-  payload_on: "on"
-  payload_off: "off"

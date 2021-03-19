@@ -30,21 +30,18 @@ switch.living_tv_exit:
   friendly_name: 'Exit'
   icon: mdi:exit-to-app
 
-binary_sensor.stove:
+sensor.stove_electricity:
+  friendly_name: 'Stove'
   icon: mdi:stove
 
-binary_sensor.oven:
+sensor.oven_electricity:
+  friendly_name: 'Oven'
   icon: mdi:stove
 
-binary_sensor.dishwasher:
+sensor.dishwasher_electricity:
+  friendly_name: 'Dishwasher'
   icon: mdi:dishwasher
 
-binary_sensor.laundry:
+sensor.laundry_electricity:
+  friendly_name: 'Laundry'
   icon: mdi:washing-machine
-
-binary_sensor.boiler:
-  icon: mdi:water-boiler
-
-sensor.boiler_electricity:
-  friendly_name: 'Boiler'
-  icon: mdi:water-boiler

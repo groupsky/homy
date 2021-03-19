@@ -1,6 +1,21 @@
 - platform: mqtt
-  name: boiler_electricity
-  state_topic: "/modbus/secondary/boiler/reading"
+  name: dishwasher_electricity
+  state_topic: "/modbus/secondary/dishwasher/reading"
   value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
-  json_attributes_topic: "/modbus/secondary/boiler/reading"
-  json_attributes_template: "{{ value_json | tojson }}"
+#  json_attributes_topic: "/modbus/secondary/dishwasher/reading"
+#  json_attributes_template: "{{ value_json | tojson }}"
+
+- platform: mqtt
+  name: laundry_electricity
+  state_topic: "/modbus/secondary/laundry/reading"
+  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
+
+- platform: mqtt
+  name: oven_electricity
+  state_topic: "/modbus/secondary/oven/reading"
+  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
+
+- platform: mqtt
+  name: stove_electricity
+  state_topic: "/modbus/secondary/stove/reading"
+  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
