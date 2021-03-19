@@ -1,9 +1,7 @@
 - platform: mqtt
   name: dishwasher_electricity
-  state_topic: "/modbus/secondary/dishwasher/reading"
-  value_template: "{{ 'on' if value_json.p > 1 else 'off' }}"
-#  json_attributes_topic: "/modbus/secondary/dishwasher/reading"
-#  json_attributes_template: "{{ value_json | tojson }}"
+  json_attributes_topic: "/modbus/secondary/dishwasher/reading"
+  json_attributes_template: "{{ value_json | tojson }}"
 
 - platform: mqtt
   name: laundry_electricity
@@ -23,16 +21,6 @@
 - platform: template
   sensors:
     oven_state:
-      friendly_name: "Day/Night"
-      value_template: >-
-        {% if is_state('sensor.oven_electricity', 'on') %}
-          On
-        {% else %}
-          Off
-        {% endif %}
-      entity_picture_template: >-
-        {% if is_state('sensor.oven_electricity', 'on') %}
-          mdi:stove
-        {% else %}
-          mdi:check
-        {% endif %}
+      friendly_name: "Oven"
+      value_template: {{ 'on' if state_attr('sensor.oven_electricity', 'p')|float > 1 else 'off' }}
+      icon_template: mdi:stove
