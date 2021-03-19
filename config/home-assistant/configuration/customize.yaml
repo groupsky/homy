@@ -40,4 +40,4 @@ binary_sensor.dishwasher:
   icon: mdi:dishwasher
 
 binary_sensor.laundry:
-  icon: mdi:laundry
+  icon: mdi:washing-machine
