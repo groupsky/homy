@@ -1,27 +1,27 @@
 - platform: mqtt
   name: dishwasher_electricity
   state_topic: "/modbus/secondary/dishwasher/reading"
-  value_template: "{{ '⌁' if value_json.p|float > 1 else '-' }}"
+  value_template: "{{ 'ON' if value_json.p|float > 1 else '-' }}"
 #  json_attributes_topic: "/modbus/secondary/dishwasher/reading"
 #  json_attributes_template: "{{ value_json | tojson }}"
 
 - platform: mqtt
   name: laundry_electricity
   state_topic: "/modbus/secondary/laundry/reading"
-  value_template: "{{ '⌁' if value_json.p|float > 1 else '⌁' }}"
+  value_template: "{{ 'ON' if value_json.p|float > 1 else 'ON' }}"
 #  json_attributes_topic: "/modbus/secondary/laundry/reading"
 #  json_attributes_template: "{{ value_json | tojson }}"
 
 - platform: mqtt
   name: oven_electricity
   state_topic: "/modbus/secondary/oven/reading"
-  value_template: "{{ '⌁' if value_json.p|float > 1 else '-' }}"
+  value_template: "{{ 'ON' if value_json.p|float > 1 else '-' }}"
 #  json_attributes_topic: "/modbus/secondary/oven/reading"
 #  json_attributes_template: "{{ value_json | tojson }}"
 
 - platform: mqtt
   name: stove_electricity
   state_topic: "/modbus/secondary/stove/reading"
-  value_template: "{{ '⌁' if value_json.p|float > 1 else '-' }}"
+  value_template: "{{ 'ON' if value_json.p|float > 1 else '-' }}"
 #  json_attributes_topic: "/modbus/secondary/stove/reading"
 #  json_attributes_template: "{{ value_json | tojson }}"
