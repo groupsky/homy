@@ -29,19 +29,3 @@ switch.living_tv_back:
 switch.living_tv_exit:
   friendly_name: 'Exit'
   icon: mdi:exit-to-app
-
-#sensor.stove_electricity:
-#  friendly_name: 'Stove'
-#  icon: mdi:stove
-#
-#sensor.oven_electricity:
-#  friendly_name: 'Oven'
-#  icon: mdi:stove
-#
-#sensor.dishwasher_electricity:
-#  friendly_name: 'Dishwasher'
-#  icon: mdi:dishwasher
-#
-#sensor.laundry_electricity:
-#  friendly_name: 'Laundry'
-#  icon: mdi:washing-machine
