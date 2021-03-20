@@ -367,6 +367,7 @@ services:
     networks:
       - automation
       - ingress
+      - egress
     security_opt:
       - no-new-privileges:true
     configs:
