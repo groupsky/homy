@@ -7,6 +7,8 @@ default_config:
 
 homeassistant:
   customize: !include configuration/customize.yaml
+  external_url: !env_var EXTERNAL_URL
+  internal_url: !env_var INTERNAL_URL
 
 updater:
   reporting: no
@@ -35,6 +37,10 @@ mqtt:
 binary_sensor: !include configuration/binary_sensors.yaml
 light: !include configuration/lights.yaml
 sensor: !include configuration/sensors.yaml
+
+spotify:
+  client_id: !secret spotify_client_id
+  client_secret: !secret spotify_client_secret
 
 switch:
   - platform: broadlink
