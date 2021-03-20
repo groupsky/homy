@@ -154,6 +154,7 @@ services:
       - ${HOMEASSISTANT_CONFIG}/configuration/lights.yaml:/config/configuration/lights.yaml:ro
       - ${HOMEASSISTANT_CONFIG}/configuration/binary_sensors.yaml:/config/configuration/binary_sensors.yaml:ro
       - ${HOMEASSISTANT_CONFIG}/configuration/sensors.yaml:/config/configuration/sensors.yaml:ro
+      - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
 
   mongo:
     build: docker/mongo
