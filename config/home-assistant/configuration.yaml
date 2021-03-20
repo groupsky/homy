@@ -36,6 +36,10 @@ binary_sensor: !include configuration/binary_sensors.yaml
 light: !include configuration/lights.yaml
 sensor: !include configuration/sensors.yaml
 
+spotify:
+  client_id: !secret spotify_client_id
+  client_secret: !secret spotify_client_secret
+
 switch:
   - platform: broadlink
     mac: B4:43:0D:B6:02:E2
