@@ -7,6 +7,8 @@ default_config:
 
 homeassistant:
   customize: !include configuration/customize.yaml
+  external_url: !env_var EXTERNAL_URL
+  internal_url: !env_var INTERNAL_URL
 
 updater:
   reporting: no

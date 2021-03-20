@@ -140,6 +140,8 @@ services:
         target: /config/configuration/scripts.yaml
     environment:
       - TZ=${TZ}
+      - EXTERNAL_URL=http://${HOMEASSISTANT_DOMAIN}
+      - INTERNAL_URL=http://${HOMEASSISTANT_DOMAIN}
       - VIRTUAL_HOST=${HOMEASSISTANT_DOMAIN}
       - VIRTUAL_PORT=8123
     volumes:
