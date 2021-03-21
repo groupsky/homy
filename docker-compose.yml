@@ -388,7 +388,8 @@ services:
       - INFLUXDB_USER_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
     volumes:
       - ${GRAFANA_CONFIG_FILE}:/etc/grafana/grafana.ini:ro
-      - ${GRAFANA_CONFIG_DATASOURCE_INFLUXDB_FILE}:/etc/grafana/provisioning/datasources/influxdb.yaml:ro
+      - ${GRAFANA_CONFIG_PATH}/provisioning:/etc/grafana/provisioning:ro
+      - ${GRAFANA_CONFIG_PATH}/dashboards:/var/lib/grafana/dashboards:ro
       - ${GRAFANA_DATA_PATH}:/var/lib/grafana
       - /etc/localtime:/etc/localtime:ro
     user: ${PUID}:${PGID}

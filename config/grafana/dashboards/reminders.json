@@ -1,6 +1,7 @@
 {
-  "uid": "alerts",
+  "uid": "reminders",
   "title": "Напомняници",
+  "version": 8,
   "editable": false,
   "panels": [
     {
@@ -326,6 +327,5 @@
     "to": "now"
   },
   "refresh": "15s",
-  "schemaVersion": 27,
-  "version": 7
+  "schemaVersion": 27
 }
