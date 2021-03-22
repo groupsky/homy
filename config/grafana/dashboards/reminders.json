@@ -1,8 +1,21 @@
 {
-  "uid": "reminders",
-  "title": "Напомняници",
-  "version": 1,
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
   "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "links": [],
   "panels": [
     {
       "alert": {
@@ -11,7 +24,7 @@
           {
             "evaluator": {
               "params": [
-                2
+                10
               ],
               "type": "gt"
             },
@@ -34,7 +47,7 @@
           {
             "evaluator": {
               "params": [
-                2
+                10
               ],
               "type": "lt"
             },
@@ -68,24 +81,33 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "influxdb",
+      "datasource": null,
       "fieldConfig": {
         "defaults": {
+          "custom": {},
           "displayName": "Power",
           "unit": "watt"
-        }
+        },
+        "overrides": []
       },
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "x": 0,
-        "y": 0,
+        "h": 9,
         "w": 12,
-        "h": 9
+        "x": 0,
+        "y": 0
       },
+      "hiddenSeries": false,
       "id": 1,
       "legend": {
-        "show": false
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
       },
       "lines": true,
       "linewidth": 1,
@@ -94,10 +116,11 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.4.3",
+      "pluginVersion": "7.4.5",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
@@ -146,21 +169,58 @@
           ]
         }
       ],
+      "thresholds": [
+        {
+          "colorMode": "critical",
+          "fill": true,
+          "line": true,
+          "op": "gt",
+          "value": 10,
+          "visible": true
+        }
+      ],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
       "title": "Състояние на миялната",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
       "type": "graph",
       "xaxis": {
+        "buckets": null,
         "mode": "time",
-        "show": true
+        "name": null,
+        "show": true,
+        "values": []
       },
       "yaxes": [
         {
+          "$$hashKey": "object:344",
           "format": "watt",
+          "label": null,
           "logBase": 10,
           "max": "2500",
           "min": "0",
           "show": true
+        },
+        {
+          "$$hashKey": "object:345",
+          "decimals": null,
+          "format": "watt",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
         }
-      ]
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
     },
     {
       "alert": {
@@ -226,24 +286,33 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "influxdb",
+      "datasource": null,
       "fieldConfig": {
         "defaults": {
+          "custom": {},
           "displayName": "Power",
           "unit": "watt"
-        }
+        },
+        "overrides": []
       },
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "x": 0,
-        "y": 9,
+        "h": 9,
         "w": 12,
-        "h": 9
+        "x": 0,
+        "y": 9
       },
+      "hiddenSeries": false,
       "id": 2,
       "legend": {
-        "show": false
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
       },
       "lines": true,
       "linewidth": 1,
@@ -252,7 +321,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.4.3",
+      "pluginVersion": "7.4.5",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -305,27 +374,74 @@
           ]
         }
       ],
+      "thresholds": [
+        {
+          "colorMode": "critical",
+          "fill": true,
+          "line": true,
+          "op": "gt",
+          "value": 2,
+          "visible": true
+        }
+      ],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
       "title": "Състояние на пералнята",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
       "type": "graph",
       "xaxis": {
+        "buckets": null,
         "mode": "time",
-        "show": true
+        "name": null,
+        "show": true,
+        "values": []
       },
       "yaxes": [
         {
+          "$$hashKey": "object:344",
           "format": "watt",
+          "label": null,
           "logBase": 10,
           "max": "2500",
           "min": "0",
           "show": true
+        },
+        {
+          "$$hashKey": "object:345",
+          "decimals": null,
+          "format": "watt",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
         }
-      ]
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
     }
   ],
+  "refresh": "30s",
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": []
+  },
   "time": {
     "from": "now-12h",
     "to": "now"
   },
-  "refresh": "30s",
-  "schemaVersion": 27
+  "timepicker": {},
+  "timezone": "",
+  "title": "Напомняници",
+  "uid": "reminders",
+  "version": 3
 }
