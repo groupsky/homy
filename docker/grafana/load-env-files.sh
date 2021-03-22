@@ -13,7 +13,9 @@ load_secret() {
 
 for secret in \
   INFLUXDB_USER \
-  INFLUXDB_USER_PASSWORD
+  INFLUXDB_USER_PASSWORD \
+  TELEGRAM_BOT_TOKEN \
+  TELEGRAM_CHAT_ID
 do
   load_secret $secret
 done
