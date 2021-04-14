@@ -119,6 +119,36 @@
   value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(131072) else 'ON' }}"
 
 - platform: mqtt
+  name: "Bath 1"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(262144) else 'ON' }}"
+
+- platform: mqtt
+  name: "Marti Door"
+  device_class: "lock"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(524288) else 'ON' }}"
+
+- platform: mqtt
+  name: "Marti Door"
+  device_class: "door"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(1048576) else 'ON' }}"
+
+- platform: mqtt
+  name: "Service Door"
+  device_class: "lock"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2097152) else 'ON' }}"
+
+- platform: mqtt
+  name: "Service Door"
+  device_class: "door"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(4194304) else 'ON' }}"
+
+- platform: mqtt
   name: Dishwasher
   state_topic: "/modbus/secondary/dishwasher/reading"
   value_template: "{{ 'ON' if value_json.p|float > 10 else 'OFF' }}"
