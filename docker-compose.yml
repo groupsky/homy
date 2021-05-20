@@ -82,6 +82,8 @@ services:
       - no-new-privileges:true
     ports:
       - "1883:1883"
+    volumes:
+      - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
 
   nodered:
     build: docker/nodered
