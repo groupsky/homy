@@ -13,7 +13,7 @@
     "@influxdata/influxdb-client": "^1.13.0",
     "ieee754": "^1.1.13",
     "modbus-serial": "^8.0.1",
-    "mongodb": "^3.6.8",
+    "mongodb": "^3.6.10",
     "mqtt": "^4.2.6"
   }
 }
