@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM node:14.16.0-alpine AS base
+FROM node:16.4.2-alpine AS base
 
 # Install tools, create Node-RED app and data dir, add user and set rights
 RUN set -ex && \
