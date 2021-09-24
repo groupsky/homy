@@ -518,6 +518,25 @@ services:
       - MQTT_CLIENT_ID=historian-secondary
       - COLLECTION=secondary
 
+  dmx-driver:
+    build: docker/dmx-driver
+    depends_on:
+      - broker
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - BROKER=mqtt://broker
+      - DMX_DRIVER=enttec-open-usb-dmx
+      - DMX_PORT=/dev/ttyUSB5
+      - MQTT_CLIENT_ID=dmx-driver
+      - TOPIC=/modbus/dry-switches/mbsl32di1/reading
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:

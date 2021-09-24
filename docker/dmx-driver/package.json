@@ -1,0 +1,16 @@
+{
+  "name": "dmx-driver",
+  "version": "1.0.0",
+  "description": "Drive dmx universe",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "start": "index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "dmx": "^0.2.5",
+    "mqtt": "^4.2.8"
+  }
+}
