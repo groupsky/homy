@@ -1,4 +1,4 @@
-FROM influxdb:1.8.4-alpine
+FROM influxdb:1.8.9-alpine
 
 COPY load-env-files.sh /load-env-files.sh
 COPY secure-entrypoint.sh /secure-entrypoint.sh
