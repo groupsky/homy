@@ -6,6 +6,20 @@ updates:
   #  <<: *shared
   #   directory: "/"
 
+  - package-ecosystem: "docker"
+    directory: "/docker/dmx-driver"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/dmx-driver"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
