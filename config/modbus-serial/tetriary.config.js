@@ -26,7 +26,7 @@ function getFileEnv(envVariable) {
 }
 
 module.exports = {
-  port: '/dev/ttyUSB2',
+  port: '/dev/ttyUSB3',
   baudRate: 9600,
   parity: 'none',
   devices: [
