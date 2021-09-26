@@ -1,11 +1,11 @@
 #### Stage BASE ########################################################################################################
-FROM node:14.16.0-alpine AS base
+FROM node:12.22.6 AS base
 
 # Install tools, create app dir, add user and set rights
 RUN set -ex && \
     mkdir -p /usr/src/app && \
     deluser --remove-home node && \
-    adduser -h /usr/src/app -D -H node-app -u 1000 && \
+    useradd --home-dir /usr/src/app --no-create-home node-app --uid 1000 && \
     addgroup node-app dialout && \
     chown -R node-app:node-app /usr/src/app
 
@@ -19,9 +19,10 @@ COPY package*.json ./
 FROM base AS build
 
 # Install Build tools
-RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python \
-    # and dependencies
-    libftdi1-dev libftdi1 && \
+RUN apt-get update && apt-get install -y \
+    udev python \
+    libftdi-dev && \
+    rm -rf /var/lib/apt/lists/* && \
     npm ci --unsafe-perm --no-update-notifier --only=production && \
     cp -R node_modules prod_node_modules
 
