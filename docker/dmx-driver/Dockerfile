@@ -19,7 +19,9 @@ COPY package*.json ./
 FROM base AS build
 
 # Install Build tools
-RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python && \
+RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python \
+    # and dependencies
+    libftdi1-dev libftdi1 && \
     npm ci --unsafe-perm --no-update-notifier --only=production && \
     cp -R node_modules prod_node_modules
 
