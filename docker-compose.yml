@@ -229,6 +229,7 @@ services:
       - TOPIC=/modbus/main/{name}/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
       - ${MAIN_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   secondary-power:
@@ -258,6 +259,7 @@ services:
       - TOPIC=/modbus/secondary/{name}/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
       - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   tetriary-power:
@@ -295,6 +297,7 @@ services:
       - INFLUXDB_MEASUREMENT=sdm630raw
     volumes:
       - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
       - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   dry-switches:
@@ -321,6 +324,7 @@ services:
       - TOPIC=/modbus/dry-switches/{name}/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
 
   influxdb:

@@ -26,7 +26,7 @@ function getFileEnv(envVariable) {
 }
 
 module.exports = {
-  port: '/dev/ttyUSB1',
+  port: '/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0',
   baudRate: 9600,
   parity: 'even',
   devices: [
