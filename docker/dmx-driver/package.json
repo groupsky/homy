@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "dmx": "^0.2.5",
+    "dmx": "git://github.com/groupsky/node-dmx.git",
     "mqtt": "^4.2.8"
   }
 }

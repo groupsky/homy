@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 /* eslint-env node */
-const DMX = require('dmx')
+const { DMX } = require('dmx')
 const mqtt = require('mqtt')
 
 const mqttUrl = process.env.BROKER
 const topic = process.env.TOPIC
 
-const dmxDriver = process.env.DMX_DRIVER
-const dmxPort = process.env.DMX_PORT
-
-const dmx = new DMX()
-const universe = dmx.addUniverse('homy', dmxDriver, dmxPort)
+const dmx = new DMX(process.env.DMX_DEVICE ? parseInt(process.env.DMX_DEVICE) : 0)
 
 const client = mqtt.connect(mqttUrl, {
   clientId: process.env.MQTT_CLIENT_ID
@@ -47,20 +43,18 @@ client.on('connect', function () {
   })
 })
 
-const st = {
-  1: 0,
-  2: 0,
-  3: 0,
-  4: 0
-}
+const st = [0, 0, 0, 0]
 
 client.on('message', function (topic, message) {
   const { inputs } = JSON.parse(message)
-  st['1'] = (inputs & 32) ? 128 : 0
-  st['2'] = (inputs & 512) ? 128 : 0
-  st['3'] = (inputs & 2048) ? 128 : 0
-  universe.update({ ...st })
+  st[1] = (inputs & 32) ? 128 : 0
+  st[2] = (inputs & 512) ? 128 : 0
+  st[3] = (inputs & 2048) ? 128 : 0
+  dmx.set(st.slice(1))
   console.log(st)
 })
 
-universe.update({ ...st })
+dmx.setHz(20)
+dmx.step(5)
+// this also starts the update thread
+dmx.set(0)
