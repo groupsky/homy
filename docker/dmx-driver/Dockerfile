@@ -38,6 +38,6 @@ COPY . .
 RUN chown -R node-app:node-app /usr/src/app && \
     rm -rf /tmp/*
 
-USER node-app
+#USER node-app
 
 ENTRYPOINT ["node", "index.js"]
