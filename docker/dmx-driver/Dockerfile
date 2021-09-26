@@ -7,7 +7,10 @@ RUN set -ex && \
     deluser --remove-home node && \
     useradd --home-dir /usr/src/app --no-create-home node-app --uid 1000 && \
     addgroup node-app dialout && \
-    chown -R node-app:node-app /usr/src/app
+    chown -R node-app:node-app /usr/src/app && \
+    apt-get update && apt-get install -y \
+      libftdi1 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set work directory
 WORKDIR /usr/src/app
