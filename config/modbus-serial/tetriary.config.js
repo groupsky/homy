@@ -47,7 +47,7 @@ module.exports = {
       url: process.env.MONGODB_URL,
       options: {
         auth: {
-          user: getFileEnv('MONGODB_USERNAME'),
+          username: getFileEnv('MONGODB_USERNAME'),
           password: getFileEnv('MONGODB_PASSWORD'),
         }
       }
