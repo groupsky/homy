@@ -64,7 +64,7 @@ client.on('offline', function () {
 
 const mongoPromise = MongoClient.connect(mongoUrl, {
     auth: {
-        user: mongoUser,
+        username: mongoUser,
         password: mongoPassword
     }
 })
