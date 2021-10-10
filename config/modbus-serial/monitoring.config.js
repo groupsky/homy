@@ -26,14 +26,15 @@ function getFileEnv(envVariable) {
 }
 
 module.exports = {
-  port: '/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.6:1.0-port0',
+  port: '/dev/serial/by-path/pci-0000:00:1d.0-usb-0:1.6:1.0-port0',
   baudRate: 9600,
   parity: 'none',
+  msDelayBetweenDevices: 60000,
   devices: [
     {
-      name: 'heat_pump',
-      address: 0x01,
-      reader: 'sdm630',
+      name: 'controlbox',
+      address: 51,
+      reader: 'xymd1',
     },
   ],
   writers: {
