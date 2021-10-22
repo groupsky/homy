@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM node:12.22.6 AS base
+FROM node:16.0.0 AS base
 
 # Install tools, create app dir, add user and set rights
 RUN set -ex && \
