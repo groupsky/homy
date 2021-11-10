@@ -1,1 +1,1 @@
-FROM nginx:1.21.3-alpine
+FROM nginx:1.21.4-alpine
