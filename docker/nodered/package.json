@@ -27,7 +27,7 @@
         }
     ],
     "dependencies": {
-        "node-red": "2.0.6",
+        "node-red": "2.1.4",
         "node-red-contrib-broadlink-control": "^2.1.4"
     },
     "engines": {
