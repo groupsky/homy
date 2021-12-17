@@ -1,1 +1,1 @@
-FROM telegraf:1.20.1-alpine
+FROM telegraf:1.21.1-alpine
