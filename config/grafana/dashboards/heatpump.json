@@ -44,7 +44,7 @@
             "query": {
               "params": [
                 "power",
-                "1m",
+                "2m",
                 "now"
               ]
             },
@@ -56,7 +56,7 @@
           }
         ],
         "executionErrorState": "alerting",
-        "for": "1m",
+        "for": "2m",
         "frequency": "1m",
         "handler": 1,
         "message": "Outside range 29-3000 W",
@@ -616,12 +616,12 @@
     "list": []
   },
   "time": {
-    "from": "now-7d",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 1
+  "version": 2
 }
