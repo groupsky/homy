@@ -29,7 +29,7 @@ module.exports = {
   port: '/dev/serial/by-path/pci-0000:00:1d.0-usb-0:1.6:1.0-port0',
   baudRate: 9600,
   parity: 'none',
-  msDelayBetweenDevices: 60000,
+  msDelayBetweenDevices: 1000,
   devices: [
     {
       name: 'controlbox',
