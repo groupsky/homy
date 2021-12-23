@@ -36,6 +36,26 @@ module.exports = {
       address: 51,
       reader: 'xymd1',
     },
+    {
+      name: 'thermostat-martin',
+      address: 0x41,
+      reader: 'bac002',
+    },
+    {
+      name: 'thermostat-gergana',
+      address: 0x42,
+      reader: 'bac002',
+    },
+    {
+      name: 'thermostat-boris',
+      address: 0x43,
+      reader: 'bac002',
+    },
+    {
+      name: 'thermostat-bedroom',
+      address: 0x44,
+      reader: 'bac002',
+    },
   ],
   writers: {
     console: {},
