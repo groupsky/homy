@@ -1,1 +1,1 @@
-FROM jwilder/docker-gen:0.7.7
+FROM jwilder/docker-gen:0.8.1
