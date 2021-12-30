@@ -29,4 +29,4 @@
     {% elif value_json.power == 'off' %}
       off
     {% endif %}
-  temperature_state_template: "{{ value_json.currentTemp }}"
+  temperature_state_template: "{{ value_json.targetTemp }}"
