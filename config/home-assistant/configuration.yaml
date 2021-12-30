@@ -35,6 +35,7 @@ mqtt:
   client_id: home-assistant
 
 binary_sensor: !include configuration/binary_sensors.yaml
+climate: !include configuration/climate.yaml
 light: !include configuration/lights.yaml
 sensor: !include configuration/sensors.yaml
 

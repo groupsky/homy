@@ -148,14 +148,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ${HOMEASSISTANT_DATA_PATH}:/config
       - ${HOMEASSISTANT_CONFIG_CONFIGURATION_FILE}:/config/configuration.yaml:ro
-      - ${HOMEASSISTANT_CONFIG_AUTOMATIONS_FILE}:/config/configuration/automations.yaml:ro
-      - ${HOMEASSISTANT_CONFIG_CUSTOMIZE_FILE}:/config/configuration/customize.yaml:ro
-      - ${HOMEASSISTANT_CONFIG_GROUPS_FILE}:/config/configuration/groups.yaml:ro
-      - ${HOMEASSISTANT_CONFIG_SCENES_FILE}:/config/configuration/scenes.yaml:ro
-      - ${HOMEASSISTANT_CONFIG_SCRIPTS_FILE}:/config/configuration/scripts.yaml:ro
-      - ${HOMEASSISTANT_CONFIG}/configuration/lights.yaml:/config/configuration/lights.yaml:ro
-      - ${HOMEASSISTANT_CONFIG}/configuration/binary_sensors.yaml:/config/configuration/binary_sensors.yaml:ro
-      - ${HOMEASSISTANT_CONFIG}/configuration/sensors.yaml:/config/configuration/sensors.yaml:ro
+      - ${HOMEASSISTANT_CONFIG}/configuration:/config/configuration:ro
       - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
 
   mongo:
