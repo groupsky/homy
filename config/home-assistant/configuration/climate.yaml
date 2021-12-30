@@ -20,6 +20,7 @@
   temperature_state_topic: /modbus/monitoring/thermostat-martin/reading
   current_temperature_template: "{{ value_json.currentTemp|float }}"
   fan_mode_state_template: "{{ 'medium' if value_json.fanSetting == 'mid' else value_json.fanSetting }}"
+  json_attributes_template: "{{ value_json | tojson }}"
   mode_state_template: >-
     {% if value_json.power == 'on' %}
       {{ 'off' if value_json.power == 'off' }}
