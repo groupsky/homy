@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM node:14.16.0-alpine AS base
+FROM node:16.13.1-alpine3.14 AS base
 
 # Install tools, create app dir, add user and set rights
 RUN set -ex && \
@@ -19,7 +19,7 @@ COPY package*.json ./
 FROM base AS build
 
 # Install Build tools
-RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python && \
+RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python3 && \
     npm ci --unsafe-perm --no-update-notifier --only=production && \
     cp -R node_modules prod_node_modules
 
