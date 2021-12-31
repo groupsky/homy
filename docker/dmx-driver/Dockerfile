@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM node:12.22.6 AS base
+FROM node:12.22.8 AS base
 
 # Install tools, create app dir, add user and set rights
 RUN set -ex && \
@@ -23,7 +23,7 @@ FROM base AS build
 
 # Install Build tools
 RUN apt-get update && apt-get install -y \
-    udev python \
+    udev python3 \
     libftdi-dev && \
     rm -rf /var/lib/apt/lists/* && \
     npm ci --unsafe-perm --no-update-notifier --only=production && \
