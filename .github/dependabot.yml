@@ -28,7 +28,21 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/deluge"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/dockergen"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/flaresolverr"
     schedule:
       interval: "daily"
     reviewers:
@@ -64,6 +78,13 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/influxdb"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/jackett"
     schedule:
       interval: "daily"
     reviewers:
@@ -154,6 +175,20 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/plex"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/sonarr"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/telegraf"
     schedule:
       interval: "daily"
@@ -176,6 +211,13 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/wireguard"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/services/plex/docker/plex"
     schedule:
       interval: "daily"
     reviewers:
