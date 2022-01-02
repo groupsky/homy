@@ -504,6 +504,25 @@ services:
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"secondary"}
 
+  dmx-driver:
+    build: docker/dmx-driver
+    depends_on:
+      - broker
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - BROKER=mqtt://broker
+      - DMX_DRIVER=enttec-open-usb-dmx
+      - DMX_PORT=/dev/ttyUSB5
+      - MQTT_CLIENT_ID=dmx-driver
+      - TOPIC=/modbus/dry-switches/mbsl32di1/reading
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+
   # Manualy run with
   # dc run historian-primary node index.js
   historian-primary:
@@ -554,24 +573,25 @@ services:
       - MQTT_CLIENT_ID=historian-secondary
       - COLLECTION=secondary
 
-  dmx-driver:
-    build: docker/dmx-driver
-    depends_on:
-      - broker
-    restart: unless-stopped
-    privileged: true
-    networks:
-      - automation
+  # Manually run with
+  # dc run volman
+  volman:
+    build: docker/volman
+    restart: 'no'
+    network_mode: none
     security_opt:
       - no-new-privileges:true
     environment:
-      - BROKER=mqtt://broker
-      - DMX_DRIVER=enttec-open-usb-dmx
-      - DMX_PORT=/dev/ttyUSB5
-      - MQTT_CLIENT_ID=dmx-driver
-      - TOPIC=/modbus/dry-switches/mbsl32di1/reading
+      - TZ=${TZ}
+      - BACKUP_ROOT=/backup
+      - VOLUMES_ROOT=/volumes
+      - VOLUMES=ha mongo influxdb
     volumes:
-      - /dev/bus/usb:/dev/bus/usb
+      - /etc/localtime:/etc/localtime:ro
+      - ${BACKUP_PATH}:/backup
+      - ${HOMEASSISTANT_DATA_PATH}:/volumes/ha
+      - ${MONGO_DATA_PATH}:/volumes/mongo
+      - ./data/influxdb:/volumes/influxdb
 
 networks:
   # internal for the automation services - mqtt, node red, ah

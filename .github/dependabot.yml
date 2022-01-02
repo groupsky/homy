@@ -175,6 +175,13 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/volman"
+    schedule:
+      interval: "daily"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/wireguard"
     schedule:
       interval: "daily"
