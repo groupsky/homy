@@ -31,31 +31,35 @@ const integrations = Object.entries(integrationsConfig).map(
   }
 )
 
+const pollDevice = async (device) => {
+  // output value to console
+  await modbusClient.setID(device.config.address)
+  try {
+    const start = Date.now()
+    const val = await device.driver.read(modbusClient, device.config, device.state)
+    if (val == null) return
+    val._tz = Date.now()
+    val._ms = val._tz - start
+    val._addr = device.config.address
+    val._type = device.config.type
+    val.device = device.name
+    integrations.forEach(({ client, name }) => {
+      try {
+        client.publish(val, device)
+      } catch (e) {
+        console.error(`Error publishing to ${name}`)
+      }
+    })
+  } catch (e) {
+    console.error(`Error reading from ${device.name}`, e)
+  }
+}
+
 const poll = async () => {
   try {
     // get value of all meters
     for (const device of devices) {
-      // output value to console
-      await modbusClient.setID(device.config.address)
-      try {
-        const start = Date.now()
-        const val = await device.driver.read(modbusClient, device.config, device.state)
-        if (val == null) continue
-        val._tz = Date.now()
-        val._ms = val._tz - start
-        val._addr = device.config.address
-        val._type = device.config.type
-        val.device = device.name
-        integrations.forEach(({ client, name }) => {
-          try {
-            client.publish(val, device)
-          } catch (e) {
-            console.error(`Error publishing to ${name}`)
-          }
-        })
-      } catch (e) {
-        console.error(`Error reading from ${device.name}`, e)
-      }
+      await pollDevice(device)
       await sleep(msDelayBetweenDevices)
     }
   } catch (e) {
@@ -78,9 +82,14 @@ Promise.all([
     if (integration.client.subscribe) {
       for (const device of devices) {
         if (device.driver.write) {
-          await integration.client.subscribe(device, (message) =>
-            device.driver.write(modbusClient, message, device.config, device.state)
-          )
+          await integration.client.subscribe(device, async (message) => {
+            try {
+              await device.driver.write(modbusClient, message, device.config, device.state)
+              await pollDevice(device)
+            } catch (e) {
+              console.error(`Error writing to device ${device.name}`, message, e)
+            }
+          })
         }
       }
     }
