@@ -2,54 +2,59 @@
 /* eslint-env node */
 const ModbusRTU = require('modbus-serial')
 const {
-  devices,
-  msDelayBetweenDevices = 150,
-  msTimeout = 1000,
-  port,
-  writers: writersConfig,
-  ...portConfig
+  modbus: {
+    port,
+    portConfig,
+    msDelayBetweenDevices = 150,
+    msTimeout = 1000,
+  },
+  devices: devicesConfig,
+  integrations: integrationsConfig,
 } = require(process.env.CONFIG)
 const modbusClient = new ModbusRTU()
 
-const readers = devices.reduce((map, { reader: readerName }) => {
-  if (!(readerName in map)) {
-    map[readerName] = require(`./readers/${readerName}`)
+const devices = devicesConfig.map((deviceConfig) => ({
+  config: deviceConfig,
+  driver: require(`./devices/${deviceConfig.type}`),
+  name: deviceConfig.name,
+  state: {}
+}))
+
+const integrations = Object.entries(integrationsConfig).map(
+  ([integrationName, integrationConfig]) => {
+    const integration = require(`./integrations/${integrationName}`)(integrationConfig)
+    return {
+      client: integration,
+      config: integrationConfig,
+      name: integrationName
+    }
   }
-  return map
-}, {})
-const writers = Object.entries(writersConfig).map(
-  ([writerName, writerConfig]) => require(`./writers/${writerName}`)(writerConfig)
 )
 
-devices.forEach((device) => {
-  device.state = {}
-})
-
-const getValues = async () => {
+const poll = async () => {
   try {
     // get value of all meters
-    for (let device of devices) {
+    for (const device of devices) {
       // output value to console
-      await modbusClient.setID(device.address)
+      await modbusClient.setID(device.config.address)
       try {
-        const reader = readers[device.reader]
         const start = Date.now()
-        const val = await reader(modbusClient, device.readerOptions, device.state)
+        const val = await device.driver.read(modbusClient, device.config, device.state)
         if (val == null) continue
         val._tz = Date.now()
         val._ms = val._tz - start
-        val._addr = device.address
-        val._type = device.reader
+        val._addr = device.config.address
+        val._type = device.config.type
         val.device = device.name
-        writers.forEach((writer) => {
+        integrations.forEach(({ client, name }) => {
           try {
-            writer(val, device)
+            client.publish(val, device)
           } catch (e) {
-            console.error('Error writing', writer)
+            console.error(`Error publishing to ${name}`)
           }
         })
       } catch (e) {
-        console.error('Error reading', device, e)
+        console.error(`Error reading from ${device.name}`, e)
       }
       await sleep(msDelayBetweenDevices)
     }
@@ -58,7 +63,7 @@ const getValues = async () => {
     console.error(e)
   } finally {
     // after get all data from slave repeat it again
-    setImmediate(getValues)
+    setImmediate(poll)
   }
 }
 
@@ -66,8 +71,20 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 Promise.all([
   modbusClient.connectRTUBuffered(port, portConfig)
-]).then(() => {
+]).then(async () => {
   modbusClient.setTimeout(msTimeout)
 
-  return getValues()
+  for (const integration of integrations) {
+    if (integration.client.subscribe) {
+      for (const device of devices) {
+        if (device.driver.write) {
+          await integration.client.subscribe(device, (message) =>
+            device.driver.write(modbusClient, message, device.config, device.state)
+          )
+        }
+      }
+    }
+  }
+
+  return poll()
 })

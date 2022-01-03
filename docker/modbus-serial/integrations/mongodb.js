@@ -21,5 +21,5 @@ module.exports = ({ url, options, collection }) => {
 
   logger.toString = () => 'mongodb'
 
-  return logger
+  return { publish: logger }
 }

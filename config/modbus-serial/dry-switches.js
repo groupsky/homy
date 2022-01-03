@@ -26,26 +26,30 @@ function getFileEnv(envVariable) {
 }
 
 module.exports = {
-  port: '/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.5:1.0-port0',
-  baudRate: 115200,
-  parity: 'even',
-  msDelayBetweenDevices: 0,
-  msTimeout: 50,
+  modbus: {
+    port: '/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.5:1.0-port0',
+    portConfig: {
+      baudRate: 115200,
+      parity: 'even',
+    },
+    msDelayBetweenDevices: 0,
+    msTimeout: 50,
+  },
   devices: [
     {
       name: 'mbsl32di1',
       address: 31,
-      reader: 'mbsl32di',
-      readerOptions: {
+      type: 'mbsl32di',
+      options: {
         maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
       }
     },
   ],
-  writers: {
+  integrations: {
     console: {},
     mqtt: {
       url: process.env.BROKER,
-      topic: process.env.TOPIC,
+      publishTopic: process.env.TOPIC,
     },
     mongodb: {
       collection: process.env.COLLECTION,

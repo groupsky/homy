@@ -1,6 +1,6 @@
 const ieee754 = require('ieee754')
 
-module.exports = async function dds024mr (client) {
+async function read (client) {
   let val
 
   val = await client.readInputRegisters(0x00, 0x38)
@@ -36,4 +36,8 @@ module.exports = async function dds024mr (client) {
     apf, bpf, cpf, freq,
     tot_act, tot_react,
   }
+}
+
+module.exports = {
+  read
 }

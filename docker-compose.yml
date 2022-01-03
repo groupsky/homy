@@ -323,6 +323,7 @@ services:
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/monitoring/{name}/reading
+      - SUBSCRIBE_TOPIC=/modbus/monitoring/{name}/write
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password

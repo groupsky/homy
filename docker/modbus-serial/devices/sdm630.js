@@ -2,7 +2,7 @@ const ieee754 = require('ieee754')
 
 const r = (value, offset) => ieee754.read(value.buffer, offset << 1, false, 23, 4)
 
-module.exports = async function sdm630modbus (client) {
+async function read (client) {
   const in1 = await client.readInputRegisters(0x00, 80)
   // Phase A/B/C line to neutral volts (Volts)
   const av = r(in1, 0x00)
@@ -281,4 +281,8 @@ module.exports = async function sdm630modbus (client) {
     b_total_kvarh,
     c_total_kvarh,
   }
+}
+
+module.exports = {
+  read
 }

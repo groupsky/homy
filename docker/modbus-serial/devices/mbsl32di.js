@@ -1,4 +1,4 @@
-module.exports = async function mbsl32di (client, { maxMsBetweenReports = 0 } = {}, state = {}) {
+async function read (client, { options: { maxMsBetweenReports = 0 } = {} } = {}, state = {}) {
   const val = await client.readHoldingRegisters(0x0000, 2)
   const newFlags = val.data[1] << 16 | val.data[0]
 
@@ -12,4 +12,8 @@ module.exports = async function mbsl32di (client, { maxMsBetweenReports = 0 } = 
   state.flags = newFlags
 
   return { inputs: newFlags }
+}
+
+module.exports = {
+  read
 }
