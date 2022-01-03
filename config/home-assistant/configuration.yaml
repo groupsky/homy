@@ -13,10 +13,6 @@ homeassistant:
   external_url: !env_var EXTERNAL_URL
   internal_url: !env_var INTERNAL_URL
 
-updater:
-  reporting: no
-  include_used_components: false
-
 # Text to speech
 tts:
   - platform: google_translate
