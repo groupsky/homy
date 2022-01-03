@@ -1,7 +1,6 @@
 - platform: mqtt
   name: Martin
   modes:
-    - "off"
     - "heat"
     - "cool"
     - "fan_only"
@@ -14,6 +13,8 @@
   temperature_unit: "C"
   temp_step: 0.5
   current_temperature_template: "{{ value_json.currentTemp|float }}"
+#  fan_mode_command_template: >-
+#    { "fanSetting": "{% if value == 'medium' %}med{% else %}{{ value }}{% endif %}" }
   fan_mode_state_template: "{{ 'medium' if value_json.fanSetting == 'mid' else value_json.fanSetting }}"
   json_attributes_template: "{{ value_json | tojson }}"
   mode_state_template: >-
@@ -31,6 +32,9 @@
   json_attributes_topic: /modbus/monitoring/thermostat-martin/reading
   mode_state_topic: /modbus/monitoring/thermostat-martin/reading
   temperature_state_topic: /modbus/monitoring/thermostat-martin/reading
+  fan_mode_command_topic: /modbus/monitoring/thermostat-martin/fan_mode/write
+  mode_command_topic: /modbus/monitoring/thermostat-martin/mode/write
+  power_command_topic: /modbus/monitoring/thermostat-martin/power/write
 
 - platform: mqtt
   name: Gergana
