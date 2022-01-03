@@ -39,9 +39,10 @@ climate: !include configuration/climate.yaml
 light: !include configuration/lights.yaml
 sensor: !include configuration/sensors.yaml
 
-spotify:
-  client_id: !secret spotify_client_id
-  client_secret: !secret spotify_client_secret
+# disabled due to linking with particular account
+#spotify:
+#  client_id: !secret spotify_client_id
+#  client_secret: !secret spotify_client_secret
 
 switch:
   - platform: broadlink
