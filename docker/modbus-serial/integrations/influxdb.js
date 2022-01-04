@@ -43,5 +43,5 @@ module.exports = ({
 
   logger.toString = () => 'influxdb'
 
-  return logger
+  return { publish: logger }
 }

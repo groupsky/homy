@@ -1,6 +1,6 @@
 const ieee754 = require('ieee754')
 
-module.exports = async function dds519mr (client) {
+async function read (client) {
   const valInputs1 = await client.readInputRegisters(0x00, 0x14)
   const v = ieee754.read(valInputs1.buffer, 0x00 << 1, false, 23, 4)
   const c = ieee754.read(valInputs1.buffer, 0x08 << 1, false, 23, 4)
@@ -16,4 +16,8 @@ module.exports = async function dds519mr (client) {
   return {
     v, c, p, pf, freq, tot
   }
+}
+
+module.exports = {
+  read
 }

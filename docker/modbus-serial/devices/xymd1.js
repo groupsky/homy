@@ -1,4 +1,4 @@
-module.exports = async function xymd1 (client) {
+async function read (client) {
   const val = await client.readInputRegisters(1, 2)
 
   // Temperature in Celsius
@@ -7,4 +7,8 @@ module.exports = async function xymd1 (client) {
   const h = val.data[1] / 10
 
   return { t, h }
+}
+
+module.exports = {
+  read
 }

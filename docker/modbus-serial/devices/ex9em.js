@@ -1,4 +1,4 @@
-module.exports = async function ex9em (client) {
+async function read (client) {
   const val = await client.readHoldingRegisters(0x0000, 0x2C)
 
   // Voltage in Volts
@@ -21,4 +21,8 @@ module.exports = async function ex9em (client) {
   const tot_react = val.data[10] / 100 // ? what divider
 
   return { v, c, p, rp, freq, ap, pow, tot_act, tot_react }
+}
+
+module.exports = {
+  read
 }

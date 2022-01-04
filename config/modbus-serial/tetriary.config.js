@@ -26,21 +26,25 @@ function getFileEnv(envVariable) {
 }
 
 module.exports = {
-  port: '/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.6:1.0-port0',
-  baudRate: 9600,
-  parity: 'none',
+  modbus: {
+    port: '/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.6:1.0-port0',
+    portConfig: {
+      baudRate: 9600,
+      parity: 'none',
+    },
+  },
   devices: [
     {
       name: 'heat_pump',
       address: 0x01,
-      reader: 'sdm630',
+      type: 'sdm630',
     },
   ],
-  writers: {
+  integrations: {
     console: {},
     mqtt: {
       url: process.env.BROKER,
-      topic: process.env.TOPIC,
+      publishTopic: process.env.TOPIC,
     },
     mongodb: {
       collection: process.env.COLLECTION,
