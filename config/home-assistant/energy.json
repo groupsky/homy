@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "energy",
+  "data": {
+    "energy_sources": [
+      {
+        "type": "grid",
+        "flow_from": [
+          {
+            "stat_energy_from": "sensor.main_energy_used",
+            "stat_cost": null,
+            "entity_energy_from": "sensor.main_energy_used",
+            "entity_energy_price": null,
+            "number_energy_price": null
+          }
+        ],
+        "flow_to": [],
+        "cost_adjustment_day": 0.0
+      }
+    ],
+    "device_consumption": [
+      {
+        "stat_consumption": "sensor.boiler_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.dishwasher_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.kitchen_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.laundry_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.main_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.oven_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.stove_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.waste_pump_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.water_pump_energy_used"
+      },
+      {
+        "stat_consumption": "sensor.heat_pump_energy_used"
+      }
+    ]
+  }
+}

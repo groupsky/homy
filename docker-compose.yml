@@ -150,6 +150,7 @@ services:
       - ${HOMEASSISTANT_DATA_PATH}:/config
       - ${HOMEASSISTANT_CONFIG_CONFIGURATION_FILE}:/config/configuration.yaml:ro
       - ${HOMEASSISTANT_CONFIG}/configuration:/config/configuration:ro
+      - ${HOMEASSISTANT_CONFIG}/energy.json:/config/.storage/energy:ro
       - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
 
   mongo:
