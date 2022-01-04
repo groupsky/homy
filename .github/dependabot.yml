@@ -9,181 +9,181 @@ updates:
   - package-ecosystem: "docker"
     directory: "/docker/dmx-driver"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/dmx-driver"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/dockergen"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/grafana"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/historian"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/historian"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/influxdb"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/modbus-serial"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/modbus-serial"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/mongo"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/mongo-express"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/mosquitto"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/mqtt-influx"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/mqtt-influx"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/mqtt-mongo"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/mqtt-mongo"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/nginx"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/nodered"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/nodered"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/telegraf"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
     directory: "/docker/test"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/test"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/volman"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "docker"
     directory: "/docker/wireguard"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     reviewers:
       - "groupsky"
