@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
-const { Mutext, withTimeout } = require('async-mutex')
+const { Mutex, withTimeout } = require('async-mutex')
 const ModbusRTU = require('modbus-serial')
 const {
   modbus: {
@@ -14,7 +14,7 @@ const {
   integrations: integrationsConfig,
 } = require(process.env.CONFIG)
 const modbusClient = new ModbusRTU()
-const modbusMutex = withTimeout(new Mutext(), msCommunicationTimeout)
+const modbusMutex = withTimeout(new Mutex(), msCommunicationTimeout)
 
 const devices = devicesConfig.map((deviceConfig) => ({
   config: deviceConfig,
