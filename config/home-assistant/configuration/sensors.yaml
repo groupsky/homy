@@ -1,6 +1,150 @@
+#- platform: mqtt
+#  name: Main energy usage
+#  device_class: apparent_power
+#  state_class: measurement
+#  unit_of_measurement: VA
+#  state_topic: "/modbus/main/main/reading"
+#  value_template: "{{ value_json.sum_ap | float }}"
+#
+#- platform: mqtt
+#  name: Main reactive energy usage
+#  device_class: reactive_power
+#  state_class: measurement
+#  unit_of_measurement: var
+#  state_topic: "/modbus/main/main/reading"
+#  value_template: "{{ value_json.sum_rp | float }}"
+#
 - platform: mqtt
-  name: Main
-  device_class: power
-  unit_of_measurement: kW
+  name: Main current A
+  device_class: current
+  state_class: measurement
+  unit_of_measurement: A
   state_topic: "/modbus/main/main/reading"
-  value_template: "{{ '%.1f'|format(value_json.sum_ap|float / 1000) }}"
+  value_template: "{{ value_json.ac | float }}"
+
+- platform: mqtt
+  name: Main current B
+  device_class: current
+  state_class: measurement
+  unit_of_measurement: A
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.bc | float }}"
+
+- platform: mqtt
+  name: Main current C
+  device_class: current
+  state_class: measurement
+  unit_of_measurement: A
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.cc | float }}"
+
+- platform: mqtt
+  name: Main power factor A
+  device_class: power_factor
+  state_class: measurement
+  unit_of_measurement: '%'
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.apf | float }}"
+
+- platform: mqtt
+  name: Main power factor B
+  device_class: power_factor
+  state_class: measurement
+  unit_of_measurement: '%'
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.bpf | float }}"
+
+- platform: mqtt
+  name: Main power factor C
+  device_class: power_factor
+  state_class: measurement
+  unit_of_measurement: '%'
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.cpf | float }}"
+
+- platform: mqtt
+  name: Main voltage A
+  device_class: voltage
+  state_class: measurement
+  unit_of_measurement: V
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.av | float }}"
+
+- platform: mqtt
+  name: Main voltage B
+  device_class: voltage
+  state_class: measurement
+  unit_of_measurement: V
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.bv | float }}"
+
+- platform: mqtt
+  name: Main voltage C
+  device_class: voltage
+  state_class: measurement
+  unit_of_measurement: V
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.cv | float }}"
+
+- platform: mqtt
+  name: Main frequency
+  device_class: frequency
+  state_class: measurement
+  unit_of_measurement: Hz
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.freq | float }}"
+
+- name: Main energy used
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.tot_act | float }}"
+  <<: &common_used_energy
+    platform: mqtt
+    device_class: energy
+    state_class: total
+    unit_of_measurement: kWh
+
+
+- name: Water pump energy used
+  state_topic: "/modbus/secondary/water_pump/reading"
+  value_template: "{{ value_json.tot_act | float }}"
+  <<: *common_used_energy
+
+- name: Waste pump energy used
+  state_topic: "/modbus/secondary/waste_pump/reading"
+  value_template: "{{ value_json.tot_act | float }}"
+  <<: *common_used_energy
+
+- name: Oven energy used
+  state_topic: "/modbus/secondary/oven/reading"
+  value_template: "{{ value_json.tot | float }}"
+  <<: *common_used_energy
+
+- name: Stove energy used
+  state_topic: "/modbus/secondary/stove/reading"
+  value_template: "{{ value_json.tot | float }}"
+  <<: *common_used_energy
+
+- name: Dishwasher energy used
+  state_topic: "/modbus/secondary/dishwasher/reading"
+  value_template: "{{ value_json.tot | float }}"
+  <<: *common_used_energy
+
+- name: Kitchen energy used
+  state_topic: "/modbus/secondary/kitchen/reading"
+  value_template: "{{ value_json.tot | float }}"
+  <<: *common_used_energy
+
+- name: Laundry energy used
+  state_topic: "/modbus/secondary/laundry/reading"
+  value_template: "{{ value_json.tot | float }}"
+  <<: *common_used_energy
+
+- name: Boiler energy used
+  state_topic: "/modbus/secondary/boiler/reading"
+  value_template: "{{ value_json.tot | float }}"
+  <<: *common_used_energy
+
+- name: Heat pump energy used
+  state_topic: "/modbus/tetriary/heat_pump/reading"
+  value_template: "{{ value_json.total_kwh | float }}"
+  <<: *common_used_energy
