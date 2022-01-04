@@ -360,16 +360,49 @@ services:
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
 
+#  influxdb:
+#    build: docker/influxdb
+#    restart: unless-stopped
+#    networks:
+#      - automation
+#    security_opt:
+#      - no-new-privileges:true
+#    configs:
+#      - source: influxdb_config
+#        target: /etc/influxdb/influxdb.conf
+#    secrets:
+#      - influxdb_admin_user
+#      - influxdb_admin_password
+#      - influxdb_user
+#      - influxdb_user_password
+#      - influxdb_read_user
+#      - influxdb_read_user_password
+#      - influxdb_write_user
+#      - influxdb_write_user_password
+#    environment:
+#      - TZ=${TZ}
+#      - INFLUXDB_DB=${INFLUXDB_DATABASE}
+#      - INFLUXDB_HTTP_AUTH_ENABLED=true
+#      - INFLUXDB_ADMIN_USER_FILE=/run/secrets/influxdb_admin_user
+#      - INFLUXDB_ADMIN_PASSWORD_FILE=/run/secrets/influxdb_admin_password
+#      - INFLUXDB_USER_FILE=/run/secrets/influxdb_user
+#      - INFLUXDB_USER_PASSWORD_FILE=/run/secrets/influxdb_user_password
+#      - INFLUXDB_READ_USER_FILE=/run/secrets/influxdb_read_user
+#      - INFLUXDB_READ_USER_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
+#      - INFLUXDB_WRITE_USER_FILE=/run/secrets/influxdb_write_user
+#      - INFLUXDB_WRITE_USER_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+#    volumes:
+#      - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
+#      - ./data/influxdb:/var/lib/influxdb
+#      - /etc/localtime:/etc/localtime:ro
+
   influxdb:
-    build: docker/influxdb
+    build: docker/influxdb2
     restart: unless-stopped
     networks:
       - automation
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: influxdb_config
-        target: /etc/influxdb/influxdb.conf
     secrets:
       - influxdb_admin_user
       - influxdb_admin_password
@@ -381,6 +414,11 @@ services:
       - influxdb_write_user_password
     environment:
       - TZ=${TZ}
+      - DOCKER_INFLUXDB_INIT_MODE=upgrade
+      - DOCKER_INFLUXDB_INIT_USERNAME_FILE=/run/secrets/influxdb_admin_user
+      - DOCKER_INFLUXDB_INIT_PASSWORD_FILE=/run/secrets/influxdb_admin_password
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
       - INFLUXDB_DB=${INFLUXDB_DATABASE}
       - INFLUXDB_HTTP_AUTH_ENABLED=true
       - INFLUXDB_ADMIN_USER_FILE=/run/secrets/influxdb_admin_user
@@ -393,8 +431,11 @@ services:
       - INFLUXDB_WRITE_USER_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
     volumes:
       - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
-      - ./data/influxdb:/var/lib/influxdb
+      - ${CONFIG_PATH}/inflixdb2:/etc/influxdb2
+      - ${DATA_PATH}/influxdb:/var/lib/influxdb
+      - ${DATA_PATH}/influxdb2:/var/lib/influxdb2
       - /etc/localtime:/etc/localtime:ro
+#    user: ${PUID}:${PGID}
 
   grafana:
     build: docker/grafana
