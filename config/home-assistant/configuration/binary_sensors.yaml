@@ -2,145 +2,193 @@
   name: "Front door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(1) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**0) else 'ON' }}"
 
 - platform: mqtt
   name: "Front side door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**1) else 'ON' }}"
 
 - platform: mqtt
   name: "Living room window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(4) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**2) else 'ON' }}"
 
 - platform: mqtt
   name: "Cabinet south window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(8) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**3) else 'ON' }}"
 
 - platform: mqtt
   name: "Cabinet west window"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(16) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**4) else 'ON' }}"
 
 - platform: mqtt
   name: "Bath 1 Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(32) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**5) else 'ON' }}"
 
 - platform: mqtt
   name: "Bath 1 Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(64) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**6) else 'ON' }}"
 
 - platform: mqtt
   name: "Cabinet Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(128) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**7) else 'ON' }}"
 
 - platform: mqtt
   name: "Cabinet Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(256) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**8) else 'ON' }}"
 
 - platform: mqtt
   name: "Bath 2 Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(512) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**9) else 'ON' }}"
 
 - platform: mqtt
   name: "Bath 2 Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(1024) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**10) else 'ON' }}"
 
 - platform: mqtt
   name: "Bath 3 Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2048) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**11) else 'ON' }}"
 
 - platform: mqtt
   name: "Bath 3 Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(4096) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**12) else 'ON' }}"
 
 - platform: mqtt
   name: "Gery Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(8192) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**13) else 'ON' }}"
 
 - platform: mqtt
   name: "Gery Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(16384) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**14) else 'ON' }}"
 
 - platform: mqtt
   name: "Bedroom Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(32768) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**15) else 'ON' }}"
 
 - platform: mqtt
   name: "Bedroom Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(65536) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**16) else 'ON' }}"
 
 - platform: mqtt
   name: "Bobo Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(131072) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**17) else 'ON' }}"
 
 - platform: mqtt
   name: "Bobo Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(262144) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**18) else 'ON' }}"
 
 - platform: mqtt
   name: "Bath 1"
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(524288) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**19) else 'ON' }}"
 
 - platform: mqtt
   name: "Marti Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(1048576) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**20) else 'ON' }}"
 
 - platform: mqtt
   name: "Marti Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2097152) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**21) else 'ON' }}"
 
 - platform: mqtt
   name: "Service Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(4194304) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**22) else 'ON' }}"
 
 - platform: mqtt
   name: "Service Door"
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(8388608) else 'ON' }}"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**23) else 'ON' }}"
+
+- platform: mqtt
+  name: "Kitchen"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**24) else 'ON' }}"
+
+- platform: mqtt
+  name: "Bath 2"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**25) else 'ON' }}"
+
+- platform: mqtt
+  name: "Bedroom balcony"
+  device_class: "door"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**26) else 'ON' }}"
+
+- platform: mqtt
+  name: "Bedroom"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**27) else 'ON' }}"
+
+- platform: mqtt
+  name: "Martin west"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**28) else 'ON' }}"
+
+- platform: mqtt
+  name: "Martin south"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**29) else 'ON' }}"
+
+- platform: mqtt
+  name: "Gergana balcony"
+  device_class: "door"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**30) else 'ON' }}"
+
+- platform: mqtt
+  name: "Boris balcony"
+  device_class: "door"
+  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**31) else 'ON' }}"
 
 - platform: mqtt
   name: Dishwasher
