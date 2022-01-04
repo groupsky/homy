@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
+const { Mutext, withTimeout } = require('async-mutex')
 const ModbusRTU = require('modbus-serial')
 const {
   modbus: {
@@ -7,11 +8,13 @@ const {
     portConfig,
     msDelayBetweenDevices = 150,
     msTimeout = 1000,
+    msCommunicationTimeout = msTimeout * 10,
   },
   devices: devicesConfig,
   integrations: integrationsConfig,
 } = require(process.env.CONFIG)
 const modbusClient = new ModbusRTU()
+const modbusMutex = withTimeout(new Mutext(), msCommunicationTimeout)
 
 const devices = devicesConfig.map((deviceConfig) => ({
   config: deviceConfig,
@@ -32,27 +35,32 @@ const integrations = Object.entries(integrationsConfig).map(
 )
 
 const pollDevice = async (device) => {
-  // output value to console
-  await modbusClient.setID(device.config.address)
-  try {
-    const start = Date.now()
-    const val = await device.driver.read(modbusClient, device.config, device.state)
-    if (val == null) return
-    val._tz = Date.now()
-    val._ms = val._tz - start
-    val._addr = device.config.address
-    val._type = device.config.type
-    val.device = device.name
-    integrations.forEach(({ client, name }) => {
-      try {
-        client.publish(val, device)
-      } catch (e) {
-        console.error(`Error publishing to ${name}`)
-      }
-    })
-  } catch (e) {
-    console.error(`Error reading from ${device.name}`, e)
-  }
+  let val = null
+  let start
+  let end
+  await modbusMutex.runExclusive(async () => {
+    await modbusClient.setID(device.config.address)
+    start = Date.now()
+    try {
+      val = await device.driver.read(modbusClient, device.config, device.state)
+    } catch (e) {
+      console.error(`Error reading from ${device.name}`, e)
+    }
+    end = Date.now()
+  })
+  if (val == null) return
+  val._tz = Math.round((start + end) / 2)
+  val._ms = end - start
+  val._addr = device.config.address
+  val._type = device.config.type
+  val.device = device.name
+  integrations.forEach(({client, name}) => {
+    try {
+      client.publish(val, device)
+    } catch (e) {
+      console.error(`Error publishing to ${name}`)
+    }
+  })
 }
 
 const poll = async () => {
@@ -83,12 +91,14 @@ Promise.all([
       for (const device of devices) {
         if (device.driver.write) {
           await integration.client.subscribe(device, async (message) => {
-            await modbusClient.setID(device.config.address)
-            try {
-              await device.driver.write(modbusClient, message, device.config, device.state)
-            } catch (e) {
-              console.error(`Error writing to device ${device.name}`, message, e)
-            }
+            await modbusMutex.runExclusive(async () => {
+              await modbusClient.setID(device.config.address)
+              try {
+                await device.driver.write(modbusClient, message, device.config, device.state)
+              } catch (e) {
+                console.error(`Error writing to device ${device.name}`, message, e)
+              }
+            })
             await pollDevice(device)
           })
         }
