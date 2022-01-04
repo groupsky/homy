@@ -86,10 +86,10 @@ Promise.all([
             await modbusClient.setID(device.config.address)
             try {
               await device.driver.write(modbusClient, message, device.config, device.state)
-              await pollDevice(device)
             } catch (e) {
               console.error(`Error writing to device ${device.name}`, message, e)
             }
+            await pollDevice(device)
           })
         }
       }
