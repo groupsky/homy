@@ -2,17 +2,16 @@
 default_config:
 
 # Uncomment this if you are using SSL/TLS, running in Docker container, etc.
-# http:
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - !env_var TRUSTED_PROXIES
 #   base_url: example.duckdns.org:8123
 
 homeassistant:
   customize: !include configuration/customize.yaml
   external_url: !env_var EXTERNAL_URL
   internal_url: !env_var INTERNAL_URL
-
-updater:
-  reporting: no
-  include_used_components: false
 
 # Text to speech
 tts:
