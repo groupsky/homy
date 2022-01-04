@@ -83,6 +83,7 @@ Promise.all([
       for (const device of devices) {
         if (device.driver.write) {
           await integration.client.subscribe(device, async (message) => {
+            await modbusClient.setID(device.config.address)
             try {
               await device.driver.write(modbusClient, message, device.config, device.state)
               await pollDevice(device)
