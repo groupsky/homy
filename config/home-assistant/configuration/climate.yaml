@@ -84,4 +84,7 @@
   mode_state_topic: /modbus/monitoring/thermostat-bedroom/reading
   power_state_topic: /modbus/monitoring/thermostat-bedroom/reading
   temperature_state_topic: /modbus/monitoring/thermostat-bedroom/reading
-  <<: *common_bac002
+  fan_mode_command_topic: /modbus/monitoring/thermostat-bedroom/write
+  mode_command_topic: /modbus/monitoring/thermostat-bedroom/write
+  temperature_command_topic: /modbus/monitoring/thermostat-bedroom/write
+  <<: *common_controllable_bac002
