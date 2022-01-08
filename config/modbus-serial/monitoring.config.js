@@ -36,6 +36,11 @@ module.exports = {
   },
   devices: [
     {
+      name: 'heat-pump',
+      address: 10,
+      type: 'zl-6x0a-r',
+    },
+    {
       name: 'controlbox',
       address: 51,
       type: 'xymd1',
