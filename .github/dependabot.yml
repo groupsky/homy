@@ -7,6 +7,20 @@ updates:
   #   directory: "/"
 
   - package-ecosystem: "docker"
+    directory: "/docker/automations"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/automations"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/dmx-driver"
     schedule:
       interval: "monthly"

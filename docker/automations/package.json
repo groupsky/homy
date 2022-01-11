@@ -1,0 +1,15 @@
+{
+  "name": "homy-automations",
+  "version": "1.0.0",
+  "description": "Automations used by homy",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "start": "index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "mqtt": "^4.3.2"
+  }
+}

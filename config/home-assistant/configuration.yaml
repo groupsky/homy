@@ -21,7 +21,7 @@ tts:
   - platform: google_translate
 
 group: !include configuration/groups.yaml
-automation: !include configuration/automations.yaml
+automation: !include configuration/bots.yaml
 script: !include configuration/scripts.yaml
 scene: !include configuration/scenes.yaml
 
