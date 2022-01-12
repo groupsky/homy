@@ -1,4 +1,3 @@
-const { write } = require('../../modbus-serial/devices/bac002')
 module.exports = (name, { bacTopic: topicPrefix, switches }) => ({
   start: ({ mqtt }) => {
     const readingTopic = `${topicPrefix}/reading`
