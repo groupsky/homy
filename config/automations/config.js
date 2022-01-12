@@ -1,19 +1,19 @@
 module.exports = {
   bots: {
     syncThermostatBedroomClock: {
-      type: 'syncBac002Clock',
+      type: 'bac002-sync-clock',
       topic: '/modbus/monitoring/thermostat-bedroom'
     },
     syncThermostatBorisClock: {
-      type: 'syncBac002Clock',
+      type: 'bac002-sync-clock',
       topic: '/modbus/monitoring/thermostat-boris'
     },
     syncThermostatGerganaClock: {
-      type: 'syncBac002Clock',
+      type: 'bac002-sync-clock',
       topic: '/modbus/monitoring/thermostat-gergana'
     },
     syncThermostatMartinClock: {
-      type: 'syncBac002Clock',
+      type: 'bac002-sync-clock',
       topic: '/modbus/monitoring/thermostat-martin'
     },
     toggleThermostatBedroomPower: {
