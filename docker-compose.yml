@@ -526,6 +526,26 @@ services:
     volumes:
       - /dev/bus/usb:/dev/bus/usb
 
+  automations:
+    build: docker/automations
+    depends_on:
+      - broker
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - BROKER=mqtt://broker
+      - CONFIG=/etc/config.js
+      - MQTT_CLIENT_ID=automations
+      - TZ=${TZ}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+      - ${CONFIG_PATH}/automations/config.js:/etc/config.js:ro
+
   # Manualy run with
   # dc run historian-primary node index.js
   historian-primary:
