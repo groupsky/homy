@@ -27,6 +27,8 @@ const playground = {
   }
 }
 
+playground.gates.mqtt.setMaxListeners(1000)
+
 playground.bots.forEach(bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
   bot.hooks.start({
