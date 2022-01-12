@@ -7,6 +7,12 @@ module.exports = (name, { topic: topicPrefix }) => ({
 
     mqtt.subscribe(readingTopic, (payload) => {
       const now = new Date(payload._tz)
+      // skip on top of hour as due to internal seconds it cannot be brought in sync
+      if (now.getMinutes() === 1 || now.getMinutes() === 59) {
+        return
+      }
+
+      // a minute difference happens due to unsynced seconds
       if (payload.minutes != null && Math.abs(payload.minutes - now.getMinutes()) > 1) {
           mqtt.publish(writeTopic, { minutes: new Date().getMinutes() })
       }
