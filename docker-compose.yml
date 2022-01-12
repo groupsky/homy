@@ -129,7 +129,7 @@ services:
       - source: homeassistant_configuration
         target: /config/configuration.yaml
       - source: homeassistant_automations
-        target: /config/configuration/bots.yaml
+        target: /config/configuration/automations.yaml
       - source: homeassistant_customize
         target: /config/configuration/customize.yaml
       - source: homeassistant_groups
