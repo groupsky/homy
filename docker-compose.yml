@@ -536,7 +536,7 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      - BROKER=mqtt://192.168.0.2
+      - BROKER=mqtt://broker
       - CONFIG=/etc/config.js
       - MQTT_CLIENT_ID=automations
       - TZ=${TZ}
