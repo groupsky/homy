@@ -16,9 +16,9 @@ async function read (client) {
   // Power
   const pow = val.data[6] / 1000
   // Total power in kWh
-  const tot_act = val.data[8] / 100 // val.data[7] has the higher order, but not sure how to sum
+  const tot_act = (val.data[7] * (1 << 16) + val.data[8]) / 100
   // Total reactive in kVArh
-  const tot_react = val.data[10] / 100 // ? what divider
+  const tot_react = (val.data[9] * (1 << 16) + val.data[10]) / 100
 
   return { v, c, p, rp, freq, ap, pow, tot_act, tot_react }
 }
