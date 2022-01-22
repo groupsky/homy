@@ -32,13 +32,21 @@ module.exports = {
       baudRate: 115200,
       parity: 'even',
     },
-    msDelayBetweenDevices: 0,
+    msDelayBetweenDevices: 5,
     msTimeout: 50,
   },
   devices: [
     {
       name: 'mbsl32di1',
       address: 31,
+      type: 'mbsl32di',
+      options: {
+        maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
+      }
+    },
+    {
+      name: 'mbsl32di2',
+      address: 32,
       type: 'mbsl32di',
       options: {
         maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
