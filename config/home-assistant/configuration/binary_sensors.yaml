@@ -191,6 +191,18 @@
   value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**31) else 'ON' }}"
 
 - platform: mqtt
+  name: "Gergana"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di2/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**0) else 'ON' }}"
+
+- platform: mqtt
+  name: "Boris"
+  device_class: "window"
+  state_topic: "/modbus/dry-switches/mbsl32di2/reading"
+  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**1) else 'ON' }}"
+
+- platform: mqtt
   name: Dishwasher
   state_topic: "/modbus/secondary/dishwasher/reading"
   value_template: "{{ 'ON' if value_json.p|float > 10 else 'OFF' }}"
