@@ -21,9 +21,9 @@ module.exports = {
       bacTopic: '/modbus/monitoring/thermostat-bedroom',
       switches: [
         // door
-        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (2 ** 26)) },
+        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 26)) },
         // window
-        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (2 ** 27)) },
+        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 27)) },
       ]
     },
     toggleThermostatBorisPower: {
@@ -31,7 +31,9 @@ module.exports = {
       bacTopic: '/modbus/monitoring/thermostat-boris',
       switches: [
         // door
-        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (2 ** 31)) },
+        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 31)) },
+        // window
+        { topic: '/modbus/dry-switches/mbsl32di2/reading', isOpen: ({ inputs }) => !(inputs & (1 << 1)) },
       ]
     },
     toggleThermostatGerganaPower: {
@@ -39,7 +41,9 @@ module.exports = {
       bacTopic: '/modbus/monitoring/thermostat-gergana',
       switches: [
         // door
-        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (2 ** 30)) },
+        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 30)) },
+        // window
+        { topic: '/modbus/dry-switches/mbsl32di2/reading', isOpen: ({ inputs }) => !(inputs & (1 << 0)) },
       ]
     },
     toggleThermostatMartinPower: {
@@ -47,9 +51,9 @@ module.exports = {
       bacTopic: '/modbus/monitoring/thermostat-martin',
       switches: [
         // west window
-        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (2 ** 28)) },
+        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 28)) },
         // south window
-        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (2 ** 29)) },
+        { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 29)) },
       ]
     },
   },
