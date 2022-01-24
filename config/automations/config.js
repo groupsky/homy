@@ -106,7 +106,25 @@ module.exports = {
       value: true,
       outputTopic: '/homy/ard1/output',
       outputMessage: { pin: 16, value: 1 }
-    }
+    },
+    autoLightOffBath1: {
+      type: 'timeout-lights-off',
+      lockedTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      lockedDi: 5,
+      lockedValue: true,
+      timeout: 12 * 60000,
+      unlockTimeout: 60000,
+      pin: 19
+    },
+    autoLightOffBath2: {
+      type: 'timeout-lights-off',
+      lockedTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      lockedDi: 9,
+      lockedValue: true,
+      timeout: 12 * 60000,
+      unlockTimeout: 60000,
+      pin: 16
+    },
   },
   gates: {
     mqtt: {
