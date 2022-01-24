@@ -42,7 +42,7 @@ module.exports = (name, {
       locked = newLocked
       if (!newLocked && oldLocked) {
         startTimer(unlockTimeout)
-      } else {
+      } else if (newLocked) {
         stopTimer()
       }
     })
