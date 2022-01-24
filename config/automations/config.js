@@ -91,6 +91,22 @@ module.exports = {
       outputTopic: '/homy/ard1/output',
       outputMessage: { pin: 18, value: -1 }
     },
+    lightOnBath1OnLock: {
+      type: 'emit-on-di',
+      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      di: 5,
+      value: true,
+      outputTopic: '/homy/ard1/output',
+      outputMessage: { pin: 19, value: 1 }
+    },
+    lightOnBath2OnLock: {
+      type: 'emit-on-di',
+      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      di: 9,
+      value: true,
+      outputTopic: '/homy/ard1/output',
+      outputMessage: { pin: 16, value: 1 }
+    }
   },
   gates: {
     mqtt: {
