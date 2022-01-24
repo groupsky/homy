@@ -1,1575 +1,1629 @@
 [
-    {
-        "id": "7f69ac0c.ea2e54",
-        "type": "tab",
-        "label": "Lightning",
-        "disabled": false,
-        "info": ""
-    },
-    {
-        "id": "f7a1080f.734998",
-        "type": "tab",
-        "label": "Temperature",
-        "disabled": false,
-        "info": ""
-    },
-    {
-        "id": "1a2ea69e.012e49",
-        "type": "mqtt-broker",
-        "name": "broker",
-        "broker": "broker",
-        "port": "1883",
-        "clientid": "nodered",
-        "usetls": false,
-        "compatmode": false,
-        "keepalive": "60",
-        "cleansession": true,
-        "birthTopic": "",
-        "birthQos": "0",
-        "birthPayload": "",
-        "closeTopic": "",
-        "closeQos": "0",
-        "closePayload": "",
-        "willTopic": "",
-        "willQos": "0",
-        "willPayload": ""
-    },
-    {
-        "id": "f2414fc3.f8896",
-        "type": "rmdevice",
-        "folder": "",
-        "mac": "B4430DB602E2",
-        "host": "192.168.0.41",
-        "devType": "272a"
-    },
-    {
-        "id": "184db820.fcc528",
-        "type": "mqtt in",
-        "z": "7f69ac0c.ea2e54",
-        "name": "ard1_input",
-        "topic": "/homy/ard1/input",
-        "qos": "2",
-        "datatype": "json",
-        "broker": "1a2ea69e.012e49",
-        "x": 80,
-        "y": 260,
-        "wires": [
-            [
-                "f94543ec.c5dce",
-                "d27c3aa8.3ec6d"
-            ]
-        ]
-    },
-    {
-        "id": "357c5f83.e0f7b",
-        "type": "mqtt out",
-        "z": "7f69ac0c.ea2e54",
-        "name": "ard1_output",
-        "topic": "/homy/ard1/output",
-        "qos": "0",
-        "retain": "false",
-        "broker": "1a2ea69e.012e49",
-        "x": 1230,
-        "y": 40,
-        "wires": []
-    },
-    {
-        "id": "1d8c052d.362f53",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "ON",
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"pin\":21,\"value\":1}",
-        "payloadType": "json",
-        "x": 90,
-        "y": 120,
-        "wires": [
-            [
-                "357c5f83.e0f7b"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "8c0cd068.fea0e8",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "OFF",
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"pin\":21,\"value\":0}",
-        "payloadType": "json",
-        "x": 90,
-        "y": 160,
-        "wires": [
-            [
-                "357c5f83.e0f7b"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "5e0006cb.1796b8",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "2531 master bed left",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "43",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "42",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 440,
-        "y": 360,
-        "wires": [
-            [
-                "29018208.31a26e"
-            ],
-            [
-                "6a60ea05.e37f44"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "f94543ec.c5dce",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "input change",
-        "property": "payload.t",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "ic",
-                "vt": "str"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 1,
-        "x": 110,
-        "y": 360,
-        "wires": [
-            [
-                "7d6bba2a.66a5f4"
-            ]
-        ]
-    },
-    {
-        "id": "7d6bba2a.66a5f4",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "onPress",
-        "property": "payload.v",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "1",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 1,
-        "x": 260,
-        "y": 360,
-        "wires": [
-            [
-                "5e0006cb.1796b8",
-                "ba8a9bee.549488",
-                "6204187a.fdcc48",
-                "211c81c7.3d086e",
-                "31866796.59f7c8",
-                "a5aa7e92.62b0c",
-                "28db88ab.935b08",
-                "2149684.30e9298",
-                "fd3ac385.b4a19",
-                "aa155f81.bdea6",
-                "bf924ef5.01acd"
-            ]
-        ]
-    },
-    {
-        "id": "1c94edfa.cd9c62",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "2528 master bed lamp left",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "21",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1150,
-        "y": 360,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "4d713e7a.df6f5",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "TOGGLE",
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"pin\":21,\"value\":-1}",
-        "payloadType": "json",
-        "x": 100,
-        "y": 80,
-        "wires": [
-            [
-                "357c5f83.e0f7b"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "6a60ea05.e37f44",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 360,
-        "wires": [
-            [
-                "1c94edfa.cd9c62"
-            ]
-        ]
-    },
-    {
-        "id": "bffab49.406b148",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "cleanup",
-        "rules": [
-            {
-                "t": "delete",
-                "p": "payload.p",
-                "pt": "msg"
-            },
-            {
-                "t": "delete",
-                "p": "payload.v",
-                "pt": "msg"
-            },
-            {
-                "t": "delete",
-                "p": "payload.t",
-                "pt": "msg"
-            },
-            {
-                "t": "delete",
-                "p": "payload.l",
-                "pt": "msg"
-            },
-            {
-                "t": "delete",
-                "p": "payload.i",
-                "pt": "msg"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1060,
-        "y": 100,
-        "wires": [
-            [
-                "357c5f83.e0f7b",
-                "1fd9ea88.4c1285"
-            ]
-        ]
-    },
-    {
-        "id": "ba8a9bee.549488",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1202 office",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "45",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "44",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 410,
-        "y": 400,
-        "wires": [
-            [
-                "88be9dab.000db"
-            ],
-            [
-                "d191d2df.3e835"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "31c292aa.3ec3be",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1200 office",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "20",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1110,
-        "y": 400,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "914cc6f7.11d748",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 520,
-        "wires": [
-            [
-                "f921244e.da2ff8"
-            ]
-        ]
-    },
-    {
-        "id": "f5496637.f23598",
-        "type": "comment",
-        "z": "7f69ac0c.ea2e54",
-        "name": "Master bed left lamp",
-        "info": "",
-        "x": 110,
-        "y": 40,
-        "wires": []
-    },
-    {
-        "id": "2dcb7c15.ce5d04",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1100 bath 1",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "19",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1110,
-        "y": 440,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "88be9dab.000db",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 560,
-        "wires": [
-            [
-                "f7a80e88.e31d7"
-            ]
-        ]
-    },
-    {
-        "id": "da3e1a29.f16fd8",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "2000 corridor 2 (4001+4013)",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "66",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1160,
-        "y": 480,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "29018208.31a26e",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 480,
-        "wires": [
-            [
-                "da3e1a29.f16fd8"
-            ]
-        ]
-    },
-    {
-        "id": "6204187a.fdcc48",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1002 bath 1",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "39",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "38",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 410,
-        "y": 440,
-        "wires": [
-            [
-                "88be9dab.000db"
-            ],
-            [
-                "fd93126.a90d8f"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "d191d2df.3e835",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 400,
-        "wires": [
-            [
-                "31c292aa.3ec3be"
-            ]
-        ]
-    },
-    {
-        "id": "fd93126.a90d8f",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 440,
-        "wires": [
-            [
-                "2dcb7c15.ce5d04"
-            ]
-        ]
-    },
-    {
-        "id": "f921244e.da2ff8",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1400 kitchen",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "67",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1110,
-        "y": 520,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "f7a80e88.e31d7",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1000 corridor 1",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "68",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1120,
-        "y": 560,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "b5ae42d0.0275a",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 600,
-        "wires": [
-            [
-                "63561875.095658"
-            ]
-        ]
-    },
-    {
-        "id": "63561875.095658",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "hall",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "15",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1090,
-        "y": 600,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "1614c3b.4f9653c",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1300 living room",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "69",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1120,
-        "y": 640,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "ce929fca.22a48",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 640,
-        "wires": [
-            [
-                "1614c3b.4f9653c"
-            ]
-        ]
-    },
-    {
-        "id": "3a50707.3d5719",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle living",
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 330,
-        "y": 40,
-        "wires": [
-            [
-                "ce929fca.22a48"
-            ]
-        ]
-    },
-    {
-        "id": "211c81c7.3d086e",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "P4 veranda 1",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "40",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "41",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 410,
-        "y": 480,
-        "wires": [
-            [
-                "ce929fca.22a48",
-                "b5ae42d0.0275a"
-            ],
-            [
-                "9d9aea0b.9c5a4"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "d27c3aa8.3ec6d",
-        "type": "debug",
-        "z": "7f69ac0c.ea2e54",
-        "name": "",
-        "active": false,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "false",
-        "x": 290,
-        "y": 260,
-        "wires": []
-    },
-    {
-        "id": "9d9aea0b.9c5a4",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 680,
-        "wires": [
-            [
-                "3944e844.0a1078"
-            ]
-        ]
-    },
-    {
-        "id": "3944e844.0a1078",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "veranda",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "62",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1100,
-        "y": 680,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "1fd9ea88.4c1285",
-        "type": "debug",
-        "z": "7f69ac0c.ea2e54",
-        "name": "",
-        "active": false,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "false",
-        "x": 1230,
-        "y": 100,
-        "wires": []
-    },
-    {
-        "id": "e9fe2ff2.d558c",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle corridor 2",
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 340,
-        "y": 160,
-        "wires": [
-            [
-                "29018208.31a26e"
-            ]
-        ]
-    },
-    {
-        "id": "a6393678.14ae58",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle kitchen",
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 330,
-        "y": 80,
-        "wires": [
-            [
-                "914cc6f7.11d748"
-            ]
-        ]
-    },
-    {
-        "id": "8831c285.c813b",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle corridor 1",
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 340,
-        "y": 120,
-        "wires": [
-            [
-                "88be9dab.000db"
-            ]
-        ]
-    },
-    {
-        "id": "31866796.59f7c8",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1303 living",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "36",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "37",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 410,
-        "y": 520,
-        "wires": [
-            [
-                "ce929fca.22a48"
-            ],
-            [
-                "3118770c.bec328"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "f2fb1a95.73e708",
-        "type": "RM",
-        "z": "7f69ac0c.ea2e54",
-        "name": "living room ir",
-        "device": "f2414fc3.f8896",
-        "action": "_msg_",
-        "remote": "",
-        "button": "",
-        "fix": 1,
-        "RFSweep": "false",
-        "x": 1210,
-        "y": 860,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "3118770c.bec328",
-        "type": "function",
-        "z": "7f69ac0c.ea2e54",
-        "name": "tv power",
-        "func": "const cmd = \"JgCMAJOSEzYTNxI3EhISEhMSFBAUERM2EjcUNRISExMSERMSFBATEhM4ERMSERMTERMSEhISEzYTEhM2EzYSNxQ2EjYTNxIABf2UkhE3FDUTNxIRFRATEhMRExETNxQ1EzcRExITERMSEhISExMSNhYOExMVDhMSExISEhM3ExETNhU0EzcRNxM2EzcTAA0FAAAAAAAAAAAAAAAA\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "x": 1060,
-        "y": 860,
-        "wires": [
-            [
-                "f2fb1a95.73e708"
-            ]
-        ],
-        "icon": "font-awesome/fa-power-off"
-    },
-    {
-        "id": "8f24442c.101ae8",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "TV ON/OFF",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 570,
-        "y": 40,
-        "wires": [
-            [
-                "3118770c.bec328"
-            ]
-        ],
-        "icon": "font-awesome/fa-power-off"
-    },
-    {
-        "id": "bcffd1f9.fe733",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "TV Vol+",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 550,
-        "y": 80,
-        "wires": [
-            [
-                "d40604d.9cf8ef8"
-            ]
-        ],
-        "icon": "font-awesome/fa-volume-up"
-    },
-    {
-        "id": "3d78faef.884276",
-        "type": "inject",
-        "z": "7f69ac0c.ea2e54",
-        "name": "TV Vol-",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 550,
-        "y": 120,
-        "wires": [
-            [
-                "d60ecbde.0e7f28"
-            ]
-        ],
-        "icon": "font-awesome/fa-volume-down"
-    },
-    {
-        "id": "d40604d.9cf8ef8",
-        "type": "function",
-        "z": "7f69ac0c.ea2e54",
-        "name": "tv vol+",
-        "func": "const cmd = \"JgDSAJKSEzcRNxM3EhEUEhISEhITEhQ1EjgSNhQREhMSERQRExMRNxM2EjcTERMSEhMTERISFBEUEBMTEzUSOBI2EzYUNRMABf2VkRE3FDUTNxESExMSExIRExMRNxI3EzYSEhMSExEUERMRFTUSNxI3ExETEhQQFBIREhQRExEUERM2EzYTNxI2FDUTAAX9k5ITNhQ2EjYTExETExIRExISEzYSOBM2ExAUEhISEhIUERM2EzcSNxESExITEhMRExIUEBMSFBATNhM2EzcTNhI3EgANBQAAAAAAAA==\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "x": 1050,
-        "y": 900,
-        "wires": [
-            [
-                "f2fb1a95.73e708"
-            ]
-        ],
-        "icon": "font-awesome/fa-volume-up"
-    },
-    {
-        "id": "d60ecbde.0e7f28",
-        "type": "function",
-        "z": "7f69ac0c.ea2e54",
-        "name": "tv vol-",
-        "func": "const cmd = \"JgDSAJOSEjgROBE3ExISExETExETERQ2EjcTNhQQExMREhQSEhETNhM2ExQRNhQRExISEhMSExISERM2ExITNxI2FDUTNhMABf2TkhI3EzcSNhMSFBESExMQExISNxM2EjcTERMSExETEhMREzcSNxISEzUUEhMRExISEhQRExITNxESEzYUNhM1FDYSAAX9k5ITNhM2EzcSExIRExITERMSEzYTNxM1ExITERYPEhMSEhM3ETgTERI4ERMSEhQQExITERMSEjcTEhI2FDUUNhI4EgANBQAAAAAAAA==\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "x": 1050,
-        "y": 940,
-        "wires": [
-            [
-                "f2fb1a95.73e708"
-            ]
-        ],
-        "icon": "font-awesome/fa-volume-down"
-    },
-    {
-        "id": "a5aa7e92.62b0c",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1304 living",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "35",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "34",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 410,
-        "y": 560,
-        "wires": [
-            [
-                "d40604d.9cf8ef8"
-            ],
-            [
-                "d60ecbde.0e7f28"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "ddd47dc1.733ba",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "4007 laundry",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.pin",
-                "pt": "msg",
-                "to": "65",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 1110,
-        "y": 720,
-        "wires": [
-            [
-                "bffab49.406b148"
-            ]
-        ],
-        "icon": "node-red/light.svg"
-    },
-    {
-        "id": "bb0847c5.a449d8",
-        "type": "change",
-        "z": "7f69ac0c.ea2e54",
-        "name": "toggle",
-        "rules": [
-            {
-                "t": "set",
-                "p": "payload.value",
-                "pt": "msg",
-                "to": "-1",
-                "tot": "num"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 970,
-        "y": 720,
-        "wires": [
-            [
-                "ddd47dc1.733ba"
-            ]
-        ]
-    },
-    {
-        "id": "1dbb46a0.7909d9",
-        "type": "RM",
-        "z": "f7a1080f.734998",
-        "name": "living room ir",
-        "device": "f2414fc3.f8896",
-        "action": "temperature",
-        "remote": "",
-        "button": "",
-        "fix": 1,
-        "RFSweep": "false",
-        "x": 290,
-        "y": 40,
-        "wires": [
-            [
-                "a8d3644c.4f5968"
-            ]
-        ]
-    },
-    {
-        "id": "aa3fe295.ac2cc",
-        "type": "inject",
-        "z": "f7a1080f.734998",
-        "name": "",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "30",
-        "crontab": "",
-        "once": false,
-        "onceDelay": "1",
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 110,
-        "y": 40,
-        "wires": [
-            [
-                "1dbb46a0.7909d9"
-            ]
-        ]
-    },
-    {
-        "id": "a01da160.7bc4b",
-        "type": "mqtt out",
-        "z": "f7a1080f.734998",
-        "name": "/homy/br1/temp",
-        "topic": "/homy/br1/temp",
-        "qos": "0",
-        "retain": "false",
-        "broker": "1a2ea69e.012e49",
-        "x": 630,
-        "y": 40,
-        "wires": []
-    },
-    {
-        "id": "a8d3644c.4f5968",
-        "type": "function",
-        "z": "f7a1080f.734998",
-        "name": "",
-        "func": "msg.payload._tz = Date.now()\nmsg.payload._type = 'broadcom rm+'\nmsg.payload.device = 'livingroom'\n\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "x": 460,
-        "y": 40,
-        "wires": [
-            [
-                "a01da160.7bc4b"
-            ]
-        ]
-    },
-    {
-        "id": "28db88ab.935b08",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1029 stairs down",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "33",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "32",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 430,
-        "y": 600,
-        "wires": [
-            [
-                "88be9dab.000db"
-            ],
-            [
-                "29018208.31a26e"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "2149684.30e9298",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1018 kitchen",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "29",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "28",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 410,
-        "y": 640,
-        "wires": [
-            [
-                "88be9dab.000db"
-            ],
-            [
-                "914cc6f7.11d748"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "fd3ac385.b4a19",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "1015 hall",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "27",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "26",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 400,
-        "y": 680,
-        "wires": [
-            [
-                "b5ae42d0.0275a"
-            ],
-            [
-                "9d9aea0b.9c5a4"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "aa155f81.bdea6",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "2010 stairs up",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "25",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "24",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 420,
-        "y": 720,
-        "wires": [
-            [
-                "88be9dab.000db"
-            ],
-            [
-                "29018208.31a26e"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    },
-    {
-        "id": "bf924ef5.01acd",
-        "type": "switch",
-        "z": "7f69ac0c.ea2e54",
-        "name": "2020 laundry",
-        "property": "payload.p",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "30",
-                "vt": "num"
-            },
-            {
-                "t": "eq",
-                "v": "31",
-                "vt": "num"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 410,
-        "y": 760,
-        "wires": [
-            [
-                "bb0847c5.a449d8"
-            ],
-            [
-                "29018208.31a26e"
-            ]
-        ],
-        "outputLabels": [
-            "left button",
-            "right button"
-        ],
-        "icon": "font-awesome/fa-pause"
-    }
+  {
+    "id": "7f69ac0c.ea2e54",
+    "type": "tab",
+    "label": "Lightning",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "f7a1080f.734998",
+    "type": "tab",
+    "label": "Temperature",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "1a2ea69e.012e49",
+    "type": "mqtt-broker",
+    "name": "broker",
+    "broker": "broker",
+    "port": "1883",
+    "clientid": "nodered",
+    "usetls": false,
+    "compatmode": false,
+    "keepalive": "60",
+    "cleansession": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthPayload": "",
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "willTopic": "",
+    "willQos": "0",
+    "willPayload": ""
+  },
+  {
+    "id": "f2414fc3.f8896",
+    "type": "rmdevice",
+    "folder": "",
+    "mac": "B4430DB602E2",
+    "host": "192.168.0.41",
+    "devType": "272a"
+  },
+  {
+    "id": "184db820.fcc528",
+    "type": "mqtt in",
+    "z": "7f69ac0c.ea2e54",
+    "name": "ard1_input",
+    "topic": "/homy/ard1/input",
+    "qos": "2",
+    "datatype": "json",
+    "broker": "1a2ea69e.012e49",
+    "inputs": 0,
+    "x": 80,
+    "y": 260,
+    "wires": [
+      [
+        "f94543ec.c5dce",
+        "d27c3aa8.3ec6d"
+      ]
+    ]
+  },
+  {
+    "id": "357c5f83.e0f7b",
+    "type": "mqtt out",
+    "z": "7f69ac0c.ea2e54",
+    "name": "ard1_output",
+    "topic": "/homy/ard1/output",
+    "qos": "0",
+    "retain": "false",
+    "broker": "1a2ea69e.012e49",
+    "x": 1230,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "1d8c052d.362f53",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "ON",
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"pin\":21,\"value\":1}",
+    "payloadType": "json",
+    "x": 90,
+    "y": 120,
+    "wires": [
+      [
+        "357c5f83.e0f7b"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "8c0cd068.fea0e8",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "OFF",
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"pin\":21,\"value\":0}",
+    "payloadType": "json",
+    "x": 90,
+    "y": 160,
+    "wires": [
+      [
+        "357c5f83.e0f7b"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "5e0006cb.1796b8",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "2531 master bed left",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "43",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "42",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 470,
+    "y": 360,
+    "wires": [
+      [
+        "e90a2c29430efe70"
+      ],
+      [
+        "6a60ea05.e37f44"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "f94543ec.c5dce",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "input change",
+    "property": "payload.t",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "ic",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 110,
+    "y": 360,
+    "wires": [
+      [
+        "7d6bba2a.66a5f4"
+      ]
+    ]
+  },
+  {
+    "id": "7d6bba2a.66a5f4",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "onPress",
+    "property": "payload.v",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "1",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 260,
+    "y": 360,
+    "wires": [
+      [
+        "5e0006cb.1796b8",
+        "ba8a9bee.549488",
+        "6204187a.fdcc48",
+        "211c81c7.3d086e",
+        "31866796.59f7c8",
+        "a5aa7e92.62b0c",
+        "28db88ab.935b08",
+        "2149684.30e9298",
+        "fd3ac385.b4a19",
+        "aa155f81.bdea6",
+        "bf924ef5.01acd"
+      ]
+    ]
+  },
+  {
+    "id": "1c94edfa.cd9c62",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "2528 master bed lamp left",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "21",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1190,
+    "y": 400,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "4d713e7a.df6f5",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "TOGGLE",
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"pin\":21,\"value\":-1}",
+    "payloadType": "json",
+    "x": 100,
+    "y": 80,
+    "wires": [
+      [
+        "357c5f83.e0f7b"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "6a60ea05.e37f44",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 400,
+    "wires": [
+      [
+        "1c94edfa.cd9c62"
+      ]
+    ]
+  },
+  {
+    "id": "bffab49.406b148",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "cleanup",
+    "rules": [
+      {
+        "t": "delete",
+        "p": "payload.p",
+        "pt": "msg"
+      },
+      {
+        "t": "delete",
+        "p": "payload.v",
+        "pt": "msg"
+      },
+      {
+        "t": "delete",
+        "p": "payload.t",
+        "pt": "msg"
+      },
+      {
+        "t": "delete",
+        "p": "payload.l",
+        "pt": "msg"
+      },
+      {
+        "t": "delete",
+        "p": "payload.i",
+        "pt": "msg"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1060,
+    "y": 100,
+    "wires": [
+      [
+        "357c5f83.e0f7b",
+        "1fd9ea88.4c1285"
+      ]
+    ]
+  },
+  {
+    "id": "ba8a9bee.549488",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1202 office",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "45",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "44",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 430,
+    "y": 400,
+    "wires": [
+      [
+        "88be9dab.000db"
+      ],
+      [
+        "d191d2df.3e835"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "31c292aa.3ec3be",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1200 office",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "20",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1130,
+    "y": 440,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "914cc6f7.11d748",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 560,
+    "wires": [
+      [
+        "f921244e.da2ff8"
+      ]
+    ]
+  },
+  {
+    "id": "f5496637.f23598",
+    "type": "comment",
+    "z": "7f69ac0c.ea2e54",
+    "name": "Master bed left lamp",
+    "info": "",
+    "x": 110,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "2dcb7c15.ce5d04",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1100 bath 1",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "19",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1140,
+    "y": 480,
+    "wires": [
+      []
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "88be9dab.000db",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 600,
+    "wires": [
+      [
+        "f7a80e88.e31d7"
+      ]
+    ]
+  },
+  {
+    "id": "da3e1a29.f16fd8",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "2000 corridor 2 (4001+4013)",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "66",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1200,
+    "y": 520,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "29018208.31a26e",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 520,
+    "wires": [
+      [
+        "da3e1a29.f16fd8"
+      ]
+    ]
+  },
+  {
+    "id": "6204187a.fdcc48",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1002 bath 1",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "39",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "38",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 440,
+    "y": 440,
+    "wires": [
+      [
+        "88be9dab.000db"
+      ],
+      [
+        "fd93126.a90d8f"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "d191d2df.3e835",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 440,
+    "wires": [
+      [
+        "31c292aa.3ec3be"
+      ]
+    ]
+  },
+  {
+    "id": "fd93126.a90d8f",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 480,
+    "wires": [
+      [
+        "2dcb7c15.ce5d04"
+      ]
+    ]
+  },
+  {
+    "id": "f921244e.da2ff8",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1400 kitchen",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "67",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1140,
+    "y": 560,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "f7a80e88.e31d7",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1000 corridor 1",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "68",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1150,
+    "y": 600,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "b5ae42d0.0275a",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 640,
+    "wires": [
+      [
+        "63561875.095658"
+      ]
+    ]
+  },
+  {
+    "id": "63561875.095658",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "hall",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "15",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1110,
+    "y": 640,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "1614c3b.4f9653c",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1300 living room",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "69",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1150,
+    "y": 680,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "ce929fca.22a48",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 680,
+    "wires": [
+      [
+        "1614c3b.4f9653c"
+      ]
+    ]
+  },
+  {
+    "id": "3a50707.3d5719",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle living",
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 330,
+    "y": 40,
+    "wires": [
+      [
+        "ce929fca.22a48"
+      ]
+    ]
+  },
+  {
+    "id": "211c81c7.3d086e",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "P4 veranda 1",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "40",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "41",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 440,
+    "y": 480,
+    "wires": [
+      [
+        "ce929fca.22a48",
+        "b5ae42d0.0275a"
+      ],
+      [
+        "9d9aea0b.9c5a4"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "d27c3aa8.3ec6d",
+    "type": "debug",
+    "z": "7f69ac0c.ea2e54",
+    "name": "",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "false",
+    "x": 290,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "9d9aea0b.9c5a4",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 720,
+    "wires": [
+      [
+        "3944e844.0a1078"
+      ]
+    ]
+  },
+  {
+    "id": "3944e844.0a1078",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "veranda",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "62",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1120,
+    "y": 720,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "1fd9ea88.4c1285",
+    "type": "debug",
+    "z": "7f69ac0c.ea2e54",
+    "name": "",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "false",
+    "x": 1230,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "e9fe2ff2.d558c",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle corridor 2",
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 350,
+    "y": 160,
+    "wires": [
+      [
+        "29018208.31a26e"
+      ]
+    ]
+  },
+  {
+    "id": "a6393678.14ae58",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle kitchen",
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 340,
+    "y": 80,
+    "wires": [
+      [
+        "914cc6f7.11d748"
+      ]
+    ]
+  },
+  {
+    "id": "8831c285.c813b",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle corridor 1",
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 350,
+    "y": 120,
+    "wires": [
+      [
+        "88be9dab.000db"
+      ]
+    ]
+  },
+  {
+    "id": "31866796.59f7c8",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1303 living",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "36",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "37",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 430,
+    "y": 520,
+    "wires": [
+      [
+        "ce929fca.22a48"
+      ],
+      [
+        "3118770c.bec328"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "f2fb1a95.73e708",
+    "type": "RM",
+    "z": "7f69ac0c.ea2e54",
+    "name": "living room ir",
+    "device": "f2414fc3.f8896",
+    "action": "_msg_",
+    "remote": "",
+    "button": "",
+    "fix": 1,
+    "RFSweep": "false",
+    "x": 1210,
+    "y": 860,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "3118770c.bec328",
+    "type": "function",
+    "z": "7f69ac0c.ea2e54",
+    "name": "tv power",
+    "func": "const cmd = \"JgCMAJOSEzYTNxI3EhISEhMSFBAUERM2EjcUNRISExMSERMSFBATEhM4ERMSERMTERMSEhISEzYTEhM2EzYSNxQ2EjYTNxIABf2UkhE3FDUTNxIRFRATEhMRExETNxQ1EzcRExITERMSEhISExMSNhYOExMVDhMSExISEhM3ExETNhU0EzcRNxM2EzcTAA0FAAAAAAAAAAAAAAAA\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "x": 960,
+    "y": 860,
+    "wires": [
+      [
+        "f2fb1a95.73e708"
+      ]
+    ],
+    "icon": "font-awesome/fa-power-off"
+  },
+  {
+    "id": "8f24442c.101ae8",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "TV ON/OFF",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 570,
+    "y": 40,
+    "wires": [
+      [
+        "3118770c.bec328"
+      ]
+    ],
+    "icon": "font-awesome/fa-power-off"
+  },
+  {
+    "id": "bcffd1f9.fe733",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "TV Vol+",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 560,
+    "y": 80,
+    "wires": [
+      [
+        "d40604d.9cf8ef8"
+      ]
+    ],
+    "icon": "font-awesome/fa-volume-up"
+  },
+  {
+    "id": "3d78faef.884276",
+    "type": "inject",
+    "z": "7f69ac0c.ea2e54",
+    "name": "TV Vol-",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 550,
+    "y": 120,
+    "wires": [
+      [
+        "d60ecbde.0e7f28"
+      ]
+    ],
+    "icon": "font-awesome/fa-volume-down"
+  },
+  {
+    "id": "d40604d.9cf8ef8",
+    "type": "function",
+    "z": "7f69ac0c.ea2e54",
+    "name": "tv vol+",
+    "func": "const cmd = \"JgDSAJKSEzcRNxM3EhEUEhISEhITEhQ1EjgSNhQREhMSERQRExMRNxM2EjcTERMSEhMTERISFBEUEBMTEzUSOBI2EzYUNRMABf2VkRE3FDUTNxESExMSExIRExMRNxI3EzYSEhMSExEUERMRFTUSNxI3ExETEhQQFBIREhQRExEUERM2EzYTNxI2FDUTAAX9k5ITNhQ2EjYTExETExIRExISEzYSOBM2ExAUEhISEhIUERM2EzcSNxESExITEhMRExIUEBMSFBATNhM2EzcTNhI3EgANBQAAAAAAAA==\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "x": 960,
+    "y": 900,
+    "wires": [
+      [
+        "f2fb1a95.73e708"
+      ]
+    ],
+    "icon": "font-awesome/fa-volume-up"
+  },
+  {
+    "id": "d60ecbde.0e7f28",
+    "type": "function",
+    "z": "7f69ac0c.ea2e54",
+    "name": "tv vol-",
+    "func": "const cmd = \"JgDSAJOSEjgROBE3ExISExETExETERQ2EjcTNhQQExMREhQSEhETNhM2ExQRNhQRExISEhMSExISERM2ExITNxI2FDUTNhMABf2TkhI3EzcSNhMSFBESExMQExISNxM2EjcTERMSExETEhMREzcSNxISEzUUEhMRExISEhQRExITNxESEzYUNhM1FDYSAAX9k5ITNhM2EzcSExIRExITERMSEzYTNxM1ExITERYPEhMSEhM3ETgTERI4ERMSEhQQExITERMSEjcTEhI2FDUUNhI4EgANBQAAAAAAAA==\"\n\nmsg.payload={\n    \"action\":\"send\",\n    \"data\":cmd\n}\n\n\nreturn msg\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "x": 960,
+    "y": 940,
+    "wires": [
+      [
+        "f2fb1a95.73e708"
+      ]
+    ],
+    "icon": "font-awesome/fa-volume-down"
+  },
+  {
+    "id": "a5aa7e92.62b0c",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1304 living",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "35",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "34",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 430,
+    "y": 560,
+    "wires": [
+      [
+        "d40604d.9cf8ef8"
+      ],
+      [
+        "d60ecbde.0e7f28"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "ddd47dc1.733ba",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "4007 laundry",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "65",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1140,
+    "y": 760,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "bb0847c5.a449d8",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 760,
+    "wires": [
+      [
+        "ddd47dc1.733ba"
+      ]
+    ]
+  },
+  {
+    "id": "28db88ab.935b08",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1029 stairs down",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "33",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "32",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 450,
+    "y": 600,
+    "wires": [
+      [
+        "88be9dab.000db"
+      ],
+      [
+        "29018208.31a26e"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "2149684.30e9298",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1018 kitchen",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "29",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "28",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 440,
+    "y": 640,
+    "wires": [
+      [
+        "88be9dab.000db"
+      ],
+      [
+        "914cc6f7.11d748"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "fd3ac385.b4a19",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "1015 hall",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "27",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "26",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 430,
+    "y": 680,
+    "wires": [
+      [
+        "b5ae42d0.0275a"
+      ],
+      [
+        "9d9aea0b.9c5a4"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "aa155f81.bdea6",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "2010 stairs up",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "25",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "24",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 440,
+    "y": 720,
+    "wires": [
+      [
+        "88be9dab.000db"
+      ],
+      [
+        "29018208.31a26e"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "bf924ef5.01acd",
+    "type": "switch",
+    "z": "7f69ac0c.ea2e54",
+    "name": "2020 laundry",
+    "property": "payload.p",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "30",
+        "vt": "num"
+      },
+      {
+        "t": "eq",
+        "v": "31",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 440,
+    "y": 760,
+    "wires": [
+      [
+        "bb0847c5.a449d8"
+      ],
+      [
+        "29018208.31a26e"
+      ]
+    ],
+    "outputLabels": [
+      "left button",
+      "right button"
+    ],
+    "icon": "font-awesome/fa-pause"
+  },
+  {
+    "id": "1e196ace66ea38f7",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "2000 bedroom",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.pin",
+        "pt": "msg",
+        "to": "17",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 1140,
+    "y": 360,
+    "wires": [
+      [
+        "bffab49.406b148"
+      ]
+    ],
+    "icon": "node-red/light.svg"
+  },
+  {
+    "id": "e90a2c29430efe70",
+    "type": "change",
+    "z": "7f69ac0c.ea2e54",
+    "name": "toggle",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.value",
+        "pt": "msg",
+        "to": "-1",
+        "tot": "num"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 960,
+    "y": 360,
+    "wires": [
+      [
+        "1e196ace66ea38f7"
+      ]
+    ]
+  },
+  {
+    "id": "1dbb46a0.7909d9",
+    "type": "RM",
+    "z": "f7a1080f.734998",
+    "name": "living room ir",
+    "device": "f2414fc3.f8896",
+    "action": "temperature",
+    "remote": "",
+    "button": "",
+    "fix": 1,
+    "RFSweep": "false",
+    "x": 290,
+    "y": 40,
+    "wires": [
+      [
+        "a8d3644c.4f5968"
+      ]
+    ]
+  },
+  {
+    "id": "aa3fe295.ac2cc",
+    "type": "inject",
+    "z": "f7a1080f.734998",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "30",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "1",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 110,
+    "y": 40,
+    "wires": [
+      [
+        "1dbb46a0.7909d9"
+      ]
+    ]
+  },
+  {
+    "id": "a01da160.7bc4b",
+    "type": "mqtt out",
+    "z": "f7a1080f.734998",
+    "name": "/homy/br1/temp",
+    "topic": "/homy/br1/temp",
+    "qos": "0",
+    "retain": "false",
+    "broker": "1a2ea69e.012e49",
+    "x": 630,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "a8d3644c.4f5968",
+    "type": "function",
+    "z": "f7a1080f.734998",
+    "name": "",
+    "func": "msg.payload._tz = Date.now()\nmsg.payload._type = 'broadcom rm+'\nmsg.payload.device = 'livingroom'\n\nreturn msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "x": 460,
+    "y": 40,
+    "wires": [
+      [
+        "a01da160.7bc4b"
+      ]
+    ]
+  }
 ]

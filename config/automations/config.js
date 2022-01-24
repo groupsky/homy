@@ -56,6 +56,41 @@ module.exports = {
         { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 29)) },
       ]
     },
+    toggleBath2Light: {
+      type: 'emit-on-di-change',
+      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
+      mask: 1 << 5,
+      outputTopic: '/homy/ard1/output',
+      outputMessage: { pin: 16, value: -1 }
+    },
+    toggleBedroomLight: {
+      type: 'emit-on-di-change',
+      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
+      mask: 1 << 7,
+      outputTopic: '/homy/ard1/output',
+      outputMessage: { pin: 17, value: -1 }
+    },
+    toggleBorisLight: {
+      type: 'emit-on-di-change',
+      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
+      mask: 1 << 10,
+      outputTopic: '/homy/ard1/output',
+      outputMessage: { pin: 64, value: -1 }
+    },
+    toggleGerganaLight: {
+      type: 'emit-on-di-change',
+      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
+      mask: 1 << 13,
+      outputTopic: '/homy/ard1/output',
+      outputMessage: { pin: 63, value: -1 }
+    },
+    toggleMartinLight: {
+      type: 'emit-on-di-change',
+      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
+      mask: 1 << 9,
+      outputTopic: '/homy/ard1/output',
+      outputMessage: { pin: 18, value: -1 }
+    },
   },
   gates: {
     mqtt: {
