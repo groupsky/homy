@@ -20,9 +20,7 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "gnetId": null,
   "graphTooltip": 0,
-  "id": 5,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -56,7 +54,7 @@
           }
         ],
         "executionErrorState": "alerting",
-        "for": "2m",
+        "for": "15m",
         "frequency": "1m",
         "handler": 1,
         "message": "Outside range 29-3000 W",
@@ -64,7 +62,6 @@
         "noDataState": "no_data",
         "notifications": []
       },
-      "datasource": null,
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -258,7 +255,6 @@
         "noDataState": "no_data",
         "notifications": []
       },
-      "datasource": null,
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -609,7 +605,7 @@
     }
   ],
   "refresh": false,
-  "schemaVersion": 31,
+  "schemaVersion": 34,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -623,5 +619,6 @@
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 2
+  "version": 1,
+  "weekStart": ""
 }
