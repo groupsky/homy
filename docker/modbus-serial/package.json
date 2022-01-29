@@ -5,6 +5,9 @@
   "author": "Geno Roupsky",
   "license": "ISC",
   "main": "index.js",
+  "bin": {
+    "modbus-serial": "./cli"
+  },
   "scripts": {
     "start": "index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -15,6 +18,7 @@
     "ieee754": "^1.1.13",
     "modbus-serial": "^8.0.5",
     "mongodb": "^4.3.0",
-    "mqtt": "^4.3.4"
+    "mqtt": "^4.3.4",
+    "yargs": "^17.3.1"
   }
 }
