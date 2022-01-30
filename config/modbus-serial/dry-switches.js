@@ -37,6 +37,22 @@ module.exports = {
   },
   devices: [
     {
+      name: 'relays00-15',
+      address: 1,
+      type: 'aspar-mod-16ro',
+      options: {
+        maxMsBetweenReports: 7 * 60 * 1000, // 7 minutes
+      }
+    },
+    {
+      name: 'relays16-31',
+      address: 2,
+      type: 'aspar-mod-16ro',
+      options: {
+        maxMsBetweenReports: 11 * 60 * 1000, // 11 minutes
+      }
+    },
+    {
       name: 'mbsl32di1',
       address: 31,
       type: 'mbsl32di',
