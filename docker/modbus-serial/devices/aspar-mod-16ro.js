@@ -51,7 +51,7 @@ const writeLong = (value) => [value & 0xFFFF, value >> 16]
  * @return {Promise<Object>}
  */
 async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = {}, state = {}) {
-  const recentReport = maxMsBetweenReports === 0 && ((Date.now() - (state.lastReport || 0)) < maxMsBetweenReports)
+  const recentReport = maxMsBetweenReports === 0 || ((Date.now() - (state.lastReport || 0)) < maxMsBetweenReports)
   if (state.lastReport > 0 && recentReport) {
     return
   }
