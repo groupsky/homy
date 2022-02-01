@@ -1,3 +1,3 @@
-FROM ghcr.io/home-assistant/home-assistant:2021.12.9
+FROM ghcr.io/home-assistant/home-assistant:2021.12.10
 
 HEALTHCHECK CMD curl --fail http://localhost:8123/ || exit 1
