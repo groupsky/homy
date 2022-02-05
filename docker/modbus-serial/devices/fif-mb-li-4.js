@@ -1,4 +1,5 @@
 // https://www.fif.com.pl/en/time-impulse-meters/560-pulse-counter-mb-li-4-lo.html
+// https://www.fif.com.pl/en/time-impulse-meters/881-pulse-counter-mb-li-4-hi.html
 
 /**
  * @typedef {1200|2400|4800|9600|19200|38400|57600|115200} BAUD_RATE
