@@ -1,3 +1,5 @@
+// https://www.autonics.com/series/3000394
+
 /**
  * @typedef {'celsius'|'fahrenheit'} TEMPERATURE_UNIT
  */
@@ -370,10 +372,20 @@ async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = 
  *   [compEnabled]: boolean|null,
  *   [targetTemp]: number,
  *   [mode]: MODE,
- *   [hysteresis]: number,
- *   [offset]: number,
- *   [highTempLimit]: number,
- *   [lowTempLimit]: number,
+ *   [pg1]: {
+ *     [virtualTempRate]: number,
+ *   },
+ *   [pg2]: {
+ *     [hysteresis]: number,
+ *     [offset]: number,
+ *     [highTempLimit]: number,
+ *     [lowTempLimit]: number,
+ *     [compressorStartupDelay]: number,
+ *     [compressorMinCycleTime]: number,
+ *     [compressorRestartDelay]: number,
+ *     [compressorMinRunTime]: number,
+ *     [compressorContinuousOperation]: number,
+ *   }
  * }} values
  * @param {CONFIG} [config]
  * @param {AUTONICS_TF3_STATE} [state]
@@ -402,29 +414,63 @@ async function write (client, values = {}, config = {}, state = {}) {
     await client.writeRegister(0x0096, WRITE_MODE_MAP[values.mode])
     delete state.pg2
   }
-  if (values.hysteresis) {
-    const tempDivisor = await readTempDivisor(client, state)
-    await sleep(delay)
-    await client.writeRegister(0x0097, Math.round(values.hysteresis * tempDivisor))
-    delete state.pg2
+  if (values.pg1) {
+    if (values.pg1.virtualTempRate) {
+      await sleep(delay)
+      await client.writeRegister(0x0067, Math.round(values.pg1.virtualTempRate))
+      delete state.pg1
+    }
   }
-  if (values.offset) {
-    const tempDivisor = await readTempDivisor(client, state)
-    await sleep(delay)
-    await client.writeRegister(0x0098, Math.round(values.offset * tempDivisor))
-    delete state.pg2
-  }
-  if (values.highTempLimit) {
-    const tempDivisor = await readTempDivisor(client, state)
-    await sleep(delay)
-    await client.writeRegister(0x0099, writeInt(Math.round(values.highTempLimit * tempDivisor)))
-    delete state.pg2
-  }
-  if (values.lowTempLimit) {
-    const tempDivisor = await readTempDivisor(client, state)
-    await sleep(delay)
-    await client.writeRegister(0x009A, writeInt(Math.round(values.lowTempLimit * tempDivisor)))
-    delete state.pg2
+  if (values.pg2) {
+    if (values.pg2.hysteresis) {
+      const tempDivisor = await readTempDivisor(client, state)
+      await sleep(delay)
+      await client.writeRegister(0x0097, Math.round(values.pg2.hysteresis * tempDivisor))
+      delete state.pg2
+    }
+    if (values.pg2.offset) {
+      const tempDivisor = await readTempDivisor(client, state)
+      await sleep(delay)
+      await client.writeRegister(0x0098, Math.round(values.pg2.offset * tempDivisor))
+      delete state.pg2
+    }
+    if (values.pg2.highTempLimit) {
+      const tempDivisor = await readTempDivisor(client, state)
+      await sleep(delay)
+      await client.writeRegister(0x0099, writeInt(Math.round(values.pg2.highTempLimit * tempDivisor)))
+      delete state.pg2
+    }
+    if (values.pg2.lowTempLimit) {
+      const tempDivisor = await readTempDivisor(client, state)
+      await sleep(delay)
+      await client.writeRegister(0x009A, writeInt(Math.round(values.pg2.lowTempLimit * tempDivisor)))
+      delete state.pg2
+    }
+    if (values.pg2.compressorStartupDelay) {
+      await sleep(delay)
+      await client.writeRegister(0x00A4, Math.round(values.pg2.compressorStartupDelay))
+      delete state.pg2
+    }
+    if (values.pg2.compressorMinCycleTime) {
+      await sleep(delay)
+      await client.writeRegister(0x00A5, Math.round(values.pg2.compressorMinCycleTime))
+      delete state.pg2
+    }
+    if (values.pg2.compressorRestartDelay) {
+      await sleep(delay)
+      await client.writeRegister(0x00A6, Math.round(values.pg2.compressorRestartDelay))
+      delete state.pg2
+    }
+    if (values.pg2.compressorMinRunTime) {
+      await sleep(delay)
+      await client.writeRegister(0x00A7, Math.round(values.pg2.compressorMinRunTime))
+      delete state.pg2
+    }
+    if (values.pg2.compressorContinuousOperation) {
+      await sleep(delay)
+      await client.writeRegister(0x00A8, Math.round(values.pg2.compressorContinuousOperation))
+      delete state.pg2
+    }
   }
 }
 
