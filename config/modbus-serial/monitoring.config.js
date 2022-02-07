@@ -36,6 +36,14 @@ module.exports = {
   },
   devices: [
     {
+      name: 'heatpump',
+      address: 1,
+      type: 'autonics-tf3',
+      options: {
+        maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
+      }
+    },
+    {
       name: 'controlbox',
       address: 51,
       type: 'xymd1',
