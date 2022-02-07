@@ -396,15 +396,18 @@ async function write (client, values = {}, config = {}, state = {}) {
   if (values.auxEnabled != null) {
     await sleep(delay)
     await client.writeCoil(0x0000, values.auxEnabled)
+    delete state.lastReport
   }
   if (values.compEnabled != null) {
     await sleep(delay)
     await client.writeCoil(0x0001, values.compEnabled)
+    delete state.lastReport
   }
   if (values.targetTemp != null) {
     const tempDivisor = await readTempDivisor(client, state)
     await sleep(delay)
     await client.writeRegister(0x0000, writeInt(Math.round(values.targetTemp * tempDivisor)))
+    delete state.lastReport
   }
   if (values.mode) {
     if (!(values.mode in WRITE_MODE_MAP)) {
@@ -412,12 +415,14 @@ async function write (client, values = {}, config = {}, state = {}) {
     }
     await sleep(delay)
     await client.writeRegister(0x0096, WRITE_MODE_MAP[values.mode])
+    delete state.lastReport
     delete state.pg2
   }
   if (values.pg1) {
     if (values.pg1.virtualTempRate) {
       await sleep(delay)
       await client.writeRegister(0x0067, Math.round(values.pg1.virtualTempRate))
+      delete state.lastReport
       delete state.pg1
     }
   }
@@ -426,49 +431,58 @@ async function write (client, values = {}, config = {}, state = {}) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x0097, Math.round(values.pg2.hysteresis * tempDivisor))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.offset) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x0098, Math.round(values.pg2.offset * tempDivisor))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.highTempLimit) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x0099, writeInt(Math.round(values.pg2.highTempLimit * tempDivisor)))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.lowTempLimit) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x009A, writeInt(Math.round(values.pg2.lowTempLimit * tempDivisor)))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.compressorStartupDelay) {
       await sleep(delay)
       await client.writeRegister(0x00A4, Math.round(values.pg2.compressorStartupDelay))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.compressorMinCycleTime) {
       await sleep(delay)
       await client.writeRegister(0x00A5, Math.round(values.pg2.compressorMinCycleTime))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.compressorRestartDelay) {
       await sleep(delay)
       await client.writeRegister(0x00A6, Math.round(values.pg2.compressorRestartDelay))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.compressorMinRunTime) {
       await sleep(delay)
       await client.writeRegister(0x00A7, Math.round(values.pg2.compressorMinRunTime))
+      delete state.lastReport
       delete state.pg2
     }
     if (values.pg2.compressorContinuousOperation) {
       await sleep(delay)
       await client.writeRegister(0x00A8, Math.round(values.pg2.compressorContinuousOperation))
+      delete state.lastReport
       delete state.pg2
     }
   }
