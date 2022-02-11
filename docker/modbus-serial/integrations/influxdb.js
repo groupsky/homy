@@ -1,5 +1,29 @@
 const { InfluxDB, Point } = require('@influxdata/influxdb-client')
 
+const mapObject = (prefix, entry, point, skip=[]) => {
+  for (const key in entry) {
+    if (!Object.hasOwnProperty.call(entry, key)) continue
+    if (skip.includes(key)) continue
+    const value = entry[key]
+    switch (typeof value) {
+      case 'boolean':
+        point.booleanField(prefix+key, value)
+        break
+      case 'number':
+        point.floatField(prefix+key, value)
+        break
+      case 'string':
+        point.tag(prefix + key, value)
+        break
+      case 'object':
+        if (!Array.isArray(value)) {
+          mapObject(prefix+key+'.', value, point)
+        }
+        break
+    }
+  }
+}
+
 module.exports = ({
   url,
   username,
@@ -24,19 +48,7 @@ module.exports = ({
       .tag('device.addr', entry._addr)
       .timestamp(entry._tz)
 
-    for (const key in entry) {
-      if (!Object.hasOwnProperty.call(entry, key)) continue
-      if (['device', '_type', '_addr', '_ms', '_tz'].includes(key)) continue
-      const value = entry[key]
-      switch (typeof value) {
-        case 'number':
-          point.floatField(key, value)
-          break
-        case 'string':
-          point.tag(key, value)
-          break
-      }
-    }
+    mapObject('', entry, point, ['device', '_type', '_addr', '_ms', '_tz'])
 
     writeApi.writePoint(point)
   }
