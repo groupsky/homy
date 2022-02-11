@@ -422,27 +422,27 @@ async function write (client, values = {}, config = {}, state = {}) {
     delete state.pg2
   }
   if (values.pg1) {
-    if (values.pg1.virtualTempRate) {
+    if (values.pg1.virtualTempRate != null) {
       await sleep(delay)
       await client.writeRegister(0x0067, Math.round(values.pg1.virtualTempRate))
       delete state.lastReport
       delete state.pg1
     }
-    if (values.pg1.input1Correction) {
+    if (values.pg1.input1Correction != null) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x0069, writeInt(Math.round(values.pg1.input1Correction * tempDivisor)))
       delete state.lastReport
       delete state.pg1
     }
-    if (values.pg1.input2Correction) {
+    if (values.pg1.input2Correction != null) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x006A, writeInt(Math.round(values.pg1.input2Correction * tempDivisor)))
       delete state.lastReport
       delete state.pg1
     }
-    if (values.pg1.input3Correction) {
+    if (values.pg1.input3Correction != null) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x006B, writeInt(Math.round(values.pg1.input3Correction * tempDivisor)))
@@ -451,59 +451,59 @@ async function write (client, values = {}, config = {}, state = {}) {
     }
   }
   if (values.pg2) {
-    if (values.pg2.hysteresis) {
+    if (values.pg2.hysteresis != null) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x0097, Math.round(values.pg2.hysteresis * tempDivisor))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.offset) {
+    if (values.pg2.offset != null) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x0098, Math.round(values.pg2.offset * tempDivisor))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.highTempLimit) {
+    if (values.pg2.highTempLimit != null) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x0099, writeInt(Math.round(values.pg2.highTempLimit * tempDivisor)))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.lowTempLimit) {
+    if (values.pg2.lowTempLimit != null) {
       const tempDivisor = await readTempDivisor(client, state)
       await sleep(delay)
       await client.writeRegister(0x009A, writeInt(Math.round(values.pg2.lowTempLimit * tempDivisor)))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.compressorStartupDelay) {
+    if (values.pg2.compressorStartupDelay != null) {
       await sleep(delay)
       await client.writeRegister(0x00A4, Math.round(values.pg2.compressorStartupDelay))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.compressorMinCycleTime) {
+    if (values.pg2.compressorMinCycleTime != null) {
       await sleep(delay)
       await client.writeRegister(0x00A5, Math.round(values.pg2.compressorMinCycleTime))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.compressorRestartDelay) {
+    if (values.pg2.compressorRestartDelay != null) {
       await sleep(delay)
       await client.writeRegister(0x00A6, Math.round(values.pg2.compressorRestartDelay))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.compressorMinRunTime) {
+    if (values.pg2.compressorMinRunTime != null) {
       await sleep(delay)
       await client.writeRegister(0x00A7, Math.round(values.pg2.compressorMinRunTime))
       delete state.lastReport
       delete state.pg2
     }
-    if (values.pg2.compressorContinuousOperation) {
+    if (values.pg2.compressorContinuousOperation != null) {
       await sleep(delay)
       await client.writeRegister(0x00A8, Math.round(values.pg2.compressorContinuousOperation))
       delete state.lastReport
