@@ -374,6 +374,9 @@ async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = 
  *   [mode]: MODE,
  *   [pg1]: {
  *     [virtualTempRate]: number,
+ *     [input1Correction]: number,
+ *     [input2Correction]: number,
+ *     [input3Correction]: number,
  *   },
  *   [pg2]: {
  *     [hysteresis]: number,
@@ -422,6 +425,27 @@ async function write (client, values = {}, config = {}, state = {}) {
     if (values.pg1.virtualTempRate) {
       await sleep(delay)
       await client.writeRegister(0x0067, Math.round(values.pg1.virtualTempRate))
+      delete state.lastReport
+      delete state.pg1
+    }
+    if (values.pg1.input1Correction) {
+      const tempDivisor = await readTempDivisor(client, state)
+      await sleep(delay)
+      await client.writeRegister(0x0069, writeInt(Math.round(values.pg1.input1Correction * tempDivisor)))
+      delete state.lastReport
+      delete state.pg1
+    }
+    if (values.pg1.input2Correction) {
+      const tempDivisor = await readTempDivisor(client, state)
+      await sleep(delay)
+      await client.writeRegister(0x006A, writeInt(Math.round(values.pg1.input2Correction * tempDivisor)))
+      delete state.lastReport
+      delete state.pg1
+    }
+    if (values.pg1.input3Correction) {
+      const tempDivisor = await readTempDivisor(client, state)
+      await sleep(delay)
+      await client.writeRegister(0x006B, writeInt(Math.round(values.pg1.input3Correction * tempDivisor)))
       delete state.lastReport
       delete state.pg1
     }
