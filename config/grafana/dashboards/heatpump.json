@@ -31,7 +31,7 @@
           {
             "evaluator": {
               "params": [
-                29,
+                25,
                 3000
               ],
               "type": "outside_range"
@@ -182,7 +182,7 @@
         {
           "colorMode": "critical",
           "op": "lt",
-          "value": 29,
+          "value": 25,
           "visible": true
         },
         {
@@ -619,6 +619,6 @@
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
