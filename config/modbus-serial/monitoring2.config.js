@@ -27,7 +27,7 @@ function getFileEnv(envVariable) {
 
 module.exports = {
   modbus: {
-    port: '/dev/serial/by-path/pci-0000:00:1d.0-usb-0:1.6:1.0-port0',
+    port: '/dev/serial/by-path/pci-0000:00:14.0-usb-0:1:1.0-port0',
     portConfig: {
       baudRate: 9600,
       parity: 'none',
@@ -36,29 +36,12 @@ module.exports = {
   },
   devices: [
     {
-      name: 'controlbox',
-      address: 51,
-      type: 'xymd1',
-    },
-    {
-      name: 'thermostat-martin',
-      address: 0x41,
-      type: 'bac002',
-    },
-    {
-      name: 'thermostat-gergana',
-      address: 0x42,
-      type: 'bac002',
-    },
-    {
-      name: 'thermostat-boris',
-      address: 0x43,
-      type: 'bac002',
-    },
-    {
-      name: 'thermostat-bedroom',
-      address: 0x44,
-      type: 'bac002',
+      name: 'heatpump-ctrl',
+      address: 1,
+      type: 'autonics-tf3',
+      options: {
+        maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
+      }
     },
   ],
   integrations: {
