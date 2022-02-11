@@ -1,5 +1,7 @@
 // ORNO OR-WE-516 - 3-phase energy meter with RS-485, 80A, MID, 3 modules, DIN TH-35mm
 // https://orno.pl/en/product/1086/3-phase-energy-meter-with-rs-485-80a-mid-3-modules-din-th-35mm
+//
+// Defaults: address=1 baudRate=9600 dataBits=8 parity=odd stopBits=1
 
 const ieee754 = require('ieee754')
 
