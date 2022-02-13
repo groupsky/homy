@@ -125,6 +125,20 @@ module.exports = {
       unlockTimeout: 60000,
       pin: 16
     },
+    nightExternalLights: {
+      type: 'solar-emitter',
+      statusTopic: '/modbus/dry-switches/relays00-15/reading',
+      commandTopic: '/modbus/dry-switches/relays00-15/write',
+      stateParser: ({ outputs }) => outputs & 1 << 15,
+      commandTemplate: (state) => ({ 'out15': state }),
+      lat: 42.1354,
+      lon: 24.7453,
+      solarTimeStates: {
+        sunset: true,
+        sunrise: false
+      },
+      verbose: false
+    },
   },
   gates: {
     mqtt: {
