@@ -137,7 +137,7 @@
           "measurement": "monitoring2",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"targetTemp\") AS \"target\", mean(\"currentTemp\") AS \"current\", mean(\"targetTemp\") - mean(\"pg2.hysteresis\") AS \"start\", mean(\"targetTemp\") + mean(\"pg2.offset\") AS \"stop\" FROM \"monitoring2\" WHERE (\"device.name\" = 'heatpump-ctrl') AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "query": "SELECT mean(\"targetTemp\") AS \"target\", mean(\"virtualTemp\") AS \"current\", mean(\"targetTemp\") - mean(\"pg2.hysteresis\") AS \"start\", mean(\"targetTemp\") + mean(\"pg2.offset\") AS \"stop\" FROM \"monitoring2\" WHERE (\"device.name\" = 'heatpump-ctrl') AND $timeFilter GROUP BY time($__interval) fill(none)",
           "rawQuery": true,
           "refId": "temperatures",
           "resultFormat": "time_series",
@@ -1309,7 +1309,9 @@
       "id": 7,
       "options": {
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "max"
+          ],
           "displayMode": "list",
           "placement": "bottom"
         },
@@ -1484,7 +1486,9 @@
       "id": 8,
       "options": {
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "min"
+          ],
           "displayMode": "list",
           "placement": "bottom"
         },
@@ -1528,7 +1532,7 @@
               },
               {
                 "params": [],
-                "type": "max"
+                "type": "min"
               },
               {
                 "params": [
@@ -1567,13 +1571,13 @@
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-1d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }
