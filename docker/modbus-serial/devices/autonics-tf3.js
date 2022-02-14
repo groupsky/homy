@@ -21,6 +21,15 @@
 /**
  * @typedef {'heater_time'|'hotgas_time'|'heater_temperature'|'hotgas_temperature'} DEFROST_METHOD
  */
+/**
+ * @typedef {2400|4800|9600|19200|38400} BAUD_RATE
+ */
+/**
+ * @typedef {'none'|'even'|'odd'} PARITY
+ */
+/**
+ * @typedef {1|2} STOP_BITS
+ */
 
 /**
  * @typedef {{
@@ -150,11 +159,39 @@ const READ_DEFROST_METHOD = {
 /**
  * @type {Object<DEFROST_METHOD, number>}
  */
-const WRITE_DEFROST_METHOD = {
+const WRITE_DEFROST_METHOD_MAP = {
   heater_time: 0,
   hotgas_time: 1,
   heater_temperature: 2,
   hotgas_temperature: 3,
+}
+
+/**
+ * @type {Object<BAUD_RATE, number>}
+ */
+const WRITE_BAUD_RATE_MAP = {
+  2400: 0,
+  4800: 1,
+  9600: 2,
+  19200: 3,
+  38400: 4,
+}
+
+/**
+ * @type {Object<PARITY, number>}
+ */
+const WRITE_PARITY_MAP = {
+  none: 0,
+  even: 1,
+  odd: 2,
+}
+
+/**
+ * @type {Object<STOP_BITS, number>}
+ */
+const WRITE_STOP_BITS_MAP = {
+  1: 0,
+  2: 1,
 }
 
 /**
@@ -562,11 +599,11 @@ async function write (client, values = {}, config = {}, state = {}) {
   }
   if (values.pg3) {
     if (values.pg3.defrostMethod) {
-      if (!(values.pg3.defrostMethod in WRITE_DEFROST_METHOD)) {
-        throw new Error(`Invalid defrost method value "${values.pg3.defrostMethod}". Valid ${Object.keys(WRITE_DEFROST_METHOD).join(', ')}`)
+      if (!(values.pg3.defrostMethod in WRITE_DEFROST_METHOD_MAP)) {
+        throw new Error(`Invalid defrost method value "${values.pg3.defrostMethod}". Valid ${Object.keys(WRITE_DEFROST_METHOD_MAP).join(', ')}`)
       }
       await sleep(delay)
-      await client.writeRegister(0x00C8, WRITE_DEFROST_METHOD[values.pg3.defrostMethod])
+      await client.writeRegister(0x00C8, WRITE_DEFROST_METHOD_MAP[values.pg3.defrostMethod])
       delete state.lastReport
       delete state.pg3
     }
@@ -583,6 +620,9 @@ async function write (client, values = {}, config = {}, state = {}) {
  * @param client
  * @param {{
  *   [address]: number,
+ *   [baudRate]: BAUD_RATE,
+ *   [parity]: PARITY,
+ *   [stopBits]: STOP_BITS,
  *   [responseDelay]: number,
  *   [temperatureUnit]: TEMPERATURE_UNIT,
  *   [inputType]: INPUT_TYPE,
@@ -631,6 +671,24 @@ async function setup (client, newConfig) {
     report.address = await client.writeRegister(0x0130, newConfig.address)
     client.setID(newConfig.address)
     await sleep(delay)
+  }
+  if (newConfig.baudRate) {
+    if (!(newConfig.baudRate in WRITE_BAUD_RATE_MAP)) {
+      throw new Error(`Invalid baudRate value "${newConfig.baudRate}". Valid ${Object.keys(WRITE_BAUD_RATE_MAP).join(', ')}`)
+    }
+    report.baudRate = await client.writeRegister(0x0131, WRITE_BAUD_RATE_MAP[newConfig.baudRate])
+  }
+  if (newConfig.parity) {
+    if (!(newConfig.parity in WRITE_PARITY_MAP)) {
+      throw new Error(`Invalid parity value "${newConfig.parity}". Valid ${Object.keys(WRITE_PARITY_MAP).join(', ')}`)
+    }
+    report.parity = await client.writeRegister(0x0132, WRITE_PARITY_MAP[newConfig.parity])
+  }
+  if (newConfig.stopBits) {
+    if (!(newConfig.stopBits in WRITE_STOP_BITS_MAP)) {
+      throw new Error(`Invalid stopBits value "${newConfig.stopBits}". Valid ${Object.keys(WRITE_STOP_BITS_MAP).join(', ')}`)
+    }
+    report.stopBits = await client.writeRegister(0x0133, WRITE_STOP_BITS_MAP[newConfig.stopBits])
   }
   if (newConfig.responseDelay) {
     report.responseDelay = await client.writeRegister(0x0134, newConfig.responseDelay)
