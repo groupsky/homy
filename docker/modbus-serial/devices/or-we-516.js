@@ -8,7 +8,7 @@ const ieee754 = require('ieee754')
 const r = (val, offset) => ieee754.read(val.buffer, offset << 1, false, 23, 4)
 
 async function read (client) {
-  const val = await client.readHoldingRegisters(0, 0x43)
+  const val = await client.readHoldingRegisters(0, 60)
 
   const serialNumber = val.data[0]
   const address = val.data[2]
@@ -43,7 +43,7 @@ async function read (client) {
   const bpf = r(val, 56)
   const cpf = r(val, 58)
 
-  const val2 = await client.readHoldingRegisters(0x100, 0x30)
+  const val2 = await client.readHoldingRegisters(0x100, 48)
   const totalActiveEnergy = r(val2, 0)
   const aTotalActiveEnergy = r(val2, 2)
   const bTotalActiveEnergy = r(val2, 4)
