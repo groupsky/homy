@@ -30,18 +30,23 @@ module.exports = {
     port: '/dev/serial/by-path/pci-0000:00:14.0-usb-0:1:1.0-port0',
     portConfig: {
       baudRate: 9600,
-      parity: 'none',
+      parity: 'odd',
     },
-    msDelayBetweenDevices: 1000,
+    msDelayBetweenDevices: 50,
   },
   devices: [
     {
       name: 'heatpump-ctrl',
-      address: 1,
+      address: 50,
       type: 'autonics-tf3',
       options: {
         maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
       }
+    },
+    {
+      name: 'stab-em',
+      address: 77,
+      type: 'or-we-516',
     },
   ],
   integrations: {
