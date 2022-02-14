@@ -1219,7 +1219,7 @@
           {
             "evaluator": {
               "params": [
-                50
+                60
               ],
               "type": "gt"
             },
@@ -1378,7 +1378,7 @@
         {
           "colorMode": "critical",
           "op": "gt",
-          "value": 50,
+          "value": 60,
           "visible": true
         }
       ],
@@ -1578,6 +1578,6 @@
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }
