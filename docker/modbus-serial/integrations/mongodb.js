@@ -12,10 +12,16 @@ module.exports = ({ url, options, collection }) => {
       const db = mongoClient.db()
       col = db.collection(collection)
     })
+    .catch((err) => {
+      console.error('Error initializing mongo connection', err)
+    })
 
   const logger = (entry) => {
     if (col) {
       col.insertOne(entry)
+        .catch((err) => {
+          console.error('Error logging entry', err)
+        })
     }
   }
 
