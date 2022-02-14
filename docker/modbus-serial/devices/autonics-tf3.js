@@ -18,6 +18,9 @@
 /**
  * @typedef {'cooling'|'heating'} MODE
  */
+/**
+ * @typedef {'heater_time'|'hotgas_time'|'heater_temperature'|'hotgas_temperature'} DEFROST_METHOD
+ */
 
 /**
  * @typedef {{
@@ -29,6 +32,7 @@
  *   [lastReport]: number,
  *   [pg1]: Object,
  *   [pg2]: Object,
+ *   [pg3]: Object,
  *   [s1Temp]: number,
  *   [s2Temp]: number,
  *   [s3Temp]: number,
@@ -131,6 +135,26 @@ const READ_MODE_MAP = {
 const WRITE_MODE_MAP = {
   cooling: 0,
   heating: 1,
+}
+
+/**
+ * @type {Object<number, DEFROST_METHOD>}
+ */
+const READ_DEFROST_METHOD = {
+  0: 'heater_time',
+  1: 'hotgas_time',
+  2: 'heater_temperature',
+  3: 'hotgas_temperature',
+}
+
+/**
+ * @type {Object<DEFROST_METHOD, number>}
+ */
+const WRITE_DEFROST_METHOD = {
+  heater_time: 0,
+  hotgas_time: 1,
+  heater_temperature: 2,
+  hotgas_temperature: 3,
 }
 
 /**
@@ -311,6 +335,27 @@ const readPG2 = async (client, state = {}, force = false) => {
 
 /**
  * @param {import('modbus-serial').ModbusRTU} client
+ * @param {{[delay]: number, [pg3]: object}} state
+ * @param {boolean} force
+ * @return {Promise<{
+ *   defrostMethod: DEFROST_METHOD,
+ *   defrostCycle: number,
+ * }>}
+ */
+const readPG3 = async (client, state = {}, force = false) => {
+  if (force || !state.pg3) {
+    await sleep(await readDelay(client, state))
+    const { data } = await client.readHoldingRegisters(0xC8, 2)
+    state.pg3 = {
+      defrostMethod: READ_DEFROST_METHOD[data[0]],
+      defrostCycle: data[1],
+    }
+  }
+  return state.pg3
+}
+
+/**
+ * @param {import('modbus-serial').ModbusRTU} client
  * @param {number} maxMsBetweenReports
  * @param {AUTONICS_TF3_STATE} state
  * @param {boolean} force
@@ -360,6 +405,7 @@ async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = 
   result.device = await readDevice(client, state)
   result.pg1 = await readPG1(client, state)
   result.pg2 = await readPG2(client, state)
+  result.pg3 = await readPG3(client, state)
   result.mode = result.pg2.mode
 
   return result
@@ -388,6 +434,10 @@ async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = 
  *     [compressorRestartDelay]: number,
  *     [compressorMinRunTime]: number,
  *     [compressorContinuousOperation]: number,
+ *   },
+ *   [pg3]: {
+ *     [defrostMethod]: DEFROST_METHOD,
+ *     [defrostCycle]: number,
  *   }
  * }} values
  * @param {CONFIG} [config]
@@ -508,6 +558,23 @@ async function write (client, values = {}, config = {}, state = {}) {
       await client.writeRegister(0x00A8, Math.round(values.pg2.compressorContinuousOperation))
       delete state.lastReport
       delete state.pg2
+    }
+  }
+  if (values.pg3) {
+    if (values.pg3.defrostMethod) {
+      if (!(values.pg3.defrostMethod in WRITE_DEFROST_METHOD)) {
+        throw new Error(`Invalid defrost method value "${values.pg3.defrostMethod}". Valid ${Object.keys(WRITE_DEFROST_METHOD).join(', ')}`)
+      }
+      await sleep(delay)
+      await client.writeRegister(0x00C8, WRITE_DEFROST_METHOD[values.pg3.defrostMethod])
+      delete state.lastReport
+      delete state.pg3
+    }
+    if (values.pg3.defrostCycle != null) {
+      await sleep(delay)
+      await client.writeRegister(0x00C9, values.pg3.defrostCycle)
+      delete state.lastReport
+      delete state.pg3
     }
   }
 }
