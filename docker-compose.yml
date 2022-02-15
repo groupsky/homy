@@ -665,6 +665,166 @@ services:
       - ${MONGO_DATA_PATH}:/volumes/mongo
       - ./data/influxdb:/volumes/influxdb
 
+  plex:
+    build: docker/plex
+    restart: on-failure
+    environment:
+      - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+      # allowed from all since it's in a private network and only accessed through ingress
+      - ALLOWED_NETWORKS=0.0.0.0/0
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${PLEX_DOMAIN}
+      - VIRTUAL_PORT=32400
+    networks:
+      - ingress
+      # needed to fetch covers/subtitles/etc.
+      - egress
+    ports:
+      # controlling Plex Home Theater via Plex Companion
+      - 3005:3005/tcp
+      # older Bonjour/Avahi network discovery
+      # - 5353:5353/udp
+      # controlling Plex for Roku via Plex Companion
+      - 8324:8324/tcp
+      # access to the Plex DLNA Server
+      - 32469:32469/tcp
+      # access to the Plex DLNA Server
+      - 1900:1900/udp
+      # current GDM network discovery
+      - 32410:32410/udp
+      - 32412:32412/udp
+      - 32413:32413/udp
+      - 32414:32414/udp
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - plex_config:/config
+      - plex_data:/data
+      - plex_transcode:/transcode
+
+  sonarr:
+    build: docker/sonarr
+    depends_on:
+      - deluge
+      - jackett
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${SONARR_DOMAIN}
+      - VIRTUAL_PORT=8989
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - sonarr_config:/config
+      - plex_data:/downloads
+
+  jackett:
+    build: docker/jackett
+    depends_on:
+      - flaresolverr
+    environment:
+      - AUTO_UPDATE=false
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${JACKETT_DOMAIN}
+      - VIRTUAL_PORT=9117
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - jacket_config:/config
+      - plex_data:/downloads
+
+  flaresolverr:
+    build: docker/flaresolverr
+    restart: on-failure
+    environment:
+      - LOG_LEVEL=info
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      # need to connect to external services
+      - egress
+
+  deluge:
+    build: docker/deluge
+    restart: on-failure
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${DELUGE_DOMAIN}
+      - VIRTUAL_PORT=8112
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    ports:
+      - "${DELUGE_PORT}:${DELUGE_PORT}/tcp"
+      - "${DELUGE_PORT}:${DELUGE_PORT}/udp"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - deluge_config:/config
+      - plex_data:/downloads
+
+  radarr:
+    build: docker/radarr
+    depends_on:
+      - deluge
+      - jackett
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${RADARR_DOMAIN}
+      - VIRTUAL_PORT=7878
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - radarr_config:/config
+      - plex_data:/downloads
+
+  bazarr:
+    build: docker/bazarr
+    depends_on:
+      - radarr
+      - sonarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${BAZARR_DOMAIN}
+      - VIRTUAL_PORT=6767
+    networks:
+      # need to connect to external services
+      - egress
+      - ingress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - bazarr_config:/config
+      - plex_data:/downloads
+
 networks:
   # internal for the automation services - mqtt, node red, ah
   automation:
@@ -742,3 +902,13 @@ secrets:
     file: ${SECRETS_PATH}/telegram_bot_token
   telegram_chat_id:
     file: ${SECRETS_PATH}/telegram_chat_id
+
+volumes:
+  bazarr_config:
+  deluge_config:
+  jacket_config:
+  plex_config:
+  plex_data:
+  plex_transcode:
+  radarr_config:
+  sonarr_config:
