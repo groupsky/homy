@@ -325,7 +325,7 @@
               }
             ]
           },
-          "unit": "celsius"
+          "unit": "none"
         },
         "overrides": [
           {
@@ -352,11 +352,13 @@
         "x": 12,
         "y": 0
       },
-      "id": 5,
+      "id": 10,
+      "interval": "10s",
       "options": {
         "legend": {
           "calcs": [
-            "mean"
+            "mean",
+            "max"
           ],
           "displayMode": "list",
           "placement": "bottom"
@@ -367,7 +369,7 @@
       },
       "targets": [
         {
-          "alias": "$col",
+          "alias": "output",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
@@ -386,10 +388,13 @@
               "type": "fill"
             }
           ],
+          "hide": true,
           "measurement": "monitoring2",
           "orderByTime": "ASC",
           "policy": "default",
-          "refId": "A",
+          "query": "SELECT mean(\"s3Temp\") - mean(\"s1Temp\") FROM \"monitoring2\" WHERE (\"device.name\" = 'heatpump-ctrl') AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "output",
           "resultFormat": "time_series",
           "select": [
             [
@@ -443,15 +448,73 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "hide": false,
-          "query": "SELECT\n  (max(\"inputs\"::integer) & 4) / 4 AS \"COMP\"\nFROM \"monitoring2\"\nWHERE \"device.name\" = 'heatpump-ctrl' AND $timeFilter\nGROUP BY time($__interval) fill(none)",
+          "hide": true,
+          "query": "SELECT\n  (min(\"inputs\"::integer) & 4) / 4 AS \"COMP\"\nFROM \"monitoring2\"\nWHERE \"device.name\" = 'heatpump-ctrl' AND $timeFilter\nGROUP BY time($__interval) fill(none)",
           "rawQuery": true,
           "refId": "state",
           "resultFormat": "time_series"
+        },
+        {
+          "alias": "input",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "none"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "measurement": "sdm630raw",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "input",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "total_p"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "heat_pump"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "($output * 10 * 60 * 4184 / 3600 / $input) / $state",
+          "hide": false,
+          "refId": "COP",
+          "type": "math"
         }
       ],
       "thresholds": [],
-      "title": "Measured",
+      "title": "COP",
       "type": "timeseries"
     },
     {
@@ -566,6 +629,10 @@
       },
       "targets": [
         {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
           "groupBy": [
             {
               "params": [
@@ -583,6 +650,8 @@
           "measurement": "sdm630raw",
           "orderByTime": "ASC",
           "policy": "default",
+          "query": "SELECT max(\"total_p\") FROM \"sdm630raw\" WHERE (\"device.name\" = 'heat_pump') AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": false,
           "refId": "power",
           "resultFormat": "time_series",
           "select": [
@@ -700,7 +769,7 @@
         "x": 12,
         "y": 9
       },
-      "id": 9,
+      "id": 5,
       "options": {
         "legend": {
           "calcs": [
@@ -715,7 +784,7 @@
       },
       "targets": [
         {
-          "alias": "diff",
+          "alias": "$col",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
@@ -737,8 +806,6 @@
           "measurement": "monitoring2",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"s3Temp\") - mean(\"s1Temp\") FROM \"monitoring2\" WHERE (\"device.name\" = 'heatpump-ctrl') AND $timeFilter GROUP BY time($__interval) fill(none)",
-          "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
           "select": [
@@ -801,7 +868,7 @@
         }
       ],
       "thresholds": [],
-      "title": "Difference",
+      "title": "Measured",
       "type": "timeseries"
     },
     {
@@ -1213,6 +1280,185 @@
       "type": "timeseries"
     },
     {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "kelvin"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "state\\..*"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "hidden"
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "alias": "diff",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "none"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "monitoring2",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"s3Temp\") - mean(\"s1Temp\") FROM \"monitoring2\" WHERE (\"device.name\" = 'heatpump-ctrl') AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "s1Temp"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              },
+              {
+                "params": [
+                  "internal.in"
+                ],
+                "type": "alias"
+              }
+            ],
+            [
+              {
+                "params": [
+                  "s3Temp"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              },
+              {
+                "params": [
+                  "internal.out"
+                ],
+                "type": "alias"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "heatpump-ctrl"
+            }
+          ]
+        },
+        {
+          "alias": "state.$col",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "hide": false,
+          "query": "SELECT\n  (max(\"inputs\"::integer) & 4) / 4 AS \"COMP\"\nFROM \"monitoring2\"\nWHERE \"device.name\" = 'heatpump-ctrl' AND $timeFilter\nGROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "state",
+          "resultFormat": "time_series"
+        }
+      ],
+      "thresholds": [],
+      "title": "Difference",
+      "type": "timeseries"
+    },
+    {
       "alert": {
         "alertRuleTags": {},
         "conditions": [
@@ -1582,6 +1828,6 @@
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 6,
+  "version": 7,
   "weekStart": ""
 }
