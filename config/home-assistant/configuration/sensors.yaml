@@ -148,3 +148,8 @@
   state_topic: "/modbus/tetriary/heat_pump/reading"
   value_template: "{{ value_json.total_kwh | float }}"
   <<: *common_used_energy
+
+- name: Stabilizator energy used
+  state_topic: "/modbus/monitoring2/stab-em/reading"
+  value_template: "{{ value_json.totalActiveEnergy | float }}"
+  <<: *common_used_energy
