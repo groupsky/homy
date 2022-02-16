@@ -369,6 +369,16 @@
       },
       "targets": [
         {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "($output * (7 + $bedroom*2 + $boris*2 + $gergana*2 + $martin*2) * 60 * 4184 / 3600 / $input) / $state",
+          "hide": false,
+          "refId": "COP",
+          "type": "math"
+        },
+        {
           "alias": "output",
           "datasource": {
             "type": "influxdb",
@@ -448,11 +458,42 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
           "hide": true,
+          "orderByTime": "ASC",
+          "policy": "default",
           "query": "SELECT\n  (min(\"inputs\"::integer) & 4) / 4 AS \"COMP\"\nFROM \"monitoring2\"\nWHERE \"device.name\" = 'heatpump-ctrl' AND $timeFilter\nGROUP BY time($__interval) fill(none)",
           "rawQuery": true,
           "refId": "state",
-          "resultFormat": "time_series"
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
         },
         {
           "alias": "input",
@@ -504,17 +545,198 @@
         },
         {
           "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
           },
-          "expression": "($output * 10 * 60 * 4184 / 3600 / $input) / $state",
-          "hide": false,
-          "refId": "COP",
-          "type": "math"
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "none"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "measurement": "xymd1",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "bedroom",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "valve"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "thermostat-bedroom"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "none"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "measurement": "xymd1",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"valve\") FROM \"xymd1\" WHERE (\"device.name\" = 'thermostat-boris') AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": false,
+          "refId": "boris",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "valve"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "thermostat-boris"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "none"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "measurement": "xymd1",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "gergana",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "valve"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "thermostat-gergana"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "none"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "measurement": "xymd1",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "refId": "martin",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "valve"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "thermostat-martin"
+            }
+          ]
         }
       ],
       "thresholds": [],
       "title": "COP",
+      "transformations": [],
       "type": "timeseries"
     },
     {
@@ -1828,6 +2050,6 @@
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 7,
+  "version": 8,
   "weekStart": ""
 }
