@@ -1,3 +1,13 @@
+const devices = {
+  boiler: {
+    identifiers: 'boiler_eldom_200l',
+    manufacturer: 'eldom',
+    model: '200l',
+    name: 'boiler',
+    sw_version: '1.0.0',
+  },
+}
+
 module.exports = {
   bots: {
     syncThermostatBedroomClock: {
@@ -138,6 +148,52 @@ module.exports = {
         sunrise: false
       },
       verbose: false
+    },
+    haBoilerSwitch: {
+      type: 'mqtt-publish',
+      topic: 'homeassistant/switch/boiler-contactor/config',
+      payload: {
+        name: 'boiler contactor',
+        unique_id: 'boiler_contactor',
+        device: devices.boiler,
+        device_class: 'outlet',
+
+        command_topic: '/modbus/dry-switches/relays00-15/write',
+        command_on_template: '{"out14": true}',
+        command_off_template: '{"out14": false}',
+
+        state_topic: '/modbus/dry-switches/relays00-15/reading',
+        state_off: '0',
+        state_on: `${1 << 14}`,
+        value_template: `{{- value_json.outputs|bitwise_and(${1 << 14}) -}}`
+      }
+    },
+    haBoilerEnergyMeter: {
+      type: 'mqtt-publish',
+      topic: 'homeassistant/sensor/boiler-energy-meter/config',
+      payload: {
+        name: 'boiler energy meter',
+        unique_id: 'boiler_energy_meter',
+        device: devices.boiler,
+        device_class: 'energy',
+        state_class: 'total',
+        unit_of_measurement: 'kWh',
+
+        state_topic: '/modbus/secondary/boiler/reading',
+        value_template: '{{ value_json.tot | float }}',
+      }
+    },
+    haBoilerHeating: {
+      type: 'mqtt-publish',
+      topic: 'homeassistant/binary_sensor/boiler-heating/config',
+      payload: {
+        name: 'boiler heating',
+        unique_id: 'boiler_status_heating',
+        device: devices.boiler,
+
+        state_topic: '/modbus/secondary/boiler/reading',
+        value_template: '{{ \'ON\' if value_json.p|float > 10 else \'OFF\' }}'
+      }
     },
   },
   gates: {
