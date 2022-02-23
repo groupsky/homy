@@ -159,8 +159,8 @@ module.exports = {
         device_class: 'outlet',
 
         command_topic: '/modbus/dry-switches/relays00-15/write',
-        command_on_template: '{"out14": true}',
-        command_off_template: '{"out14": false}',
+        payload_on: '{"out14": true}',
+        payload_off: '{"out14": false}',
 
         state_topic: '/modbus/dry-switches/relays00-15/reading',
         state_off: '0',
