@@ -1,4 +1,4 @@
-module.exports = (name, { diTopic, mask, outputTopic, outputMessage }) => ({
+module.exports = (name, { diTopic, mask, outputTopic, outputMessage, filterState = () => true }) => ({
   start: ({ mqtt }) => {
     let state = null
 
@@ -7,8 +7,11 @@ module.exports = (name, { diTopic, mask, outputTopic, outputMessage }) => ({
       if (state == null) {
         state = newState
       } else if (newState !== state) {
+        const oldState = state
         state = newState
-        mqtt.publish(outputTopic, outputMessage)
+        if (filterState(newState, oldState)) {
+          mqtt.publish(outputTopic, outputMessage)
+        }
       }
     })
   }
