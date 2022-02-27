@@ -139,7 +139,7 @@ module.exports = {
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       mask: 1 << 10,
       outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 19, value: 1 },
+      outputMessage: { pin: 16, value: 1 },
       filterState: (newState) => !newState
     },
     autoLightOffBath2: {
