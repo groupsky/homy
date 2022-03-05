@@ -29,18 +29,6 @@
   value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**4) else 'ON' }}"
 
 - platform: mqtt
-  name: "Bath 1 Door"
-  device_class: "lock"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**5) else 'ON' }}"
-
-- platform: mqtt
-  name: "Bath 1 Door"
-  device_class: "door"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**6) else 'ON' }}"
-
-- platform: mqtt
   name: "Cabinet Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
@@ -51,30 +39,6 @@
   device_class: "door"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
   value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**8) else 'ON' }}"
-
-- platform: mqtt
-  name: "Bath 2 Door"
-  device_class: "lock"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**9) else 'ON' }}"
-
-- platform: mqtt
-  name: "Bath 2 Door"
-  device_class: "door"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**10) else 'ON' }}"
-
-- platform: mqtt
-  name: "Bath 3 Door"
-  device_class: "lock"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**11) else 'ON' }}"
-
-- platform: mqtt
-  name: "Bath 3 Door"
-  device_class: "door"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**12) else 'ON' }}"
 
 - platform: mqtt
   name: "Gery Door"
@@ -113,12 +77,6 @@
   value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**18) else 'ON' }}"
 
 - platform: mqtt
-  name: "Bath 1"
-  device_class: "window"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**19) else 'ON' }}"
-
-- platform: mqtt
   name: "Marti Door"
   device_class: "lock"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
@@ -147,12 +105,6 @@
   device_class: "window"
   state_topic: "/modbus/dry-switches/mbsl32di1/reading"
   value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**24) else 'ON' }}"
-
-- platform: mqtt
-  name: "Bath 2"
-  device_class: "window"
-  state_topic: "/modbus/dry-switches/mbsl32di1/reading"
-  value_template: "{{ 'OFF' if value_json.inputs|bitwise_and(2**25) else 'ON' }}"
 
 - platform: mqtt
   name: "Bedroom balcony"

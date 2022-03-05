@@ -1,11 +1,41 @@
+const areas = {
+  bath1: 'Баня 1',
+  bath2: 'Баня 2',
+  bath3: 'Баня 3',
+  external: 'Вън'
+}
+
 const devices = {
+  bath1: {
+    identifiers: 'device_area_bath1',
+    name: 'Баня 1',
+    suggested_area: areas.bath1
+  },
+
+  bath2: {
+    identifiers: 'device_area_bath2',
+    name: 'Баня 2',
+    suggested_area: areas.bath2
+  },
+
+  bath3: {
+    identifiers: 'device_area_bath3',
+    name: 'Баня 3',
+    suggested_area: areas.bath3
+  },
+
   boiler: {
     identifiers: 'boiler_eldom_200l',
     manufacturer: 'eldom',
     model: '200l',
     name: 'boiler',
-    sw_version: '1.0.0',
   },
+
+  veranda: {
+    identifiers: 'device_veranda',
+    name: 'Веранда',
+    suggested_area: areas.external
+  }
 }
 
 module.exports = {
@@ -209,6 +239,178 @@ module.exports = {
 
         state_topic: '/modbus/secondary/boiler/reading',
         value_template: '{{ \'ON\' if value_json.p|float > 10 else \'OFF\' }}'
+      }
+    },
+    verandaLight: {
+      type: 'ard1-light',
+      pin: 62,
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/light/veranda_1',
+        config: {
+          name: 'Веранда 1',
+          device: devices.veranda,
+          object_id: 'veranda_light1',
+          unique_id: 'bot_veranda_light1',
+        }
+      }
+    },
+    bath1Door: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 6)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_1_door',
+        config: {
+          name: 'Врата',
+          device: devices.bath1,
+          device_class: 'door',
+          object_id: 'bath1_door',
+          unique_id: 'bot_bath1_door',
+        }
+      }
+    },
+    bath1DoorLock: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 5)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_1_door_lock',
+        config: {
+          name: 'Врата',
+          device: devices.bath1,
+          device_class: 'lock',
+          object_id: 'bath1_door_lock',
+          unique_id: 'bot_bath1_door_lock',
+        }
+      }
+    },
+    bath1Light: {
+      type: 'ard1-light',
+      pin: 19,
+      inverted: true,
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/light/bath_1',
+        config: {
+          name: 'Основна',
+          device: devices.bath1,
+          object_id: 'bath1_light',
+          unique_id: 'bot_bath1_light',
+        }
+      }
+    },
+    bath1Window: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 19)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_1_window',
+        config: {
+          name: 'Прозорец',
+          device: devices.bath1,
+          device_class: 'window',
+          object_id: 'bath1_window',
+          unique_id: 'bot_bath1_window',
+        }
+      }
+    },
+    bath2Door: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 10)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_2_door',
+        config: {
+          name: 'Врата',
+          device: devices.bath2,
+          device_class: 'door',
+          object_id: 'bath2_door',
+          unique_id: 'bot_bath2_door',
+        }
+      }
+    },
+    bath2DoorLock: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 9)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_2_door_lock',
+        config: {
+          name: 'Врата',
+          device: devices.bath2,
+          device_class: 'lock',
+          object_id: 'bath2_door_lock',
+          unique_id: 'bot_bath2_door_lock',
+        }
+      }
+    },
+    bath2Light: {
+      type: 'ard1-light',
+      pin: 16,
+      inverted: true,
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/light/bath_2',
+        config: {
+          name: 'Основна',
+          device: devices.bath2,
+          object_id: 'bath2_light',
+          unique_id: 'bot_bath2_light',
+        }
+      }
+    },
+    bath2Window: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 25)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_2_window',
+        config: {
+          name: 'Прозорец',
+          device: devices.bath2,
+          device_class: 'window',
+          object_id: 'bath2_window',
+          unique_id: 'bot_bath2_window',
+        }
+      }
+    },
+    bath3Door: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 12)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_3_door',
+        config: {
+          name: 'Врата',
+          device: devices.bath3,
+          device_class: 'door',
+          object_id: 'bath3_door',
+          unique_id: 'bot_bath3_door',
+        }
+      }
+    },
+    bath3DoorLock: {
+      type: 'binary-sensor',
+      stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      stateParser: ({ inputs }) => !(inputs & (1 << 11)),
+      ha: {
+        enabled: true,
+        topic: 'homeassistant/binary_sensor/bath_3_door_lock',
+        config: {
+          name: 'Врата',
+          device: devices.bath3,
+          device_class: 'lock',
+          object_id: 'bath3_door_lock',
+          unique_id: 'bot_bath3_door_lock',
+        }
       }
     },
   },

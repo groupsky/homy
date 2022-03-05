@@ -12,19 +12,6 @@
     {% endif %}
 
 - platform: mqtt
-  name: "Баня 2"
-  schema: template
-  command_topic: "/homy/ard1/output"
-  state_topic: "/homy/ard1/input"
-  command_on_template: '{"pin": 16, "value": 1}'
-  command_off_template: '{"pin": 16, "value": 0}'
-  state_template: >-
-    {% if value_json.p == 16 %}
-      {{ 'on' if value_json.v == 0 }}
-      {{ 'off' if value_json.v == 1 }}
-    {% endif %}
-
-- platform: mqtt
   name: "Спалня"
   schema: template
   command_topic: "/homy/ard1/output"
@@ -46,19 +33,6 @@
   command_off_template: '{"pin": 18, "value": 0}'
   state_template: >-
     {% if value_json.p == 18 %}
-      {{ 'on' if value_json.v == 0 }}
-      {{ 'off' if value_json.v == 1 }}
-    {% endif %}
-
-- platform: mqtt
-  name: "Баня 1 (1100)"
-  schema: template
-  command_topic: "/homy/ard1/output"
-  state_topic: "/homy/ard1/input"
-  command_on_template: '{"pin": 19, "value": 1}'
-  command_off_template: '{"pin": 19, "value": 0}'
-  state_template: >-
-    {% if value_json.p == 19 %}
       {{ 'on' if value_json.v == 0 }}
       {{ 'off' if value_json.v == 1 }}
     {% endif %}
@@ -87,19 +61,6 @@
     {% if value_json.p == 21 %}
       {{ 'on' if value_json.v == 0 }}
       {{ 'off' if value_json.v == 1 }}
-    {% endif %}
-
-- platform: mqtt
-  name: "Веранда"
-  schema: template
-  command_topic: "/homy/ard1/output"
-  state_topic: "/homy/ard1/input"
-  command_on_template: '{"pin": 62, "value": 1}'
-  command_off_template: '{"pin": 62, "value": 0}'
-  state_template: >-
-    {% if value_json.p == 62 %}
-      {{ 'on' if value_json.v == 1 }}
-      {{ 'off' if value_json.v == 0 }}
     {% endif %}
 
 - platform: mqtt
