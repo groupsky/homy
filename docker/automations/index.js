@@ -27,19 +27,32 @@ const playground = {
   }
 }
 
+const contentProcessors = {
+  json: {
+    read: (val) => JSON.parse(val),
+    write: (val) => JSON.stringify(val),
+  },
+  plain: {
+    read: (val) => String(val),
+    write: (val) => String(val),
+  }
+}
+
 playground.gates.mqtt.setMaxListeners(1000)
 
 playground.bots.forEach(bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
   bot.hooks.start({
     mqtt: {
-      subscribe: (topic, cb) => {
+      subscribe: async (topic, cb) => new Promise((resolve, reject) => {
         playground.gates.mqtt.on('connect', () => {
           playground.gates.mqtt.subscribe(topic, (err) => {
             if (err) {
               console.error(`[${bot.config.type}] failure subscribing to ${topic}`, err)
+              reject(err)
               return
             }
+            resolve()
           })
           playground.gates.mqtt.on('message', (msgTopic, payload) => {
             if (topic !== msgTopic) {
@@ -49,21 +62,31 @@ playground.bots.forEach(bot => {
             cb(JSON.parse(payload.toString()))
           })
         })
-      },
-      publish: (topic, payload) => {
-        playground.gates.mqtt.publish(topic, JSON.stringify({
+      }),
+      publish: async (topic, payload, {
+        content = 'json',
+        qos = 0,
+        retain = false,
+      } = {}) => {
+        if (!contentProcessors[content]?.write) {
+          throw new Error(`Missing ${content} write transformation!`)
+        }
+        const writer = contentProcessors[content].write
+        return new Promise((resolve, reject) => playground.gates.mqtt.publish(topic, writer({
           ...payload,
           _bot: {
             name: bot.name,
             type: bot.config.type
           },
           _tz: Date.now()
-        }), (err) => {
+        }), { qos, retain }, (err) => {
           if (err) {
             console.error(`[${bot.config.type}] failure sending to ${topic}`, payload)
+            reject(err)
             return
           }
-        })
+          resolve()
+        }))
       }
     }
   })

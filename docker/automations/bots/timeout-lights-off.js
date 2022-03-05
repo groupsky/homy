@@ -5,10 +5,16 @@ module.exports = (name, {
   lockedTopic,
   lockedDi,
   lockedValue = true,
-  timeout, unlockTimeout = timeout,
+  openedTopic,
+  openedDi,
+  openedValue = true,
+  timeout,
+  unlockTimeout = timeout,
+  openedTimeout = timeout,
   pin
 }) => ({
   start: ({ mqtt }) => {
+    let opened = null
     let locked = null
     let timer = null
     let light = null
@@ -46,6 +52,18 @@ module.exports = (name, {
         stopTimer()
       }
     })
+
+    // listen for door open state change
+    if (openedTopic) {
+      mqtt.subscribe(openedTopic, (payload) => {
+        const newOpened = Boolean(payload.inputs & (1 << openedDi)) === openedValue
+        const oldOpened = opened
+        opened = newOpened
+        if (newOpened && !oldOpened) {
+          startTimer(openedTimeout)
+        }
+      })
+    }
 
     // listen for light changes
     mqtt.subscribe(ARD_INPUT_TOPIC, (payload) => {
