@@ -1,7 +1,6 @@
 const resolve = require('../lib/resolve')
 
 module.exports = (name, { diTopic, di, value, outputTopic, outputMessage }) => {
-  resolve('mqtt-transform', )
   return ({
     start: ({ mqtt }) => {
       mqtt.subscribe(diTopic, (payload) => {
