@@ -75,7 +75,7 @@ const ard1Output = (
     transform: [{ name: 'ard1_output_status', params: { pin } }],
     output: { topic }
   }),
-  [`${name}Control`]: {
+  [`${name}Cmd`]: {
     type: 'transform',
     input: { name: 'inputs/mqtt', params: { topic: `${prefix}/${topic}/set` } },
     filterInput: 'not_null',
