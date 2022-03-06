@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /* eslint-env node */
 const mqtt = require('mqtt')
+const resolve = require('./lib/resolve')
+
 const {
   bots: botConfigs,
   gates: {
@@ -17,7 +19,7 @@ const playground = {
     return {
       config,
       name,
-      hooks: require(`./bots/${config.type}`)(name, config)
+      hooks: resolve({ name: config.type, params: [name, config] }, 'bots')
     }
   }),
   gates: {

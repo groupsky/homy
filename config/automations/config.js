@@ -241,20 +241,6 @@ module.exports = {
         value_template: '{{ \'ON\' if value_json.p|float > 10 else \'OFF\' }}'
       }
     },
-    verandaLight: {
-      type: 'ard1-light',
-      pin: 62,
-      ha: {
-        enabled: true,
-        topic: 'homeassistant/light/veranda_1',
-        config: {
-          name: 'Веранда 1',
-          device: devices.veranda,
-          object_id: 'veranda_light1',
-          unique_id: 'bot_veranda_light1',
-        }
-      }
-    },
     bath1Door: {
       type: 'binary-sensor',
       stateTopic: '/modbus/dry-switches/mbsl32di1/reading',
@@ -284,21 +270,6 @@ module.exports = {
           device_class: 'lock',
           object_id: 'bath1_door_lock',
           unique_id: 'bot_bath1_door_lock',
-        }
-      }
-    },
-    bath1Light: {
-      type: 'ard1-light',
-      pin: 19,
-      inverted: true,
-      ha: {
-        enabled: true,
-        topic: 'homeassistant/light/bath_1',
-        config: {
-          name: 'Основна',
-          device: devices.bath1,
-          object_id: 'bath1_light',
-          unique_id: 'bot_bath1_light',
         }
       }
     },
@@ -347,21 +318,6 @@ module.exports = {
           device_class: 'lock',
           object_id: 'bath2_door_lock',
           unique_id: 'bot_bath2_door_lock',
-        }
-      }
-    },
-    bath2Light: {
-      type: 'ard1-light',
-      pin: 16,
-      inverted: true,
-      ha: {
-        enabled: true,
-        topic: 'homeassistant/light/bath_2',
-        config: {
-          name: 'Основна',
-          device: devices.bath2,
-          object_id: 'bath2_light',
-          unique_id: 'bot_bath2_light',
         }
       }
     },
