@@ -120,8 +120,8 @@ module.exports = {
       config: {
         name: 'Таван',
         device: devices.bedroom,
-        object_id: 'bedroom_ceiling_light',
-        unique_id: 'homy_bedroom_ceiling_light',
+        object_id: 'office_ceiling_light',
+        unique_id: 'homy_office_ceiling_light',
       }
     }),
     ...haLight({
