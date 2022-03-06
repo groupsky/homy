@@ -138,7 +138,7 @@ module.exports = {
       feature: 'veranda_west_light',
       config: {
         name: 'Запад',
-        device: devices.veranda,
+        device: devices.external,
         object_id: 'veranda_west_light',
         unique_id: 'homy_veranda_west_light',
       }
