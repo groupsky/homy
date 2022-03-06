@@ -12,6 +12,7 @@ const areas = {
   corridor2: 'Коридор 2',
   external: 'Вън',
   gergana: 'Гергана',
+  kitchen: 'Кухня',
   laundry: 'Мокро',
   livingroom: 'Хол',
   martin: 'Мартин',
@@ -188,7 +189,7 @@ module.exports = {
       feature: 'kitchen_all_ceiling_lights',
       config: {
         name: 'Таван',
-        device: devices.laundry,
+        device: devices.kitchen,
         object_id: 'kitchen_all_ceiling_lights',
         unique_id: 'homy_kitchen_all_ceiling_lights',
       }
