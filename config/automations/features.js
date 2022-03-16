@@ -30,8 +30,36 @@ const state = (
 })
 
 /**
+ * @param {string} name
+ * @param {string} inputTopic
+ * @param {Array<string|object>} transform
+ * @param {string} outputTopic
+ * @return {Object}
+ */
+const cmd = (
+  {
+    name,
+    input: { topic: inputTopic },
+    transform,
+    output: { topic: outputTopic },
+  }
+) => ({
+  [`${name}Cmd`]: {
+    type: 'transform',
+    input: { name: 'inputs/mqtt', params: { topic: `${prefix}/${inputTopic}/set` } },
+    filterInput: 'not_null',
+    transform: [
+      'from_state',
+      ...transform
+    ],
+    output: { name: 'outputs/mqtt', params: { topic: outputTopic, retain: true } }
+  },
+})
+
+/**
  *
  * @param {string} name
+ * @param {'dry-switches'} [bus]
  * @param {'mbsl32di1'|'mbsl32di2'} device
  * @param {number} bit
  * @param {boolean} invert
@@ -41,6 +69,7 @@ const state = (
 const drySwitch = (
   {
     name,
+    bus = 'dry-switches',
     device,
     bit,
     invert = false,
@@ -48,12 +77,51 @@ const drySwitch = (
   }
 ) => state({
   name,
-  input: { topic: `/modbus/dry-switches/${device}/reading` },
+  input: { topic: `/modbus/${bus}/${device}/reading` },
   transform: [
     { name: 'inputs_bit_status', params: { bit } },
     invert && 'not'
   ].filter(Boolean),
   output: { topic }
+})
+
+/**
+ * @param {string} name
+ * @param {'dry-switches'} [bus]
+ * @param {'relays00-15'|'relays16-31'} device
+ * @param {number} bit
+ * @param {boolean} [invert]
+ * @param {string} topic
+ * @return {Object}
+ */
+const relay = (
+  {
+    name,
+    bus = 'dry-switches',
+    device,
+    bit,
+    invert = false,
+    topic
+  }
+) => ({
+  ...state({
+    name,
+    input: { topic: `/modbus/${bus}/${device}/reading` },
+    transform: [
+      { name: 'get_object_key', params: { key: 'outputs' } }, { name: 'bit_status', params: { bit } },
+      invert ? { name: 'not' } : null
+    ].filter(Boolean),
+    output: { topic }
+  }),
+  ...cmd({
+    name,
+    input: { topic },
+    transform: [
+      invert ? { name: 'not' } : null,
+      { name: 'create_object_key', params: { key: `out${bit}` } }
+    ],
+    output: { topic: `/modbus/${bus}/${device}/write` }
+  }),
 })
 
 /**
@@ -404,6 +472,19 @@ module.exports = {
       invert: true,
       topic: 'open/boris_window_open'
     }),
+
+    ...relay({
+      name: 'externalHouseLights',
+      device: 'relays00-15',
+      bit: 15,
+      topic: 'light/external_house_lights'
+    }),
+    ...relay({
+      name: 'serviceBoilerContactor',
+      device: 'relays00-15',
+      bit: 14,
+      topic: 'relay/service_boiler_contactor'
+    })
   },
   gates: {
     mqtt: {
