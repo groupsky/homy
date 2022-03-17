@@ -50,7 +50,7 @@ const cmd = (
     filterInput: 'not_null',
     transform: [
       'from_state',
-      ...transform
+      ...transform.filter(Boolean)
     ],
     output: { name: 'outputs/mqtt', params: { topic: outputTopic, retain: true } }
   },
@@ -158,7 +158,7 @@ const ard1Output = (
 })
 
 // homy/features/${feature_type}/${unique_feature_name}/(status|set|...)
-module.exports = {
+const config = {
   bots: {
     // ...ard1Output({
     //   name: 'antreCeilingLight',
@@ -495,3 +495,7 @@ module.exports = {
     },
   }
 }
+
+console.log(config)
+
+module.exports = config
