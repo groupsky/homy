@@ -17,7 +17,7 @@ const areas = {
   laundry: 'Мокро',
   livingroom: 'Хол',
   martin: 'Мартин',
-  service: 'Севризно',
+  service: 'Сервизно',
 }
 
 const devices = {
@@ -60,6 +60,35 @@ const haLight = (
     },
     transform: [],
     output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/light/${feature}/config`, retain: true } }
+  }
+})
+
+const haSwitch = (
+  {
+    name,
+    feature_type,
+    feature,
+    config
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          command_topic: `${featuresPrefix}/${feature_type}/${feature}/set`,
+          payload_on: JSON.stringify({ state: true, _src: 'ha' }),
+          payload_off: JSON.stringify({ state: false, _src: 'ha' }),
+          state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
+          state_on: 'on',
+          state_off: 'off',
+          value_template: `{{- 'on' if value_json.state else 'off' -}}`,
+          ...config
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/switch/${feature}/config`, retain: true } }
   }
 })
 
@@ -250,6 +279,16 @@ const config = {
         unique_id: 'homy_livingroom_ceiling_light',
       }
     }),
+    ...haLight({
+      name: 'externalHouseLights',
+      feature: 'external_house_lights',
+      config: {
+        name: 'Къща',
+        device: devices.external,
+        object_id: 'external_house_lights',
+        unique_id: 'homy_external_house_lights',
+      }
+    }),
 
     ...haBinarySensor({
       name: 'frontMainDoorOpen',
@@ -286,7 +325,6 @@ const config = {
         object_id: 'living_window_open',
         unique_id: 'homy_living_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'cabinetSouthWindowOpen',
@@ -299,7 +337,6 @@ const config = {
         object_id: 'cabinet_south_window_open',
         unique_id: 'homy_cabinet_south_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'cabinetWestWindowOpen',
@@ -312,7 +349,6 @@ const config = {
         object_id: 'cabinet_west_window_open',
         unique_id: 'homy_cabinet_west_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath1DoorLock',
@@ -325,7 +361,6 @@ const config = {
         object_id: 'bath1_door_lock',
         unique_id: 'homy_bath1_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath1DoorOpen',
@@ -338,7 +373,6 @@ const config = {
         object_id: 'bath1_door_open',
         unique_id: 'homy_bath1_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'cabinetDoorLock',
@@ -351,7 +385,6 @@ const config = {
         object_id: 'cabinet_door_lock',
         unique_id: 'homy_cabinet_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'cabinetDoorOpen',
@@ -364,7 +397,6 @@ const config = {
         object_id: 'cabinet_door_open',
         unique_id: 'homy_cabinet_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath2DoorLock',
@@ -377,7 +409,6 @@ const config = {
         object_id: 'bath2_door_lock',
         unique_id: 'homy_bath2_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath2DoorOpen',
@@ -390,7 +421,6 @@ const config = {
         object_id: 'bath2_door_open',
         unique_id: 'homy_bath2_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath3DoorLock',
@@ -403,7 +433,6 @@ const config = {
         object_id: 'bath3_door_lock',
         unique_id: 'homy_bath3_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath3DoorOpen',
@@ -416,7 +445,6 @@ const config = {
         object_id: 'bath3_door_open',
         unique_id: 'homy_bath3_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'gerganaDoorLock',
@@ -429,7 +457,6 @@ const config = {
         object_id: 'gergana_door_lock',
         unique_id: 'homy_gergana_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'gerganaDoorOpen',
@@ -442,7 +469,6 @@ const config = {
         object_id: 'gergana_door_open',
         unique_id: 'homy_gergana_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bedroomDoorLock',
@@ -455,7 +481,6 @@ const config = {
         object_id: 'bedroom_door_lock',
         unique_id: 'homy_bedroom_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'bedroomDoorOpen',
@@ -468,7 +493,6 @@ const config = {
         object_id: 'bedroom_door_open',
         unique_id: 'homy_bedroom_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'borisDoorLock',
@@ -481,7 +505,6 @@ const config = {
         object_id: 'boris_door_lock',
         unique_id: 'homy_boris_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'borisDoorOpen',
@@ -494,7 +517,6 @@ const config = {
         object_id: 'boris_door_open',
         unique_id: 'homy_boris_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath1WindowOpen',
@@ -507,7 +529,6 @@ const config = {
         object_id: 'bath1_window_open',
         unique_id: 'homy_bath1_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'martinDoorLock',
@@ -520,7 +541,6 @@ const config = {
         object_id: 'martin_door_lock',
         unique_id: 'homy_martin_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'martinDoorOpen',
@@ -533,7 +553,6 @@ const config = {
         object_id: 'martin_door_open',
         unique_id: 'homy_martin_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'serviceInternalDoorLock',
@@ -546,7 +565,6 @@ const config = {
         object_id: 'service_internal_door_lock',
         unique_id: 'homy_service_internal_door_lock',
       },
-
     }),
     ...haBinarySensor({
       name: 'serviceInternalDoorOpen',
@@ -559,7 +577,6 @@ const config = {
         object_id: 'service_internal_door_open',
         unique_id: 'homy_service_internal_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'kitchenWindowOpen',
@@ -572,7 +589,6 @@ const config = {
         object_id: 'kitchen_window_open',
         unique_id: 'homy_kitchen_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bath2WindowOpen',
@@ -585,7 +601,6 @@ const config = {
         object_id: 'bath2_window_open',
         unique_id: 'homy_bath2_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bedroomExternalDoorOpen',
@@ -598,7 +613,6 @@ const config = {
         object_id: 'bedroom_external_door_open',
         unique_id: 'homy_bedroom_external_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'bedroomWindowOpen',
@@ -611,7 +625,6 @@ const config = {
         object_id: 'bedroom_window_open',
         unique_id: 'homy_bedroom_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'martinWestWindowOpen',
@@ -624,7 +637,6 @@ const config = {
         object_id: 'martin_west_window_open',
         unique_id: 'homy_martin_west_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'martinSouthWindowOpen',
@@ -637,7 +649,6 @@ const config = {
         object_id: 'martin_south_window_open',
         unique_id: 'homy_martin_south_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'gerganaExternalDoorOpen',
@@ -650,7 +661,6 @@ const config = {
         object_id: 'gergana_external_door_open',
         unique_id: 'homy_gergana_external_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'borisExternalDoorOpen',
@@ -663,7 +673,6 @@ const config = {
         object_id: 'boris_external_door_open',
         unique_id: 'homy_boris_external_door_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'gerganaWindowOpen',
@@ -676,7 +685,6 @@ const config = {
         object_id: 'gergana_window_open',
         unique_id: 'homy_gergana_window_open',
       },
-
     }),
     ...haBinarySensor({
       name: 'borisWindowOpen',
@@ -689,7 +697,18 @@ const config = {
         object_id: 'boris_window_open',
         unique_id: 'homy_boris_window_open',
       },
+    }),
 
+    ...haSwitch({
+      name: 'serviceBoilerContactor',
+      feature_type: 'relay',
+      feature: 'service_boiler_contactor',
+      config: {
+        name: 'Бойлер',
+        unique_id: 'service_boiler_contactor',
+        device: devices.boiler,
+        device_class: 'outlet',
+      }
     }),
   },
   gates: {
