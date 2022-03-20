@@ -66,41 +66,38 @@ module.exports = {
         { topic: '/modbus/dry-switches/mbsl32di1/reading', isOpen: ({ inputs }) => !(inputs & (1 << 29)) },
       ]
     },
-    toggleBath2Light: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
-      mask: 1 << 5,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 16, value: -1 }
+
+    toggleBath2LightFromBath2Switch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'bath2_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'bath2_ceiling_light' },
     },
-    toggleBedroomLight: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
-      mask: 1 << 7,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 17, value: -1 }
+    toggleBedroomLightFromBedroomSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'bedroom_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'bedroom_ceiling_light' },
     },
-    toggleBorisLight: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
-      mask: 1 << 10,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 64, value: -1 }
+    toggleBorisLightFromBorisSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'boris_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'boris_ceiling_light' },
     },
-    toggleGerganaLight: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
-      mask: 1 << 13,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 63, value: -1 }
+    toggleGerganaLightFromGerganaSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'gergana_switch_right' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'gergana_ceiling_light' },
     },
-    toggleMartinLight: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di2/reading',
-      mask: 1 << 9,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 18, value: -1 }
+    toggleMartinLightFromMartinSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'martin_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'martin_ceiling_light' },
     },
+
     lightOnBath1OnLock: {
       type: 'emit-on-di',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
