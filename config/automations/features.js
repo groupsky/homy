@@ -23,7 +23,7 @@ const state = (
     transform: [
       ...transform,
       'to_state',
-    ],
+    ].filter(Boolean),
     filterOutput: 'state_not_null',
     output: { name: 'outputs/mqtt', params: { topic: `${prefix}/${outputTopic}/status`, retain: true } }
   },
@@ -82,7 +82,7 @@ const drySwitch = (
     { name: 'get_object_key', params: { key: 'inputs' } },
     { name: 'bit_to_bool', params: { bit } },
     invert && 'not'
-  ].filter(Boolean),
+  ],
   output: { topic }
 })
 
@@ -112,7 +112,7 @@ const relay = (
       { name: 'get_object_key', params: { key: 'outputs' } },
       { name: 'bit_to_bool', params: { bit } },
       invert ? { name: 'not' } : null
-    ].filter(Boolean),
+    ],
     output: { topic }
   }),
   ...cmd({
@@ -127,8 +127,34 @@ const relay = (
 })
 
 /**
+ *
  * @param {string} name
  * @param {number} pin
+ * @param {boolean} [invert]
+ * @param {string} topic
+ * @return {Object}
+ */
+const ard1Input = (
+  {
+    name,
+    pin,
+    invert = false,
+    topic
+  }
+) => state({
+  name,
+  input: { topic: '/homy/ard1/input' },
+  transform: [
+    { name: 'ard1_status', params: { pin, type: 'ic' } },
+    invert && 'not'
+  ],
+  output: { topic }
+})
+
+/**
+ * @param {string} name
+ * @param {number} pin
+ * @param {boolean} [invert]
  * @param {string} topic
  * @return {Object}
  */
@@ -136,30 +162,149 @@ const ard1Output = (
   {
     name,
     pin,
+    invert = false,
     topic
   }
 ) => ({
   ...state({
     name,
     input: { topic: '/homy/ard1/input' },
-    transform: [{ name: 'ard1_output_status', params: { pin } }],
+    transform: [
+      { name: 'ard1_status', params: { pin, type: 'oc' } },
+      invert && 'not'
+    ],
     output: { topic }
   }),
-  [`${name}Cmd`]: {
-    type: 'transform',
-    input: { name: 'inputs/mqtt', params: { topic: `${prefix}/${topic}/set` } },
-    filterInput: 'not_null',
+  ...cmd({
+    name,
+    input: { topic: `${prefix}/${topic}/set` },
     transform: [
-      'from_state',
-      { name: 'ard1_output_set', params: { pin } },
+      invert && 'not',
+      { name: 'ard1_set', params: { pin } },
     ],
-    output: { name: 'outputs/mqtt', params: { topic: '/homy/ard1/output', retain: true } }
-  },
+    output: { topic: '/homy/ard1/output' }
+  }),
 })
 
 // homy/features/${feature_type}/${unique_feature_name}/(status|set|...)
 const config = {
   bots: {
+    ...ard1Input({
+      name: 'corridor2StairsRightBtn',
+      pin: 24,
+      topic: 'button/corridor2_stairs_right'
+    }),
+    ...ard1Input({
+      name: 'corridor2StairsLeftBtn',
+      pin: 25,
+      topic: 'button/corridor2_stairs_left'
+    }),
+    ...ard1Input({
+      name: 'antreMainRightBtn',
+      pin: 26,
+      topic: 'button/antre_main_right'
+    }),
+    ...ard1Input({
+      name: 'antreMainLeftBtn',
+      pin: 27,
+      topic: 'button/antre_main_left'
+    }),
+    ...ard1Input({
+      name: 'corridor1KitchenRightBtn',
+      pin: 28,
+      topic: 'button/corridor1_kitchen_right'
+    }),
+    ...ard1Input({
+      name: 'corridor1KitchenLeftBtn',
+      pin: 29,
+      topic: 'button/corridor1_kitchen_left'
+    }),
+    ...ard1Input({
+      name: 'corridor2LaundryLeftBtn',
+      pin: 30,
+      topic: 'button/corridor2_laundry_left'
+    }),
+    ...ard1Input({
+      name: 'corridor2LaundryRightBtn',
+      pin: 31,
+      topic: 'button/corridor2_laundry_right'
+    }),
+    ...ard1Input({
+      name: 'corridor1StairsRightBtn',
+      pin: 32,
+      topic: 'button/corridor1_stairs_right'
+    }),
+    ...ard1Input({
+      name: 'corridor1StairsLeftBtn',
+      pin: 33,
+      topic: 'button/corridor1_stairs_left'
+    }),
+    ...ard1Input({
+      name: 'livingMainDownBtn',
+      pin: 34,
+      topic: 'button/living_main_down'
+    }),
+    ...ard1Input({
+      name: 'livingMainUpBtn',
+      pin: 35,
+      topic: 'button/living_main_up'
+    }),
+    ...ard1Input({
+      name: 'livingMainRightBtn',
+      pin: 36,
+      topic: 'button/living_main_right'
+    }),
+    ...ard1Input({
+      name: 'livingMainLeftBtn',
+      pin: 37,
+      topic: 'button/living_main_left'
+    }),
+    ...ard1Input({
+      name: 'bath1MainLeftBtn',
+      pin: 39,
+      topic: 'button/bath1_main_left'
+    }),
+    ...ard1Input({
+      name: 'bath1MainRightBtn',
+      pin: 38,
+      topic: 'button/bath1_main_right'
+    }),
+    ...ard1Input({
+      name: 'bath1MainLeftBtn',
+      pin: 39,
+      topic: 'button/bath1_main_left'
+    }),
+    ...ard1Input({
+      name: 'verandaWestRightBtn',
+      pin: 40,
+      topic: 'button/veranda_west_right'
+    }),
+    ...ard1Input({
+      name: 'verandaWestLeftBtn',
+      pin: 41,
+      topic: 'button/veranda_west_left'
+    }),
+    ...ard1Input({
+      name: 'bedroomLeftbedRightBtn',
+      pin: 42,
+      topic: 'button/bedroom_leftbed_right'
+    }),
+    ...ard1Input({
+      name: 'bedroomLeftbedLeftBtn',
+      pin: 43,
+      topic: 'button/bedroom_leftbed_left'
+    }),
+    ...ard1Input({
+      name: 'officeMainRightBtn',
+      pin: 44,
+      topic: 'button/office_main_right'
+    }),
+    ...ard1Input({
+      name: 'officeMainLeftBtn',
+      pin: 45,
+      topic: 'button/office_main_left'
+    }),
+
     ...ard1Output({
       name: 'antreCeilingLight',
       pin: 15,
@@ -475,16 +620,46 @@ const config = {
       topic: 'open/boris_window_open'
     }),
     ...drySwitch({
+      name: 'bath3SwitchLeft',
+      device: 'mbsl32di2',
+      bit: 2,
+      topic: 'switch/bath3_switch_left'
+    }),
+    ...drySwitch({
+      name: 'bath3SwitchRight',
+      device: 'mbsl32di2',
+      bit: 3,
+      topic: 'switch/bath3_switch_right'
+    }),
+    ...drySwitch({
+      name: 'bath2SwitchRight',
+      device: 'mbsl32di2',
+      bit: 4,
+      topic: 'switch/bath2_switch_right'
+    }),
+    ...drySwitch({
       name: 'bath2SwitchLeft',
       device: 'mbsl32di2',
       bit: 5,
       topic: 'switch/bath2_switch_left'
     }),
     ...drySwitch({
+      name: 'bedroomSwitchRight',
+      device: 'mbsl32di2',
+      bit: 6,
+      topic: 'switch/bedroom_switch_right'
+    }),
+    ...drySwitch({
       name: 'bedroomSwitchLeft',
       device: 'mbsl32di2',
       bit: 7,
       topic: 'switch/bedroom_switch_left'
+    }),
+    ...drySwitch({
+      name: 'martinSwitchRight',
+      device: 'mbsl32di2',
+      bit: 8,
+      topic: 'switch/martin_switch_right'
     }),
     ...drySwitch({
       name: 'martinSwitchLeft',
@@ -499,6 +674,18 @@ const config = {
       topic: 'switch/boris_switch_left'
     }),
     ...drySwitch({
+      name: 'borisSwitchRight',
+      device: 'mbsl32di2',
+      bit: 11,
+      topic: 'switch/boris_switch_right'
+    }),
+    ...drySwitch({
+      name: 'gerganaSwitchLeft',
+      device: 'mbsl32di2',
+      bit: 12,
+      topic: 'switch/gergana_switch_left'
+    }),
+    ...drySwitch({
       name: 'gerganaSwitchRight',
       device: 'mbsl32di2',
       bit: 13,
@@ -506,17 +693,17 @@ const config = {
     }),
 
     ...relay({
+      name: 'serviceBoilerContactor',
+      device: 'relays00-15',
+      bit: 14,
+      topic: 'relay/service_boiler_contactor'
+    }),
+    ...relay({
       name: 'externalHouseLights',
       device: 'relays00-15',
       bit: 15,
       topic: 'light/external_house_lights'
     }),
-    ...relay({
-      name: 'serviceBoilerContactor',
-      device: 'relays00-15',
-      bit: 14,
-      topic: 'relay/service_boiler_contactor'
-    })
   },
   gates: {
     mqtt: {
