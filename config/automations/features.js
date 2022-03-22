@@ -177,7 +177,7 @@ const ard1Output = (
   }),
   ...cmd({
     name,
-    input: { topic: `${prefix}/${topic}/set` },
+    input: { topic },
     transform: [
       invert && 'not',
       { name: 'ard1_set', params: { pin } },
