@@ -98,6 +98,14 @@ module.exports = {
       outputFeature: { type: 'light', name: 'martin_ceiling_light' },
     },
 
+    toggleOfficeLightFromOfficeButton: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'office_main_right' },
+      inputFilter: 'identity',
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'office_ceiling_light' },
+    },
+
     lightOnBath1OnLock: {
       type: 'emit-on-di',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
