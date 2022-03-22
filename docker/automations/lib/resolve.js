@@ -1,5 +1,4 @@
 function resolve (id, type = 'funcs') {
-  console.log('resolve', type, id)
   if (id == null) throw new Error('Missing `id`')
   if (typeof type !== 'string') throw new Error(`Unsupported \`type\` type "${typeof type}"`)
   switch (typeof id) {
