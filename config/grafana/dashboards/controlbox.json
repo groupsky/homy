@@ -227,8 +227,8 @@
           {
             "evaluator": {
               "params": [
-                17,
-                30
+                5,
+                35
               ],
               "type": "outside_range"
             },
@@ -253,7 +253,7 @@
         "for": "5m",
         "frequency": "1m",
         "handler": 1,
-        "message": "Outside range 17-30 deg C",
+        "message": "Outside range 5-35 deg C",
         "name": "Temperature alert",
         "noDataState": "no_data",
         "notifications": []
@@ -301,11 +301,11 @@
               },
               {
                 "color": "green",
-                "value": 17
+                "value": 5
               },
               {
                 "color": "red",
-                "value": 30
+                "value": 35
               }
             ]
           },
@@ -322,8 +322,11 @@
       "id": 5,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "hidden",
+          "calcs": [
+            "max",
+            "min"
+          ],
+          "displayMode": "list",
           "placement": "bottom"
         },
         "tooltip": {
@@ -370,6 +373,12 @@
               "key": "device.name",
               "operator": "=",
               "value": "controlbox"
+            },
+            {
+              "condition": "AND",
+              "key": "t",
+              "operator": "<",
+              "value": "80"
             }
           ]
         }
@@ -378,13 +387,13 @@
         {
           "colorMode": "critical",
           "op": "lt",
-          "value": 17,
+          "value": 5,
           "visible": true
         },
         {
           "colorMode": "critical",
           "op": "gt",
-          "value": 30,
+          "value": 35,
           "visible": true
         }
       ],
@@ -398,8 +407,8 @@
           {
             "evaluator": {
               "params": [
-                20,
-                75
+                15,
+                85
               ],
               "type": "outside_range"
             },
@@ -424,7 +433,7 @@
         "for": "5m",
         "frequency": "1m",
         "handler": 1,
-        "message": "Outside range 20-75 %H",
+        "message": "Outside range 15-85 %H",
         "name": "Humidity alert",
         "noDataState": "no_data",
         "notifications": []
@@ -468,12 +477,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "orange",
                 "value": null
               },
               {
+                "color": "green",
+                "value": 15
+              },
+              {
                 "color": "red",
-                "value": 70
+                "value": 85
               }
             ]
           },
@@ -490,8 +503,11 @@
       "id": 3,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "hidden",
+          "calcs": [
+            "min",
+            "max"
+          ],
+          "displayMode": "list",
           "placement": "bottom"
         },
         "tooltip": {
@@ -548,13 +564,13 @@
         {
           "colorMode": "critical",
           "op": "lt",
-          "value": 20,
+          "value": 15,
           "visible": true
         },
         {
           "colorMode": "critical",
           "op": "gt",
-          "value": 75,
+          "value": 85,
           "visible": true
         }
       ],
