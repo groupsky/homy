@@ -707,6 +707,7 @@ const config = {
     ...relay({
       name: 'irrigationGrassNorthWest',
       device: 'relays32-47',
+      bus: 'monitoring',
       bit: 7,
       topic: 'relay/irrigation_grass_north_west'
     }),
