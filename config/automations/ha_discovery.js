@@ -13,6 +13,7 @@ const areas = {
   corridor2: 'Коридор 2',
   external: 'Вън',
   gergana: 'Гергана',
+  irrigation: 'Поливане',
   kitchen: 'Кухня',
   laundry: 'Мокро',
   livingroom: 'Хол',
@@ -707,6 +708,18 @@ const config = {
         name: 'Бойлер',
         unique_id: 'service_boiler_contactor',
         device: devices.boiler,
+        device_class: 'outlet',
+      }
+    }),
+
+    ...haSwitch({
+      name: 'irrigationGrassNorthWest',
+      feature_type: 'relay',
+      feature: 'irrigation_grass_north_west',
+      config: {
+        name: 'Трева северозапад',
+        unique_id: 'irrigation_grass_north_west',
+        device: devices.irrigation,
         device_class: 'outlet',
       }
     }),

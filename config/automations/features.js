@@ -704,6 +704,12 @@ const config = {
       bit: 15,
       topic: 'light/external_house_lights'
     }),
+    ...relay({
+      name: 'irrigationGrassNorthWest',
+      device: 'relays32-47',
+      bit: 7,
+      topic: 'relay/irrigation_grass_north_west'
+    }),
   },
   gates: {
     mqtt: {
