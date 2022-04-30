@@ -36,6 +36,14 @@ module.exports = {
   },
   devices: [
     {
+      name: 'relays32-47',
+      address: 11,
+      type: 'aspar-mod-16ro',
+      options: {
+        maxMsBetweenReports: 11 * 60 * 1000, // 11 minutes
+      }
+    },
+    {
       name: 'controlbox',
       address: 51,
       type: 'xymd1',
