@@ -226,7 +226,7 @@ module.exports = {
         unit_of_measurement: 'kWh',
 
         state_topic: '/modbus/secondary/boiler/reading',
-        value_template: '{{ value_json.tot | float }}',
+        value_template: '{{ value_json.tot | float(default=0) }}',
       }
     },
     haBoilerHeating: {
@@ -238,7 +238,7 @@ module.exports = {
         device: devices.boiler,
 
         state_topic: '/modbus/secondary/boiler/reading',
-        value_template: '{{ \'ON\' if value_json.p|float > 10 else \'OFF\' }}'
+        value_template: '{{ \'ON\' if value_json.p|float(default=0) > 10 else \'OFF\' }}'
       }
     },
     bath1Door: {

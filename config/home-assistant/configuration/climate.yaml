@@ -36,7 +36,7 @@
       precision: 0.5
       temperature_unit: "C"
       temp_step: 0.5
-      current_temperature_template: "{{ value_json.currentTemp|float }}"
+      current_temperature_template: "{{ value_json.currentTemp|float(default=0) }}"
       fan_mode_state_template: "{{ 'medium' if value_json.fanSetting == 'mid' else value_json.fanSetting }}"
       json_attributes_template: "{{ value_json | tojson }}"
       mode_state_template: >-
