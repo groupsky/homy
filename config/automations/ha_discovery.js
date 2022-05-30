@@ -723,6 +723,17 @@ const config = {
         device_class: 'outlet',
       }
     }),
+    ...haSwitch({
+      name: 'irrigationGrassPergola',
+      feature_type: 'relay',
+      feature: 'irrigation_grass_pergola',
+      config: {
+        name: 'Трева пергола',
+        unique_id: 'irrigation_grass_pergola',
+        device: devices.irrigation,
+        device_class: 'outlet',
+      }
+    }),
   },
   gates: {
     mqtt: {

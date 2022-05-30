@@ -711,6 +711,13 @@ const config = {
       bit: 7,
       topic: 'relay/irrigation_grass_north_west'
     }),
+    ...relay({
+      name: 'irrigationGrassPergola',
+      device: 'relays32-47',
+      bus: 'monitoring',
+      bit: 6,
+      topic: 'relay/irrigation_grass_pergola'
+    }),
   },
   gates: {
     mqtt: {
