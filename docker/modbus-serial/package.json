@@ -13,7 +13,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@influxdata/influxdb-client": "^1.22.0",
+    "@influxdata/influxdb-client": "^1.27.0",
     "async-mutex": "^0.3.2",
     "ieee754": "^1.1.13",
     "modbus-serial": "^8.0.5",
