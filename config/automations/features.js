@@ -743,6 +743,32 @@ const config = {
       ],
       output: {topic: 'sensor/temperature_solar_panel'},
     }),
+    ...state({
+      name: 'temperatureRoomService',
+      input: {topic: '/modbus/monitoring/solar_heater/reading'},
+      transform: [
+        { name: 'get_object_key', params: { key: 't6' } },
+      ],
+      output: {topic: 'sensor/temperature_room_service'},
+    }),
+    ...state({
+      name: 'relaySolarHeaterCirculation',
+      input: {topic: '/modbus/monitoring/solar_heater/reading'},
+      transform: [
+        { name: 'get_object_key', params: { key: 'outputs' } },
+        { name: 'get_object_key', params: { key: 'p1' } },
+      ],
+      output: {topic: 'relay/solar_heater_circulation'},
+    }),
+    ...state({
+      name: 'relaySolarHeaterElectricHeater',
+      input: {topic: '/modbus/monitoring/solar_heater/reading'},
+      transform: [
+        { name: 'get_object_key', params: { key: 'outputs' } },
+        { name: 'get_object_key', params: { key: 'p6' } },
+      ],
+      output: {topic: 'relay/solar_heater_electric_heater'},
+    }),
   },
   gates: {
     mqtt: {

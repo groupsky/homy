@@ -812,7 +812,44 @@ const config = {
         unique_id: 'homy_temperature_solar_panel',
         unit_of_measurement: "°C"
       },
-    })
+    }),
+    ...haSensor({
+      name: 'temperatureRoomService',
+      feature: 'temperature_room_service',
+      type: 'temperature',
+      config: {
+        name: 'Температура сервизно',
+        device: devices.service,
+        object_id: 'temperature_room_service',
+        unique_id: 'homy_temperature_room_service',
+        unit_of_measurement: "°C"
+      },
+    }),
+
+    ...haBinarySensor({
+      name: 'relaySolarHeaterCirculation',
+      feature_type: 'relay',
+      feature: 'solar_heater_circulation',
+      type: 'power',
+      config: {
+        name: 'Циркулация соларен панел',
+        device: devices.solarPanel,
+        object_id: 'solar_heater_circulation',
+        unique_id: 'homy_solar_heater_circulation',
+      },
+    }),
+    ...haBinarySensor({
+      name: 'relaySolarHeaterElecticHeater',
+      feature_type: 'relay',
+      feature: 'solar_heater_electric_heater',
+      type: 'power',
+      config: {
+        name: 'Електрически нагревател',
+        device: devices.boiler,
+        object_id: 'solar_heater_electric_heater',
+        unique_id: 'homy_solar_heater_electric_heater',
+      },
+    }),
   },
   gates: {
     mqtt: {
