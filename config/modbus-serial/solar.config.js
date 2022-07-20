@@ -32,6 +32,7 @@ module.exports = {
       baudRate: 9600,
       parity: 'none',
     },
+    msDelayBetweenDevices: 1000,
   },
   devices: [
     {
