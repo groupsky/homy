@@ -411,6 +411,43 @@ services:
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
 
+  solar:
+    build: docker/modbus-serial
+    depends_on:
+      - broker
+      - mongo
+      - influxdb
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+      - mongo_root_username
+      - mongo_root_password
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
+      - COLLECTION=monitoring
+      - CONFIG=/etc/config.js
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/monitoring/{name}/reading
+      - SUBSCRIBE_TOPIC=/modbus/monitoring/{name}/write
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - INFLUXDB_TAGS={"bus":"monitoring"}
+      - INFLUXDB_MEASUREMENT=xymd1
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
+      - ${CONFIG_PATH}/modbus-serial/solar.config.js:/etc/config.js:ro
+
   influxdb:
     build: docker/influxdb
     restart: unless-stopped
