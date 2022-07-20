@@ -1,3 +1,6 @@
+const featuresPrefix = process.env.FEATURES_TOPIC_PREFIX || 'homy/features'
+const haPrefix = process.env.HA_TOPIC_PREFIX || 'homeassistant'
+
 const devices = {
   boiler: {
     identifiers: 'boiler_eldom_200l',
@@ -196,6 +199,24 @@ module.exports = {
         state_topic: '/modbus/secondary/boiler/reading',
         value_template: '{{ \'ON\' if value_json.p|float(default=0) > 10 else \'OFF\' }}'
       }
+    },
+
+    timeoutStopIrrigationGrassNorthWest: {
+      type: 'timeout-emit',
+      listenTopic: `${featuresPrefix}/relay/irrigation_grass_north_west/status`,
+      listenFilter: (payload) => payload.state,
+      timeout: 25 * 60000,
+      emitTopic: `${featuresPrefix}/relay/irrigation_grass_north_west/set`,
+      emitValue: { state: false }
+    },
+
+    timeoutStopIrrigationGrassPergola: {
+      type: 'timeout-emit',
+      listenTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/status`,
+      listenFilter: (payload) => payload.state,
+      timeout: 15 * 60000,
+      emitTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
+      emitValue: { state: false }
     },
   },
   gates: {
