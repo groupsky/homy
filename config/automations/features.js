@@ -718,6 +718,31 @@ const config = {
       bit: 6,
       topic: 'relay/irrigation_grass_pergola'
     }),
+
+    ...state({
+      name: 'temperatureBoilerLow',
+      input: {topic: '/modbus/monitoring/solar_heater/reading'},
+      transform: [
+        { name: 'get_object_key', params: { key: 't1' } },
+      ],
+      output: {topic: 'sensor/temperature_boiler_low'},
+    }),
+    ...state({
+      name: 'temperatureBoilerHigh',
+      input: {topic: '/modbus/monitoring/solar_heater/reading'},
+      transform: [
+        { name: 'get_object_key', params: { key: 't2' } },
+      ],
+      output: {topic: 'sensor/temperature_boiler_high'},
+    }),
+    ...state({
+      name: 'temperatureSolarPanel',
+      input: {topic: '/modbus/monitoring/solar_heater/reading'},
+      transform: [
+        { name: 'get_object_key', params: { key: 't3' } },
+      ],
+      output: {topic: 'sensor/temperature_solar_panel'},
+    }),
   },
   gates: {
     mqtt: {

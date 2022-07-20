@@ -18,6 +18,7 @@ const areas = {
   laundry: 'Мокро',
   livingroom: 'Хол',
   martin: 'Мартин',
+  roof: 'Покрив',
   service: 'Сервизно',
 }
 
@@ -34,6 +35,12 @@ const devices = {
     model: '200l',
     name: 'boiler',
     suggested_area: areas.service
+  },
+
+  solarPanel: {
+    identifiers: 'solar_panel',
+    name: 'solar_panel',
+    suggested_area: areas.roof
   },
 }
 
@@ -125,6 +132,41 @@ const haBinarySensor = (
     },
     transform: [],
     output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/binary_sensor/${feature}/config`, retain: true } }
+  }
+})
+
+/**
+ * @param {string} name
+ * @param {string} feature
+ * @param {null|'apparent_power'|'current'|'energy'|'frequency'|'humidity'|'power_factor'|'power'|'pressure'|'reactive_power'|'temperature'|'timestamp'|'voltage'} device_class
+ * @param {object} config
+ * @param {string} feature_type
+ * @return {Object}
+ */
+const haSensor = (
+  {
+    name,
+    feature,
+    type: device_class,
+    config,
+    feature_type = 'sensor'
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          name,
+          device_class,
+          state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
+          value_template: '{{ value_json.state }}',
+          ...config
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/sensor/${feature}/config`, retain: true } }
   }
 })
 
@@ -734,6 +776,43 @@ const config = {
         device_class: 'outlet',
       }
     }),
+
+    ...haSensor({
+      name: 'temperatureBoilerLow',
+      feature: 'temperature_boiler_low',
+      type: 'temperature',
+      config: {
+        name: 'Температура бойлер долу',
+        device: devices.boiler,
+        object_id: 'temperature_boiler_low',
+        unique_id: 'homy_temperature_boiler_low',
+        unit_of_measurement: "°C"
+      },
+    }),
+    ...haSensor({
+      name: 'temperatureBoilerHigh',
+      feature: 'temperature_boiler_high',
+      type: 'temperature',
+      config: {
+        name: 'Температура бойлер горе',
+        device: devices.boiler,
+        object_id: 'temperature_boiler_high',
+        unique_id: 'homy_temperature_boiler_high',
+        unit_of_measurement: "°C"
+      },
+    }),
+    ...haSensor({
+      name: 'temperatureSolarPanel',
+      feature: 'temperature_solar_panel',
+      type: 'temperature',
+      config: {
+        name: 'Температура соларен панел',
+        device: devices.solarPanel,
+        object_id: 'temperature_solar_panel',
+        unique_id: 'homy_temperature_solar_panel',
+        unit_of_measurement: "°C"
+      },
+    })
   },
   gates: {
     mqtt: {
