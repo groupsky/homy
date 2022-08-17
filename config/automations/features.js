@@ -718,6 +718,20 @@ const config = {
       bit: 6,
       topic: 'relay/irrigation_grass_pergola'
     }),
+    ...relay({
+      name: 'irrigationFlowerPots',
+      device: 'relays32-47',
+      bus: 'monitoring',
+      bit: 5,
+      topic: 'relay/irrigation_flower_pots'
+    }),
+    ...relay({
+      name: 'irrigationFlowerGround',
+      device: 'relays32-47',
+      bus: 'monitoring',
+      bit: 4,
+      topic: 'relay/irrigation_flower_ground'
+    }),
 
     ...state({
       name: 'temperatureBoilerLow',

@@ -776,6 +776,28 @@ const config = {
         device_class: 'outlet',
       }
     }),
+    ...haSwitch({
+      name: 'irrigationGrassPergola',
+      feature_type: 'relay',
+      feature: 'irrigation_flower_pots',
+      config: {
+        name: 'Саксии',
+        unique_id: 'irrigation_flower_pots',
+        device: devices.irrigation,
+        device_class: 'outlet',
+      }
+    }),
+    ...haSwitch({
+      name: 'irrigationGrassPergola',
+      feature_type: 'relay',
+      feature: 'irrigation_flower_ground',
+      config: {
+        name: 'Растения',
+        unique_id: 'irrigation_flower_ground',
+        device: devices.irrigation,
+        device_class: 'outlet',
+      }
+    }),
 
     ...haSensor({
       name: 'temperatureBoilerLow',
