@@ -777,7 +777,7 @@ const config = {
       }
     }),
     ...haSwitch({
-      name: 'irrigationGrassPergola',
+      name: 'irrigationFlowerPots',
       feature_type: 'relay',
       feature: 'irrigation_flower_pots',
       config: {
@@ -788,7 +788,7 @@ const config = {
       }
     }),
     ...haSwitch({
-      name: 'irrigationGrassPergola',
+      name: 'irrigationFlowerGround',
       feature_type: 'relay',
       feature: 'irrigation_flower_ground',
       config: {
