@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@influxdata/influxdb-client": "^1.22.0",
+    "@influxdata/influxdb-client": "^1.31.0",
     "mqtt": "^4.3.4"
   }
 }
