@@ -17,7 +17,7 @@ jobs:
           docker-compose --env-file example.env up --build --force-recreate -d
 
       - name: Setup node
-        uses: actions/setup-node@v2.5.1
+        uses: actions/setup-node@v3.5.1
         with:
           node-version: 14
 
