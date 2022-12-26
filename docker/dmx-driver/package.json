@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "dmx": "https://github.com/groupsky/node-dmx.git",
-    "mqtt": "^4.3.4"
+    "mqtt": "^4.3.7"
   }
 }
