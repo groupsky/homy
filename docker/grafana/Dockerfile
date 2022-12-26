@@ -2,7 +2,7 @@ FROM grafana/grafana:8.3.4
 
 USER root
 
-ARG GF_INSTALL_IMAGE_RENDERER_PLUGIN="true"
+ARG GF_INSTALL_IMAGE_RENDERER_PLUGIN="false"
 
 ARG GF_GID="0"
 ENV GF_PATHS_PLUGINS="/var/lib/grafana-plugins"

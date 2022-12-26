@@ -11,5 +11,5 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2.4.0
 
-      - name: Run tests
-        run: ./test_infrastructure.sh
+      - name: Build all containers
+        run: docker-compose --env-file example.env --file docker-compose.yml up --build --force-recreate --no-start
