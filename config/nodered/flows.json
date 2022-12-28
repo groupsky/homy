@@ -201,7 +201,6 @@
     "wires": [
       [
         "5e0006cb.1796b8",
-        "6204187a.fdcc48",
         "211c81c7.3d086e",
         "31866796.59f7c8",
         "a5aa7e92.62b0c",
@@ -373,32 +372,6 @@
     "wires": []
   },
   {
-    "id": "2dcb7c15.ce5d04",
-    "type": "change",
-    "z": "7f69ac0c.ea2e54",
-    "name": "1100 bath 1",
-    "rules": [
-      {
-        "t": "set",
-        "p": "payload.pin",
-        "pt": "msg",
-        "to": "19",
-        "tot": "num"
-      }
-    ],
-    "action": "",
-    "property": "",
-    "from": "",
-    "to": "",
-    "reg": false,
-    "x": 1140,
-    "y": 480,
-    "wires": [
-      []
-    ],
-    "icon": "node-red/light.svg"
-  },
-  {
     "id": "88be9dab.000db",
     "type": "change",
     "z": "7f69ac0c.ea2e54",
@@ -477,71 +450,6 @@
     "wires": [
       [
         "da3e1a29.f16fd8"
-      ]
-    ]
-  },
-  {
-    "id": "6204187a.fdcc48",
-    "type": "switch",
-    "z": "7f69ac0c.ea2e54",
-    "name": "1002 bath 1",
-    "property": "payload.p",
-    "propertyType": "msg",
-    "rules": [
-      {
-        "t": "eq",
-        "v": "39",
-        "vt": "num"
-      },
-      {
-        "t": "eq",
-        "v": "38",
-        "vt": "num"
-      }
-    ],
-    "checkall": "true",
-    "repair": false,
-    "outputs": 2,
-    "x": 440,
-    "y": 440,
-    "wires": [
-      [
-        "fd93126.a90d8f"
-      ],
-      [
-        "fd93126.a90d8f"
-      ]
-    ],
-    "outputLabels": [
-      "left button",
-      "right button"
-    ],
-    "icon": "font-awesome/fa-pause"
-  },
-  {
-    "id": "fd93126.a90d8f",
-    "type": "change",
-    "z": "7f69ac0c.ea2e54",
-    "name": "toggle",
-    "rules": [
-      {
-        "t": "set",
-        "p": "payload.value",
-        "pt": "msg",
-        "to": "-1",
-        "tot": "num"
-      }
-    ],
-    "action": "",
-    "property": "",
-    "from": "",
-    "to": "",
-    "reg": false,
-    "x": 960,
-    "y": 480,
-    "wires": [
-      [
-        "2dcb7c15.ce5d04"
       ]
     ]
   },

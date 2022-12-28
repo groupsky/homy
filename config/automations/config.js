@@ -70,6 +70,13 @@ module.exports = {
       ]
     },
 
+    toggleBath1LightFromBath1Switch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'bath1_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'bath1_ceiling_light' },
+      outputConfig: { initialState: false },
+    },
     toggleBath2LightFromBath2Switch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'bath2_switch_left' },
@@ -115,6 +122,13 @@ module.exports = {
       outputConfig: { initialState: false },
     },
 
+    toggleCorridor1LightFromBath1Switch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'bath1_switch_right' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'corridor1_ceiling_light' },
+      outputConfig: { initialState: false },
+    },
     toggleCorridor1LightFromOfficeButton: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'button', name: 'office_main_left' },
