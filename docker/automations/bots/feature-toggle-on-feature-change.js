@@ -7,10 +7,11 @@ module.exports = (name, {
   outputFeature,
   outputConfig,
   toggleConfig,
+  initialOutputState,
 }) => {
   const FeatureState = resolve('state', 'features')
   const InputFeatureState = FeatureState(inputFeature, inputConfig)
-  const OutputFeatureState = FeatureState(outputFeature, outputConfig)
+  const OutputFeatureState = FeatureState(outputFeature, outputConfig, { initialState: initialOutputState })
   const filter = inputFilter ? resolve(inputFilter) : () => true
 
   return ({

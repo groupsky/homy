@@ -75,30 +75,35 @@ module.exports = {
       inputFeature: { type: 'switch', name: 'bath2_switch_left' },
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'bath2_ceiling_light' },
+      initialOutputState: false,
     },
     toggleBedroomLightFromBedroomSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'bedroom_switch_left' },
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'bedroom_ceiling_light' },
+      initialOutputState: false,
     },
     toggleBorisLightFromBorisSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'boris_switch_left' },
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'boris_ceiling_light' },
+      initialOutputState: false,
     },
     toggleGerganaLightFromGerganaSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'gergana_switch_right' },
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'gergana_ceiling_light' },
+      initialOutputState: false,
     },
     toggleMartinLightFromMartinSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'martin_switch_left' },
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'martin_ceiling_light' },
+      initialOutputState: false,
     },
 
     toggleOfficeLightFromOfficeButton: {
@@ -107,6 +112,7 @@ module.exports = {
       inputFilter: 'identity',
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'office_ceiling_light' },
+      initialOutputState: false,
     },
 
     lightOnBath1OnLock: {

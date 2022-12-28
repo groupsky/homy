@@ -24,14 +24,18 @@ class StateFeature extends EventEmitter {
    * @param {{name: string, type: string}} feature
    * @param {import(mqtt)}mqtt
    * @param {boolean} [autoSubscribe]
+   * @param {boolean} [retain]
+   * @param {boolean|null} [initialState]
    */
   constructor (feature, { mqtt }, {
     autoSubscribe = true,
     retain = false,
+    initialState = null
   } = {}) {
     super()
     this.#feature = feature
     this.#mqtt = mqtt
+    this.#state = initialState
 
     if (autoSubscribe) {
       this.subscribe()
