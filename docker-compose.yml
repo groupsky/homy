@@ -488,7 +488,7 @@ services:
     build:
       context: docker/grafana
       args:
-        GF_INSTALL_IMAGE_RENDERER_PLUGIN: 'true'
+        GF_INSTALL_IMAGE_RENDERER_PLUGIN: 'false'
     depends_on:
       - influxdb
     restart: unless-stopped
