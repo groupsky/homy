@@ -1,8 +1,0 @@
-- platform: mqtt
-  name: "Външно"
-  schema: template
-  command_topic: "/modbus/dry-switches/relays00-15/write"
-  state_topic: "/modbus/dry-switches/relays00-15/reading"
-  command_on_template: '{"out15": true}'
-  command_off_template: '{"out15": false}'
-  state_template: "{{ 'on' if value_json.outputs|bitwise_and(2**15) > 0 else 'off' }}"

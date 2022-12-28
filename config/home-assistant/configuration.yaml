@@ -32,9 +32,10 @@ logger:
     homeassistant.components.mqtt.light.schema_template: error
 
 mqtt:
-  broker: broker
-  port: 1883
-  client_id: home-assistant
+  binary_sensor: !include configuration/mqtt/binary_sensors.yaml
+  climate: !include configuration/mqtt/climate.yaml
+  light: !include configuration/mqtt/lights.yaml
+  sensor: !include configuration/mqtt/sensors.yaml
 
 binary_sensor: !include configuration/binary_sensors.yaml
 climate: !include configuration/climate.yaml
