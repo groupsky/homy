@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y \
     udev python3 \
     libftdi-dev && \
     rm -rf /var/lib/apt/lists/* && \
-    npm ci --unsafe-perm --no-update-notifier --only=production && \
+    npm ci --unsafe-perm --no-update-notifier --omit=dev && \
     cp -R node_modules prod_node_modules
 
 #### Stage RELEASE #####################################################################################################
