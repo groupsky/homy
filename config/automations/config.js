@@ -115,6 +115,15 @@ module.exports = {
       initialOutputState: false,
     },
 
+    toggleCorridor1LightFromOfficeButton: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'office_main_left' },
+      inputFilter: 'identity',
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'corridor1_ceiling_light' },
+      initialOutputState: false,
+    },
+
     lightOnBath1OnLock: {
       type: 'emit-on-di',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
