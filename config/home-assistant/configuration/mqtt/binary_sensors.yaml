@@ -1,0 +1,15 @@
+- name: Dishwasher
+  state_topic: "/modbus/secondary/dishwasher/reading"
+  value_template: "{{ 'ON' if value_json.p|float(default=0) > 10 else 'OFF' }}"
+
+- name: Laundry
+  state_topic: "/modbus/secondary/laundry/reading"
+  value_template: "{{ 'ON' if value_json.p|float(default=0) > 1 else 'OFF' }}"
+
+- name: Oven
+  state_topic: "/modbus/secondary/oven/reading"
+  value_template: "{{ 'ON' if value_json.p|float(default=0) > 1 else 'OFF' }}"
+
+- name: Stove
+  state_topic: "/modbus/secondary/stove/reading"
+  value_template: "{{ 'ON' if value_json.p|float(default=0) > 10 else 'OFF' }}"
