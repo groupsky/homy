@@ -485,7 +485,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   grafana:
-    build: docker/grafana
+    build:
+      context: docker/grafana
+      args:
+        GF_INSTALL_IMAGE_RENDERER_PLUGIN: 'true'
     depends_on:
       - influxdb
     restart: unless-stopped
