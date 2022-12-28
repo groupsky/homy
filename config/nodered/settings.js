@@ -273,5 +273,12 @@ module.exports = {
             // To enable the Projects feature, set this value to true
             enabled: false
         }
-    }
+    },
+
+    // Enable runtime features - stopped flows
+    // https://nodered.org/blog/2022/07/14/version-3-0-released#editing-stopped-flows
+    runtimeState: {
+        enabled: true,
+        ui: true
+    },
 }
