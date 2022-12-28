@@ -5,4 +5,4 @@ FROM nodered/node-red:3.0.2-16
 COPY package.json .
 COPY package-lock.json .
 
-RUN npm install --unsafe-perm --no-update-notifier --no-fund --only=production
+RUN npm version && npm ci --unsafe-perm --no-update-notifier --no-fund --omit=dev
