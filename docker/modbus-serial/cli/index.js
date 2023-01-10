@@ -42,6 +42,7 @@ yargs(hideBin(process.argv))
         await setup(modbusClient, deviceConfig)
       } catch (e) {
         console.error(e)
+        process.exit(1)
       }
     })
   })
@@ -54,6 +55,7 @@ yargs(hideBin(process.argv))
         console.log(report)
       } catch (e) {
         console.error(e)
+        process.exit(1)
       }
     })
   })
@@ -66,6 +68,7 @@ yargs(hideBin(process.argv))
         console.log(report)
       } catch (e) {
         console.error(e)
+        process.exit(1)
       }
     })
   })
