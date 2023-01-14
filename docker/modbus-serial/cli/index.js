@@ -32,7 +32,7 @@ const getDeviceAction = (argv, action) => {
 const getDeviceConfig = (argv) => yargs(argv._.slice(1)).parse()
 
 yargs(hideBin(process.argv))
-  .command('setup <type> [id] [port]', 'setup a device', (yargs) => {
+  .command('setup <type> [id] [port] -- --param=value ...', 'setup a device. Params after -- are values to write', (yargs) => {
     return yargs
   }, async (argv) => {
     await withModbus(argv, async (modbusClient) => {
@@ -51,15 +51,18 @@ yargs(hideBin(process.argv))
       const read = getDeviceAction(argv, 'read')
       const deviceConfig = getDeviceConfig(argv)
       try {
+        const _start = Date.now()
         const report = await read(modbusClient, deviceConfig, {})
+        const _end = Date.now()
         console.log(report)
+        console.error(`Read took ${_end - _start}ms`)
       } catch (e) {
         console.error(e)
         process.exit(1)
       }
     })
   })
-  .command('write <type> [id] [port]', 'write to device', (yargs) => yargs, async (argv) => {
+  .command('write <type> [id] [port] -- --param=value ...', 'write to device. Params after -- are values to write', (yargs) => yargs, async (argv) => {
     await withModbus(argv, async (modbusClient) => {
       const write = getDeviceAction(argv, 'write')
       const deviceConfig = getDeviceConfig(argv)
