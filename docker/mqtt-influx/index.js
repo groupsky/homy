@@ -22,7 +22,8 @@ const writeApi = new InfluxDB({url: influxUrl, token: influxToken})
 const converters = {
     dds024mr: require('./converters/dds024mr'),
     dds519mr: require('./converters/dds519mr'),
-    ex9em: require('./converters/ex9em')
+    ex9em: require('./converters/ex9em'),
+    'or-we-514': require('./converters/or-we-514'),
 }
 
 client.on('connect', function () {
