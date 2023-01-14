@@ -40,6 +40,11 @@ module.exports = {
       type: 'ex9em',
     },
     {
+      name: 'microwave',
+      address: 0x02,
+      type: 'or-we-514',
+    },
+    {
       name: 'waste_pump',
       address: 0x03,
       type: 'ex9em',
