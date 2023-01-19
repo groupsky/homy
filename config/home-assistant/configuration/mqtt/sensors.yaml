@@ -126,3 +126,8 @@
   state_topic: "/modbus/monitoring2/stab-em/reading"
   value_template: "{{ value_json.totalActiveEnergy | float(default=0) }}"
   <<: *common_used_energy
+
+- name: Microwave energy used
+  state_topic: "/modbus/secondary/microwave/reading"
+  value_template: "{{ value_json.tot | float(default=0) }}"
+  <<: *common_used_energy

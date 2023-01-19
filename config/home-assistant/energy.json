@@ -48,6 +48,9 @@
         "stat_consumption": "sensor.heat_pump_energy_used"
       },
       {
+        "stat_consumption": "sensor.microwave_energy_used"
+      },
+      {
         "stat_consumption": "sensor.stabilizator_energy_used"
       }
     ]
