@@ -680,13 +680,13 @@ const config = {
       name: 'bath1MainLeftBtn',
       device: 'mbsl32di2',
       bit: 18,
-      topic: 'button/bath1_main_left'
+      topic: 'button/bath1_switch_left'
     }),
     ...drySwitch({
       name: 'bath1MainRightBtn',
       device: 'mbsl32di2',
       bit: 19,
-      topic: 'button/bath1_main_right'
+      topic: 'button/bath1_switch_right'
     }),
 
     ...relay({
