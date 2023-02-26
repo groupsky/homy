@@ -260,21 +260,6 @@ const config = {
       topic: 'button/living_main_left'
     }),
     ...ard1Input({
-      name: 'bath1MainLeftBtn',
-      pin: 39,
-      topic: 'button/bath1_main_left'
-    }),
-    ...ard1Input({
-      name: 'bath1MainRightBtn',
-      pin: 38,
-      topic: 'button/bath1_main_right'
-    }),
-    ...ard1Input({
-      name: 'bath1MainLeftBtn',
-      pin: 39,
-      topic: 'button/bath1_main_left'
-    }),
-    ...ard1Input({
       name: 'verandaWestRightBtn',
       pin: 40,
       topic: 'button/veranda_west_right'
@@ -690,6 +675,18 @@ const config = {
       device: 'mbsl32di2',
       bit: 13,
       topic: 'switch/gergana_switch_right'
+    }),
+    ...drySwitch({
+      name: 'bath1MainLeftBtn',
+      device: 'mbsl32di2',
+      bit: 18,
+      topic: 'button/bath1_main_left'
+    }),
+    ...drySwitch({
+      name: 'bath1MainRightBtn',
+      device: 'mbsl32di2',
+      bit: 19,
+      topic: 'button/bath1_main_right'
     }),
 
     ...relay({
