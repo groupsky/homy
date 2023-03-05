@@ -607,13 +607,13 @@ const config = {
     ...drySwitch({
       name: 'bath3SwitchLeft',
       device: 'mbsl32di2',
-      bit: 2,
+      bit: 3,
       topic: 'switch/bath3_switch_left'
     }),
     ...drySwitch({
       name: 'bath3SwitchRight',
       device: 'mbsl32di2',
-      bit: 3,
+      bit: 2,
       topic: 'switch/bath3_switch_right'
     }),
     ...drySwitch({
@@ -689,6 +689,18 @@ const config = {
       topic: 'button/bath1_switch_right'
     }),
 
+    ...relay({
+      name: 'bath3CeilingLight1',
+      device: 'relays00-15',
+      bit: 12,
+      topic: 'light/bath3_ceiling_light1'
+    }),
+    ...relay({
+      name: 'bath3CeilingLight2',
+      device: 'relays00-15',
+      bit: 13,
+      topic: 'light/bath3_ceiling_light2'
+    }),
     ...relay({
       name: 'serviceBoilerContactor',
       device: 'relays00-15',
