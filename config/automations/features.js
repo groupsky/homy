@@ -690,16 +690,10 @@ const config = {
     }),
 
     ...relay({
-      name: 'bath3CeilingLight1',
-      device: 'relays00-15',
-      bit: 12,
-      topic: 'light/bath3_ceiling_light1'
-    }),
-    ...relay({
-      name: 'bath3CeilingLight2',
+      name: 'bath3CeilingLight',
       device: 'relays00-15',
       bit: 13,
-      topic: 'light/bath3_ceiling_light2'
+      topic: 'light/bath3_ceiling_light'
     }),
     ...relay({
       name: 'serviceBoilerContactor',

@@ -85,18 +85,11 @@ module.exports = {
       outputFeature: { type: 'light', name: 'bath2_ceiling_light' },
       outputConfig: { initialState: false },
     },
-    toggleBath3Light1FromBath3Switch: {
+    toggleBath3LightFromBath3Switch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'bath3_switch_left' },
       toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'bath3_ceiling_light1' },
-      outputConfig: { initialState: false },
-    },
-    toggleBath3Light1FromBath3Switch: {
-      type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'switch', name: 'bath3_switch_left' },
-      toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'bath3_ceiling_light2' },
+      outputFeature: { type: 'light', name: 'bath3_ceiling_light' },
       outputConfig: { initialState: false },
     },
     toggleBedroomLightFromBedroomSwitch: {

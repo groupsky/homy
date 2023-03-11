@@ -193,23 +193,13 @@ const config = {
       }
     }),
     ...haLight({
-      name: 'bath3CeilingLight1',
-      feature: 'bath3_ceiling_light1',
+      name: 'bath3CeilingLight',
+      feature: 'bath3_ceiling_light',
       config: {
         name: 'Баня 3',
         device: devices.bath3,
-        object_id: 'bath3_ceiling_light1',
-        unique_id: 'homy_bath3_ceiling_light1',
-      }
-    }),
-    ...haLight({
-      name: 'bath3CeilingLight2',
-      feature: 'bath3_ceiling_light2',
-      config: {
-        name: 'Баня 3',
-        device: devices.bath3,
-        object_id: 'bath3_ceiling_light2',
-        unique_id: 'homy_bath3_ceiling_light2',
+        object_id: 'bath3_ceiling_light',
+        unique_id: 'homy_bath3_ceiling_light',
       }
     }),
     ...haLight({
