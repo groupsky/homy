@@ -368,6 +368,18 @@ const config = {
       },
     }),
     ...haBinarySensor({
+      name: 'laundryWindowOpen',
+      feature_type: 'open',
+      feature: 'laundry_window_open',
+      type: 'window',
+      config: {
+        name: 'Мокро',
+        device: devices.laundry,
+        object_id: 'laundry_window_open',
+        unique_id: 'homy_laundry_window_open',
+      },
+    }),
+    ...haBinarySensor({
       name: 'livingWindowOpen',
       feature_type: 'open',
       feature: 'living_window_open',
@@ -653,6 +665,18 @@ const config = {
         device: devices.bath2,
         object_id: 'bath2_window_open',
         unique_id: 'homy_bath2_window_open',
+      },
+    }),
+    ...haBinarySensor({
+      name: 'bath3WindowOpen',
+      feature_type: 'open',
+      feature: 'bath3_window_open',
+      type: 'window',
+      config: {
+        name: 'Баня 3',
+        device: devices.bath3,
+        object_id: 'bath3_window_open',
+        unique_id: 'homy_bath3_window_open',
       },
     }),
     ...haBinarySensor({

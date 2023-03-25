@@ -688,6 +688,18 @@ const config = {
       bit: 19,
       topic: 'button/bath1_switch_right'
     }),
+    ...drySwitch({
+      name: 'laundryWindowOpen',
+      device: 'mbsl32di2',
+      bit: 20,
+      topic: 'open/laundry_window_open'
+    }),
+    ...drySwitch({
+      name: 'bath3WindowOpen',
+      device: 'mbsl32di2',
+      bit: 21,
+      topic: 'open/bath3_window_open'
+    }),
 
     ...relay({
       name: 'bath3CeilingLight',
