@@ -197,6 +197,30 @@ module.exports = {
       unlockTimeout: 60000,
       pin: 16
     },
+    lightOnBath3OnLock: {
+      type: 'emit-on-di',
+      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      di: 11,
+      value: true,
+      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
+      outputMessage: { state: true }
+    },
+    lightOnBath3OnOpen: {
+      type: 'emit-on-di-change',
+      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
+      mask: 1 << 12,
+      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
+      outputMessage: { state: true },
+      filterState: (newState) => !newState
+    },
+    autoLightOffBath3: {
+      type: 'timeout-emit',
+      listenTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
+      listenFilter: (payload) => payload.state,
+      timeout: 15 * 60 * 1000,
+      emitTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
+      emitValue: { state: false }
+    },
     nightExternalLights: {
       type: 'solar-emitter',
       statusTopic: '/modbus/dry-switches/relays00-15/reading',
