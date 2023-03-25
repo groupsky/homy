@@ -692,12 +692,14 @@ const config = {
       name: 'laundryWindowOpen',
       device: 'mbsl32di2',
       bit: 20,
+      invert: true,
       topic: 'open/laundry_window_open'
     }),
     ...drySwitch({
       name: 'bath3WindowOpen',
       device: 'mbsl32di2',
       bit: 21,
+      invert: true,
       topic: 'open/bath3_window_open'
     }),
 
