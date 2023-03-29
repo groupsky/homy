@@ -202,14 +202,14 @@ module.exports = {
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       di: 11,
       value: true,
-      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
+      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
       outputMessage: { state: true }
     },
     lightOnBath3OnOpen: {
       type: 'emit-on-di-change',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       mask: 1 << 12,
-      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
+      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
       outputMessage: { state: true },
       filterState: (newState) => !newState
     },
@@ -217,7 +217,7 @@ module.exports = {
       type: 'timeout-emit',
       listenTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
       listenFilter: (payload) => payload.state,
-      timeout: 15 * 60 * 1000,
+      timeout: 30 * 60 * 1000,
       emitTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
       emitValue: { state: false }
     },
