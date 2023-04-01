@@ -16,7 +16,7 @@
     "@influxdata/influxdb-client": "^1.33.0",
     "async-mutex": "^0.4.0",
     "ieee754": "^1.1.13",
-    "modbus-serial": "^8.0.8",
+    "modbus-serial": "^8.0.10",
     "mongodb": "^4.13.0",
     "mqtt": "^4.3.7",
     "yargs": "^17.6.2"
