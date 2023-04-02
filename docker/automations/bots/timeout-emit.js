@@ -9,7 +9,7 @@ module.exports = (name, {
     let timer = null
 
     mqtt.subscribe(listenTopic, (payload) => {
-      clearTimeout(timeout)
+      clearTimeout(timer)
       if (listenFilter(payload)) {
         timer = setTimeout(() => {
           mqtt.publish(emitTopic, emitValue instanceof Function ? emitValue(payload) : emitValue)
