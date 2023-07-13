@@ -3,19 +3,29 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
         "type": "dashboard"
       }
     ]
   },
   "editable": true,
-  "gnetId": null,
+  "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "links": [],
+  "liveNow": false,
   "panels": [
     {
       "alert": {
@@ -81,10 +91,12 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "displayName": "Power",
           "unit": "watt"
         },
@@ -116,7 +128,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.4.5",
+      "pluginVersion": "9.3.2",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -126,6 +138,10 @@
       "steppedLine": false,
       "targets": [
         {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
           "groupBy": [
             {
               "params": [
@@ -179,9 +195,7 @@
           "visible": true
         }
       ],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "Състояние на миялната",
       "tooltip": {
         "shared": true,
@@ -190,9 +204,7 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
@@ -200,7 +212,6 @@
         {
           "$$hashKey": "object:344",
           "format": "watt",
-          "label": null,
           "logBase": 10,
           "max": "2500",
           "min": "0",
@@ -208,18 +219,14 @@
         },
         {
           "$$hashKey": "object:345",
-          "decimals": null,
           "format": "watt",
           "label": "",
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": false
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
@@ -286,10 +293,12 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "displayName": "Power",
           "unit": "watt"
         },
@@ -321,7 +330,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.4.5",
+      "pluginVersion": "9.3.2",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -331,6 +340,10 @@
       "steppedLine": false,
       "targets": [
         {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
           "groupBy": [
             {
               "params": [
@@ -384,9 +397,7 @@
           "visible": true
         }
       ],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "Състояние на пералнята",
       "tooltip": {
         "shared": true,
@@ -395,9 +406,7 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
@@ -405,7 +414,6 @@
         {
           "$$hashKey": "object:344",
           "format": "watt",
-          "label": null,
           "logBase": 10,
           "max": "2500",
           "min": "0",
@@ -413,23 +421,19 @@
         },
         {
           "$$hashKey": "object:345",
-          "decimals": null,
           "format": "watt",
           "label": "",
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": false
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     }
   ],
   "refresh": "30s",
-  "schemaVersion": 27,
+  "schemaVersion": 37,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -443,5 +447,6 @@
   "timezone": "",
   "title": "Напомняници",
   "uid": "reminders",
-  "version": 3
+  "version": 10,
+  "weekStart": ""
 }
