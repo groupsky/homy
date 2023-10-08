@@ -296,31 +296,6 @@ const config = {
       topic: 'light/antre_ceiling_light',
     }),
     ...ard1Output({
-      name: 'bath2CeilingLight',
-      pin: 16,
-      topic: 'light/bath2_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'bedroomCeilingLight',
-      pin: 17,
-      topic: 'light/bedroom_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'martinCeilingLight',
-      pin: 18,
-      topic: 'light/martin_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'bath1CeilingLight',
-      pin: 19,
-      topic: 'light/bath1_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'officeCeilingLight',
-      pin: 20,
-      topic: 'light/office_ceiling_light',
-    }),
-    ...ard1Output({
       name: 'bedroomBedLeftLight',
       pin: 21,
       topic: 'light/bedroom_bed_left_light',
@@ -329,41 +304,6 @@ const config = {
       name: 'verandaWestLight',
       pin: 62,
       topic: 'light/veranda_west_light',
-    }),
-    ...ard1Output({
-      name: 'gerganaCeilingLight',
-      pin: 63,
-      topic: 'light/gergana_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'borisCeilingLight',
-      pin: 64,
-      topic: 'light/boris_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'laundryCeilingLight',
-      pin: 65,
-      topic: 'light/laundry_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'corridor2BothCeilingLights',
-      pin: 66,
-      topic: 'light/corridor2_both_ceiling_lights',
-    }),
-    ...ard1Output({
-      name: 'kitchenAllCeilingLights',
-      pin: 67,
-      topic: 'light/kitchen_all_ceiling_lights',
-    }),
-    ...ard1Output({
-      name: 'corridor1CeilingLight',
-      pin: 68,
-      topic: 'light/corridor1_ceiling_light',
-    }),
-    ...ard1Output({
-      name: 'livingroomCeilingLight',
-      pin: 69,
-      topic: 'light/livingroom_ceiling_light',
     }),
 
     ...drySwitch({
@@ -704,36 +644,116 @@ const config = {
     }),
 
     ...relay({
+      name: 'kitchenAllCeilingLights',
+      device: 'relays00-15',
+      bus: 'dry-switches',
+      bit: 8,
+      topic: 'light/kitchen_all_ceiling_lights'
+    }),
+    ...relay({
+      name: 'corridor1CeilingLight',
+      device: 'relays00-15',
+      bus: 'dry-switches',
+      bit: 9,
+      topic: 'light/corridor1_ceiling_light'
+    }),
+    ...relay({
+      name: 'corridor2BothCeilingLights',
+      device: 'relays00-15',
+      bus: 'dry-switches',
+      bit: 10,
+      topic: 'light/corridor2_both_ceiling_lights'
+    }),
+    ...relay({
+      name: 'laundryCeilingLight',
+      device: 'relays00-15',
+      bus: 'dry-switches',
+      bit: 11,
+      topic: 'light/laundry_ceiling_light'
+    }),
+    ...relay({
       name: 'bath3CeilingLight',
       device: 'relays00-15',
+      bus: 'dry-switches',
       bit: 13,
       topic: 'light/bath3_ceiling_light'
     }),
     ...relay({
       name: 'serviceBoilerContactor',
       device: 'relays00-15',
+      bus: 'dry-switches',
       bit: 14,
       topic: 'relay/service_boiler_contactor'
     }),
     ...relay({
       name: 'externalHouseLights',
       device: 'relays00-15',
+      bus: 'dry-switches',
       bit: 15,
       topic: 'light/external_house_lights'
     }),
     ...relay({
-      name: 'irrigationGrassNorthWest',
-      device: 'relays32-47',
-      bus: 'monitoring',
-      bit: 7,
-      topic: 'relay/irrigation_grass_north_west'
+      name: 'bedroomCeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 8,
+      topic: 'light/bedroom_ceiling_light',
     }),
     ...relay({
-      name: 'irrigationGrassPergola',
+      name: 'martinCeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 9,
+      topic: 'light/martin_ceiling_light',
+    }),
+    ...relay({
+      name: 'gerganaCeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 10,
+      topic: 'light/gergana_ceiling_light',
+    }),
+    ...relay({
+      name: 'borisCeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 11,
+      topic: 'light/boris_ceiling_light',
+    }),
+    ...relay({
+      name: 'bath2CeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 12,
+      topic: 'light/bath2_ceiling_light',
+    }),
+    ...relay({
+      name: 'bath1CeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 13,
+      topic: 'light/bath1_ceiling_light',
+    }),
+    ...relay({
+      name: 'officeCeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 14,
+      topic: 'light/office_ceiling_light',
+    }),
+    ...relay({
+      name: 'livingroomCeilingLight',
+      device: 'relays16-31',
+      bus: 'dry-switches',
+      bit: 15,
+      topic: 'light/livingroomCeilingLight',
+    }),
+    ...relay({
+      name: 'irrigationFlowerGround',
       device: 'relays32-47',
       bus: 'monitoring',
-      bit: 6,
-      topic: 'relay/irrigation_grass_pergola'
+      bit: 4,
+      topic: 'relay/irrigation_flower_ground'
     }),
     ...relay({
       name: 'irrigationFlowerPots',
@@ -743,11 +763,18 @@ const config = {
       topic: 'relay/irrigation_flower_pots'
     }),
     ...relay({
-      name: 'irrigationFlowerGround',
+      name: 'irrigationGrassPergola',
       device: 'relays32-47',
       bus: 'monitoring',
-      bit: 4,
-      topic: 'relay/irrigation_flower_ground'
+      bit: 6,
+      topic: 'relay/irrigation_grass_pergola'
+    }),
+    ...relay({
+      name: 'irrigationGrassNorthWest',
+      device: 'relays32-47',
+      bus: 'monitoring',
+      bit: 7,
+      topic: 'relay/irrigation_grass_north_west'
     }),
 
     ...state({
