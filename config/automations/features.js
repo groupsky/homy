@@ -746,7 +746,7 @@ const config = {
       device: 'relays16-31',
       bus: 'dry-switches',
       bit: 15,
-      topic: 'light/livingroomCeilingLight',
+      topic: 'light/livingroom_ceiling_light',
     }),
     ...relay({
       name: 'irrigationFlowerGround',
