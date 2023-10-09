@@ -152,50 +152,48 @@ module.exports = {
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       di: 5,
       value: true,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 19, value: 1 }
+      outputTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
+      outputMessage: { state: true }
     },
     lightOnBath1OnOpen: {
       type: 'emit-on-di-change',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       mask: 1 << 6,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 19, value: 1 },
+      outputTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
+      outputMessage: { state: true }
       filterState: (newState) => !newState
     },
     autoLightOffBath1: {
-      type: 'timeout-lights-off',
-      lockedTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      lockedDi: 5,
-      lockedValue: true,
+      type: 'timeout-emit',
+      listenTopic: `${featuresPrefix}/light/bath1_ceiling_light/status`,
+      listenFilter: (payload) => payload.state,
       timeout: 12 * 60000,
-      unlockTimeout: 60000,
-      pin: 19
+      emitTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
+      emitValue: { state: false }
     },
     lightOnBath2OnLock: {
       type: 'emit-on-di',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       di: 9,
       value: true,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 16, value: 1 }
+      outputTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
+      outputMessage: { state: true }
     },
     lightOnBath2OnOpen: {
       type: 'emit-on-di-change',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       mask: 1 << 10,
-      outputTopic: '/homy/ard1/output',
-      outputMessage: { pin: 16, value: 1 },
+      outputTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
+      outputMessage: { state: true },
       filterState: (newState) => !newState
     },
     autoLightOffBath2: {
-      type: 'timeout-lights-off',
-      lockedTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      lockedDi: 9,
-      lockedValue: true,
+      type: 'timeout-emit',
+      listenTopic: `${featuresPrefix}/light/bath2_ceiling_light/status`,
+      listenFilter: (payload) => payload.state,
       timeout: 12 * 60000,
-      unlockTimeout: 60000,
-      pin: 16
+      outputTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
+      outputMessage: { state: false },
     },
     lightOnBath3OnLock: {
       type: 'emit-on-di',
@@ -217,7 +215,7 @@ module.exports = {
       type: 'timeout-emit',
       listenTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
       listenFilter: (payload) => payload.state,
-      timeout: 30 * 60 * 1000,
+      timeout: 12 * 60 * 1000,
       emitTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
       emitValue: { state: false }
     },
