@@ -160,7 +160,7 @@ module.exports = {
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
       mask: 1 << 6,
       outputTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
-      outputMessage: { state: true }
+      outputMessage: { state: true },
       filterState: (newState) => !newState
     },
     autoLightOffBath1: {
