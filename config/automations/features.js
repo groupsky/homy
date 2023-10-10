@@ -210,26 +210,6 @@ const config = {
       topic: 'button/antre_main_left'
     }),
     ...ard1Input({
-      name: 'corridor1KitchenRightBtn',
-      pin: 28,
-      topic: 'button/corridor1_kitchen_right'
-    }),
-    ...ard1Input({
-      name: 'corridor1KitchenLeftBtn',
-      pin: 29,
-      topic: 'button/corridor1_kitchen_left'
-    }),
-    ...ard1Input({
-      name: 'corridor2LaundryLeftBtn',
-      pin: 30,
-      topic: 'button/corridor2_laundry_left'
-    }),
-    ...ard1Input({
-      name: 'corridor2LaundryRightBtn',
-      pin: 31,
-      topic: 'button/corridor2_laundry_right'
-    }),
-    ...ard1Input({
       name: 'corridor1StairsRightBtn',
       pin: 32,
       topic: 'button/corridor1_stairs_right'
@@ -250,16 +230,6 @@ const config = {
       topic: 'button/living_main_up'
     }),
     ...ard1Input({
-      name: 'livingMainRightBtn',
-      pin: 36,
-      topic: 'button/living_main_right'
-    }),
-    ...ard1Input({
-      name: 'livingMainLeftBtn',
-      pin: 37,
-      topic: 'button/living_main_left'
-    }),
-    ...ard1Input({
       name: 'verandaWestRightBtn',
       pin: 40,
       topic: 'button/veranda_west_right'
@@ -278,16 +248,6 @@ const config = {
       name: 'bedroomLeftbedLeftBtn',
       pin: 43,
       topic: 'button/bedroom_leftbed_left'
-    }),
-    ...ard1Input({
-      name: 'officeMainRightBtn',
-      pin: 44,
-      topic: 'button/office_main_right'
-    }),
-    ...ard1Input({
-      name: 'officeMainLeftBtn',
-      pin: 45,
-      topic: 'button/office_main_left'
     }),
 
     ...ard1Output({
@@ -641,6 +601,54 @@ const config = {
       bit: 21,
       invert: true,
       topic: 'open/bath3_window_open'
+    }),
+    ...drySwitch({
+      name: 'officeMainRightBtn',
+      device: 'mbsl32di2',
+      bit: 22,
+      topic: 'button/office_main_right'
+    }),
+    ...drySwitch({
+      name: 'officeMainLeftBtn',
+      device: 'mbsl32di2',
+      bit: 23,
+      topic: 'button/office_main_left'
+    }),
+    ...drySwitch({
+      name: 'livingMainRightBtn',
+      device: 'mbsl32di2',
+      bit: 24,
+      topic: 'button/living_main_right'
+    }),
+    ...drySwitch({
+      name: 'livingMainLeftBtn',
+      device: 'mbsl32di2',
+      bit: 25,
+      topic: 'button/living_main_left'
+    }),
+    ...drySwitch({
+      name: 'corridor1KitchenLeftBtn',
+      device: 'mbsl32di2',
+      bit: 26,
+      topic: 'button/corridor1_kitchen_left'
+    }),
+    ...drySwitch({
+      name: 'corridor1KitchenRightBtn',
+      device: 'mbsl32di2',
+      bit: 27,
+      topic: 'button/corridor1_kitchen_right'
+    }),
+    ...drySwitch({
+      name: 'corridor2LaundryRightBtn',
+      device: 'mbsl32di2',
+      bit: 30,
+      topic: 'button/corridor2_laundry_right'
+    }),
+    ...drySwitch({
+      name: 'corridor2LaundryLeftBtn',
+      device: 'mbsl32di2',
+      bit: 31,
+      topic: 'button/corridor2_laundry_left'
     }),
 
     ...relay({
