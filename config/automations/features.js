@@ -220,16 +220,6 @@ const config = {
       topic: 'button/corridor1_stairs_left'
     }),
     ...ard1Input({
-      name: 'livingMainDownBtn',
-      pin: 34,
-      topic: 'button/living_main_down'
-    }),
-    ...ard1Input({
-      name: 'livingMainUpBtn',
-      pin: 35,
-      topic: 'button/living_main_up'
-    }),
-    ...ard1Input({
       name: 'verandaWestRightBtn',
       pin: 40,
       topic: 'button/veranda_west_right'
@@ -637,6 +627,18 @@ const config = {
       device: 'mbsl32di2',
       bit: 27,
       topic: 'button/corridor1_kitchen_right'
+    }),
+    ...drySwitch({
+      name: 'livingMainUpBtn',
+      device: 'mbsl32di2',
+      bit: 28,
+      topic: 'button/living_main_up'
+    }),
+    ...drySwitch({
+      name: 'livingMainDownBtn',
+      device: 'mbsl32di2',
+      bit: 29,
+      topic: 'button/living_main_down'
     }),
     ...drySwitch({
       name: 'corridor2LaundryRightBtn',
