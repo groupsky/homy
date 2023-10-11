@@ -531,10 +531,10 @@ const config = {
       topic: 'switch/bedroom_switch_left'
     }),
     ...drySwitch({
-      name: 'martinSwitchRight',
+      name: 'martinButtonRight',
       device: 'mbsl32di2',
       bit: 8,
-      topic: 'switch/martin_switch_right'
+      topic: 'button/martin_button_right'
     }),
     ...drySwitch({
       name: 'martinSwitchLeft',
