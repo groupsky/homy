@@ -189,7 +189,6 @@ module.exports = {
     toggleCorridor2LightFromGerganaSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'gergana_switch_left' },
-      inputFilter: 'identity',
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'corridor2_both_ceiling_lights' },
       outputConfig: { initialState: false },
@@ -197,6 +196,7 @@ module.exports = {
     toggleCorridor2LightFromMartinButton: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'button', name: 'martin_button_right' },
+      inputFilter: 'identity',
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'corridor2_both_ceiling_lights' },
       outputConfig: { initialState: false },
