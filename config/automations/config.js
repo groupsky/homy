@@ -171,6 +171,45 @@ module.exports = {
       outputConfig: { initialState: false },
     },
 
+    toggleCorridor2LightFromLaundrySwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'corridor2_laundry_right' },
+      inputFilter: 'identity',
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'corridor2_both_ceiling_lights' },
+      outputConfig: { initialState: false },
+    },
+    toggleCorridor2LightFromBorisSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'boris_switch_right' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'corridor2_both_ceiling_lights' },
+      outputConfig: { initialState: false },
+    },
+    toggleCorridor2LightFromGerganaSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'gergana_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'corridor2_both_ceiling_lights' },
+      outputConfig: { initialState: false },
+    },
+    toggleCorridor2LightFromMartinSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'martin_switch_right' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'corridor2_both_ceiling_lights' },
+      outputConfig: { initialState: false },
+    },
+
+    toggleLaundryLightFromLaundrySwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'laundry_ceiling_light' },
+      inputFilter: 'identity',
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'laundry_ceiling_light' },
+      outputConfig: { initialState: false },
+    },
+
     lightOnBath1OnLock: {
       type: 'emit-on-di',
       diTopic: '/modbus/dry-switches/mbsl32di1/reading',
