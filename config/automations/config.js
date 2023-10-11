@@ -204,7 +204,7 @@ module.exports = {
 
     toggleLaundryLightFromLaundrySwitch: {
       type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'button', name: 'laundry_ceiling_light' },
+      inputFeature: { type: 'button', name: 'corridor2_laundry_left' },
       inputFilter: 'identity',
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'laundry_ceiling_light' },
