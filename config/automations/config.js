@@ -121,6 +121,20 @@ module.exports = {
       outputConfig: { initialState: false },
     },
 
+    toggleKitchenLightFromKitchenSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'corridor1_kitchen_right' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'kitchen_all_ceiling_lights' },
+      outputConfig: { initialState: false },
+    },
+    toggleLivingroomLightFromLivingroomSwitch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'living_main_right' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'livingroom_ceiling_light' },
+      outputConfig: { initialState: false },
+    },
     toggleOfficeLightFromOfficeButton: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'button', name: 'office_main_right' },
@@ -133,6 +147,14 @@ module.exports = {
     toggleCorridor1LightFromBath1Switch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'button', name: 'bath1_switch_right' },
+      inputFilter: 'identity',
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'corridor1_ceiling_light' },
+      outputConfig: { initialState: false },
+    },
+    toggleCorridor1LightFromKitchenButton: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'button', name: 'corridor1_kitchen_left' },
       inputFilter: 'identity',
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'corridor1_ceiling_light' },
