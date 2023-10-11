@@ -124,6 +124,7 @@ module.exports = {
     toggleKitchenLightFromKitchenSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'button', name: 'corridor1_kitchen_right' },
+      inputFilter: 'identity',
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'kitchen_all_ceiling_lights' },
       outputConfig: { initialState: false },
@@ -131,6 +132,7 @@ module.exports = {
     toggleLivingroomLightFromLivingroomSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'button', name: 'living_main_right' },
+      inputFilter: 'identity',
       toggleConfig: { timeout: 1000 },
       outputFeature: { type: 'light', name: 'livingroom_ceiling_light' },
       outputConfig: { initialState: false },
