@@ -262,6 +262,7 @@ services:
     depends_on:
       - broker
       - mongo
+      - influxdb
     restart: unless-stopped
     privileged: true
     networks:
