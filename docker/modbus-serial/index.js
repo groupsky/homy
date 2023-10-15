@@ -4,6 +4,7 @@ const { Mutex, withTimeout } = require('async-mutex')
 const ModbusRTU = require('modbus-serial')
 const {
   modbus: {
+    type = 'rtu', // 'rtu' or 'tcp'
     port,
     portConfig,
     msDelayBetweenDevices = 150,
@@ -82,7 +83,9 @@ const poll = async () => {
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 Promise.all([
-  modbusClient.connectRTUBuffered(port, portConfig)
+  type === 'tcp'
+      ? modbusClient.connectTCP(port, portConfig)
+      : modbusClient.connectRTUBuffered(port, portConfig)
 ]).then(async () => {
   modbusClient.setTimeout(msTimeout)
 
