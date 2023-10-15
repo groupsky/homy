@@ -30,7 +30,7 @@ module.exports = {
     port: '/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.6:1.0-port0',
     portConfig: {
       baudRate: 9600,
-      parity: 'none',
+      parity: 'even',
     },
   },
   devices: [
