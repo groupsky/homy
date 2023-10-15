@@ -449,7 +449,7 @@ services:
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/solar.config.js:/etc/config.js:ro
 
-  dry-switches:
+  inverter:
     build: docker/modbus-serial
     depends_on:
       - broker
