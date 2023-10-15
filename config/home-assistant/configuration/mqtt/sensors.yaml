@@ -71,7 +71,6 @@
 - name: Main energy used
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_import_kwh | float(default=0) }}"
-  last_reset_value_template: "2023-10-15T07:00:00+00:00"
   <<: &common_used_energy
     device_class: energy
     state_class: total
@@ -80,71 +79,59 @@
 - name: Main energy returned
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_export_kwh | float(default=0) }}"
-  last_reset_value_template: "2023-10-15T07:00:00+00:00"
   <<: *common_used_energy
 
 - name: Water pump energy used
   state_topic: "/modbus/secondary/water_pump/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Waste pump energy used
   state_topic: "/modbus/secondary/waste_pump/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Oven energy used
   state_topic: "/modbus/secondary/oven/reading"
   value_template: "{{ value_json.tot | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Stove energy used
   state_topic: "/modbus/secondary/stove/reading"
   value_template: "{{ value_json.tot | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Dishwasher energy used
   state_topic: "/modbus/secondary/dishwasher/reading"
   value_template: "{{ value_json.tot | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Kitchen energy used
   state_topic: "/modbus/secondary/kitchen/reading"
   value_template: "{{ value_json.tot | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Laundry energy used
   state_topic: "/modbus/secondary/laundry/reading"
   value_template: "{{ value_json.tot | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Boiler energy used
   state_topic: "/modbus/secondary/boiler/reading"
   value_template: "{{ value_json.tot | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Heat pump energy used
   state_topic: "/modbus/tetriary/heat_pump/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
-  last_reset_value_template: "2023-10-15T07:00:00+00:00"
   <<: *common_used_energy
 
 - name: Stabilizator energy used
   state_topic: "/modbus/monitoring2/stab-em/reading"
   value_template: "{{ value_json.totalActiveEnergy | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
 
 - name: Microwave energy used
   state_topic: "/modbus/secondary/microwave/reading"
   value_template: "{{ value_json.tot | float(default=0) }}"
-  last_reset_value_template: '1970-01-01T00:00:00+00:00'
   <<: *common_used_energy
