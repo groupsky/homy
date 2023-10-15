@@ -2,7 +2,7 @@
 
 const readLong = (msb, lsb) => msb << 16 | lsb
 
-async function read (client) {
+async function read (client, { options: { maxMsBetweenReports = 0 } = {} } = {}, state = {}) {
   let data
 
   data = await client.readHoldingRegisters(32106, 2);
@@ -29,7 +29,7 @@ async function read (client) {
   // Insulation resistance (MΩ) * 1000
   const ins = data.data[8] / 1000
 
-  return {
+  const newValues = {
     total_p,
     daily_p,
     ap,
@@ -40,6 +40,17 @@ async function read (client) {
     temp,
     ins,
   }
+
+    const noChange = Object.keys(newValues).every(key => newValues[key] === state[key])
+    const recentReport = maxMsBetweenReports === 0 || ((Date.now() - (state.lastReport || 0)) < maxMsBetweenReports)
+    if (noChange && recentReport) {
+        return
+    }
+
+    state.lastReport = Date.now()
+    Object.assign(state, newValues)
+
+    return newValues
 }
 
 module.exports = {

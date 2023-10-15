@@ -38,6 +38,9 @@ module.exports = {
             name: 'inverter',
             address: 0x01,
             type: 'sun2000',
+            options: {
+                maxMsBetweenReports: 5 * 60 * 1000, // 5 minutes
+            }
         },
     ],
     integrations: {
