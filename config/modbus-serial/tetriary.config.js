@@ -37,7 +37,7 @@ module.exports = {
     {
       name: 'heat_pump',
       address: 0x01,
-      type: 'sdm630',
+      type: 'dds024mr',
     },
   ],
   integrations: {

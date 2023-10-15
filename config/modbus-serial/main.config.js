@@ -37,7 +37,7 @@ module.exports = {
     {
       name: 'main',
       address: 0x01,
-      type: 'dds024mr',
+      type: 'sdm630',
     },
   ],
   integrations: {
