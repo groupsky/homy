@@ -28,15 +28,7 @@
       },
       {
         "type": "solar",
-        "flow_from": [
-          {
-            "stat_energy_from": "sensor.inverter_sun2000_accumulated_yield",
-            "stat_cost": null,
-            "entity_energy_from": "sensor.inverter_sun2000_accumulated_yield",
-            "entity_energy_price": null,
-            "number_energy_price": null
-          }
-        ]
+        "stat_energy_from": "sensor.inverter_sun2000_accumulated_yield"
       }
     ],
     "device_consumption": [
