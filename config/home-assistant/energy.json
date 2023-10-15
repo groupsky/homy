@@ -15,7 +15,15 @@
             "number_energy_price": null
           }
         ],
-        "flow_to": [],
+        "flow_to": [
+          {
+            "stat_energy_to": "sensor.main_energy_returned",
+            "stat_cost": null,
+            "entity_energy_to": "sensor.main_energy_returned",
+            "entity_energy_price": null,
+            "number_energy_price": null
+          }
+        ],
         "cost_adjustment_day": 0.0
       }
     ],
