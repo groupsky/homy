@@ -36,7 +36,7 @@ module.exports = {
     },
     devices: [
         {
-            name: 'inverter',
+            name: 'main',
             address: 0x01,
             type: 'sun2000',
             options: {
