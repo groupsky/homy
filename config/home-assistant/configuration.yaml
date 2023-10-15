@@ -9,6 +9,7 @@ http:
 #   base_url: example.duckdns.org:8123
 
 homeassistant:
+  country: BG
   customize: !include configuration/customize.yaml
   customize_glob:
     sensor.*:
