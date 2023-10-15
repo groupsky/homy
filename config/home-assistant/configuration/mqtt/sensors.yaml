@@ -81,10 +81,7 @@
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_export_kwh | float(default=0) }}"
   last_reset_value_template: "2023-10-15T70:00:00Z"
-  <<: &common_used_energy
-    device_class: energy
-    state_class: total
-    unit_of_measurement: kWh
+  <<: *common_used_energy
 
 - name: Water pump energy used
   state_topic: "/modbus/secondary/water_pump/reading"
