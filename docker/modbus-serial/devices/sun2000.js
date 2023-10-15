@@ -41,3 +41,7 @@ async function read (client) {
     ins,
   }
 }
+
+module.exports = {
+  read
+}
