@@ -69,7 +69,4 @@
 - name: inverter_sun2000_accumulated_yield
   state_topic: "/modbus/inverter/sun2000/reading"
   value_template: "{{ value_json.total_p | float(default=0) }}"
-  <<: &common_used_energy
-    device_class: energy
-    state_class: total
-    unit_of_measurement: kWh
+  <<: *common_used_energy
