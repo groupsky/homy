@@ -71,7 +71,7 @@
 - name: Main energy used
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_import_kwh | float(default=0) }}"
-  last_reset_value_template: "2023-10-15T70:00:00Z"
+  last_reset_value_template: "2023-10-15T70:00:00+00:00"
   <<: &common_used_energy
     device_class: energy
     state_class: total
@@ -80,7 +80,7 @@
 - name: Main energy returned
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_export_kwh | float(default=0) }}"
-  last_reset_value_template: "2023-10-15T70:00:00Z"
+  last_reset_value_template: "2023-10-15T70:00:00+00:00"
   <<: *common_used_energy
 
 - name: Water pump energy used
@@ -126,7 +126,7 @@
 - name: Heat pump energy used
   state_topic: "/modbus/tetriary/heat_pump/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
-  last_reset_value_template: "2023-10-15T70:00:00Z"
+  last_reset_value_template: "2023-10-15T70:00:00+00:00"
   <<: *common_used_energy
 
 - name: Stabilizator energy used
