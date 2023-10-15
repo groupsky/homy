@@ -18,7 +18,7 @@
         "flow_to": [
           {
             "stat_energy_to": "sensor.main_energy_returned",
-            "stat_cost": null,
+            "stat_compensation": null,
             "entity_energy_to": "sensor.main_energy_returned",
             "entity_energy_price": null,
             "number_energy_price": null
