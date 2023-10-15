@@ -14,12 +14,6 @@ homeassistant:
   customize_glob:
     sensor.*:
       last_reset: '1970-01-01T00:00:00+00:00'
-    sensor.heat_pump_energy_used:
-      last_reset: '2023-10-15T07:00:00+00:00'
-    sensor.main_energy_used:
-      last_reset: '2023-10-15T07:00:00+00:00'
-    sensor.main_energy_returned:
-      last_reset: '2023-10-15T07:00:00+00:00'
   external_url: !env_var EXTERNAL_URL
   internal_url: !env_var INTERNAL_URL
 

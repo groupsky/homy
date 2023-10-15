@@ -1,74 +1,4 @@
-- name: Main current A
-  device_class: current
-  state_class: measurement
-  unit_of_measurement: A
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.ac | float(default=0) }}"
-
-- name: Main current B
-  device_class: current
-  state_class: measurement
-  unit_of_measurement: A
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.bc | float(default=0) }}"
-
-- name: Main current C
-  device_class: current
-  state_class: measurement
-  unit_of_measurement: A
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.cc | float(default=0) }}"
-
-- name: Main power factor A
-  device_class: power_factor
-  state_class: measurement
-  unit_of_measurement: '%'
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.apf | float(default=0) }}"
-
-- name: Main power factor B
-  device_class: power_factor
-  state_class: measurement
-  unit_of_measurement: '%'
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.bpf | float(default=0) }}"
-
-- name: Main power factor C
-  device_class: power_factor
-  state_class: measurement
-  unit_of_measurement: '%'
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.cpf | float(default=0) }}"
-
-- name: Main voltage A
-  device_class: voltage
-  state_class: measurement
-  unit_of_measurement: V
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.av | float(default=0) }}"
-
-- name: Main voltage B
-  device_class: voltage
-  state_class: measurement
-  unit_of_measurement: V
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.bv | float(default=0) }}"
-
-- name: Main voltage C
-  device_class: voltage
-  state_class: measurement
-  unit_of_measurement: V
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.cv | float(default=0) }}"
-
-- name: Main frequency
-  device_class: frequency
-  state_class: measurement
-  unit_of_measurement: Hz
-  state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.freq | float(default=0) }}"
-
-- name: Main energy used
+- name: main_energy_sdm630_total_import_kwh
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_import_kwh | float(default=0) }}"
   <<: &common_used_energy
@@ -76,7 +6,7 @@
     state_class: total
     unit_of_measurement: kWh
 
-- name: Main energy returned
+- name: main_energy_sdm630_total_export_kwh
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_export_kwh | float(default=0) }}"
   <<: *common_used_energy
@@ -121,7 +51,7 @@
   value_template: "{{ value_json.tot | float(default=0) }}"
   <<: *common_used_energy
 
-- name: Heat pump energy used
+- name: heat_pump_dds024mr_tot_act
   state_topic: "/modbus/tetriary/heat_pump/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
   <<: *common_used_energy

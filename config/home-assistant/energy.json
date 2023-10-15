@@ -8,18 +8,18 @@
         "type": "grid",
         "flow_from": [
           {
-            "stat_energy_from": "sensor.main_energy_used",
+            "stat_energy_from": "sensor.main_energy_sdm630_total_import_kwh",
             "stat_cost": null,
-            "entity_energy_from": "sensor.main_energy_used",
+            "entity_energy_from": "sensor.main_energy_sdm630_total_import_kwh",
             "entity_energy_price": null,
             "number_energy_price": null
           }
         ],
         "flow_to": [
           {
-            "stat_energy_to": "sensor.main_energy_returned",
+            "stat_energy_to": "sensor.main_energy_sdm630_total_export_kwh",
             "stat_compensation": null,
-            "entity_energy_to": "sensor.main_energy_returned",
+            "entity_energy_to": "sensor.main_energy_sdm630_total_export_kwh",
             "entity_energy_price": null,
             "number_energy_price": null
           }
@@ -53,7 +53,7 @@
         "stat_consumption": "sensor.boiler_energy_used"
       },
       {
-        "stat_consumption": "sensor.heat_pump_energy_used"
+        "stat_consumption": "sensor.heat_pump_dds024mr_tot_act"
       },
       {
         "stat_consumption": "sensor.microwave_energy_used"
