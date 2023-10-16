@@ -24,6 +24,7 @@ const converters = {
     dds519mr: require('./converters/dds519mr'),
     ex9em: require('./converters/ex9em'),
     'or-we-514': require('./converters/or-we-514'),
+    sdm630: require('./converters/sdm630'),
 }
 
 client.on('connect', function () {
