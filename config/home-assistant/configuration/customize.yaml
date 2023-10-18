@@ -29,3 +29,18 @@ switch.living_tv_back:
 switch.living_tv_exit:
   friendly_name: 'Exit'
   icon: mdi:exit-to-app
+
+sensor.inverter_sun2000_accumulated_yield:
+  friendly_name: Inverter
+
+sensor.heat_pump_dds024mr_tot_act:
+  friendly_name: Heat pump (after 2023-10-15)
+sensor.heat_pump_energy_used:
+  friendly_name: Heat pump (until 2023-10-15)
+
+sensor.main_energy_sdm630_total_import_kwh:
+  friendly_name: Import (after 2023-10-15)
+sensor.main_energy_used:
+  friendly_name: Import (until 2023-10-15)
+sensor.main_energy_sdm630_total_export_kwh:
+  friendly_name: Export (after 2023-10-15)
