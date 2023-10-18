@@ -11,6 +11,11 @@
   value_template: "{{ value_json.total_export_kwh | float(default=0) }}"
   <<: *common_used_energy
 
+- name: Main energy used
+  state_topic: "obsolete/modbus/main/main/reading"
+  value_template: "{{ value_json.tot_act | float(default=0) }}"
+  <<: *common_used_energy
+
 - name: Water pump energy used
   state_topic: "/modbus/secondary/water_pump/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
@@ -69,4 +74,9 @@
 - name: inverter_sun2000_accumulated_yield
   state_topic: "/modbus/inverter/main/reading"
   value_template: "{{ value_json.total_p | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: Heat pump energy used
+  state_topic: "obsolete/modbus/tetriary/heat_pump/reading"
+  value_template: "{{ value_json.tot_act | float(default=0) }}"
   <<: *common_used_energy
