@@ -32,7 +32,10 @@
       },
       {
         "type": "solar",
-        "stat_energy_from": "sensor.inverter_sun2000_accumulated_yield"
+        "stat_energy_from": "sensor.inverter_sun2000_accumulated_yield",
+        "config_entry_solar_forecast": [
+          "1d7032dd2c0298848a60e4e0f7270f0e"
+        ]
       }
     ],
     "device_consumption": [
