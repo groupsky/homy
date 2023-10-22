@@ -6,9 +6,39 @@
     state_class: total
     unit_of_measurement: kWh
 
+- name: main_energy_sdm630_a_import_kwh
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.a_import_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_b_import_kwh
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.b_import_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_c_import_kwh
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.c_import_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
 - name: main_energy_sdm630_total_export_kwh
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.total_export_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_a_export_kwh
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.a_export_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_b_export_kwh
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.b_export_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_c_export_kwh
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.c_export_kwh | float(default=0) }}"
   <<: *common_used_energy
 
 - name: Main energy used
