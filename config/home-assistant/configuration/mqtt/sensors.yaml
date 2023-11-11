@@ -1,5 +1,5 @@
 - name: main_energy_sdm630_total_import_kwh
-  state_topic: "/modbus/main/main/reading"
+  state_topic: "obsolete/modbus/main/main/reading"
   value_template: "{{ value_json.total_import_kwh | float(default=0) }}"
   <<: &common_used_energy
     device_class: energy
@@ -7,36 +7,66 @@
     unit_of_measurement: kWh
 
 - name: main_energy_sdm630_a_import_kwh
-  state_topic: "/modbus/main/main/reading"
+  state_topic: "obsolete/modbus/main/main/reading"
   value_template: "{{ value_json.a_import_kwh | float(default=0) }}"
   <<: *common_used_energy
 
 - name: main_energy_sdm630_b_import_kwh
-  state_topic: "/modbus/main/main/reading"
+  state_topic: "obsolete/modbus/main/main/reading"
   value_template: "{{ value_json.b_import_kwh | float(default=0) }}"
   <<: *common_used_energy
 
 - name: main_energy_sdm630_c_import_kwh
+  state_topic: "obsolete/modbus/main/main/reading"
+  value_template: "{{ value_json.c_import_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_a_import_kwh_2023_11_11
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.a_import_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_b_import_kwh_2023_11_11
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.b_import_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_c_import_kwh_2023_11_11
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.c_import_kwh | float(default=0) }}"
   <<: *common_used_energy
 
 - name: main_energy_sdm630_total_export_kwh
-  state_topic: "/modbus/main/main/reading"
+  state_topic: "obsolete/modbus/main/main/reading"
   value_template: "{{ value_json.total_export_kwh | float(default=0) }}"
   <<: *common_used_energy
 
 - name: main_energy_sdm630_a_export_kwh
-  state_topic: "/modbus/main/main/reading"
+  state_topic: "obsolete/modbus/main/main/reading"
   value_template: "{{ value_json.a_export_kwh | float(default=0) }}"
   <<: *common_used_energy
 
 - name: main_energy_sdm630_b_export_kwh
-  state_topic: "/modbus/main/main/reading"
+  state_topic: "obsolete/modbus/main/main/reading"
   value_template: "{{ value_json.b_export_kwh | float(default=0) }}"
   <<: *common_used_energy
 
 - name: main_energy_sdm630_c_export_kwh
+  state_topic: "obsolete/modbus/main/main/reading"
+  value_template: "{{ value_json.c_export_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_a_export_kwh_2023_11_11
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.a_export_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_b_export_kwh_2023_11_11
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.b_export_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
+- name: main_energy_sdm630_c_export_kwh_2023_11_11
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.c_export_kwh | float(default=0) }}"
   <<: *common_used_energy

@@ -10,6 +10,7 @@ http:
 
 homeassistant:
   country: BG
+  currency: BGN
   customize: !include configuration/customize.yaml
   customize_glob:
     sensor.*:

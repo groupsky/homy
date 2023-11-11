@@ -39,8 +39,20 @@ sensor.heat_pump_energy_used:
   friendly_name: Heat pump (until 2023-10-15)
 
 sensor.main_energy_sdm630_total_import_kwh:
-  friendly_name: Import (after 2023-10-15)
+  friendly_name: Import (until 2023-11-11)
 sensor.main_energy_used:
   friendly_name: Import (until 2023-10-15)
 sensor.main_energy_sdm630_total_export_kwh:
-  friendly_name: Export (after 2023-10-15)
+  friendly_name: Export (until 2023-11-11)
+sensor.main_energy_sdm630_a_import_kwh_2023_11_11:
+  friendly_name: Import L1
+sensor.main_energy_sdm630_b_import_kwh_2023_11_11:
+  friendly_name: Import L2
+sensor.main_energy_sdm630_c_import_kwh_2023_11_11:
+  friendly_name: Import L3
+sensor.main_energy_sdm630_a_export_kwh_2023_11_11:
+  friendly_name: Export L1
+sensor.main_energy_sdm630_b_export_kwh_2023_11_11:
+  friendly_name: Export L2
+sensor.main_energy_sdm630_c_export_kwh_2023_11_11:
+  friendly_name: Export L3

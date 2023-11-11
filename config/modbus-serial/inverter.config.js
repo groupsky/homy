@@ -32,7 +32,7 @@ module.exports = {
         portConfig: {
             port: 502,
         },
-        msDelayBetweenDevices: 5000,
+        msDelayBetweenDevices: 15000,
     },
     devices: [
         {
