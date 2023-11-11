@@ -212,6 +212,8 @@ services:
       - source: main_power
         target: /etc/config.js
     secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
       - mongo_root_username
       - mongo_root_password
     environment:
@@ -222,6 +224,12 @@ services:
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/main/{name}/reading
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - INFLUXDB_TAGS={"bus":"primary"}
+      - INFLUXDB_MEASUREMENT=raw
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
@@ -242,6 +250,8 @@ services:
       - source: secondary_power
         target: /etc/config.js
     secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
       - mongo_root_username
       - mongo_root_password
     environment:
@@ -252,6 +262,12 @@ services:
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/secondary/{name}/reading
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - INFLUXDB_TAGS={"bus":"secondary"}
+      - INFLUXDB_MEASUREMENT=raw
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
