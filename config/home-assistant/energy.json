@@ -9,59 +9,59 @@
         "flow_from": [
           {
             "stat_energy_from": "sensor.main_energy_used",
-            "stat_cost": 0.25751,
+            "stat_cost": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": 0.25751
           },
           {
             "stat_energy_from": "sensor.main_energy_sdm630_total_import_kwh",
-            "stat_cost": 0.25751,
+            "stat_cost": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": 0.25751
           },
           {
             "stat_energy_from": "sensor.main_energy_sdm630_a_import_kwh_2023_11_11",
-            "stat_cost": 0.25751,
+            "stat_cost": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": 0.25751
           },
           {
             "stat_energy_from": "sensor.main_energy_sdm630_b_import_kwh_2023_11_11",
-            "stat_cost": 0.25751,
+            "stat_cost": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": 0.25751
           },
           {
             "stat_energy_from": "sensor.main_energy_sdm630_c_import_kwh_2023_11_11",
-            "stat_cost": 0.25751,
+            "stat_cost": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": 0.25751
           }
         ],
         "flow_to": [
           {
             "stat_energy_to": "sensor.main_energy_sdm630_total_export_kwh",
-            "stat_compensation": -0.25751,
+            "stat_compensation": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": -0.25751
           },
           {
             "stat_energy_to": "sensor.main_energy_sdm630_a_export_kwh_2023_11_11",
-            "stat_compensation": -0.25751,
+            "stat_compensation": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": -0.25751
           },
           {
             "stat_energy_to": "sensor.main_energy_sdm630_b_export_kwh_2023_11_11",
-            "stat_compensation": -0.25751,
+            "stat_compensation": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": -0.25751
           },
           {
             "stat_energy_to": "sensor.main_energy_sdm630_c_export_kwh_2023_11_11",
-            "stat_compensation": -0.25751,
+            "stat_compensation": null,
             "entity_energy_price": null,
-            "number_energy_price": null
+            "number_energy_price": -0.25751
           }
         ],
         "cost_adjustment_day": 0.0
