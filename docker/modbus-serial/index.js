@@ -35,6 +35,8 @@ const integrations = Object.entries(integrationsConfig).map(
   }
 )
 
+const deviceErrors = new Map()
+
 const pollDevice = async (device) => {
   let val = null
   let start
@@ -44,8 +46,26 @@ const pollDevice = async (device) => {
     start = Date.now()
     try {
       val = await device.driver.read(modbusClient, device.config, device.state)
+      deviceErrors.delete(device.name)
     } catch (e) {
       console.error(`Error reading from ${device.name}`, e)
+      if (!deviceErrors.has(device.name)) {
+        deviceErrors.set(device.name, {error: e, counter: 1})
+        return
+      }
+      const {error: prevError, counter} = deviceErrors.get(device.name)
+      if (prevError.message !== e.message || prevError?.errno !== e?.errno) {
+        deviceErrors.set(device.name, {error: e, counter: 1})
+        return
+      }
+
+      if (counter < 10) {
+        deviceErrors.set(device.name, {error: e, counter: counter + 1})
+        return
+      }
+
+      console.error('Too many errors', e)
+      process.exit()
     }
     end = Date.now()
   })
