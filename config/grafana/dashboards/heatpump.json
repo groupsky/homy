@@ -896,18 +896,19 @@
               "type": "fill"
             }
           ],
-          "measurement": "sdm630raw",
+          "hide": true,
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT max(\"total_p\") FROM \"sdm630raw\" WHERE (\"device.name\" = 'heat_pump') AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "query": "SELECT max(\"p\") FROM \"current_power\" WHERE (\"device.name\" = 'heat_pump') AND (\"phase\" = 'A') AND $timeFilter GROUP BY time($__interval) fill(null)",
           "rawQuery": false,
-          "refId": "power",
+          "refId": "A",
           "resultFormat": "time_series",
           "select": [
             [
               {
                 "params": [
-                  "total_p"
+                  "p"
                 ],
                 "type": "field"
               },
@@ -922,8 +923,135 @@
               "key": "device.name",
               "operator": "=",
               "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "A"
             }
           ]
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "measurement": "current_power",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT max(\"p\") FROM \"current_power\" WHERE (\"device.name\" = 'heat_pump') AND (\"phase\" = 'B') AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": false,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "p"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "max"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "B"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "measurement": "current_power",
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT max(\"p\") FROM \"current_power\" WHERE (\"device.name\" = 'heat_pump') AND (\"phase\" = 'C') AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": false,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "p"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "max"
+              }
+            ]
+          ],
+          "tags": [
+            {
+              "key": "device.name",
+              "operator": "=",
+              "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "C"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "name": "Expression",
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "$A+$B+$C",
+          "hide": false,
+          "refId": "power",
+          "type": "math"
         }
       ],
       "thresholds": [
@@ -2177,6 +2305,6 @@
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 10,
+  "version": 11,
   "weekStart": ""
 }
