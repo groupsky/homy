@@ -1290,7 +1290,7 @@
             }
           ],
           "hide": false,
-          "measurement": "sdm630raw",
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "mina",
@@ -1299,7 +1299,7 @@
             [
               {
                 "params": [
-                  "av"
+                  "v"
                 ],
                 "type": "field"
               },
@@ -1314,6 +1314,12 @@
               "key": "device.name",
               "operator": "=",
               "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "A"
             }
           ]
         },
@@ -1337,7 +1343,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "sdm630raw",
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "maxa",
@@ -1346,7 +1352,7 @@
             [
               {
                 "params": [
-                  "av"
+                  "v"
                 ],
                 "type": "field"
               },
@@ -1361,6 +1367,12 @@
               "key": "device.name",
               "operator": "=",
               "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "A"
             }
           ]
         },
@@ -1385,7 +1397,7 @@
             }
           ],
           "hide": false,
-          "measurement": "sdm630raw",
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "minb",
@@ -1394,7 +1406,7 @@
             [
               {
                 "params": [
-                  "bv"
+                  "v"
                 ],
                 "type": "field"
               },
@@ -1409,6 +1421,12 @@
               "key": "device.name",
               "operator": "=",
               "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "B"
             }
           ]
         },
@@ -1433,7 +1451,7 @@
             }
           ],
           "hide": false,
-          "measurement": "sdm630raw",
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "maxb",
@@ -1442,7 +1460,7 @@
             [
               {
                 "params": [
-                  "bv"
+                  "v"
                 ],
                 "type": "field"
               },
@@ -1457,6 +1475,12 @@
               "key": "device.name",
               "operator": "=",
               "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "B"
             }
           ]
         },
@@ -1481,7 +1505,7 @@
             }
           ],
           "hide": false,
-          "measurement": "sdm630raw",
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "minc",
@@ -1490,7 +1514,7 @@
             [
               {
                 "params": [
-                  "cv"
+                  "v"
                 ],
                 "type": "field"
               },
@@ -1505,6 +1529,12 @@
               "key": "device.name",
               "operator": "=",
               "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "C"
             }
           ]
         },
@@ -1529,7 +1559,7 @@
             }
           ],
           "hide": false,
-          "measurement": "sdm630raw",
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "maxc",
@@ -1538,7 +1568,7 @@
             [
               {
                 "params": [
-                  "cv"
+                  "v"
                 ],
                 "type": "field"
               },
@@ -1553,6 +1583,12 @@
               "key": "device.name",
               "operator": "=",
               "value": "heat_pump"
+            },
+            {
+              "condition": "AND",
+              "key": "phase",
+              "operator": "=",
+              "value": "C"
             }
           ]
         }
@@ -1802,6 +1838,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -1834,7 +1872,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "#EAB839",
@@ -1867,7 +1906,8 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "single",
+          "sort": "none"
         }
       },
       "targets": [
@@ -1983,6 +2023,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -2015,7 +2057,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
+                "color": "red",
+                "value": null
               },
               {
                 "color": "#EAB839",
@@ -2048,7 +2091,8 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "single",
+          "sort": "none"
         }
       },
       "targets": [
@@ -2133,6 +2177,6 @@
   "timezone": "",
   "title": "Heatpump",
   "uid": "Nml0-Fonz",
-  "version": 9,
+  "version": 10,
   "weekStart": ""
 }
