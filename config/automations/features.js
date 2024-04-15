@@ -786,6 +786,13 @@ const config = {
       bit: 7,
       topic: 'relay/irrigation_grass_north_west'
     }),
+    ...relay({
+      name: 'irrigationGrassWestCenter',
+      device: 'relays32-47',
+      bus: 'monitoring',
+      bit: 8,
+      topic: 'relay/irrigation_grass_west_center'
+    }),
 
     ...state({
       name: 'temperatureBoilerLow',

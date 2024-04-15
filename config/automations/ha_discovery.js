@@ -832,6 +832,18 @@ const config = {
         device_class: 'outlet',
       }
     }),
+    ...haSwitch({
+      name: 'irrigationGrassWestCenter',
+      feature_type: 'relay',
+      feature: 'irrigation_grass_west_center',
+      config: {
+        name: 'Трева запад-център',
+        object_id: 'irrigation_grass_west_center',
+        unique_id: 'irrigation_grass_west_center',
+        device: devices.irrigation,
+        device_class: 'outlet',
+      }
+    }),
 
     ...haSensor({
       name: 'temperatureBoilerLow',
