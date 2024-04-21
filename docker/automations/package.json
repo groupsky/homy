@@ -7,10 +7,16 @@
   "main": "index.js",
   "scripts": {
     "start": "index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "dependencies": {
+    "cron-parser": "^4.9.0",
     "mqtt": "^4.3.7",
     "suncalc": "^1.9.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "node-notifier": "^10.0.1",
+    "prettier-2": "npm:prettier@^2.8.8"
   }
 }

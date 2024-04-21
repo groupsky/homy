@@ -356,6 +356,43 @@ module.exports = {
       emitTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
       emitValue: { state: false }
     },
+
+    irrigationFlowerGroundSchedule: {
+      type: 'irrigation',
+      schedule: '0 */10 8-18 * * *',
+      duration: 5*60*1000,
+      valveControlTopic: `${featuresPrefix}/irrigation_flower_ground/set`,
+    },
+    irrigationFlowerPotsSchedule: {
+      type: 'irrigation',
+      schedule: '0 25,55 6-22 * * *',
+      duration: 2*60*1000,
+      valveControlTopic: `${featuresPrefix}/irrigation_flower_pots/set`,
+    },
+    irrigationGrassPergolaSchedule: {
+      type: 'irrigation',
+      schedule: '0 0 2 * * *',
+      duration: 20*60*1000,
+      valveControlTopic: `${featuresPrefix}/irrigation_grass_pergola/set`,
+    },
+    irrigationGrassNorthWestSchedule: {
+      type: 'irrigation',
+      schedule: '0 20 2 * * *',
+      duration: 20*60*1000,
+      valveControlTopic: `${featuresPrefix}/irrigation_grass_north_west/set`,
+    },
+    irrigationGrassWestCenterSchedule: {
+      type: 'irrigation',
+      schedule: '0 40 2 * * *',
+      duration: 20*60*1000,
+      valveControlTopic: `${featuresPrefix}/irrigation_grass_west_center/set`,
+    },
+    irrigationGrassNorthWestSchedule2: {
+      type: 'irrigation',
+      schedule: '0 0 3 * * *',
+      duration: 20*60*1000,
+      valveControlTopic: `${featuresPrefix}/irrigation_grass_north_west/set`,
+    },
   },
   gates: {
     mqtt: {
