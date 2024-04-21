@@ -5,6 +5,7 @@ module.exports = (name, {
     valveControlTemplate = (state) => ({state}),
     schedule,
     duration,
+    verbose
 }) => ({
     start: ({mqtt}) => {
         const interval = parser.parseExpression(schedule);
@@ -30,6 +31,10 @@ module.exports = (name, {
             }
 
             const status = computeWantedStatus()
+
+            if (verbose) {
+                console.log(`[${name}] state`, status.state, 'for', status.timeout / 60000, 'minutes')
+            }
 
             mqtt.publish(valveControlTopic, valveControlTemplate(status.state))
 

@@ -20,7 +20,7 @@ module.exports = (name, {
       if (status == null || wantedStatus == null) return
       if (status !== wantedStatus) {
         if (verbose) {
-          console.log('state different than wanted, publishing', commandTopic, commandTemplate(wantedStatus))
+          console.log(`[${name}] state different than wanted, publishing`, commandTopic, commandTemplate(wantedStatus))
         }
         mqtt.publish(commandTopic, commandTemplate(wantedStatus))
       }
@@ -42,8 +42,8 @@ module.exports = (name, {
       const current = states.reduce((best, current) => best.eta > 0 || current.eta <= 0 && best.eta < current.eta ? current : best)
       const next = states.reduce((best, current) => best.eta <= 0 || current.eta > 0 && best.eta > current.eta ? current : best)
       if (verbose) {
-        console.log('current state', current.state, 'since', -Math.round(current.eta / 60000), 'm')
-        console.log('next state', next.state, 'in', Math.round(next.eta / 60000), 'm')
+        console.log(`[${name}] current state`, current.state, 'since', -Math.round(current.eta / 60000), 'm')
+        console.log(`[${name}] next state`, next.state, 'in', Math.round(next.eta / 60000), 'm')
       }
       wantedStatus = solarTimeStates[current.state]
       setTimeout(computeWantedStatus, next.eta)
@@ -53,7 +53,7 @@ module.exports = (name, {
     mqtt.subscribe(statusTopic, (payload) => {
       status = Boolean(stateParser(payload))
       if (verbose) {
-        console.log('status updated to', status)
+        console.log(`[${name}] status updated to`, status)
       }
       update()
     })
