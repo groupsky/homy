@@ -62,6 +62,7 @@ const haLight = (
           command_off_template: JSON.stringify({ state: false, _src: 'ha' }),
           state_topic: `${featuresPrefix}/light/${feature}/status`,
           state_template: `{{- 'on' if value_json.state else 'off' -}}`,
+          unique_id: `homy_light_${feature}`,
           ...config
         }
       }
@@ -91,6 +92,7 @@ const haSwitch = (
           state_on: 'on',
           state_off: 'off',
           value_template: `{{- 'on' if value_json.state else 'off' -}}`,
+          unique_id: `homy_${feature_type}_${feature}`,
           ...config
         }
       }
@@ -125,7 +127,8 @@ const haBinarySensor = (
           name,
           device_class,
           state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
-          value_template: '{{ \'ON\' if value_json.state else \'OFF\' }}',
+          value_template: device_class === 'lock' ? '{{ \'OFF\' if value_json.state else \'ON\' }}' : '{{ \'ON\' if value_json.state else \'OFF\' }}',
+          unique_id: `homy_${device_class}_${feature}`,
           ...config
         }
       }
@@ -161,6 +164,7 @@ const haSensor = (
           device_class,
           state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
           value_template: '{{ value_json.state }}',
+          unique_id: `homy_${device_class}_${feature}`,
           ...config
         }
       }
