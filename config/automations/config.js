@@ -339,6 +339,38 @@ module.exports = {
       }
     },
 
+    irrigationFlowerGroundSchedule: {
+      type: 'irrigation',
+      schedule: '0 */10 8-18 * * *',
+      duration: 5*60000,
+      valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_ground/set`,
+    },
+    irrigationFlowerPotsSchedule: {
+      type: 'irrigation',
+      schedule: '0 25,55 6-22 * * *',
+      duration: 2*60000,
+      valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_pots/set`,
+    },
+    irrigationGrassPergolaSchedule: {
+      type: 'irrigation',
+      schedule: '0 0 2 * * *',
+      duration: 20*60000,
+      valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
+    },
+    timeoutStopIrrigationGrassPergola: {
+      type: 'timeout-emit',
+      listenTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/status`,
+      listenFilter: (payload) => payload.state,
+      timeout: 25 * 60000,
+      emitTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
+      emitValue: { state: false }
+    },
+    irrigationGrassNorthWestSchedule: {
+      type: 'irrigation',
+      schedule: '0 25 2 * * *',
+      duration: 20*60000,
+      valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_north_west/set`,
+    },
     timeoutStopIrrigationGrassNorthWest: {
       type: 'timeout-emit',
       listenTopic: `${featuresPrefix}/relay/irrigation_grass_north_west/status`,
@@ -347,49 +379,23 @@ module.exports = {
       emitTopic: `${featuresPrefix}/relay/irrigation_grass_north_west/set`,
       emitValue: { state: false }
     },
-
-    timeoutStopIrrigationGrassPergola: {
-      type: 'timeout-emit',
-      listenTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/status`,
-      listenFilter: (payload) => payload.state,
-      timeout: 15 * 60000,
-      emitTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
-      emitValue: { state: false }
-    },
-
-    irrigationFlowerGroundSchedule: {
-      type: 'irrigation',
-      schedule: '0 */10 8-18 * * *',
-      duration: 5*60*1000,
-      valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_ground/set`,
-    },
-    irrigationFlowerPotsSchedule: {
-      type: 'irrigation',
-      schedule: '0 25,55 6-22 * * *',
-      duration: 2*60*1000,
-      valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_pots/set`,
-    },
-    irrigationGrassPergolaSchedule: {
-      type: 'irrigation',
-      schedule: '0 0 2 * * *',
-      duration: 20*60*1000,
-      valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
-    },
-    irrigationGrassNorthWestSchedule: {
-      type: 'irrigation',
-      schedule: '0 20 2 * * *',
-      duration: 20*60*1000,
-      valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_north_west/set`,
-    },
     irrigationGrassWestCenterSchedule: {
       type: 'irrigation',
-      schedule: '0 40 2 * * *',
-      duration: 20*60*1000,
+      schedule: '0 50 2 * * *',
+      duration: 20*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_west_center/set`,
+    },
+    timeoutStopIrrigationGrassWestCenter: {
+      type: 'timeout-emit',
+      listenTopic: `${featuresPrefix}/relay/irrigation_grass_west_center/status`,
+      listenFilter: (payload) => payload.state,
+      timeout: 25 * 60000,
+      emitTopic: `${featuresPrefix}/relay/irrigation_grass_west_center/set`,
+      emitValue: { state: false }
     },
     irrigationGrassNorthWestSchedule2: {
       type: 'irrigation',
-      schedule: '0 0 3 * * *',
+      schedule: '0 15 3 * * *',
       duration: 20*60*1000,
       valveControlTopic: `${featuresPrefix}/irrigation_grass_north_west/set`,
     },
