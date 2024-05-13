@@ -256,8 +256,8 @@ module.exports = {
       listenTopic: `${featuresPrefix}/light/bath2_ceiling_light/status`,
       listenFilter: (payload) => payload.state,
       timeout: 12 * 60000,
-      outputTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
-      outputMessage: { state: false },
+      emitTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
+      emitValue: { state: false },
     },
     lightOnBath3OnLock: {
       type: 'emit-on-di',
