@@ -9,6 +9,7 @@ module.exports = (name, {
         let locked = null
         let unlockedTimer = null
         let openedTimer = null
+        let closedTimer = null
 
         if (lock?.statusTopic) {
             mqtt.subscribe(lock.statusTopic, (payload) => {
@@ -28,16 +29,16 @@ module.exports = (name, {
                         clearTimeout(unlockedTimer)
                         unlockedTimer = null
                     }
-                } else if (timeouts?.unlock != null && !unlockedTimer) {
+                } else if (timeouts?.unlocked != null && !unlockedTimer) {
                     if (verbose) {
-                        console.log(`[${name}] turning off lights in ${timeouts.unlock / 60000} minutes`)
+                        console.log(`[${name}] turning off lights in ${timeouts.unlocked / 60000} minutes from unlocked timeout`)
                     }
                     unlockedTimer = setTimeout(() => {
                         if (verbose) {
-                            console.log(`[${name}] turning off lights`)
+                            console.log(`[${name}] turning off lights from unlocked timeout`)
                         }
                         mqtt.publish(light.commandTopic, {state: false})
-                    }, timeouts.unlock)
+                    }, timeouts.unlocked)
                 }
             })
         }
@@ -94,15 +95,31 @@ module.exports = (name, {
                         mqtt.publish(light.commandTopic, {state: true})
                         if (timeouts?.opened && !openedTimer) {
                             if (verbose) {
-                                console.log(`[${name}] turning off lights in ${timeouts.opened / 60000} minutes`)
+                                console.log(`[${name}] turning off lights in ${timeouts.opened / 60000} minutes from opened timeout`)
                             }
                             openedTimer = setTimeout(() => {
                                 if (verbose) {
-                                    console.log(`[${name}] turning off lights`)
+                                    console.log(`[${name}] turning off lights from opened timeout`)
                                 }
                                 mqtt.publish(light.commandTopic, {state: false})
                             }, timeouts.opened)
                         }
+                    }
+                } else {
+                    if (verbose) {
+                        console.log(`[${name}] turning on lights`)
+                    }
+                    mqtt.publish(light.commandTopic, {state: true})
+                    if (timeouts?.closed && !closedTimer) {
+                        if (verbose) {
+                            console.log(`[${name}] turning off lights in ${timeouts.closed / 60000} minutes from closed timeout`)
+                        }
+                        closedTimer = setTimeout(() => {
+                            if (verbose) {
+                                console.log(`[${name}] turning off lights from closed timeout`)
+                            }
+                            mqtt.publish(light.commandTopic, {state: false})
+                        }, timeouts.closed)
                     }
                 }
             })

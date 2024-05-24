@@ -80,7 +80,7 @@ describe('bath-lights', () => {
         const bathLights = BathLights('test-bath-lights', {
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
-            timeouts: {unlock: 1000},
+            timeouts: {unlocked: 1000},
         })
         const mockPublish = jest.fn()
         const mqtt = {subscribe, publish: mockPublish}
@@ -104,7 +104,7 @@ describe('bath-lights', () => {
         const bathLights = BathLights('test-bath-lights', {
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
-            timeouts: {unlock: 1000},
+            timeouts: {unlocked: 1000},
         })
         const mockPublish = jest.fn()
         const mqtt = {subscribe, publish: mockPublish}
@@ -126,7 +126,7 @@ describe('bath-lights', () => {
         const bathLights = BathLights('test-bath-lights', {
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
-            timeouts: {unlock: 1000},
+            timeouts: {unlocked: 1000},
         })
         const mockPublish = jest.fn()
         const mqtt = {subscribe, publish: mockPublish}
@@ -149,7 +149,7 @@ describe('bath-lights', () => {
         const bathLights = BathLights('test-bath-lights', {
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
-            timeouts: {unlock: 1000},
+            timeouts: {unlocked: 1000},
         })
         const mockPublish = jest.fn()
         const mqtt = {subscribe, publish: mockPublish}
@@ -171,7 +171,7 @@ describe('bath-lights', () => {
         const bathLights = BathLights('test-bath-lights', {
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
-            timeouts: {unlock: 1000},
+            timeouts: {unlocked: 1000},
         })
         const mockPublish = jest.fn()
         const mqtt = {subscribe, publish: mockPublish}
@@ -195,7 +195,7 @@ describe('bath-lights', () => {
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
             door: {statusTopic: 'door/status'},
-            timeouts: {unlock: 1000},
+            timeouts: {unlocked: 1000},
         })
         const mockPublish = jest.fn()
         const mqtt = {subscribe, publish: mockPublish}
@@ -218,7 +218,7 @@ describe('bath-lights', () => {
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
             door: {statusTopic: 'door/status'},
-            timeouts: {unlock: 1000},
+            timeouts: {unlocked: 1000},
         })
         const mockPublish = jest.fn()
         const mqtt = {subscribe, publish: mockPublish}
@@ -319,6 +319,107 @@ describe('bath-lights', () => {
 
         // should not turn off the lights
         expect(mockPublish).not.toHaveBeenCalled()
+    })
+
+    test.only('should work continuously', () => {
+        const state = {}
+        const bathLights = BathLights('test-bath-lights', {
+            door: {statusTopic: 'door/status'},
+            lock: {statusTopic: 'lock/status'},
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            timeouts: {closed: 1*60000, opened: 2*60000, unlocked: 3*60000},
+            verbose: true
+        })
+        const mockPublish = jest.fn().mockImplementation((topic, payload) => {
+            console.log('publish', topic, payload)
+            expect(topic).toEqual('lights/command')
+            state[topic.split('/')[0]] = payload.state
+        })
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        /////////////////////////
+        // Scenario - close door
+        /////////////////////////
+
+        // close door - lights on
+        publish('door/status', {state: false})
+        expect(state).toEqual({lights: true})
+
+        // wait for 1 minute - lights off
+        jest.advanceTimersByTime(60000)
+        expect(state).toEqual({lights: false})
+
+        // wait for 1 hour - lights off
+        jest.advanceTimersByTime(60*60000)
+        expect(state).toEqual({lights: false})
+
+        /////////////////////////
+        // Scenario - open door
+        /////////////////////////
+
+        // open door - lights on
+        publish('door/status', {state: true})
+        expect(state).toEqual({lights: true})
+
+        // wait for 1 minute - lights on
+        jest.advanceTimersByTime(60000)
+        expect(state).toEqual({lights: true})
+
+        // wait for 1 minute - lights off
+        jest.advanceTimersByTime(60000)
+        expect(state).toEqual({lights: false})
+
+        // wait for 1 hour - lights off
+        jest.advanceTimersByTime(60*60000)
+        expect(state).toEqual({lights: false})
+
+
+        //////////////////////////
+        // Scenario - close & lock
+        //////////////////////////
+
+        // close door - lights on
+        publish('door/status', {state: false})
+        expect(state).toEqual({lights: true})
+
+        // wait for 1 minute - lights on
+        jest.advanceTimersByTime(60000)
+        expect(state).toEqual({lights: true})
+
+        // lock door - lights on
+        publish('lock/status', {state: true})
+        expect(state).toEqual({lights: true})
+
+        // wait for 1 hour - lights on
+        jest.advanceTimersByTime(3600000)
+        expect(state).toEqual({lights: true})
+
+        //////////////////////////
+        // Scenario - unlock & open
+        //////////////////////////
+
+        // unlock door - lights on
+        publish('lock/status', {state: false})
+        expect(state).toEqual({lights: true})
+
+        // wait for 1 minute - lights on
+        jest.advanceTimersByTime(60000)
+        expect(state).toEqual({lights: true})
+
+        // wait for 1 minute - lights on
+        jest.advanceTimersByTime(60000)
+        expect(state).toEqual({lights: true})
+
+        // open door - lights off
+        publish('door/status', {state: true})
+        expect(state).toEqual({lights: false})
+
+        // wait for 1 hour - lights off
+        jest.advanceTimersByTime(3600000)
+        expect(state).toEqual({lights: false})
     })
 })
 
