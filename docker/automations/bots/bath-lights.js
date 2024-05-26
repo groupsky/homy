@@ -9,6 +9,7 @@ module.exports = (name, {
     start: ({mqtt}) => {
         let lightState = null
         let lockState = null
+        let toggleState = null
         let closedTimer = null
         let openedTimer = null
         let toggledTimer = null
@@ -64,12 +65,16 @@ module.exports = (name, {
                 if (verbose) {
                     console.log(`[${name}] toggle ${toggleType} changed`, payload)
                 }
-                if (toggleType === 'switch' || payload.state) {
+                const changed = toggleState !== payload.state
+                toggleState = payload.state
+                if ((toggleType === 'switch' && changed) || (toggleType === 'button' && payload.state)) {
                     if (lightState) {
-                        if (verbose) {
-                            console.log('[${name}] turning off lights')
+                        if (!lockState) {
+                            if (verbose) {
+                                console.log('[${name}] turning off lights')
+                            }
+                            mqtt.publish(light.commandTopic, {state: false})
                         }
-                        mqtt.publish(light.commandTopic, {state: false})
                     } else {
                         if (verbose) {
                             console.log('[${name}] turning on lights')
