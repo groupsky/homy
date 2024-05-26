@@ -107,6 +107,27 @@ module.exports = (name, {
                         console.log(`[${name}] turning on lights`)
                     }
                     mqtt.publish(light.commandTopic, {state: true, r: 'lck'})
+                    if (closedTimer) {
+                        if (verbose) {
+                            console.log(`[${name}] cancelling closed timer`)
+                        }
+                        clearTimeout(closedTimer)
+                        closedTimer = null
+                    }
+                    if (openedTimer) {
+                        if (verbose) {
+                            console.log(`[${name}] cancelling opened timer`)
+                        }
+                        clearTimeout(openedTimer)
+                        openedTimer = null
+                    }
+                    if (toggledTimer) {
+                        if (verbose) {
+                            console.log(`[${name}] cancelling toggled timer`)
+                        }
+                        clearTimeout(toggledTimer)
+                        toggledTimer = null
+                    }
                     if (unlockedTimer) {
                         if (verbose) {
                             console.log(`[${name}] cancelling unlocked timer`)
