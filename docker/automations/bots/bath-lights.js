@@ -63,26 +63,28 @@ module.exports = (name, {
                 if (verbose) {
                     console.log(`[${name}] toggle changed`, payload)
                 }
-                if (lightState) {
-                    if (verbose) {
-                        console.log('[${name}] turning off lights')
-                    }
-                    mqtt.publish(light.commandTopic, {state: false})
-                } else {
-                    if (verbose) {
-                        console.log('[${name}] turning on lights')
-                    }
-                    mqtt.publish(light.commandTopic, {state: true})
-                    if (timeouts?.toggled && !toggledTimer) {
+                if (payload.state) {
+                    if (lightState) {
                         if (verbose) {
-                            console.log(`[${name}] turning off lights in ${timeouts.toggled / 60000} minutes from toggled timeout`)
+                            console.log('[${name}] turning off lights')
                         }
-                        toggledTimer = setTimeout(() => {
+                        mqtt.publish(light.commandTopic, {state: false})
+                    } else {
+                        if (verbose) {
+                            console.log('[${name}] turning on lights')
+                        }
+                        mqtt.publish(light.commandTopic, {state: true})
+                        if (timeouts?.toggled && !toggledTimer) {
                             if (verbose) {
-                                console.log(`[${name}] turning off lights from toggled timeout`)
+                                console.log(`[${name}] turning off lights in ${timeouts.toggled / 60000} minutes from toggled timeout`)
                             }
-                            mqtt.publish(light.commandTopic, {state: false})
-                        }, timeouts.toggled)
+                            toggledTimer = setTimeout(() => {
+                                if (verbose) {
+                                    console.log(`[${name}] turning off lights from toggled timeout`)
+                                }
+                                mqtt.publish(light.commandTopic, {state: false})
+                            }, timeouts.toggled)
+                        }
                     }
                 }
             })

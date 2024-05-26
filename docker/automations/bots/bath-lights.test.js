@@ -18,7 +18,7 @@ beforeEach(() => {
 
 
 describe('bath-lights', () => {
-    test.each([false, true])('should turn on lights when toggle is %s', (switchStatus) => {
+    test('should turn on lights when toggle changes', () => {
         const bathLights = BathLights('test-bath-lights', {
             light: {commandTopic: 'lights/command'},
             toggle: {statusTopic: 'switch/status'}
@@ -30,13 +30,14 @@ describe('bath-lights', () => {
         bathLights.start({mqtt})
 
         // toggle status
-        publish('switch/status', {state: switchStatus})
+        publish('switch/status', {state: true})
+        publish('switch/status', {state: false})
 
         // should turn on the lights
         expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
     })
 
-    test.each([false, true])('should turn off lights when toggle is %s and lights are on', (switchStatus) => {
+    test('should turn off lights when toggle changes and lights are on', () => {
         const bathLights = BathLights('test-bath-lights', {
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
             toggle: {statusTopic: 'switch/status'}
@@ -51,13 +52,14 @@ describe('bath-lights', () => {
         publish('lights/status', {state: true})
 
         // toggle status
-        publish('switch/status', {state: switchStatus})
+        publish('switch/status', {state: true})
+        publish('switch/status', {state: false})
 
         // should turn off the lights
         expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: false})
     })
 
-    test.each([false, true])('should turn on lights when toggle is %s and lights are off', (switchStatus) => {
+    test('should turn on lights when toggle changes and lights are off', () => {
         const bathLights = BathLights('test-bath-lights', {
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
             toggle: {statusTopic: 'switch/status'},
@@ -72,7 +74,8 @@ describe('bath-lights', () => {
         publish('lights/status', {state: false})
 
         // toggle status
-        publish('switch/status', {state: switchStatus})
+        publish('switch/status', {state: true})
+        publish('switch/status', {state: false})
 
         // should turn off the lights
         expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
@@ -97,6 +100,7 @@ describe('bath-lights', () => {
 
         // toggle status
         publish('switch/status', {state: true})
+        publish('switch/status', {state: false})
 
         // should turn on the lights
         expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
@@ -128,6 +132,7 @@ describe('bath-lights', () => {
 
         // toggle status
         publish('switch/status', {state: true})
+        publish('switch/status', {state: false})
 
         // should turn on the lights
         expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
@@ -469,6 +474,7 @@ describe('bath-lights', () => {
         /////////////////////////
 
         // switch - lights on
+        publish('switch/status', {state: true})
         publish('switch/status', {state: false})
         expect(state).toEqual({lights: true})
 
