@@ -25,7 +25,7 @@ module.exports = (name, {
                     if (verbose) {
                         console.log(`[${name}] turning on lights from lock`)
                     }
-                    mqtt.publish(light.commandTopic, {state: true})
+                    mqtt.publish(light.commandTopic, {state: true, r: 'loff-lock'})
                 }
 
                 if (closedTimer) {
@@ -73,13 +73,13 @@ module.exports = (name, {
                             if (verbose) {
                                 console.log('[${name}] turning off lights')
                             }
-                            mqtt.publish(light.commandTopic, {state: false})
+                            mqtt.publish(light.commandTopic, {state: false, r: 'tgl-lon'})
                         }
                     } else {
                         if (verbose) {
                             console.log('[${name}] turning on lights')
                         }
-                        mqtt.publish(light.commandTopic, {state: true})
+                        mqtt.publish(light.commandTopic, {state: true, r: 'tgl-loff'})
                         if (timeouts?.toggled && !toggledTimer) {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights in ${timeouts.toggled / 60000} minutes from toggled timeout`)
@@ -88,7 +88,7 @@ module.exports = (name, {
                                 if (verbose) {
                                     console.log(`[${name}] turning off lights from toggled timeout`)
                                 }
-                                mqtt.publish(light.commandTopic, {state: false})
+                                mqtt.publish(light.commandTopic, {state: false, r: 'tgl-tout'})
                             }, timeouts.toggled)
                         }
                     }
@@ -106,7 +106,7 @@ module.exports = (name, {
                     if (verbose) {
                         console.log(`[${name}] turning on lights`)
                     }
-                    mqtt.publish(light.commandTopic, {state: true})
+                    mqtt.publish(light.commandTopic, {state: true, r: 'lck'})
                     if (unlockedTimer) {
                         if (verbose) {
                             console.log(`[${name}] cancelling unlocked timer`)
@@ -122,7 +122,7 @@ module.exports = (name, {
                         if (verbose) {
                             console.log(`[${name}] turning off lights from unlocked timeout`)
                         }
-                        mqtt.publish(light.commandTopic, {state: false})
+                        mqtt.publish(light.commandTopic, {state: false, r: 'unl-tout'})
                     }, timeouts.unlocked)
                 }
             })
@@ -138,7 +138,7 @@ module.exports = (name, {
                         if (verbose) {
                             console.log(`[${name}] turning off lights`)
                         }
-                        mqtt.publish(light.commandTopic, {state: false})
+                        mqtt.publish(light.commandTopic, {state: false, r: 'don-unl'})
                         if (verbose) {
                             console.log(`[${name}] cancelling unlocked timer`)
                         }
@@ -148,7 +148,7 @@ module.exports = (name, {
                         if (verbose) {
                             console.log(`[${name}] turning on lights`)
                         }
-                        mqtt.publish(light.commandTopic, {state: true})
+                        mqtt.publish(light.commandTopic, {state: true, r: 'don'})
                         if (timeouts?.opened && !openedTimer) {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights in ${timeouts.opened / 60000} minutes from opened timeout`)
@@ -157,7 +157,7 @@ module.exports = (name, {
                                 if (verbose) {
                                     console.log(`[${name}] turning off lights from opened timeout`)
                                 }
-                                mqtt.publish(light.commandTopic, {state: false})
+                                mqtt.publish(light.commandTopic, {state: false, r: 'don-tout'})
                             }, timeouts.opened)
                         }
                     }
@@ -165,7 +165,7 @@ module.exports = (name, {
                     if (verbose) {
                         console.log(`[${name}] turning on lights`)
                     }
-                    mqtt.publish(light.commandTopic, {state: true})
+                    mqtt.publish(light.commandTopic, {state: true, r: 'doff'})
                     if (timeouts?.closed && !closedTimer) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights in ${timeouts.closed / 60000} minutes from closed timeout`)
@@ -174,7 +174,7 @@ module.exports = (name, {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights from closed timeout`)
                             }
-                            mqtt.publish(light.commandTopic, {state: false})
+                            mqtt.publish(light.commandTopic, {state: false, r: 'doff-tout'})
                         }, timeouts.closed)
                     }
                 }
