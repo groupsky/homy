@@ -18,6 +18,130 @@ beforeEach(() => {
 
 
 describe('bath-lights', () => {
+    test.each([false, true])('should turn on lights when toggle is %s', (switchStatus) => {
+        const bathLights = BathLights('test-bath-lights', {
+            light: {commandTopic: 'lights/command'},
+            toggle: {statusTopic: 'switch/status'}
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // toggle status
+        publish('switch/status', {state: switchStatus})
+
+        // should turn on the lights
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
+    })
+
+    test.each([false, true])('should turn off lights when toggle is %s and lights are on', (switchStatus) => {
+        const bathLights = BathLights('test-bath-lights', {
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            toggle: {statusTopic: 'switch/status'}
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // lights on
+        publish('lights/status', {state: true})
+
+        // toggle status
+        publish('switch/status', {state: switchStatus})
+
+        // should turn off the lights
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: false})
+    })
+
+    test.each([false, true])('should turn on lights when toggle is %s and lights are off', (switchStatus) => {
+        const bathLights = BathLights('test-bath-lights', {
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            toggle: {statusTopic: 'switch/status'},
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // lights off
+        publish('lights/status', {state: false})
+
+        // toggle status
+        publish('switch/status', {state: switchStatus})
+
+        // should turn off the lights
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
+    })
+
+    test('should turn off lights after toggle timeout', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            toggle: {statusTopic: 'switch/status'},
+            timeouts: {
+                toggled: 1000
+            },
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // lights off
+        publish('lights/status', {state: false})
+
+        // toggle status
+        publish('switch/status', {state: true})
+
+        // should turn on the lights
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
+        mockPublish.mockClear()
+
+        // wait for timeout
+        jest.advanceTimersByTime(1000)
+
+        // should turn off the lights
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: false})
+    })
+
+    test('should not turn off lights after toggle timeout when turned off and on', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            toggle: {statusTopic: 'switch/status'},
+            timeouts: {
+                toggled: 1000
+            },
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // lights off
+        publish('lights/status', {state: false})
+
+        // toggle status
+        publish('switch/status', {state: true})
+
+        // should turn on the lights
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', {state: true})
+        mockPublish.mockClear()
+
+        // turn light off and on again
+        publish('lights/status', {state: false})
+        publish('lights/status', {state: true})
+        jest.advanceTimersByTime(1000)
+
+        // should not turn off the lights
+        expect(mockPublish).not.toHaveBeenCalled()
+    })
+
     test('should turn on lights when locked', () => {
         const bathLights = BathLights('test-bath-lights', {
             lock: {statusTopic: 'lock/status'},
@@ -321,14 +445,14 @@ describe('bath-lights', () => {
         expect(mockPublish).not.toHaveBeenCalled()
     })
 
-    test.only('should work continuously', () => {
+    test('should work continuously', () => {
         const state = {}
         const bathLights = BathLights('test-bath-lights', {
             door: {statusTopic: 'door/status'},
             lock: {statusTopic: 'lock/status'},
             light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
-            timeouts: {closed: 1*60000, opened: 2*60000, unlocked: 3*60000},
-            verbose: true
+            toggle: {statusTopic: 'switch/status'},
+            timeouts: {closed: 1*60000, opened: 2*60000, toggled: 5*60000, unlocked: 3*60000},
         })
         const mockPublish = jest.fn().mockImplementation((topic, payload) => {
             console.log('publish', topic, payload)
@@ -339,6 +463,22 @@ describe('bath-lights', () => {
 
         // start the bot
         bathLights.start({mqtt})
+
+        /////////////////////////
+        // Scenario - switch
+        /////////////////////////
+
+        // switch - lights on
+        publish('switch/status', {state: false})
+        expect(state).toEqual({lights: true})
+
+        // wait for 5 minute - lights off
+        jest.advanceTimersByTime(5*60000)
+        expect(state).toEqual({lights: false})
+
+        // wait for 1 hour - lights off
+        jest.advanceTimersByTime(60*60000)
+        expect(state).toEqual({lights: false})
 
         /////////////////////////
         // Scenario - close door

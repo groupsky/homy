@@ -70,28 +70,6 @@ module.exports = {
       ]
     },
 
-    toggleBath1LightFromBath1Switch: {
-      type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'button', name: 'bath1_switch_left' },
-      inputFilter: 'identity',
-      toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'bath1_ceiling_light' },
-      outputConfig: { initialState: false },
-    },
-    toggleBath2LightFromBath2Switch: {
-      type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'switch', name: 'bath2_switch_left' },
-      toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'bath2_ceiling_light' },
-      outputConfig: { initialState: false },
-    },
-    toggleBath3LightFromBath3Switch: {
-      type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'switch', name: 'bath3_switch_left' },
-      toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'bath3_ceiling_light' },
-      outputConfig: { initialState: false },
-    },
     toggleBedroomLightFromBedroomSwitch: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'switch', name: 'bedroom_switch_left' },
@@ -211,29 +189,41 @@ module.exports = {
       outputConfig: { initialState: false },
     },
 
-    lightOnBath1OnLock: {
-      type: 'emit-on-di',
-      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      di: 5,
-      value: true,
-      outputTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
-      outputMessage: { state: true }
+    lightBath1Controller: {
+      type: 'bath-lights',
+      door: {
+        statusTopic: `${featuresPrefix}/open/bath1_door_open/status`,
+      },
+      lock: {
+        statusTopic: `${featuresPrefix}/lock/bath1_door_lock/status`,
+      },
+      light: {
+        commandTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
+        statusTopic: `${featuresPrefix}/light/bath1_ceiling_light/status`,
+      },
+      toggle: {
+        statusTopic: `${featuresPrefix}/button/bath1_switch_left/status`,
+      },
+      timeouts: {
+        closed: 0.5 * 60000,
+        opened: 5 * 60000,
+        toggled: 12 * 60000,
+        unlocked: 15 * 60000,
+      }
     },
-    lightOnBath1OnOpen: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      mask: 1 << 6,
-      outputTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
-      outputMessage: { state: true },
-      filterState: (newState) => !newState
+    toggleBath2LightFromBath2Switch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'bath2_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'bath2_ceiling_light' },
+      outputConfig: { initialState: false },
     },
-    autoLightOffBath1: {
-      type: 'timeout-emit',
-      listenTopic: `${featuresPrefix}/light/bath1_ceiling_light/status`,
-      listenFilter: (payload) => payload.state,
-      timeout: 12 * 60000,
-      emitTopic: `${featuresPrefix}/light/bath1_ceiling_light/set`,
-      emitValue: { state: false }
+    toggleBath3LightFromBath3Switch: {
+      type: 'feature-toggle-on-feature-change',
+      inputFeature: { type: 'switch', name: 'bath3_switch_left' },
+      toggleConfig: { timeout: 1000 },
+      outputFeature: { type: 'light', name: 'bath3_ceiling_light' },
+      outputConfig: { initialState: false },
     },
     lightOnBath2OnLock: {
       type: 'emit-on-di',

@@ -2,21 +2,98 @@ module.exports = (name, {
     door,
     lock,
     light,
+    toggle,
     timeouts,
     verbose
 }) => ({
     start: ({mqtt}) => {
-        let locked = null
-        let unlockedTimer = null
-        let openedTimer = null
+        let lightState = null
+        let lockState = null
         let closedTimer = null
+        let openedTimer = null
+        let toggledTimer = null
+        let unlockedTimer = null
+
+        mqtt.subscribe(light.statusTopic, (payload) => {
+            if (verbose) {
+                console.log(`[${name}] light changed`, payload)
+            }
+            lightState = payload.state
+            if (!payload.state) {
+                if (lockState) {
+                    if (verbose) {
+                        console.log(`[${name}] turning on lights from lock`)
+                    }
+                    mqtt.publish(light.commandTopic, {state: true})
+                }
+
+                if (closedTimer) {
+                    if (verbose) {
+                        console.log(`[${name}] cancelling closed timer`)
+                    }
+                    clearTimeout(closedTimer)
+                    closedTimer = null
+                }
+                if (openedTimer) {
+                    if (verbose) {
+                        console.log(`[${name}] cancelling opened timer`)
+                    }
+                    clearTimeout(openedTimer)
+                    openedTimer = null
+                }
+                if (toggledTimer) {
+                    if (verbose) {
+                        console.log(`[${name}] cancelling toggled timer`)
+                    }
+                    clearTimeout(toggledTimer)
+                    toggledTimer = null
+                }
+                if (unlockedTimer) {
+                    if (verbose) {
+                        console.log(`[${name}] cancelling unlocked timer`)
+                    }
+                    clearTimeout(unlockedTimer)
+                    unlockedTimer = null
+                }
+            }
+        })
+
+        if (toggle?.statusTopic) {
+            mqtt.subscribe(toggle.statusTopic, (payload) => {
+                if (verbose) {
+                    console.log(`[${name}] toggle changed`, payload)
+                }
+                if (lightState) {
+                    if (verbose) {
+                        console.log('[${name}] turning off lights')
+                    }
+                    mqtt.publish(light.commandTopic, {state: false})
+                } else {
+                    if (verbose) {
+                        console.log('[${name}] turning on lights')
+                    }
+                    mqtt.publish(light.commandTopic, {state: true})
+                    if (timeouts?.toggled && !toggledTimer) {
+                        if (verbose) {
+                            console.log(`[${name}] turning off lights in ${timeouts.toggled / 60000} minutes from toggled timeout`)
+                        }
+                        toggledTimer = setTimeout(() => {
+                            if (verbose) {
+                                console.log(`[${name}] turning off lights from toggled timeout`)
+                            }
+                            mqtt.publish(light.commandTopic, {state: false})
+                        }, timeouts.toggled)
+                    }
+                }
+            })
+        }
 
         if (lock?.statusTopic) {
             mqtt.subscribe(lock.statusTopic, (payload) => {
                 if (verbose) {
                     console.log(`[${name}] lock changed`, payload)
                 }
-                locked = payload.state
+                lockState = payload.state
                 if (payload.state) {
                     if (verbose) {
                         console.log(`[${name}] turning on lights`)
@@ -42,35 +119,6 @@ module.exports = (name, {
                 }
             })
         }
-
-        mqtt.subscribe(light.statusTopic, (payload) => {
-            if (verbose) {
-                console.log(`[${name}] light changed`, payload)
-            }
-            if (!payload.state) {
-                if (locked) {
-                    if (verbose) {
-                        console.log(`[${name}] turning on lights`)
-                    }
-                    mqtt.publish(light.commandTopic, {state: true})
-                } else {
-                    if (unlockedTimer) {
-                        if (verbose) {
-                            console.log(`[${name}] cancelling unlocked timer`)
-                        }
-                        clearTimeout(unlockedTimer)
-                        unlockedTimer = null
-                    }
-                    if (openedTimer) {
-                        if (verbose) {
-                            console.log(`[${name}] cancelling opened timer`)
-                        }
-                        clearTimeout(openedTimer)
-                        openedTimer = null
-                    }
-                }
-            }
-        })
 
         if (door?.statusTopic) {
             mqtt.subscribe(door.statusTopic, (payload) => {
