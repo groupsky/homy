@@ -59,11 +59,12 @@ module.exports = (name, {
         })
 
         if (toggle?.statusTopic) {
+            const toggleType = toggle.type || 'button'
             mqtt.subscribe(toggle.statusTopic, (payload) => {
                 if (verbose) {
-                    console.log(`[${name}] toggle changed`, payload)
+                    console.log(`[${name}] toggle ${toggleType} changed`, payload)
                 }
-                if (payload.state) {
+                if (toggleType === 'switch' || payload.state) {
                     if (lightState) {
                         if (verbose) {
                             console.log('[${name}] turning off lights')

@@ -194,6 +194,7 @@ module.exports = {
         statusTopic: `${featuresPrefix}/light/bath1_ceiling_light/status`,
       },
       toggle: {
+        type: 'button',
         statusTopic: `${featuresPrefix}/button/bath1_switch_left/status`,
       },
       timeouts: {
@@ -216,7 +217,8 @@ module.exports = {
         statusTopic: `${featuresPrefix}/light/bath2_ceiling_light/status`,
       },
       toggle: {
-        statusTopic: `${featuresPrefix}/button/bath2_switch_left/status`,
+        type: 'switch',
+        statusTopic: `${featuresPrefix}/switch/bath2_switch_left/status`,
       },
       timeouts: {
         closed: 0.5 * 60000,
@@ -238,7 +240,8 @@ module.exports = {
         statusTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
       },
       toggle: {
-        statusTopic: `${featuresPrefix}/button/bath3_switch_left/status`,
+        type: 'switch',
+        statusTopic: `${featuresPrefix}/switch/bath3_switch_left/status`,
       },
       timeouts: {
         closed: 0.5 * 60000,
