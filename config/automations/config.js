@@ -124,14 +124,6 @@ module.exports = {
       outputConfig: { initialState: false },
     },
 
-    toggleCorridor1LightFromBath1Switch: {
-      type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'button', name: 'bath1_switch_right' },
-      inputFilter: 'identity',
-      toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'corridor1_ceiling_light' },
-      outputConfig: { initialState: false },
-    },
     toggleCorridor1LightFromKitchenButton: {
       type: 'feature-toggle-on-feature-change',
       inputFeature: { type: 'button', name: 'corridor1_kitchen_left' },
@@ -211,68 +203,51 @@ module.exports = {
         unlocked: 15 * 60000,
       }
     },
-    toggleBath2LightFromBath2Switch: {
-      type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'switch', name: 'bath2_switch_left' },
-      toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'bath2_ceiling_light' },
-      outputConfig: { initialState: false },
+    lightBath2Controller: {
+      type: 'bath-lights',
+      door: {
+        statusTopic: `${featuresPrefix}/open/bath2_door_open/status`,
+      },
+      lock: {
+        statusTopic: `${featuresPrefix}/lock/bath2_door_lock/status`,
+      },
+      light: {
+        commandTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
+        statusTopic: `${featuresPrefix}/light/bath2_ceiling_light/status`,
+      },
+      toggle: {
+        statusTopic: `${featuresPrefix}/button/bath2_switch_left/status`,
+      },
+      timeouts: {
+        closed: 0.5 * 60000,
+        opened: 5 * 60000,
+        toggled: 12 * 60000,
+        unlocked: 15 * 60000,
+      }
     },
-    toggleBath3LightFromBath3Switch: {
-      type: 'feature-toggle-on-feature-change',
-      inputFeature: { type: 'switch', name: 'bath3_switch_left' },
-      toggleConfig: { timeout: 1000 },
-      outputFeature: { type: 'light', name: 'bath3_ceiling_light' },
-      outputConfig: { initialState: false },
+    lightBath3Controller: {
+      type: 'bath-lights',
+      door: {
+        statusTopic: `${featuresPrefix}/open/bath3_door_open/status`,
+      },
+      lock: {
+        statusTopic: `${featuresPrefix}/lock/bath3_door_lock/status`,
+      },
+      light: {
+        commandTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
+        statusTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
+      },
+      toggle: {
+        statusTopic: `${featuresPrefix}/button/bath3_switch_left/status`,
+      },
+      timeouts: {
+        closed: 0.5 * 60000,
+        opened: 5 * 60000,
+        toggled: 12 * 60000,
+        unlocked: 15 * 60000,
+      }
     },
-    lightOnBath2OnLock: {
-      type: 'emit-on-di',
-      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      di: 9,
-      value: true,
-      outputTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
-      outputMessage: { state: true }
-    },
-    lightOnBath2OnOpen: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      mask: 1 << 10,
-      outputTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
-      outputMessage: { state: true },
-      filterState: (newState) => !newState
-    },
-    autoLightOffBath2: {
-      type: 'timeout-emit',
-      listenTopic: `${featuresPrefix}/light/bath2_ceiling_light/status`,
-      listenFilter: (payload) => payload.state,
-      timeout: 12 * 60000,
-      emitTopic: `${featuresPrefix}/light/bath2_ceiling_light/set`,
-      emitValue: { state: false },
-    },
-    lightOnBath3OnLock: {
-      type: 'emit-on-di',
-      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      di: 11,
-      value: true,
-      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
-      outputMessage: { state: true }
-    },
-    lightOnBath3OnOpen: {
-      type: 'emit-on-di-change',
-      diTopic: '/modbus/dry-switches/mbsl32di1/reading',
-      mask: 1 << 12,
-      outputTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
-      outputMessage: { state: true },
-      filterState: (newState) => !newState
-    },
-    autoLightOffBath3: {
-      type: 'timeout-emit',
-      listenTopic: `${featuresPrefix}/light/bath3_ceiling_light/status`,
-      listenFilter: (payload) => payload.state,
-      timeout: 12 * 60 * 1000,
-      emitTopic: `${featuresPrefix}/light/bath3_ceiling_light/set`,
-      emitValue: { state: false }
-    },
+
     nightExternalLights: {
       type: 'solar-emitter',
       statusTopic: '/modbus/dry-switches/relays00-15/reading',
