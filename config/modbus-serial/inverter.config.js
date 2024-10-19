@@ -28,7 +28,7 @@ function getFileEnv(envVariable) {
 module.exports = {
     modbus: {
         type: 'tcp',
-        port: '192.168.0.51',
+        port: 'inverter.srv.net.roupsky.name',
         portConfig: {
             port: 502,
         },
