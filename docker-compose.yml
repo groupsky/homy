@@ -825,6 +825,9 @@ services:
       - MQTT_USERNAME_FILE=/run/secrets/ovms_mqtt_user
       - MQTT_PASSWORD_FILE=/run/secrets/ovms_mqtt_password
     volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
       - ${CONFIG_PATH}/telegraf/ovms.conf:/etc/telegraf/telegraf.conf:ro
 
   # Manually run with
