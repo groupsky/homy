@@ -817,6 +817,8 @@ services:
       - influxdb_write_user_password
       - ovms_mqtt_user
       - ovms_mqtt_password
+    ulimits:
+      memlock: 835584
     environment:
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
