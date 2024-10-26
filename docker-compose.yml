@@ -802,6 +802,31 @@ services:
       - MQTT_CLIENT_ID=historian-secondary
       - COLLECTION=secondary
 
+  telegraf-ovms:
+    build: docker/telegraf
+    depends_on:
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+      - ovms_mqtt_user
+      - ovms_mqtt_password
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - MQTT_USERNAME_FILE=/run/secrets/ovms_mqtt_user
+      - MQTT_PASSWORD_FILE=/run/secrets/ovms_mqtt_password
+    volumes:
+      - ${CONFIG_PATH}/telegraf/ovms.conf:/etc/telegraf/telegraf.conf:ro
+
   # Manually run with
   # dc run volman
   volman:
@@ -895,6 +920,10 @@ secrets:
     file: ${MONGO_SECRET_ROOT_USERNAME_FILE}
   nodered_credentials_key:
     file: ${NODERED_SECRET_CREDENTIALS_KEY_FILE}
+  ovms_mqtt_password:
+    file: ${SECRETS_PATH}/ovms_mqtt_password
+  ovms_mqtt_user:
+    file: ${SECRETS_PATH}/ovms_mqtt_user
   telegram_bot_token:
     file: ${SECRETS_PATH}/telegram_bot_token
   telegram_chat_id:
