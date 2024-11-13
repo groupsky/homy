@@ -23,15 +23,13 @@
 /**
  * @typedef {{
  *   [read]: {
- *     [frequency]: boolean,
- *     [voltage]: boolean,
- *     [current]: boolean,
- *     [power]: boolean,
- *     [reactivePower]: boolean,
- *     [apparentPower]: boolean,
- *     [powerFactor]: boolean,
- *     [totalPower]: boolean,
- *     [totalReactivePower]: boolean,
+ *     [instantaneous]: boolean,
+ *     [energy]: boolean,
+ *     [quadrants]: boolean,
+ *     [system]: boolean,
+ *     [time]: boolean,
+ *     [config]: boolean,
+ *     [tariffs]: boolean,
  *   },
  *   [options]: {
  *     [maxMsBetweenReports]: number,
@@ -42,15 +40,90 @@
 /**
  * @typedef {{
  *   [lastReport]: number,
- *   [freq]: number,
  *   [v]: number,
  *   [c]: number,
- *   [p]: number,
- *   [rp]: number,
  *   [ap]: number,
+ *   [app]: number,
+ *   [rp]: number,
+ *   [freq]: number,
  *   [pow]: number,
  *   [tot_act]: number,
+ *   [tot_act_t1]: number,
+ *   [tot_act_t2]: number,
+ *   [tot_act_t3]: number,
+ *   [tot_act_t4]: number,
+ *   [tot_act_rev]: number,
+ *   [tot_act_rev_t1]: number,
+ *   [tot_act_rev_t2]: number,
+ *   [tot_act_rev_t3]: number,
+ *   [tot_act_rev_t4]: number,
+ *   [act]: number,
+ *   [act_t1]: number,
+ *   [act_t2]: number,
+ *   [act_t3]: number,
+ *   [act_t4]: number,
  *   [tot_react]: number,
+ *   [tot_react_t1]: number,
+ *   [tot_react_t2]: number,
+ *   [tot_react_t3]: number,
+ *   [tot_react_t4]: number,
+ *   [tot_react_rev]: number,
+ *   [tot_react_rev_t1]: number,
+ *   [tot_react_rev_t2]: number,
+ *   [tot_react_rev_t3]: number,
+ *   [tot_react_rev_t4]: number,
+ *   [react]: number,
+ *   [react_t1]: number,
+ *   [react_t2]: number,
+ *   [react_t3]: number,
+ *   [react_t4]: number,
+ *   [react_1]: number,
+ *   [react_1_t1]: number,
+ *   [react_1_t2]: number,
+ *   [react_1_t3]: number,
+ *   [react_1_t4]: number,
+ *   [react_2]: number,
+ *   [react_2_t1]: number,
+ *   [react_2_t2]: number,
+ *   [react_2_t3]: number,
+ *   [react_2_t4]: number,
+ *   [react_3]: number,
+ *   [react_3_t1]: number,
+ *   [react_3_t2]: number,
+ *   [react_3_t3]: number,
+ *   [react_3_t4]: number,
+ *   [react_4]: number,
+ *   [react_4_t1]: number,
+ *   [react_4_t2]: number,
+ *   [react_4_t3]: number,
+ *   [react_4_t4]: number,
+ *   [act_reset]: number,
+ *   [react_reset]: number,
+ *   [act_demand]: number,
+ *   [act_demand_max]: number,
+ *   [act_demand_rev]: number,
+ *   [act_demand_max_rev]: number,
+ *   [react_demand]: number,
+ *   [react_demand_max]: number,
+ *   [react_demand_rev]: number,
+ *   [react_demand_max_rev]: number,
+ *   [serial]: string,
+ *   [id]: number,
+ *   [fw]: number,
+ *   [hw]: number,
+ *   [fw_checksum]: number,
+ *   [time]: Date,
+ *   [scroll_time]: number,
+ *   [baud_rate]: BAUD_RATE,
+ *   [parity]: PARITY,
+ *   [stop_bits]: STOP_BITS,
+ *   [combined_code]: COMBINED_CODE,
+ *   [demand_mode]: DEMAND_MODE,
+ *   [demand_cycle]: number,
+ *   [display_mode]: string,
+ *   [password]: string,
+ *   [running_time]: number,
+ *   [startup_current]: number,
  * }} STATE
  */
 
@@ -149,7 +222,6 @@ const WRITE_DEMAND_MODE_MAP = {
 const readBaudRate = (val) => READ_BAUD_RATE_MAP[val]
 /**
  * @param {BAUD_RATE} val
- * @param {number} prev
  * @return {number}
  */
 const writeBaudRate = (val) =>  WRITE_BAUD_RATE_MAP[val]
@@ -161,7 +233,6 @@ const writeBaudRate = (val) =>  WRITE_BAUD_RATE_MAP[val]
 const readParity = (val) => READ_PARITY_MAP[val]
 /**
  * @param {PARITY} val
- * @param {number} prev
  * @return {number}
  */
 const writeParity = (val) => WRITE_PARITY_MAP[val]
@@ -174,7 +245,6 @@ const readStopBits = (val) => READ_STOP_BITS_MAP[val]
 
 /**
  * @param {STOP_BITS} val
- * @param {number} prev
  */
 const writeStopBits = (val) => WRITE_STOP_BITS_MAP[val]
 
@@ -186,7 +256,6 @@ const readCombinedCode = (val) => READ_COMBINED_CODE_MAP[val]
 
 /**
  * @param {COMBINED_CODE} val
- * @param {number} prev
  */
 const writeCombinedCode = (val) => WRITE_COMBINED_CODE_MAP[val]
 
@@ -198,12 +267,12 @@ const readDemandMode = (val) => READ_DEMAND_MODE_MAP[val]
 
 /**
  * @param {DEMAND_MODE} val
- * @param {number} prev
  */
 const writeDemandMode = (val) => WRITE_DEMAND_MODE_MAP[val]
 
 /**
  * @param {Array<number>} data
+ * @param {number} [count=8]
  * @return {string}
  */
 const readTimeTable = (data, count = 8) => {
@@ -247,7 +316,7 @@ const writeLongBig = (value) => [value >> 16, value & 0xFFFF]
  * @param {import('modbus-serial').ModbusRTU} client
  * @param {CONFIG} [config]
  * @param {STATE} [state]
- * @return {Promise<Object>}
+ * @return {Promise<STATE>}
  */
 async function read(
     client, {
@@ -487,7 +556,7 @@ async function read(
 
         // Serial number - 12-bit serial number, the same as xxx ID, it needs to use 10h together,
         // hexadecimal, 0123 4567 8910H serial number is 012345678910
-        result.serial = ('000000000000' + (data.data[0] << 24 | data.data[1] << 16 | data.data[2]).toString(16)).slice(-12)
+        result.serial = ('0'.repeat(11) + (data.data[0] << 24 | data.data[1] << 16 | data.data[2]).toString(16)).slice(-12)
         changed |= result.serial !== state.serial
 
         // modbus id - 8-bit modbus id
@@ -700,26 +769,63 @@ async function read(
  * Setup communication parameters - changes are applied after device restart
  * @param {import('modbus-serial').ModbusRTU} client
  * @param {{
+ *   [serial]: string,
  *   [address]: number,
  *   [baudRate]: BAUD_RATE,
  *   [parity]: PARITY,
+ *   [stopBits]: STOP_BITS,
+ *   [combinedCode]: COMBINED_CODE,
+ *   [demandMode]: DEMAND_MODE,
+ *   [demandCycle]: number,
+ *   [displayMode]: string,
+ *   [password]: string,
+ *   [runningTime]: number,
+ *   [startupCurrent]: number,
  * }} newConfig
  * @return {Promise<void>}
  */
 async function setup(client, newConfig) {
+    if (newConfig.serial != null) {
+        const serial = ('0'.repeat(11)+newConfig.serial).slice(-12)
+        await client.writeRegisters(0x1000, [
+            parseInt(serial.slice(0, 4), 16),
+            parseInt(serial.slice(4, 8), 16),
+            parseInt(serial.slice(8, 12), 16),
+        ])
+    }
     if (newConfig.address != null) {
         await client.writeRegisters(0x110, [newConfig.address])
         client.setID(newConfig.address)
     }
-    if (newConfig.baudRate != null || newConfig.parity != null) {
-        const {data} = await client.readHoldingRegisters(0x111, 1)
-        if (newConfig.baudRate != null) {
-            data[0] = writeBaudRate(newConfig.baudRate, data[0])
-        }
-        if (newConfig.parity != null) {
-            data[0] = writeParity(newConfig.parity, data[0])
-        }
-        await client.writeRegisters(0x111, data)
+    if (newConfig.baudRate != null) {
+        await client.writeRegisters(0x100C, [writeBaudRate(newConfig.baudRate)])
+    }
+    if (newConfig.parity != null) {
+        await client.writeRegisters(0x100D, [writeParity(newConfig.parity)])
+    }
+    if (newConfig.stopBits != null) {
+        await client.writeRegisters(0x100E, [writeStopBits(newConfig.stopBits)])
+    }
+    if (newConfig.combinedCode != null) {
+        await client.writeRegisters(0x100F, [writeCombinedCode(newConfig.combinedCode)])
+    }
+    if (newConfig.demandMode != null) {
+        await client.writeRegisters(0x1010, [writeDemandMode(newConfig.demandMode)])
+    }
+    if (newConfig.demandCycle != null) {
+        await client.writeRegisters(0x1011, [newConfig.demandCycle])
+    }
+    if (newConfig.displayMode != null) {
+        await client.writeRegisters(0x1012, newConfig.displayMode.match(/.{1,4}/g).map(v => parseInt(v, 16)))
+    }
+    if (newConfig.password != null) {
+        await client.writeRegisters(0x1015, [parseInt(newConfig.password, 10)])
+    }
+    if (newConfig.runningTime != null) {
+        await client.writeRegisters(0x1016, writeLongBig(newConfig.runningTime))
+    }
+    if (newConfig.startupCurrent != null) {
+        await client.writeRegisters(0x1018, writeLongBig(newConfig.startupCurrent))
     }
 }
 
