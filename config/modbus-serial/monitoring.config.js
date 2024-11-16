@@ -36,6 +36,11 @@ module.exports = {
   },
   devices: [
     {
+      name: 'charger',
+      address: 1,
+      type: 'or-we-526',
+    },
+    {
       name: 'relays32-47',
       address: 11,
       type: 'aspar-mod-16ro',
