@@ -312,6 +312,12 @@ const readLongBig = (lsb, msb) => msb << 16 | lsb
  */
 const writeLongBig = (value) => [value & 0xFFFF, value >> 16]
 /**
+ * Read a number as a hex string - e.g. 0x1234 -> 1234
+ * @param {number} value
+ * @returns {number}
+ */
+const readHexNum = (value) => Number.parseInt(value.toString(16), 10)
+/**
  * Write a number as a hex string - e.g. 1234 -> 0x1234
  * @param {number} value
  * @returns {number}
@@ -589,14 +595,14 @@ async function read(
 
         // Time - year-2000, month, day, week, hour, minute, second
         result.time = new Date(
-            2000 + Number.parseInt(data.data[0].toString(16), 10),
-            Number.parseInt((data.data[1] >> 8).toString(16), 10) - 1,
-            Number.parseInt((data.data[1] & 0xFF).toString(16), 10),
+            2000 + readHexNum(data.data[0]),
+            readHexNum(data.data[1] >> 8) - 1,
+            readHexNum(data.data[1] & 0xFF),
             // we don't need the week
-            // Number.parseInt((data.data[2] >> 8).toString(16), 10),
-            Number.parseInt((data.data[2] & 0xFF).toString(16), 10),
-            Number.parseInt((data.data[3] >> 8).toString(16), 10),
-            Number.parseInt((data.data[3] & 0xFF).toString(16), 10)
+            // readHexNum(data.data[2] >> 8),
+            readHexNum(data.data[2] & 0xFF),
+            readHexNum(data.data[3] >> 8),
+            readHexNum(data.data[3] & 0xFF)
         ).getTime()
         changed |= result.time !== state.time
 
