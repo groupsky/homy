@@ -13,14 +13,14 @@ cd homy
 * Initialize the OPNVPN configuration files and certificates
 
 ```bash
-docker-compose run --rm openvpn ovpn_genconfig -Ddbu udp://VPN.SERVERNAME.COM
-docker-compose run --rm openvpn ovpn_initpki
+docker compose run --rm openvpn ovpn_genconfig -Ddbu udp://VPN.SERVERNAME.COM
+docker compose run --rm openvpn ovpn_initpki
 ```
 
 * Start the containers
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 * All is up and running
@@ -41,22 +41,22 @@ A good solution is available at [ufw-docker](https://github.com/chaifeng/ufw-doc
 ```bash
 export CLIENTNAME="your_client_name"
 # with a passphrase (recommended)
-docker-compose run --rm openvpn easyrsa build-client-full $CLIENTNAME
+docker compose run --rm openvpn easyrsa build-client-full $CLIENTNAME
 # without a passphrase (not recommended)
-docker-compose run --rm openvpn easyrsa build-client-full $CLIENTNAME nopass
+docker compose run --rm openvpn easyrsa build-client-full $CLIENTNAME nopass
 ```
 
 * Retrieve the client configuration with embedded certificates
 
 ```bash
-docker-compose run --rm openvpn ovpn_getclient $CLIENTNAME > $CLIENTNAME.ovpn
+docker compose run --rm openvpn ovpn_getclient $CLIENTNAME > $CLIENTNAME.ovpn
 ```
 
 * Revoke a client certificate
 
 ```bash
 # Keep the corresponding crt, key and req files.
-docker-compose run --rm openvpn ovpn_revokeclient $CLIENTNAME
+docker compose run --rm openvpn ovpn_revokeclient $CLIENTNAME
 # Remove the corresponding crt, key and req files.
-docker-compose run --rm openvpn ovpn_revokeclient $CLIENTNAME remove
+docker compose run --rm openvpn ovpn_revokeclient $CLIENTNAME remove
 ```
