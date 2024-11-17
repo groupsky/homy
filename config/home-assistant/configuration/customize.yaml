@@ -56,3 +56,5 @@ sensor.main_energy_sdm630_b_export_kwh_2023_11_11:
   friendly_name: Export L2
 sensor.main_energy_sdm630_c_export_kwh_2023_11_11:
   friendly_name: Export L3
+sensor.ev_charger_total:
+  friendly_name: EV charger

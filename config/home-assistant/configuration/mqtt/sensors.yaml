@@ -140,3 +140,8 @@
   state_topic: "obsolete/modbus/tetriary/heat_pump/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
   <<: *common_used_energy
+
+- name: ev_charger_total
+  state_topic: "/modbus/monitoring/charger/reading"
+  value_template: "{{ value_json.tot_act | float(default=0) }}"
+  <<: *common_used_energy

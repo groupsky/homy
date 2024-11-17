@@ -110,6 +110,9 @@
       },
       {
         "stat_consumption": "sensor.stabilizator_energy_used"
+      },
+      {
+        "stat_consumption":  "sensor.ev_charger_total"
       }
     ]
   }
