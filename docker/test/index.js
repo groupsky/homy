@@ -9,21 +9,21 @@ const timer = setTimeout(() => {
 
 client.on('connect', () => {
     console.log('connected, sending...')
-    client.subscribe('/modbus/dry-switches/relays00-15/write', (err) => {
+    client.subscribe('/modbus/dry-switches/relays00-15/write', async (err) => {
         if (err) {
             console.log('Error sending', err)
             process.exit(1)
         }
         console.log(`> [${'/modbus/dry-switches/mbsl32di2/reading'}]: ${JSON.stringify({
-            "inputs": 137366691,
+            "inputs": 1 << 27,
             "_tz": Date.now(),
             "_ms": 7,
             "_addr": 32,
             "_type": "mbsl32di",
             "device": "mbsl32di2"
         })}`)
-        client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
-            "inputs": 137366691,
+        await client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
+            "inputs": 1 << 27,
             "_tz": Date.now(),
             "_ms": 7,
             "_addr": 32,
@@ -31,15 +31,15 @@ client.on('connect', () => {
             "device": "mbsl32di2"
         }))
         console.log(`> [${'/modbus/dry-switches/mbsl32di2/reading'}]: ${JSON.stringify({
-            "inputs": 3148963,
+            "inputs": 0,
             "_tz": Date.now(),
             "_ms": 7,
             "_addr": 32,
             "_type": "mbsl32di",
             "device": "mbsl32di2"
         })}`)
-        client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
-            "inputs": 3148963,
+        await client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
+            "inputs": 0,
             "_tz": Date.now(),
             "_ms": 7,
             "_addr": 32,
