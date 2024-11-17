@@ -5,7 +5,12 @@ const client = mqtt.connect(brokerUrl)
 const timer = setTimeout(() => {
     console.error('Timeout!')
     process.exit(1)
-}, 1000)
+}, 2000)
+
+const publish = (topic, payload) => {
+    console.log(`> [${topic}]: ${JSON.stringify(payload)}`)
+    return client.publish(topic, JSON.stringify(payload))
+}
 
 client.on('connect', () => {
     console.log('connected, sending...')
@@ -14,32 +19,8 @@ client.on('connect', () => {
             console.log('Error sending', err)
             process.exit(1)
         }
-        console.log(`> [${'/modbus/dry-switches/mbsl32di2/reading'}]: ${JSON.stringify({
+        publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
             "inputs": 1 << 27,
-            "_tz": Date.now(),
-            "_ms": 7,
-            "_addr": 32,
-            "_type": "mbsl32di",
-            "device": "mbsl32di2"
-        })}`)
-        await client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
-            "inputs": 1 << 27,
-            "_tz": Date.now(),
-            "_ms": 7,
-            "_addr": 32,
-            "_type": "mbsl32di",
-            "device": "mbsl32di2"
-        }))
-        console.log(`> [${'/modbus/dry-switches/mbsl32di2/reading'}]: ${JSON.stringify({
-            "inputs": 0,
-            "_tz": Date.now(),
-            "_ms": 7,
-            "_addr": 32,
-            "_type": "mbsl32di",
-            "device": "mbsl32di2"
-        })}`)
-        client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
-            "inputs": 0,
             "_tz": Date.now(),
             "_ms": 7,
             "_addr": 32,
@@ -52,12 +33,29 @@ client.on('connect', () => {
 client.on('message', (topic, message) => {
     console.log(`< [${topic}]: ${message}`)
     // message is Buffer
-    if (topic === '/modbus/dry-switches/relays00-15/write') {
-        const msg = JSON.parse(message)
-        if (msg.out8 === true) {
-            clearTimeout(timer)
-            client.end()
+    switch (topic) {
+        case '/modbus/dry-switches/relays00-15/write': {
+            const msg = JSON.parse(message)
+            if (msg.out8 === true) {
+                clearTimeout(timer)
+                client.end()
+            }
         }
+        break
+        case 'homy/features/button/corridor1_kitchen_right/status': {
+            const msg = JSON.parse(message)
+            if (msg.state === true) {
+                publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
+                    "inputs": 0,
+                    "_tz": Date.now(),
+                    "_ms": 7,
+                    "_addr": 32,
+                    "_type": "mbsl32di",
+                    "device": "mbsl32di2"
+                }))
+            }
+        }
+        break
     }
 })
 
