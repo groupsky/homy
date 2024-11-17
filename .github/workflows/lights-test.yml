@@ -14,12 +14,13 @@ jobs:
       - name: Run containers
         run: |
           sudo chown -R 1000:1000 data/nodered
-          docker compose --env-file example.env up --build --force-recreate -d
+          docker compose --env-file example.env up --build --force-recreate -d automations features broker
 
       - name: Setup node
         uses: actions/setup-node@v3.5.1
         with:
-          node-version: 14
+          node-version: 22
+          node-version-file: docker/test/.nvmrc
 
       - name: Run tests
         run: |
