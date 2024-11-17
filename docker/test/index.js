@@ -9,7 +9,7 @@ const timer = setTimeout(() => {
 
 client.on('connect', () => {
     console.log('connected, sending...')
-    client.subscribe('/homy/ard1/output', (err) => {
+    client.subscribe('/modbus/dry-switches/relays00-15/write', (err) => {
         if (err) {
             console.log('Error sending', err)
             process.exit(1)
@@ -54,7 +54,7 @@ client.on('message', (topic, message) => {
     // message is Buffer
     if (topic === '/modbus/dry-switches/relays00-15/write') {
         const msg = JSON.parse(message)
-        if (msg.out13 === true) {
+        if (msg.out8 === true) {
             clearTimeout(timer)
             client.end()
         }
