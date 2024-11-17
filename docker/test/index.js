@@ -9,7 +9,7 @@ const timer = setTimeout(() => {
 
 client.on('connect', () => {
     console.log('connected, sending...')
-    client.subscribe('/modbus/dry-switches/relays00-15/write', async (err) => {
+    client.subscribe('#', async (err) => {
         if (err) {
             console.log('Error sending', err)
             process.exit(1)
@@ -38,7 +38,7 @@ client.on('connect', () => {
             "_type": "mbsl32di",
             "device": "mbsl32di2"
         })}`)
-        await client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
+        client.publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
             "inputs": 0,
             "_tz": Date.now(),
             "_ms": 7,
