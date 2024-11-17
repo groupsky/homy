@@ -10,7 +10,7 @@ source ../example.env
 
 export DOMAIN=
 
-dc="docker-compose --env-file ../example.env -f ../docker-compose.yml"
+dc="docker compose --env-file ../example.env -f ../docker-compose.yml"
 
 sudo iptables-save > /tmp/iptables.backup
 

@@ -8,7 +8,7 @@ TIMEOUT=3
 
 export DOMAIN=
 
-dc="docker-compose --env-file example.env"
+dc="docker compose --env-file example.env"
 dct="$dc --file docker-compose.yml --file docker-compose.test.yml"
 vpn="$dct run test-vpn"
 ext="$dct run test-external"
