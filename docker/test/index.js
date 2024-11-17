@@ -6,6 +6,7 @@ const timer = setTimeout(() => {
     console.error('Timeout!')
     process.exit(1)
 }, 2000)
+let interval = null
 
 const publish = (topic, payload) => {
     console.log(`> [${topic}]: ${JSON.stringify(payload)}`)
@@ -19,14 +20,18 @@ client.on('connect', () => {
             console.log('Error sending', err)
             process.exit(1)
         }
-        publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
-            "inputs": 1 << 27,
-            "_tz": Date.now(),
-            "_ms": 7,
-            "_addr": 32,
-            "_type": "mbsl32di",
-            "device": "mbsl32di2"
-        }))
+        let inputs = 0
+        setInterval(() => {
+            inputs = inputs === 0 ? 1 << 27 : 0
+            publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
+                "inputs": inputs,
+                "_tz": Date.now(),
+                "_ms": 7,
+                "_addr": 32,
+                "_type": "mbsl32di",
+                "device": "mbsl32di2"
+            }))
+        }, 100)
     })
 })
 
@@ -38,21 +43,8 @@ client.on('message', (topic, message) => {
             const msg = JSON.parse(message)
             if (msg.out8 === true) {
                 clearTimeout(timer)
+                clearInterval(interval)
                 client.end()
-            }
-        }
-        break
-        case 'homy/features/button/corridor1_kitchen_right/status': {
-            const msg = JSON.parse(message)
-            if (msg.state === true) {
-                publish('/modbus/dry-switches/mbsl32di2/reading', JSON.stringify({
-                    "inputs": 0,
-                    "_tz": Date.now(),
-                    "_ms": 7,
-                    "_addr": 32,
-                    "_type": "mbsl32di",
-                    "device": "mbsl32di2"
-                }))
             }
         }
         break
