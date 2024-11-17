@@ -3,7 +3,7 @@
   fan_mode_state_topic: /modbus/monitoring/thermostat-martin/reading
   json_attributes_topic: /modbus/monitoring/thermostat-martin/reading
   mode_state_topic: /modbus/monitoring/thermostat-martin/reading
-  power_state_topic: /modbus/monitoring/thermostat-martin/reading
+#   power_state_topic: /modbus/monitoring/thermostat-martin/reading
   temperature_state_topic: /modbus/monitoring/thermostat-martin/reading
   fan_mode_command_topic: /modbus/monitoring/thermostat-martin/write
   mode_command_topic: /modbus/monitoring/thermostat-martin/write
@@ -46,7 +46,7 @@
         {% elif value_json.power == 'off' %}
           off
         {% endif %}
-      power_state_template: "{{ value_json.power }}"
+#       power_state_template: "{{ value_json.power }}"
       temperature_state_template: "{{ value_json.targetTemp }}"
 
 - name: Gergana
@@ -54,7 +54,7 @@
   fan_mode_state_topic: /modbus/monitoring/thermostat-gergana/reading
   json_attributes_topic: /modbus/monitoring/thermostat-gergana/reading
   mode_state_topic: /modbus/monitoring/thermostat-gergana/reading
-  power_state_topic: /modbus/monitoring/thermostat-gergana/reading
+#   power_state_topic: /modbus/monitoring/thermostat-gergana/reading
   temperature_state_topic: /modbus/monitoring/thermostat-gergana/reading
   fan_mode_command_topic: /modbus/monitoring/thermostat-gergana/write
   mode_command_topic: /modbus/monitoring/thermostat-gergana/write
@@ -66,7 +66,7 @@
   fan_mode_state_topic: /modbus/monitoring/thermostat-boris/reading
   json_attributes_topic: /modbus/monitoring/thermostat-boris/reading
   mode_state_topic: /modbus/monitoring/thermostat-boris/reading
-  power_state_topic: /modbus/monitoring/thermostat-boris/reading
+#   power_state_topic: /modbus/monitoring/thermostat-boris/reading
   temperature_state_topic: /modbus/monitoring/thermostat-boris/reading
   fan_mode_command_topic: /modbus/monitoring/thermostat-boris/write
   mode_command_topic: /modbus/monitoring/thermostat-boris/write
@@ -78,7 +78,7 @@
   fan_mode_state_topic: /modbus/monitoring/thermostat-bedroom/reading
   json_attributes_topic: /modbus/monitoring/thermostat-bedroom/reading
   mode_state_topic: /modbus/monitoring/thermostat-bedroom/reading
-  power_state_topic: /modbus/monitoring/thermostat-bedroom/reading
+#   power_state_topic: /modbus/monitoring/thermostat-bedroom/reading
   temperature_state_topic: /modbus/monitoring/thermostat-bedroom/reading
   fan_mode_command_topic: /modbus/monitoring/thermostat-bedroom/write
   mode_command_topic: /modbus/monitoring/thermostat-bedroom/write
