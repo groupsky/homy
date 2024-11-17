@@ -23,15 +23,11 @@ services:
     network_mode: none
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: ingressgen_template_nginx
-        target: /etc/docker-gen/templates/nginx.tmpl
     environment:
       - TARGET_CONTAINER=$INGRESS_NAME
     volumes:
       - ${INGRESS_DATA_PATH}:/etc/nginx/conf.d
       - /var/run/docker.sock:/tmp/docker.sock:ro
-      # fallback in case configs are not supported
       - ${INGRESSGEN_TEMPLATE_NGINX_FILE}:/etc/docker-gen/templates/nginx.tmpl:ro
 
   vpn:
@@ -46,11 +42,6 @@ services:
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
-    configs:
-      - source: vpn_template_peer
-        target: /config/templates/peer.conf
-      - source: vpn_template_server
-        target: /config/templates/server.conf
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -97,11 +88,6 @@ services:
       - egress
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: nodered_flows
-        target: /data/flows.json
-      - source: nodered_settings
-        target: /data/settings.js
     secrets:
       - nodered_credentials_key
     environment:
@@ -125,19 +111,6 @@ services:
       - egress
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: homeassistant_configuration
-        target: /config/configuration.yaml
-      - source: homeassistant_automations
-        target: /config/configuration/automations.yaml
-      - source: homeassistant_customize
-        target: /config/configuration/customize.yaml
-      - source: homeassistant_groups
-        target: /config/configuration/groups.yaml
-      - source: homeassistant_scenes
-        target: /config/configuration/scenes.yaml
-      - source: homeassistant_scripts
-        target: /config/configuration/scripts.yaml
     environment:
       - TZ=${TZ}
       - EXTERNAL_URL=http://${HOMEASSISTANT_DOMAIN}
@@ -208,9 +181,6 @@ services:
       - automation
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: main_power
-        target: /etc/config.js
     secrets:
       - influxdb_write_user
       - influxdb_write_user_password
@@ -246,9 +216,6 @@ services:
       - automation
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: secondary_power
-        target: /etc/config.js
     secrets:
       - influxdb_write_user
       - influxdb_write_user_password
@@ -285,9 +252,6 @@ services:
       - automation
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: tetriary_power
-        target: /etc/config.js
     secrets:
       - influxdb_write_user
       - influxdb_write_user_password
@@ -324,9 +288,6 @@ services:
       - automation
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: monitoring
-        target: /etc/config.js
     secrets:
       - influxdb_write_user
       - influxdb_write_user_password
@@ -364,9 +325,6 @@ services:
       - automation
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: monitoring
-        target: /etc/config.js
     secrets:
       - influxdb_write_user
       - influxdb_write_user_password
@@ -508,9 +466,6 @@ services:
       - automation
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: influxdb_config
-        target: /etc/influxdb/influxdb.conf
     secrets:
       - influxdb_admin_user
       - influxdb_admin_password
@@ -551,11 +506,6 @@ services:
       - egress
     security_opt:
       - no-new-privileges:true
-    configs:
-      - source: grafana_config
-        target: /etc/grafana/grafana.ini
-      - source: grafana_datasource_influxdb
-        target: /etc/grafana/provisioning/datasources/influxdb.yaml
     secrets:
       - influxdb_read_user
       - influxdb_read_user_password
@@ -871,32 +821,6 @@ networks:
     internal: true
   test-internal2:
     internal: true
-
-configs:
-  grafana_config:
-    file: ${GRAFANA_CONFIG_FILE}
-  grafana_datasource_influxdb:
-    file: ${GRAFANA_CONFIG_DATASOURCE_INFLUXDB_FILE}
-  influxdb_config:
-    file: ${INFLUXDB_CONFIG_FILE}
-  ingressgen_template_nginx:
-    file: ${INGRESSGEN_TEMPLATE_NGINX_FILE}
-  vpn_template_peer:
-    file: ${VPN_TEMPLATE_PEER_FILE}
-  vpn_template_server:
-    file: ${VPN_TEMPLATE_SERVER_FILE}
-  main_power:
-    file: ${MAIN_POWER_CONFIG_FILE}
-  monitoring:
-    file: ${CONFIG_PATH}/modbus-serial/monitoring.config.js
-  nodered_flows:
-    file: ${NODERED_CONFIG_FLOWS_FILE}
-  nodered_settings:
-    file: ${NODERED_CONFIG_SETTINGS_FILE}
-  secondary_power:
-    file: ${SECONDARY_POWER_CONFIG_FILE}
-  tetriary_power:
-    file: ${TETRIARY_POWER_CONFIG_FILE}
 
 secrets:
   influxdb_admin_user:
