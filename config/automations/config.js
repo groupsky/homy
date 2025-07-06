@@ -309,22 +309,24 @@ module.exports = {
 
     irrigationFlowerGroundSchedule: {
       type: 'irrigation',
-      schedule: '0 */10 8-18 * * *',
+      schedule: '0 */10 9-18 * * *',
       duration: 5*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_ground/set`,
     },
     irrigationFlowerPotsSchedule: {
       type: 'irrigation',
-      schedule: '0 25,55 6-22 * * *',
+      schedule: '0 25,55 9-20 * * *',
       duration: 2*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_pots/set`,
     },
+    /* disable until the new valve is installed
     irrigationGrassPergolaSchedule: {
       type: 'irrigation',
-      schedule: '0 0 2 * * *',
+      schedule: '0 0 7 * * *',
       duration: 20*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
     },
+    */
     timeoutStopIrrigationGrassPergola: {
       type: 'timeout-emit',
       listenTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/status`,
@@ -335,7 +337,7 @@ module.exports = {
     },
     irrigationGrassNorthWestSchedule: {
       type: 'irrigation',
-      schedule: '0 25 2 * * *',
+      schedule: '0 50 7 * * *',
       duration: 20*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_north_west/set`,
     },
@@ -349,7 +351,7 @@ module.exports = {
     },
     irrigationGrassWestCenterSchedule: {
       type: 'irrigation',
-      schedule: '0 50 2 * * *',
+      schedule: '0 25 7 * * *',
       duration: 20*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_west_center/set`,
     },
@@ -360,12 +362,6 @@ module.exports = {
       timeout: 25 * 60000,
       emitTopic: `${featuresPrefix}/relay/irrigation_grass_west_center/set`,
       emitValue: { state: false }
-    },
-    irrigationGrassNorthWestSchedule2: {
-      type: 'irrigation',
-      schedule: '0 15 3 * * *',
-      duration: 20*60*1000,
-      valveControlTopic: `${featuresPrefix}/irrigation_grass_north_west/set`,
     },
   },
   gates: {
