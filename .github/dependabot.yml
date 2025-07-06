@@ -201,3 +201,10 @@ updates:
       interval: "monthly"
     reviewers:
       - "groupsky"
+
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"

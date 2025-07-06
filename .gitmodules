@@ -1,0 +1,3 @@
+[submodule "docker/homeassistant/custom_components/sunseeker-lawn-mower"]
+	path = docker/homeassistant/custom_components/sunseeker-lawn-mower
+	url = https://github.com/Sdahl1234/Sunseeker-lawn-mower.git

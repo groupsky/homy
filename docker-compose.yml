@@ -125,6 +125,7 @@ services:
       - ${HOMEASSISTANT_CONFIG}/configuration:/config/configuration:ro
       - ${HOMEASSISTANT_CONFIG}/energy.json:/config/.storage/energy:ro
       - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
+      - ./docker/homeassistant/custom_components/sunseeker-lawn-mower/custom_components/sunseeker:/config/custom_components/sunseeker:ro
 
   mongo:
     build: docker/mongo
