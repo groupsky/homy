@@ -106,6 +106,9 @@ describe('bath-lights', () => {
             // should turn on the lights
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
             mockPublish.mockClear()
+            
+            // simulate lights turning on
+            publish('lights/status', {state: true})
 
             // wait for timeout
             jest.advanceTimersByTime(1000)
@@ -542,6 +545,176 @@ describe('bath-lights', () => {
             // should not turn off the lights
             expect(mockPublish).not.toHaveBeenCalled()
         })
+    })
+
+    test('should not turn off lights when locked after door closed timeout was set', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            door: {statusTopic: 'door/status'},
+            lock: {statusTopic: 'lock/status'},
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            timeouts: {closed: 1000},
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // close door (unlocked) - lights on and timeout set
+        publish('door/status', {state: false})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+
+        // lock door before timeout expires
+        publish('lock/status', {state: true})
+        
+        // advance time past the closed timeout
+        jest.advanceTimersByTime(1000)
+
+        // lights should NOT turn off because door is now locked
+        expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+    })
+
+    test('should not send duplicate light commands when timeout fires after lights already off', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            door: {statusTopic: 'door/status'},
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            timeouts: {closed: 1000},
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // close door - lights on and timeout set
+        publish('door/status', {state: false})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+
+        // lights turn off externally before timeout
+        publish('lights/status', {state: false})
+        
+        // advance time past the closed timeout
+        jest.advanceTimersByTime(1000)
+
+        // should NOT send another turn-off command
+        expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+    })
+
+    test('should not turn off lights when door open event repeats', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            door: {statusTopic: 'door/status'},
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            timeouts: {opened: 2000},
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // door closes - lights on
+        publish('door/status', {state: false})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+
+        // door opens - lights on and 2-second timeout set
+        publish('door/status', {state: true})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+
+        // wait 1 second
+        jest.advanceTimersByTime(1000)
+
+        // door open event repeats (should not interfere)
+        publish('door/status', {state: true})
+        expect(mockPublish).not.toHaveBeenCalled() // no new light command
+
+        // wait another second (original timeout should fire)
+        jest.advanceTimersByTime(1000)
+
+        // lights should turn off from original timeout
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+    })
+
+    test('should not interfere with unlock timeout when door open event repeats', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            door: {statusTopic: 'door/status'},
+            lock: {statusTopic: 'lock/status'},
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            timeouts: {unlocked: 1500, opened: 3000},
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // lock door - lights on
+        publish('lock/status', {state: true})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+
+        // unlock door - unlock timeout set (1.5s)  
+        publish('lock/status', {state: false})
+        expect(mockPublish).not.toHaveBeenCalled() // no immediate light change
+        
+        // wait 500ms
+        jest.advanceTimersByTime(500)
+
+        // door opens - should turn lights off immediately (cancelling unlock timeout)
+        publish('door/status', {state: true}) 
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false, r: 'don-unl'}))
+        mockPublish.mockClear()
+
+        // wait 500ms 
+        jest.advanceTimersByTime(500)
+
+        // door open event repeats - should not cause any additional actions
+        publish('door/status', {state: true})
+        expect(mockPublish).not.toHaveBeenCalled()
+
+        // wait past when unlock timeout would have fired (500ms more = 1.5s total)
+        jest.advanceTimersByTime(500) 
+
+        // should not turn off lights again
+        expect(mockPublish).not.toHaveBeenCalled()
+    })
+
+    test('should not restart closed timeout when door close event repeats', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            door: {statusTopic: 'door/status'},
+            lock: {statusTopic: 'lock/status'},
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            timeouts: {closed: 2000},
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // close door - lights on and 2-second timeout set
+        publish('door/status', {state: false})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+
+        // wait 1 second
+        jest.advanceTimersByTime(1000)
+
+        // door close event repeats (should not reset the timer)
+        publish('door/status', {state: false})
+        expect(mockPublish).not.toHaveBeenCalled() // no new light command
+
+        // lock the door after repeated event
+        publish('lock/status', {state: true})
+        
+        // wait another second (original timeout would have fired here)
+        jest.advanceTimersByTime(1000)
+
+        // lights should NOT turn off because door was locked before original timeout
+        expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
     })
 
     test('should work continuously', () => {
