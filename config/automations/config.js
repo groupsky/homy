@@ -198,10 +198,10 @@ module.exports = {
         statusTopic: `${featuresPrefix}/button/bath1_switch_left/status`,
       },
       timeouts: {
-        closed: 0.5 * 60000,
-        opened: 5 * 60000,
-        toggled: 12 * 60000,
-        unlocked: 15 * 60000,
+        closed: 2 * 60000,    // 2 minutes - accommodate kids + adults
+        opened: 12 * 60000,   // 12 minutes - door usually left open
+        toggled: 25 * 60000,  // 25 minutes - guest + kid friendly manual override
+        unlocked: 3 * 60000,  // 3 minutes - accommodate kids cleanup time
       }
     },
     lightBath2Controller: {
@@ -221,10 +221,10 @@ module.exports = {
         statusTopic: `${featuresPrefix}/switch/bath2_switch_left/status`,
       },
       timeouts: {
-        closed: 0.5 * 60000,
-        opened: 5 * 60000,
-        toggled: 12 * 60000,
-        unlocked: 15 * 60000,
+        closed: 3 * 60000,    // 3 minutes - kids take longer
+        opened: 6 * 60000,    // 6 minutes - kids might leave door open briefly  
+        toggled: 25 * 60000,  // 25 minutes - kids forget to turn off lights
+        unlocked: 4 * 60000,  // 4 minutes - kids need more transition time
       }
     },
     lightBath3Controller: {
@@ -244,10 +244,10 @@ module.exports = {
         statusTopic: `${featuresPrefix}/switch/bath3_switch_left/status`,
       },
       timeouts: {
-        closed: 0.5 * 60000,
-        opened: 5 * 60000,
-        toggled: 12 * 60000,
-        unlocked: 15 * 60000,
+        closed: 2 * 60000,    // 2 minutes - adult efficiency
+        opened: 10 * 60000,   // 10 minutes - post-shower ventilation
+        toggled: 15 * 60000,  // 15 minutes - intentional extended use
+        unlocked: 3 * 60000,  // 3 minutes - standard adult transition
       }
     },
 
