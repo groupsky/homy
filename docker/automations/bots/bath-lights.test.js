@@ -682,6 +682,45 @@ describe('bath-lights', () => {
         expect(mockPublish).not.toHaveBeenCalled()
     })
 
+    test('should not override manual toggle timeout when door closes', () => {
+        const bathLights = BathLights('test-bath-lights', {
+            door: {statusTopic: 'door/status'},
+            light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            toggle: {statusTopic: 'switch/status', type: 'button'},
+            timeouts: {closed: 2000, toggled: 25000}, // 2s vs 25s - big difference
+        })
+        const mockPublish = jest.fn()
+        const mqtt = {subscribe, publish: mockPublish}
+
+        // start the bot
+        bathLights.start({mqtt})
+
+        // Guest enters and manually turns on lights (like manual switch)
+        publish('switch/status', {state: true})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+        
+        // Simulate lights actually turning on
+        publish('lights/status', {state: true})
+
+        // Guest closes door - this should NOT override the manual toggle timeout
+        publish('door/status', {state: false})
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        mockPublish.mockClear()
+
+        // Wait past closed timeout (2s) but before toggle timeout (25s)
+        jest.advanceTimersByTime(3000)
+
+        // Lights should still be on - manual override should take priority
+        expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+
+        // Wait until toggle timeout should fire (25s total)
+        jest.advanceTimersByTime(22000)
+
+        // Now lights should turn off from the original manual toggle timeout
+        expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+    })
+
     test('should not restart closed timeout when door close event repeats', () => {
         const bathLights = BathLights('test-bath-lights', {
             door: {statusTopic: 'door/status'},

@@ -113,6 +113,7 @@ module.exports = (name, {
                                 if (lightState !== false && !lockState) {
                                     mqtt.publish(light.commandTopic, {state: false, r: 'tgl-tout'})
                                 }
+                                toggledTimer = null
                             }, timeouts.toggled)
                         }
                     }
@@ -145,6 +146,7 @@ module.exports = (name, {
                         if (lightState !== false && !lockState) {
                             mqtt.publish(light.commandTopic, {state: false, r: 'unl-tout'})
                         }
+                        unlockedTimer = null
                     }, timeouts.unlocked)
                 }
             })
@@ -175,7 +177,7 @@ module.exports = (name, {
                             console.log(`[${name}] turning on lights`)
                         }
                         mqtt.publish(light.commandTopic, {state: true, r: 'don'})
-                        if (timeouts?.opened && !openedTimer) {
+                        if (timeouts?.opened && !openedTimer && !toggledTimer) {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights in ${timeouts.opened / 60000} minutes from opened timeout`)
                             }
@@ -187,6 +189,7 @@ module.exports = (name, {
                                 if (lightState !== false && !lockState) {
                                     mqtt.publish(light.commandTopic, {state: false, r: 'don-tout'})
                                 }
+                                openedTimer = null
                             }, timeouts.opened)
                         }
                     }
@@ -198,7 +201,7 @@ module.exports = (name, {
                         }
                         mqtt.publish(light.commandTopic, {state: true, r: 'doff'})
                     }
-                    if (timeouts?.closed && !closedTimer && !lockState) {
+                    if (timeouts?.closed && !closedTimer && !lockState && !toggledTimer) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights in ${timeouts.closed / 60000} minutes from closed timeout`)
                         }
@@ -210,6 +213,7 @@ module.exports = (name, {
                             if (lightState !== false && !lockState) {
                                 mqtt.publish(light.commandTopic, {state: false, r: 'doff-tout'})
                             }
+                            closedTimer = null
                         }, timeouts.closed)
                     }
                 }
