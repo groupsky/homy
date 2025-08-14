@@ -2,3 +2,4 @@
 !*.secret
 /.env
 node_modules/
+.claude/*.local.*

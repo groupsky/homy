@@ -1,0 +1,19 @@
+{
+  "name": "homy-kafka-bridge",
+  "version": "1.0.0",
+  "description": "MQTT to Kafka bridge for event sourcing",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "start": "index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "kafka-node": "^5.0.0",
+    "mqtt": "^4.3.7"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

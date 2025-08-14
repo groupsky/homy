@@ -1,0 +1,83 @@
+version: '3.8'
+
+x-kafka-common: &kafka-common
+  image: apache/kafka:latest
+  environment: &kafka-env
+    - KAFKA_NODE_ID=1
+    - KAFKA_PROCESS_ROLES=broker,controller
+    - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+    - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+    - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+    - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+    - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+    - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+    - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+    - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+    - KAFKA_NUM_PARTITIONS=3
+  networks:
+    - kafka-test
+
+services:
+  broker:
+    image: eclipse-mosquitto:latest
+    networks:
+      - kafka-test
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto-test.conf:/mosquitto/config/mosquitto.conf
+
+  kafka:
+    <<: *kafka-common
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-test-data:/var/lib/kafka/data
+
+  kafka-bridge:
+    build: docker/kafka-bridge
+    depends_on:
+      - broker
+      - kafka
+    networks:
+      - kafka-test
+    environment:
+      - BROKER=mqtt://broker
+      - KAFKA_HOSTS=kafka:9092
+      - MQTT_CLIENT_ID=kafka-bridge-test
+
+  # Automations service with test configuration
+  automations:
+    build: docker/automations
+    depends_on:
+      - broker
+    networks:
+      - kafka-test
+    environment:
+      - BROKER=mqtt://broker
+      - CONFIG=/etc/test-config.js
+      - MQTT_CLIENT_ID=automations-test
+      - TZ=Europe/Sofia
+    volumes:
+      - ./test/kafka-integration/test-automations-config.js:/etc/test-config.js:ro
+
+  # Test service to verify integration
+  kafka-integration-test:
+    build: docker/kafka-integration-test
+    depends_on:
+      - broker
+      - kafka
+      - kafka-bridge
+    networks:
+      - kafka-test
+    environment:
+      - BROKER=mqtt://broker
+      - KAFKA_HOSTS=kafka:9092
+    command: tail -f /dev/null  # Keep container running for manual test execution
+
+networks:
+  kafka-test:
+
+volumes:
+  kafka-test-data:

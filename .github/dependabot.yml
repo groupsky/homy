@@ -202,6 +202,34 @@ updates:
     reviewers:
       - "groupsky"
 
+  - package-ecosystem: "docker"
+    directory: "/docker/kafka-bridge"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/kafka-bridge"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/kafka-integration-test"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/kafka-integration-test"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
   - package-ecosystem: "gitsubmodule"
     directory: "/"
     schedule:

@@ -703,6 +703,46 @@ services:
       - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
       - ${CONFIG_PATH}/automations/ha_discovery.js:/etc/config.js:ro
 
+  kafka:
+    image: apache/kafka:latest
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_NUM_PARTITIONS=3
+    volumes:
+      - ${KAFKA_DATA_PATH:-./data/kafka}:/var/lib/kafka/data
+
+  kafka-bridge:
+    build: docker/kafka-bridge
+    depends_on:
+      - broker
+      - kafka
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - BROKER=mqtt://broker
+      - KAFKA_HOSTS=kafka:9092
+      - MQTT_CLIENT_ID=kafka-bridge
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
   # Manualy run with
   # dc run historian-primary node index.js
   historian-primary:

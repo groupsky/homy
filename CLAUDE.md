@@ -21,6 +21,13 @@ npm test
 
 # Run individual test files
 npx jest bots/irrigation.test.js
+
+# Run Kafka event sourcing integration tests
+./test_kafka_integration.sh
+
+# Run individual Kafka tests
+docker compose -f docker-compose.kafka-test.yml exec kafka-integration-test npm run test:kafka
+docker compose -f docker-compose.kafka-test.yml exec kafka-integration-test npm run test:bath-lights
 ```
 
 ### Docker Environment
@@ -126,3 +133,8 @@ The system integrates with:
 - Persistent data is stored in `data/` directory
 - Secrets are managed through Docker secrets in `secrets/`
 - The `modbus-serial` service has device drivers in `devices/` subdirectory
+
+## Docker Configuration
+
+- All services in `docker-compose.yml` build their Dockerfiles from the `docker/` directory
+- Dependabot configuration in `.github/dependabot.yml` keeps all Docker base images and npm dependencies up to date with monthly updates
