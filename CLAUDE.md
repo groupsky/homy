@@ -110,6 +110,9 @@ The system integrates with:
 
 ## Documentation
 
+### Architecture
+- **System Architecture**: `ARCHITECTURE.md` - Comprehensive architectural overview covering data flow, service architecture, current state, and future direction for planning new features and improvements
+
 ### Automation Bot Documentation
 - **Bathroom Controller**: `docker/automations/docs/bathroom-controller.md` - Comprehensive guide for bathroom lighting automation including configuration for Bath1 (guest/daytime), Bath2 (kids), and Bath3 (master) bathrooms
 
