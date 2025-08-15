@@ -92,13 +92,13 @@ module.exports = (name, {
                     if (lightState) {
                         if (!lockState) {
                             if (verbose) {
-                                console.log('[${name}] turning off lights')
+                                console.log(`[${name}] turning off lights`)
                             }
                             mqtt.publish(light.commandTopic, {state: false, r: 'tgl-lon'})
                         }
                     } else {
                         if (verbose) {
-                            console.log('[${name}] turning on lights')
+                            console.log(`[${name}] turning on lights`)
                         }
                         mqtt.publish(light.commandTopic, {state: true, r: 'tgl-loff'})
                         if (timeouts?.toggled && !toggledTimer) {
