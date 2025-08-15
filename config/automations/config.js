@@ -202,7 +202,13 @@ module.exports = {
         opened: 12 * 60000,   // 12 minutes - door usually left open
         toggled: 25 * 60000,  // 25 minutes - guest + kid friendly manual override
         unlocked: 3 * 60000,  // 3 minutes - accommodate kids cleanup time
-      }
+      },
+      commandConfig: {
+        verification: 5000,   // 5 second verification timeout (conservative for testing)
+        maxRetries: 3,        // 3 retry attempts (standard reliability)
+        retryDelay: 1000,     // 1 second between retries (not too aggressive)
+      },
+      verbose: true           // Enable detailed logging for Bath1 testing phase
     },
     lightBath2Controller: {
       type: 'bath-lights',
