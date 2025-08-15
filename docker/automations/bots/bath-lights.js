@@ -64,6 +64,7 @@ module.exports = (name, {
         }
 
         mqtt.subscribe(light.statusTopic, (payload) => {
+            if (!payload) return
             if (verbose) {
                 console.log(`[${name}] light changed`, payload)
             }
@@ -83,6 +84,7 @@ module.exports = (name, {
         if (toggle?.statusTopic) {
             const toggleType = toggle.type || 'button'
             mqtt.subscribe(toggle.statusTopic, (payload) => {
+                if (!payload) return
                 if (verbose) {
                     console.log(`[${name}] toggle ${toggleType} changed`, payload)
                 }
@@ -123,6 +125,7 @@ module.exports = (name, {
 
         if (lock?.statusTopic) {
             mqtt.subscribe(lock.statusTopic, (payload) => {
+                if (!payload) return
                 if (verbose) {
                     console.log(`[${name}] lock changed`, payload)
                 }
@@ -154,6 +157,7 @@ module.exports = (name, {
 
         if (door?.statusTopic) {
             mqtt.subscribe(door.statusTopic, (payload) => {
+                if (!payload) return
                 if (verbose) {
                     console.log(`[${name}] door changed`, payload)
                 }
