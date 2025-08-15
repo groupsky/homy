@@ -491,7 +491,7 @@ services:
       - INFLUXDB_WRITE_USER_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
     volumes:
       - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
-      - ./data/influxdb:/var/lib/influxdb
+      - ${DATA_PATH}/influxdb:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
 
   grafana:
@@ -705,6 +705,8 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
       - ${CONFIG_PATH}/automations/config.js:/etc/config.js:ro
+      - ${DATA_PATH}/automations/state:/app/state
+    user: ${PUID}:${PGID}
 
   features:
     build: docker/automations
@@ -844,7 +846,7 @@ services:
       - ${BACKUP_PATH}:/backup
       - ${HOMEASSISTANT_DATA_PATH}:/volumes/ha
       - ${MONGO_DATA_PATH}:/volumes/mongo
-      - ./data/influxdb:/volumes/influxdb
+      - ${DATA_PATH}/influxdb:/volumes/influxdb
 
 networks:
   # internal for the automation services - mqtt, node red, ah
