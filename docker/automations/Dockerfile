@@ -28,11 +28,13 @@ FROM base AS RELEASE
 
 ENV NODE_OPTIONS="--unhandled-rejections=strict"
 
+USER root
+
 COPY --from=build /usr/src/app/prod_node_modules ./node_modules
 COPY . .
 
 # Chown & Clean up
-RUN chown -R node-app:node-app /usr/src/app && \
+RUN chown -R root:root /usr/src/app && \
     rm -rf /tmp/*
 
 USER node-app
