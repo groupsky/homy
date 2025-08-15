@@ -7,7 +7,7 @@ beforeEach(() => {
 const setup = async ({schedule, duration = 1000}) => {
     const irrigation = require('./irrigation')('test-irrigation', {
         valveControlTopic: 'valve-control',
-        valveControlTemplate: (status) => status,
+        valveControlTemplate: (status) => status ? 'on' : 'off',
         schedule,
         duration,
     })

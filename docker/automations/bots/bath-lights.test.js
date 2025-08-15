@@ -106,7 +106,7 @@ describe('bath-lights', () => {
             // should turn on the lights
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
             mockPublish.mockClear()
-            
+
             // simulate lights turning on
             publish('lights/status', {state: true})
 
@@ -567,7 +567,7 @@ describe('bath-lights', () => {
 
         // lock door before timeout expires
         publish('lock/status', {state: true})
-        
+
         // advance time past the closed timeout
         jest.advanceTimersByTime(1000)
 
@@ -594,7 +594,7 @@ describe('bath-lights', () => {
 
         // lights turn off externally before timeout
         publish('lights/status', {state: false})
-        
+
         // advance time past the closed timeout
         jest.advanceTimersByTime(1000)
 
@@ -656,19 +656,19 @@ describe('bath-lights', () => {
         expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
         mockPublish.mockClear()
 
-        // unlock door - unlock timeout set (1.5s)  
+        // unlock door - unlock timeout set (1.5s)
         publish('lock/status', {state: false})
         expect(mockPublish).not.toHaveBeenCalled() // no immediate light change
-        
+
         // wait 500ms
         jest.advanceTimersByTime(500)
 
         // door opens - should turn lights off immediately (cancelling unlock timeout)
-        publish('door/status', {state: true}) 
+        publish('door/status', {state: true})
         expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false, r: 'don-unl'}))
         mockPublish.mockClear()
 
-        // wait 500ms 
+        // wait 500ms
         jest.advanceTimersByTime(500)
 
         // door open event repeats - should not cause any additional actions
@@ -676,7 +676,7 @@ describe('bath-lights', () => {
         expect(mockPublish).not.toHaveBeenCalled()
 
         // wait past when unlock timeout would have fired (500ms more = 1.5s total)
-        jest.advanceTimersByTime(500) 
+        jest.advanceTimersByTime(500)
 
         // should not turn off lights again
         expect(mockPublish).not.toHaveBeenCalled()
@@ -699,7 +699,7 @@ describe('bath-lights', () => {
         publish('switch/status', {state: true})
         expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
         mockPublish.mockClear()
-        
+
         // Simulate lights actually turning on
         publish('lights/status', {state: true})
 
@@ -748,7 +748,7 @@ describe('bath-lights', () => {
 
         // lock the door after repeated event
         publish('lock/status', {state: true})
-        
+
         // wait another second (original timeout would have fired here)
         jest.advanceTimersByTime(1000)
 
@@ -836,9 +836,13 @@ describe('bath-lights', () => {
         publish('door/status', {state: false})
         expect(state).toEqual({lights: true})
 
-        // wait for 1 minute - lights on
-        jest.advanceTimersByTime(60000)
+        // wait for almost 1 minute - lights on
+        jest.advanceTimersByTime(59999)
         expect(state).toEqual({lights: true})
+
+        // wait for 1 ms - lights off
+        jest.advanceTimersByTime(1)
+        expect(state).toEqual({lights: false})
 
         // lock door - lights on
         publish('lock/status', {state: true})
