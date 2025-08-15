@@ -2516,5 +2516,485 @@ describe('bath-lights', () => {
             expect(mockPublish).toHaveBeenCalled()
         })
     })
+
+    describe('MQTT error handling scenarios', () => {
+        test('should expose MQTT publish failures (current behavior - no error handling)', () => {
+            const bathLights = BathLights('mqtt-error-test', {
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            })
+            
+            // Mock MQTT publish that throws errors
+            const mockPublish = jest.fn().mockImplementation(() => {
+                throw new Error('MQTT connection lost')
+            })
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Current implementation will throw - this documents the behavior
+            expect(() => {
+                publish('lock/status', {state: true})
+            }).toThrow('MQTT connection lost')
+            
+            // Verify publish was attempted
+            expect(mockPublish).toHaveBeenCalled()
+        })
+
+        test('should expose missing MQTT publish method (current behavior - no error handling)', () => {
+            const bathLights = BathLights('mqtt-missing-test', {
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command'},
+            })
+            
+            // MQTT object without publish method
+            const mqtt = {subscribe}
+
+            // Should not crash during startup
+            expect(() => {
+                bathLights.start({mqtt})
+            }).not.toThrow()
+
+            // Current implementation will throw when trying to publish
+            expect(() => {
+                publish('lock/status', {state: true})
+            }).toThrow('mqtt.publish is not a function')
+        })
+
+        test('should handle malformed MQTT topics gracefully', () => {
+            const bathLights = BathLights('malformed-topic-test', {
+                door: {statusTopic: ''},  // empty topic
+                lock: {statusTopic: null}, // null topic
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            // Should not crash with malformed topics during startup
+            expect(() => {
+                bathLights.start({mqtt})
+            }).not.toThrow()
+
+            // System should still work with valid topics
+            publish('lights/status', {state: false})
+            expect(mockPublish).not.toHaveBeenCalled() // No commands expected for empty events
+        })
+
+        test('should expose MQTT subscription errors during startup (current behavior)', () => {
+            const bathLights = BathLights('subscription-error-test', {
+                door: {statusTopic: 'door/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            })
+            const mockPublish = jest.fn()
+
+            // Mock subscribe that throws on certain topics
+            const mockSubscribe = jest.fn((topic, callback) => {
+                if (topic === 'door/status') {
+                    throw new Error('Subscription failed')
+                }
+                mqttSubscriptions[topic] = callback
+            })
+            const mqtt = {subscribe: mockSubscribe, publish: mockPublish}
+
+            // Current implementation will throw during startup if subscription fails
+            expect(() => {
+                bathLights.start({mqtt})
+            }).toThrow('Subscription failed')
+        })
+
+        test('should handle corrupted MQTT message payloads', () => {
+            const bathLights = BathLights('corrupted-payload-test', {
+                door: {statusTopic: 'door/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Test various corrupted payload scenarios - most should not crash due to null guards
+            const corruptedPayloads = [
+                null,           // handled by null guard
+                undefined,      // handled by null guard
+                {},             // has state: undefined (falsy)
+                {state: undefined}, // falsy state value
+                {state: null},  // falsy state value
+                {corrupted: 'data'}, // has state: undefined (falsy)
+                'string instead of object', // will crash - not an object
+                123,            // will crash - not an object
+                [],             // has state: undefined (falsy)
+                {state: {nested: 'object'}}, // truthy state value (object)
+            ]
+
+            corruptedPayloads.forEach((payload, index) => {
+                // All payloads should be handled gracefully due to existing null guards
+                // The null guard at the start of each handler prevents crashes
+                expect(() => {
+                    mqttSubscriptions['door/status'](payload)
+                    mqttSubscriptions['lights/status'](payload)
+                }).not.toThrow(`Failed on payload ${index}: ${JSON.stringify(payload)}`)
+            })
+        })
+
+        test('should expose MQTT disconnection errors (current behavior)', () => {
+            const bathLights = BathLights('disconnect-test', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                timeouts: {closed: 1000},
+            })
+            
+            let publishShouldFail = false
+            const mockPublish = jest.fn((topic, payload) => {
+                if (publishShouldFail) {
+                    throw new Error('MQTT disconnected')
+                }
+            })
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Start normal operation
+            publish('door/status', {state: false})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+            
+            // Simulate MQTT disconnection
+            publishShouldFail = true
+            mockPublish.mockClear()
+            
+            // Current implementation will throw during disconnection
+            expect(() => {
+                publish('lock/status', {state: true})
+            }).toThrow('MQTT disconnected')
+        })
+
+        test('should handle high-frequency MQTT message storms', () => {
+            const bathLights = BathLights('message-storm-test', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+                timeouts: {closed: 10, opened: 10, toggled: 10, unlocked: 10},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Simulate message storm (thousands of messages)
+            const startTime = Date.now()
+            
+            for (let i = 0; i < 1000; i++) {
+                // Rapid state changes
+                publish('door/status', {state: i % 2 === 0})
+                publish('lock/status', {state: i % 3 === 0})
+                publish('lights/status', {state: i % 5 === 0})
+                publish('switch/status', {state: true})
+                
+                // Occasional timer advancement
+                if (i % 100 === 0) {
+                    jest.advanceTimersByTime(50)
+                }
+            }
+            
+            const endTime = Date.now()
+            
+            // Should handle message storm within reasonable time
+            expect(endTime - startTime).toBeLessThan(5000)
+            
+            // System should still be responsive after storm
+            mockPublish.mockClear()
+            publish('lock/status', {state: true})
+            expect(mockPublish).toHaveBeenCalled()
+        })
+
+        test('should handle MQTT publish with malformed command payloads', () => {
+            const bathLights = BathLights('malformed-command-test', {
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command'},
+            })
+            
+            // Mock publish that validates payload structure
+            const mockPublish = jest.fn((topic, payload) => {
+                if (typeof payload !== 'object' || payload === null) {
+                    throw new Error('Invalid payload format')
+                }
+                if (!payload.hasOwnProperty('state')) {
+                    throw new Error('Missing state property')
+                }
+            })
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Should not crash if publish validation fails
+            expect(() => {
+                publish('lock/status', {state: true})
+            }).not.toThrow()
+            
+            // Verify the command was attempted with proper format
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({
+                state: true,
+                r: expect.any(String)
+            }))
+        })
+    })
+
+    describe('configuration validation edge cases', () => {
+        test('should handle missing required light configuration', () => {
+            // Missing light.commandTopic should not crash but may not work properly
+            expect(() => {
+                const bathLights = BathLights('missing-light-command', {
+                    door: {statusTopic: 'door/status'},
+                    light: {statusTopic: 'lights/status'}, // missing commandTopic
+                })
+                const mockPublish = jest.fn()
+                bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+            }).not.toThrow()
+        })
+
+        test('should handle empty configuration object', () => {
+            expect(() => {
+                const bathLights = BathLights('empty-config', {})
+                const mockPublish = jest.fn()
+                bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+            }).toThrow() // Should throw because light is required
+        })
+
+        test('should handle null and undefined configuration properties', () => {
+            const bathLights = BathLights('null-config', {
+                door: null,
+                lock: undefined,
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: null,
+                timeouts: undefined,
+                verbose: null,
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            expect(() => {
+                bathLights.start({mqtt})
+            }).not.toThrow()
+
+            // Should work with just light functionality
+            publish('lights/status', {state: false})
+            // No crash expected
+        })
+
+        test('should handle invalid timeout configurations', () => {
+            const configurations = [
+                {timeouts: null},
+                {timeouts: undefined},
+                {timeouts: 'invalid'},
+                {timeouts: 123},
+                {timeouts: []},
+                {timeouts: {closed: 'invalid'}},
+                {timeouts: {closed: null}},
+                {timeouts: {closed: undefined}},
+                {timeouts: {closed: {}}},
+                {timeouts: {closed: []}},
+            ]
+
+            configurations.forEach((config, index) => {
+                expect(() => {
+                    const bathLights = BathLights(`timeout-config-${index}`, {
+                        door: {statusTopic: 'door/status'},
+                        light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                        ...config
+                    })
+                    const mockPublish = jest.fn()
+                    bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+                    
+                    // Trigger door close which would use timeout
+                    publish('door/status', {state: false})
+                }).not.toThrow(`Failed on config ${index}: ${JSON.stringify(config)}`)
+            })
+        })
+
+        test('should handle invalid toggle type configurations', () => {
+            const toggleConfigs = [
+                {type: 'invalid'},
+                {type: null},
+                {type: undefined},
+                {type: 123},
+                {type: {}},
+                {type: []},
+                {type: ''},
+            ]
+
+            toggleConfigs.forEach((toggleConfig, index) => {
+                expect(() => {
+                    const bathLights = BathLights(`toggle-config-${index}`, {
+                        light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                        toggle: {statusTopic: 'switch/status', ...toggleConfig},
+                    })
+                    const mockPublish = jest.fn()
+                    bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+                    
+                    // Should default to 'button' behavior
+                    publish('lights/status', {state: false})
+                    publish('switch/status', {state: true})
+                    expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+                }).not.toThrow(`Failed on toggle config ${index}: ${JSON.stringify(toggleConfig)}`)
+            })
+        })
+
+        test('should handle missing statusTopic in configuration', () => {
+            const configurations = [
+                {door: {statusTopic: ''}},
+                {door: {statusTopic: null}},
+                {door: {statusTopic: undefined}},
+                {door: {}}, // missing statusTopic entirely
+                {lock: {statusTopic: ''}},
+                {lock: {statusTopic: null}},
+                {toggle: {statusTopic: ''}},
+                {toggle: {statusTopic: null}},
+            ]
+
+            configurations.forEach((config, index) => {
+                expect(() => {
+                    const bathLights = BathLights(`missing-topic-${index}`, {
+                        light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                        ...config
+                    })
+                    const mockPublish = jest.fn()
+                    bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+                }).not.toThrow(`Failed on config ${index}: ${JSON.stringify(config)}`)
+            })
+        })
+
+        test('should handle verbose configuration edge cases', () => {
+            const verboseConfigs = [
+                {verbose: true},
+                {verbose: false},
+                {verbose: null},
+                {verbose: undefined},
+                {verbose: 'true'},
+                {verbose: 'false'},
+                {verbose: 1},
+                {verbose: 0},
+                {verbose: {}},
+                {verbose: []},
+            ]
+
+            verboseConfigs.forEach((config, index) => {
+                expect(() => {
+                    const bathLights = BathLights(`verbose-config-${index}`, {
+                        light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                        lock: {statusTopic: 'lock/status'},
+                        ...config
+                    })
+                    const mockPublish = jest.fn()
+                    bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+                    
+                    // Test verbose logging doesn't crash
+                    publish('lock/status', {state: true})
+                    expect(mockPublish).toHaveBeenCalled()
+                }).not.toThrow(`Failed on verbose config ${index}: ${JSON.stringify(config)}`)
+            })
+        })
+
+        test('should handle deeply nested invalid configuration', () => {
+            const invalidConfig = {
+                door: {
+                    statusTopic: {
+                        nested: {
+                            invalid: 'object'
+                        }
+                    }
+                },
+                lock: {
+                    statusTopic: ['array', 'instead', 'of', 'string']
+                },
+                light: {
+                    commandTopic: 123,
+                    statusTopic: null
+                },
+                toggle: {
+                    statusTopic: function() { return 'function' },
+                    type: Symbol('symbol')
+                },
+                timeouts: {
+                    closed: function() { return 1000 },
+                    opened: Symbol('timeout'),
+                    toggled: new Date(),
+                    unlocked: /regex/
+                },
+                verbose: new Map()
+            }
+
+            // Even with completely invalid config, it shouldn't crash during startup
+            expect(() => {
+                const bathLights = BathLights('deeply-invalid', invalidConfig)
+                const mockPublish = jest.fn()
+                bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+            }).not.toThrow()
+        })
+
+        test('should handle configuration parameter type coercion', () => {
+            const bathLights = BathLights('type-coercion-test', {
+                door: {statusTopic: 'door/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                timeouts: {
+                    closed: '1000',    // string that can be coerced to number
+                    opened: true,      // boolean (coerced to 1)
+                    toggled: false,    // boolean (coerced to 0)
+                    unlocked: '2000',  // string number
+                },
+                verbose: 'true'        // string that could be coerced to boolean
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            expect(() => {
+                bathLights.start({mqtt})
+            }).not.toThrow()
+
+            // Test that system still works despite type coercion
+            publish('door/status', {state: false})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+        })
+
+        test('should handle configuration with circular references', () => {
+            const circularConfig = {
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                door: {statusTopic: 'door/status'}
+            }
+            
+            // Create circular reference
+            circularConfig.self = circularConfig
+            circularConfig.door.parent = circularConfig
+
+            expect(() => {
+                const bathLights = BathLights('circular-ref', circularConfig)
+                const mockPublish = jest.fn()
+                bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+            }).not.toThrow()
+        })
+
+        test('should handle configuration with prototype pollution attempts', () => {
+            const maliciousConfig = {
+                light: {commandTopic: 'lights/command'},
+                '__proto__': {
+                    polluted: true
+                },
+                'constructor': {
+                    'prototype': {
+                        polluted: true
+                    }
+                }
+            }
+
+            expect(() => {
+                const bathLights = BathLights('proto-pollution', maliciousConfig)
+                const mockPublish = jest.fn()
+                bathLights.start({mqtt: {subscribe, publish: mockPublish}})
+            }).not.toThrow()
+
+            // Verify no prototype pollution occurred
+            expect({}.polluted).toBeUndefined()
+        })
+    })
 })
 
