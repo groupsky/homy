@@ -2,6 +2,7 @@
 /* eslint-env node */
 const mqtt = require('mqtt')
 const resolve = require('./lib/resolve')
+const StateManager = require('./lib/state-manager')
 
 const {
   bots: botConfigs,
@@ -12,6 +13,8 @@ const {
     }
   }
 } = require(process.env.CONFIG || './config')
+
+const stateManager = new StateManager()
 
 const playground = {
   bots: Object.entries(botConfigs).map(([name, config]) => {
@@ -25,7 +28,8 @@ const playground = {
   gates: {
     mqtt: mqtt.connect(mqttUrl, {
       clientId: mqttClientId
-    })
+    }),
+    state: stateManager
   }
 }
 
@@ -90,6 +94,19 @@ playground.bots.forEach(bot => {
           resolve()
         }))
       }
-    }
+    },
+    state: playground.gates.state.createBotState(bot.name)
   })
+})
+
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM, cleaning up...')
+  await stateManager.cleanup()
+  process.exit(0)
+})
+
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT, cleaning up...')
+  await stateManager.cleanup()
+  process.exit(0)
 })
