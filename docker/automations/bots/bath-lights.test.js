@@ -1636,6 +1636,223 @@ describe('bath-lights', () => {
             publish('switch/status', {state: true})
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
         })
+
+        test('should prevent toggle timeout from turning off lights when locked', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+                lock: {statusTopic: 'lock/status'},
+                timeouts: {toggled: 1000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // lights off initially
+            publish('lights/status', {state: false})
+
+            // toggle to turn on lights with timeout
+            publish('switch/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+            mockPublish.mockClear()
+
+            // simulate lights turning on
+            publish('lights/status', {state: true})
+
+            // lock the door - this should prevent toggle timeout from turning off lights
+            publish('lock/status', {state: true})
+
+            // wait for toggle timeout to fire
+            jest.advanceTimersByTime(1000)
+
+            // lights should NOT turn off because door is locked
+            expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+        })
+    })
+
+    describe('reason codes validation', () => {
+        test('should use correct reason codes for basic actions', () => {
+            // Test each reason code in separate bot instances to avoid interference
+            
+            // Test 'lck' - lights on when locked
+            const lockBot = BathLights('lock-test', {
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command'},
+            })
+            let mockPublish = jest.fn()
+            lockBot.start({mqtt: {subscribe, publish: mockPublish}})
+            publish('lock/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'lck'}))
+
+            // Test 'tgl-loff' - toggle turns on lights when off
+            const toggleOffBot = BathLights('toggle-off-test', {
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+            })
+            mockPublish = jest.fn()
+            toggleOffBot.start({mqtt: {subscribe, publish: mockPublish}})
+            publish('lights/status', {state: false})
+            publish('switch/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'tgl-loff'}))
+
+            // Test 'tgl-lon' - toggle turns off lights when on
+            const toggleOnBot = BathLights('toggle-on-test', {
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+            })
+            mockPublish = jest.fn()
+            toggleOnBot.start({mqtt: {subscribe, publish: mockPublish}})
+            publish('lights/status', {state: true})
+            publish('switch/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'tgl-lon'}))
+
+            // Test 'don' - door opened
+            const doorBot = BathLights('door-test', {
+                door: {statusTopic: 'door/status'},
+                light: {commandTopic: 'lights/command'},
+            })
+            mockPublish = jest.fn()
+            doorBot.start({mqtt: {subscribe, publish: mockPublish}})
+            publish('door/status', {state: true}) // door opens (no prior state)
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'don'}))
+
+            // Test 'doff' - door closed
+            mockPublish.mockClear()
+            publish('door/status', {state: false}) // door closes
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'doff'}))
+        })
+
+        test('should use timeout-specific reason codes', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+                timeouts: {closed: 500, opened: 500, toggled: 500, unlocked: 500},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Test 'tgl-tout' - toggle timeout
+            publish('lights/status', {state: false})
+            publish('switch/status', {state: true})
+            publish('lights/status', {state: true})
+            mockPublish.mockClear()
+            jest.advanceTimersByTime(500)
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'tgl-tout'}))
+
+            // Test 'don-tout' - door open timeout
+            mockPublish.mockClear()
+            publish('door/status', {state: false})
+            publish('door/status', {state: true})
+            publish('lights/status', {state: true})
+            mockPublish.mockClear()
+            jest.advanceTimersByTime(500)
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'don-tout'}))
+
+            // Test 'doff-tout' - door closed timeout
+            mockPublish.mockClear()
+            publish('door/status', {state: false})
+            publish('lights/status', {state: true})
+            mockPublish.mockClear()
+            jest.advanceTimersByTime(500)
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'doff-tout'}))
+
+            // Test 'don-unl' - door opened during unlock timeout
+            mockPublish.mockClear()
+            publish('lock/status', {state: true})
+            publish('lock/status', {state: false})
+            publish('door/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'don-unl'}))
+        })
+    })
+
+    describe('payload validation', () => {
+        test('should handle undefined and null payload.state values', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Test undefined payload.state - should not crash
+            expect(() => {
+                mqttSubscriptions['lights/status']({state: undefined})
+                mqttSubscriptions['door/status']({state: undefined})
+                mqttSubscriptions['lock/status']({state: undefined})
+                mqttSubscriptions['switch/status']({state: undefined})
+            }).not.toThrow()
+
+            // Test null payload.state - should not crash  
+            expect(() => {
+                mqttSubscriptions['lights/status']({state: null})
+                mqttSubscriptions['door/status']({state: null})
+                mqttSubscriptions['lock/status']({state: null})
+                mqttSubscriptions['switch/status']({state: null})
+            }).not.toThrow()
+
+            // Test completely missing state property - should not crash
+            expect(() => {
+                mqttSubscriptions['lights/status']({})
+                mqttSubscriptions['door/status']({})
+                mqttSubscriptions['lock/status']({})
+                mqttSubscriptions['switch/status']({})
+            }).not.toThrow()
+
+            // Test null payload - should not crash
+            expect(() => {
+                mqttSubscriptions['lights/status'](null)
+                mqttSubscriptions['door/status'](null)
+                mqttSubscriptions['lock/status'](null)
+                mqttSubscriptions['switch/status'](null)
+            }).not.toThrow()
+
+            // Test undefined payload - should not crash
+            expect(() => {
+                mqttSubscriptions['lights/status'](undefined)
+                mqttSubscriptions['door/status'](undefined)
+                mqttSubscriptions['lock/status'](undefined)
+                mqttSubscriptions['switch/status'](undefined)
+            }).not.toThrow()
+
+            // Verify no unexpected mqtt publishes occurred
+            expect(mockPublish).not.toHaveBeenCalled()
+        })
+
+        test('should handle non-boolean payload.state values with type coercion', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+
+            bathLights.start({mqtt})
+
+            // Test string values (truthy/falsy)
+            mqttSubscriptions['lights/status']({state: "true"}) // truthy
+            mqttSubscriptions['lights/status']({state: "false"}) // truthy (not boolean false!)
+            mqttSubscriptions['lights/status']({state: ""}) // falsy
+            
+            // Test number values
+            mqttSubscriptions['lights/status']({state: 1}) // truthy
+            mqttSubscriptions['lights/status']({state: 0}) // falsy
+            
+            // Test object values
+            mqttSubscriptions['lights/status']({state: {}}) // truthy
+            mqttSubscriptions['lights/status']({state: []}) // truthy
+
+            // Should not crash from type coercion issues
+            expect(mockPublish).not.toHaveBeenCalled()
+        })
     })
 
     describe('multiple simultaneous timers', () => {
