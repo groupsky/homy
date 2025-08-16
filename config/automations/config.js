@@ -206,7 +206,8 @@ module.exports = {
       commandConfig: {
         verification: 300,    // 300ms verification timeout
         maxRetries: 3,        // 3 retry attempts (standard reliability)
-        retryDelay: 50,      // 50ms between retries
+        retryDelay: 50,       // 50ms between retries
+        failureTopic: 'homy/automation/lightBath1Controller/command_failed', // monitoring topic
       },
       verbose: true           // Enable detailed logging for Bath1 testing phase
     },

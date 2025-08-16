@@ -3121,7 +3121,12 @@ describe('bath-lights', () => {
                 const bathLights = BathLights('verification-failure-test', {
                     light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
                     toggle: {statusTopic: 'switch/status', type: 'button'},
-                    commandConfig: {verification: 200, maxRetries: 2, retryDelay: 50},
+                    commandConfig: {
+                        verification: 200, 
+                        maxRetries: 2, 
+                        retryDelay: 50, 
+                        failureTopic: 'homy/automation/verification-failure-test/command_failed'
+                    },
                     verbose: true
                 })
                 const mockPublish = jest.fn()
@@ -3234,6 +3239,40 @@ describe('bath-lights', () => {
                     })
                 )
             })
+
+            test('should not emit failure events when failureTopic not configured', () => {
+                const bathLights = BathLights('no-failure-topic-test', {
+                    light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                    toggle: {statusTopic: 'switch/status', type: 'button'},
+                    commandConfig: {
+                        verification: 100,
+                        maxRetries: 1,
+                        retryDelay: 50,
+                        // No failureTopic configured - should not emit failure events
+                    }
+                })
+                const mockPublish = jest.fn()
+                const mqtt = {subscribe, publish: mockPublish}
+
+                bathLights.start({mqtt})
+
+                // Start with lights off and trigger toggle
+                publish('lights/status', {state: false})
+                publish('switch/status', {state: true})
+                mockPublish.mockClear()
+
+                // Cause failure by keeping wrong state
+                publish('lights/status', {state: false})
+                jest.advanceTimersByTime(100) // verification timeout
+                jest.advanceTimersByTime(50)  // retry delay
+
+                // Final failure - should NOT emit failure event
+                publish('lights/status', {state: false})
+                jest.advanceTimersByTime(100)
+
+                // Should not have called publish for any failure events
+                expect(mockPublish).not.toHaveBeenCalled()
+            })
         })
 
         describe('production configuration compatibility', () => {
@@ -3276,7 +3315,7 @@ describe('bath-lights', () => {
             })
 
             test('should enable verification for Bath1 when configured', () => {
-                // Bath1 config with verification enabled
+                // Bath1 config with verification enabled (matching production config)
                 const bathLights = BathLights('lightBath1Controller', {
                     door: {
                         statusTopic: 'homy/features/open/bath1_door_open/status',
@@ -3302,6 +3341,7 @@ describe('bath-lights', () => {
                         verification: 300,   // 300ms verification
                         maxRetries: 3,       // 3 retry attempts  
                         retryDelay: 50,      // 50ms between retries
+                        failureTopic: 'homy/automation/lightBath1Controller/command_failed', // monitoring topic
                     }
                 })
                 const mockPublish = jest.fn()

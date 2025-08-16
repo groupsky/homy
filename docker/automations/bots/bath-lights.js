@@ -43,7 +43,7 @@ module.exports = (name, {
             verification: commandConfig.verification || 0,     // 0 = disabled
             maxRetries: commandConfig.maxRetries || 0,         // 0 = disabled
             retryDelay: commandConfig.retryDelay || 1000,      // 1 second between retries
-            failureTopic: commandConfig.failureTopic || `homy/automation/${name}/command_failed`, // configurable topic
+            failureTopic: commandConfig.failureTopic,          // no default - opt-in only
         }
 
         // Pending command tracking (only one command at a time to avoid conflicts)
@@ -135,17 +135,19 @@ module.exports = (name, {
                         console.log(`[${name}] command for ${reason} failed after ${command.attempts} attempts - giving up`)
                     }
                     
-                    // Emit failure event for monitoring (using configurable topic)
-                    try {
-                        mqtt.publish(config.failureTopic, {
-                            reason,
-                            attempts: command.attempts,
-                            expectedState,
-                            actualState: lightState,
-                            timestamp: Date.now()
-                        })
-                    } catch (e) {
-                        // Ignore publish failures for failure events
+                    // Emit failure event for monitoring (only if failureTopic configured)
+                    if (config.failureTopic) {
+                        try {
+                            mqtt.publish(config.failureTopic, {
+                                reason,
+                                attempts: command.attempts,
+                                expectedState,
+                                actualState: lightState,
+                                timestamp: Date.now()
+                            })
+                        } catch (e) {
+                            // Ignore publish failures for failure events
+                        }
                     }
                     
                     cleanupCommand()
