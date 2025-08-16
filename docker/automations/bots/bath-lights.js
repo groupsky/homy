@@ -43,13 +43,14 @@ module.exports = (name, {
             verification: commandConfig.verification || 0,     // 0 = disabled
             maxRetries: commandConfig.maxRetries || 0,         // 0 = disabled
             retryDelay: commandConfig.retryDelay || 1000,      // 1 second between retries
+            failureTopic: commandConfig.failureTopic || `homy/automation/${name}/command_failed`, // configurable topic
         }
 
-        // Pending commands tracking (only used if verification enabled)
-        const pendingCommands = new Map() // reason -> {expectedState, attempts, timer, etc}
+        // Pending command tracking (only one command at a time to avoid conflicts)
+        let pendingCommand = null
 
         // Smart publish: legacy mode (direct) or verification mode
-        const smartPublish = (topic, payload, reason = 'unknown') => {
+        const smartPublish = (topic, payload) => {
             if (config.verification === 0 || config.maxRetries === 0) {
                 // Legacy mode - direct publish (existing behavior)
                 mqtt.publish(topic, payload)
@@ -58,14 +59,14 @@ module.exports = (name, {
 
             // Verification mode - use state-based verification
             const expectedState = payload.state
+            const reason = payload.r || 'unknown' // Use payload.r as unified reason
             
-            // Cancel any existing command for the same reason to avoid conflicts
-            if (pendingCommands.has(reason)) {
-                const existingCommand = pendingCommands.get(reason)
-                clearTimeout(existingCommand.verificationTimer)
-                clearTimeout(existingCommand.retryTimer)
+            // Cancel any existing pending command to avoid conflicts
+            if (pendingCommand) {
+                clearTimeout(pendingCommand.verificationTimer)
+                clearTimeout(pendingCommand.retryTimer)
                 if (verbose) {
-                    console.log(`[${name}] cancelling existing command for reason: ${reason}`)
+                    console.log(`[${name}] cancelling existing command for new command: ${reason}`)
                 }
             }
 
@@ -76,6 +77,14 @@ module.exports = (name, {
                 reason,
                 attempts: 0,
                 timestamp: Date.now()
+            }
+
+            const cleanupCommand = () => {
+                if (pendingCommand) {
+                    if (pendingCommand.verificationTimer) clearTimeout(pendingCommand.verificationTimer)
+                    if (pendingCommand.retryTimer) clearTimeout(pendingCommand.retryTimer)
+                    pendingCommand = null
+                }
             }
 
             const executeCommand = () => {
@@ -98,7 +107,7 @@ module.exports = (name, {
 
                 // Set verification timeout
                 const verificationTimer = setTimeout(() => {
-                    if (pendingCommands.has(reason)) {
+                    if (pendingCommand) {
                         if (verbose) {
                             console.log(`[${name}] command verification timeout for ${reason} (expected: ${expectedState}, actual: ${lightState})`)
                         }
@@ -117,7 +126,7 @@ module.exports = (name, {
 
                 // Store command for verification
                 command.verificationTimer = verificationTimer
-                pendingCommands.set(reason, command)
+                pendingCommand = command
             }
 
             const scheduleRetry = () => {
@@ -126,9 +135,9 @@ module.exports = (name, {
                         console.log(`[${name}] command for ${reason} failed after ${command.attempts} attempts - giving up`)
                     }
                     
-                    // Emit failure event for monitoring
+                    // Emit failure event for monitoring (using configurable topic)
                     try {
-                        mqtt.publish(`homy/automation/${name}/command_failed`, {
+                        mqtt.publish(config.failureTopic, {
                             reason,
                             attempts: command.attempts,
                             expectedState,
@@ -148,21 +157,12 @@ module.exports = (name, {
                 }
 
                 const retryTimer = setTimeout(() => {
-                    if (pendingCommands.has(reason)) {
+                    if (pendingCommand && pendingCommand === command) {
                         executeCommand()
                     }
                 }, config.retryDelay)
                 
                 command.retryTimer = retryTimer
-            }
-
-            const cleanupCommand = () => {
-                const cmd = pendingCommands.get(reason)
-                if (cmd) {
-                    if (cmd.verificationTimer) clearTimeout(cmd.verificationTimer)
-                    if (cmd.retryTimer) clearTimeout(cmd.retryTimer)
-                    pendingCommands.delete(reason)
-                }
             }
 
             executeCommand()
@@ -209,20 +209,18 @@ module.exports = (name, {
                 console.log(`[${name}] light changed from ${previousState} to ${lightState}`, payload)
             }
 
-            // Check all pending commands for state-based verification (if verification enabled)
-            if (config.verification > 0 && config.maxRetries > 0) {
-                for (const [reason, command] of pendingCommands.entries()) {
-                    if (lightState === command.expectedState) {
-                        if (verbose) {
-                            console.log(`[${name}] command for ${reason} verified successfully (state: ${lightState})`)
-                        }
-                        // Command successful - clean up
-                        if (command.verificationTimer) clearTimeout(command.verificationTimer)
-                        if (command.retryTimer) clearTimeout(command.retryTimer)
-                        pendingCommands.delete(reason)
+            // Check pending command for state-based verification (if verification enabled)
+            if (config.verification > 0 && config.maxRetries > 0 && pendingCommand) {
+                if (lightState === pendingCommand.expectedState) {
+                    if (verbose) {
+                        console.log(`[${name}] command for ${pendingCommand.reason} verified successfully (state: ${lightState})`)
                     }
-                    // If state doesn't match, let the verification timeout handle retries
+                    // Command successful - clean up
+                    if (pendingCommand.verificationTimer) clearTimeout(pendingCommand.verificationTimer)
+                    if (pendingCommand.retryTimer) clearTimeout(pendingCommand.retryTimer)
+                    pendingCommand = null
                 }
+                // If state doesn't match, let the verification timeout handle retries
             }
 
             // Original logic with state change handling
@@ -231,7 +229,7 @@ module.exports = (name, {
                     if (verbose) {
                         console.log(`[${name}] turning on lights from lock`)
                     }
-                    smartPublish(light.commandTopic, {state: true, r: 'loff-lock'}, 'lock_override')
+                    smartPublish(light.commandTopic, {state: true, r: 'loff-lock'})
                 }
 
                 cancelTimers()
@@ -253,13 +251,13 @@ module.exports = (name, {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights`)
                             }
-                            smartPublish(light.commandTopic, {state: false, r: 'tgl-lon'}, 'toggle_off')
+                            smartPublish(light.commandTopic, {state: false, r: 'tgl-lon'})
                         }
                     } else {
                         if (verbose) {
                             console.log(`[${name}] turning on lights`)
                         }
-                        smartPublish(light.commandTopic, {state: true, r: 'tgl-loff'}, 'toggle_on')
+                        smartPublish(light.commandTopic, {state: true, r: 'tgl-loff'})
                         if (timeouts?.toggled && !toggledTimer) {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights in ${timeouts.toggled / 60000} minutes from toggled timeout`)
@@ -270,7 +268,7 @@ module.exports = (name, {
                                 }
                                 // Check current state before turning off
                                 if (lightState !== false && !lockState) {
-                                    smartPublish(light.commandTopic, {state: false, r: 'tgl-tout'}, 'toggle_timeout')
+                                    smartPublish(light.commandTopic, {state: false, r: 'tgl-tout'})
                                 }
                                 toggledTimer = null
                             }, timeouts.toggled)
@@ -291,7 +289,7 @@ module.exports = (name, {
                     if (verbose) {
                         console.log(`[${name}] turning on lights`)
                     }
-                    smartPublish(light.commandTopic, {state: true, r: 'lck'}, 'lock_on')
+                    smartPublish(light.commandTopic, {state: true, r: 'lck'})
 
                     cancelTimers()
                 } else if (timeouts?.unlocked != null && !unlockedTimer) {
@@ -304,7 +302,7 @@ module.exports = (name, {
                         }
                         // Check current state before turning off
                         if (lightState !== false && !lockState) {
-                            smartPublish(light.commandTopic, {state: false, r: 'unl-tout'}, 'unlock_timeout')
+                            smartPublish(light.commandTopic, {state: false, r: 'unl-tout'})
                         }
                         unlockedTimer = null
                     }, timeouts.unlocked)
@@ -327,7 +325,7 @@ module.exports = (name, {
                         if (verbose) {
                             console.log(`[${name}] turning off lights`)
                         }
-                        smartPublish(light.commandTopic, {state: false, r: 'don-unl'}, 'door_open_unlock')
+                        smartPublish(light.commandTopic, {state: false, r: 'don-unl'})
                         if (verbose) {
                             console.log(`[${name}] cancelling unlocked timer`)
                         }
@@ -337,7 +335,7 @@ module.exports = (name, {
                         if (verbose) {
                             console.log(`[${name}] turning on lights`)
                         }
-                        smartPublish(light.commandTopic, {state: true, r: 'don'}, 'door_open')
+                        smartPublish(light.commandTopic, {state: true, r: 'don'})
                         if (timeouts?.opened && !openedTimer && !toggledTimer) {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights in ${timeouts.opened / 60000} minutes from opened timeout`)
@@ -348,7 +346,7 @@ module.exports = (name, {
                                 }
                                 // Check current state before turning off
                                 if (lightState !== false && !lockState) {
-                                    smartPublish(light.commandTopic, {state: false, r: 'don-tout'}, 'door_open_timeout')
+                                    smartPublish(light.commandTopic, {state: false, r: 'don-tout'})
                                 }
                                 openedTimer = null
                             }, timeouts.opened)
@@ -360,7 +358,7 @@ module.exports = (name, {
                         if (verbose) {
                             console.log(`[${name}] turning on lights`)
                         }
-                        smartPublish(light.commandTopic, {state: true, r: 'doff'}, 'door_close')
+                        smartPublish(light.commandTopic, {state: true, r: 'doff'})
                     }
                     if (timeouts?.closed && !closedTimer && !lockState && !toggledTimer) {
                         if (verbose) {
@@ -372,7 +370,7 @@ module.exports = (name, {
                             }
                             // Check current state before turning off
                             if (lightState !== false && !lockState) {
-                                smartPublish(light.commandTopic, {state: false, r: 'doff-tout'}, 'door_close_timeout')
+                                smartPublish(light.commandTopic, {state: false, r: 'doff-tout'})
                             }
                             closedTimer = null
                         }, timeouts.closed)

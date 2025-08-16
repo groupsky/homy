@@ -204,9 +204,9 @@ module.exports = {
         unlocked: 3 * 60000,  // 3 minutes - accommodate kids cleanup time
       },
       commandConfig: {
-        verification: 5000,   // 5 second verification timeout (conservative for testing)
+        verification: 300,    // 300ms verification timeout
         maxRetries: 3,        // 3 retry attempts (standard reliability)
-        retryDelay: 1000,     // 1 second between retries (not too aggressive)
+        retryDelay: 50,      // 50ms between retries
       },
       verbose: true           // Enable detailed logging for Bath1 testing phase
     },
@@ -228,7 +228,7 @@ module.exports = {
       },
       timeouts: {
         closed: 3 * 60000,    // 3 minutes - kids take longer
-        opened: 6 * 60000,    // 6 minutes - kids might leave door open briefly  
+        opened: 6 * 60000,    // 6 minutes - kids might leave door open briefly
         toggled: 25 * 60000,  // 25 minutes - kids forget to turn off lights
         unlocked: 4 * 60000,  // 4 minutes - kids need more transition time
       }
