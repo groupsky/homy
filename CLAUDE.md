@@ -29,6 +29,8 @@ docker compose logs -f ha
 docker compose up -d --build automations
 ```
 
+**IMPORTANT**: All containers must be built from the `docker/` directory structure. Each service should have its own subdirectory under `docker/` containing its Dockerfile and related files.
+
 ## Architecture
 
 ### Service Architecture
@@ -77,6 +79,9 @@ The system integrates with:
 ### Configuration References
 - **Main Configuration**: `config/automations/config.js` - Primary system configuration
 - **Architecture Overview**: `ARCHITECTURE.md` - Comprehensive system architecture documentation
+
+### E2E Testing
+- **Monitoring Pipeline**: `test/e2e/monitoring-pipeline/` - End-to-end test for bath-lights command verification monitoring and alerting
 
 ## File Structure Notes
 
