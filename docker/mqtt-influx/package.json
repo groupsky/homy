@@ -7,10 +7,22 @@
   "main": "index.js",
   "scripts": {
     "start": "index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:working",
+    "test:all": "npm run test:converters && npm run test:mqtt && npm run test:component && npm run test:integration",
+    "test:working": "npm run test:converters && npm run test:component",
+    "test:converters": "node --test converters/*.test.js",
+    "test:converter": "node --test converters/command-verification.test.js",
+    "test:mqtt": "node --test mqtt.integration.test.js",
+    "test:component": "node --test mqtt-influx.component.test.js",
+    "test:integration": "node --test service.integration.test.js",
+    "test:watch": "node --test --watch converters/*.test.js mqtt.integration.test.js mqtt-influx.component.test.js service.integration.test.js"
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.33.2",
     "mqtt": "^4.3.7"
+  },
+  "devDependencies": {
+    "aedes": "^0.50.0",
+    "net": "^1.0.2"
   }
 }
