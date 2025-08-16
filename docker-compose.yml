@@ -490,7 +490,7 @@ services:
       - INFLUXDB_WRITE_USER_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
     volumes:
       - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
-      - ./data/influxdb:/var/lib/influxdb
+      - ${DATA_PATH}/influxdb:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
 
   grafana:
