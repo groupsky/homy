@@ -8,22 +8,23 @@ contactPoints:
         type: telegram
         disableResolveMessage: false
         settings:
-          chatid: "$TELEGRAM_CHAT_ID"
+          chatid: |
+            $TELEGRAM_CHAT_ID
           bottoken: "$TELEGRAM_BOT_TOKEN"
           message: |
             🏠 **{{ .GroupLabels.service | title }} Alert**
-            
+
             **Status:** {{ .Status | title }}
             **Severity:** {{ .GroupLabels.severity | title }}
-            
+
             {{ range .Alerts }}
             📋 **{{ .Annotations.summary }}**
             📊 {{ .Annotations.description }}
-            
+
             🔗 [View Dashboard]({{ .GeneratorURL }})
             📖 [Troubleshooting Guide]({{ .Annotations.runbook_url }})
             {{ end }}
-            
+
             ⏰ {{ .CommonAnnotations.timestamp }}
           parseMode: Markdown
           uploadImage: false
