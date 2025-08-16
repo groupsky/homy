@@ -200,8 +200,8 @@ describe('Bath-lights monitoring pipeline E2E', () => {
     console.log(`✅ Telegram reader bot connected: @${readerBotTest.botInfo.username}`)
     
     // Wait for actual Grafana alert message triggered by our failure events
-    // Keywords match the Grafana alert template: "🏠 **Bath Lights Alert**" + "command failures"
-    const expectedKeywords = ['🏠', 'Bath Lights', 'Alert', 'command']
+    // Keywords match the HTML Grafana alert template: "🏠 <b>Bath Lights Alert</b>" + "command failures" 
+    const expectedKeywords = ['🏠', 'Bath Lights Alert', 'Status:', 'command']
     
     const alertResult = await waitForAlertMessage(
       telegramConfig.readerToken,
