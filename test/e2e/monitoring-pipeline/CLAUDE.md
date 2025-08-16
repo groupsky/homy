@@ -43,22 +43,26 @@ Test Data → MQTT Client → mqtt-influx-automation → InfluxDB → Grafana AP
 ### Quick Start
 ```bash
 cd test/e2e/monitoring-pipeline
+./setup-test-secrets.sh  # First time setup
 ./run-test.sh
 ```
 
 ### Manual Steps
 ```bash
+# Setup test secrets (first time only)
+./setup-test-secrets.sh
+
 # Install dependencies
 npm install
 
 # Start environment (from repository root)
-docker compose -f docker-compose.yml -f test/e2e/monitoring-pipeline/docker-compose.test.yml up -d
+docker compose --env-file test/e2e/monitoring-pipeline/.env.test -f docker-compose.yml -f test/e2e/monitoring-pipeline/docker-compose.test.yml up -d
 
 # Wait for services, then run test
 npm test
 
 # Cleanup
-docker compose -f docker-compose.yml -f test/e2e/monitoring-pipeline/docker-compose.test.yml down
+docker compose --env-file test/e2e/monitoring-pipeline/.env.test -f docker-compose.yml -f test/e2e/monitoring-pipeline/docker-compose.test.yml down
 ```
 
 ### CI/CD Mode
@@ -101,14 +105,38 @@ The test publishes realistic failure events:
 
 ## Configuration
 
+### Security and Isolation
+
+**IMPORTANT**: This test environment is completely isolated from production:
+- Uses separate Docker Compose project (`homy-monitoring-e2e`)
+- All services use internal Docker networking (no external ports)
+- Uses dedicated test secrets from `secrets.test/` directory via `.env.test`
+- No connection to production services at 192.168.13.2
+- Telegram notifications use local test bot credentials
+
 ### Environment Variables
 ```bash
-BROKER=mqtt://localhost:1883           # MQTT broker URL
-INFLUXDB_URL=http://localhost:8086     # InfluxDB connection
-GRAFANA_URL=http://localhost:3000      # Grafana dashboard URL
-INFLUXDB_DATABASE=automation           # InfluxDB database name
+BROKER=mqtt://broker:1883              # Internal MQTT broker (NOT production)
+INFLUXDB_URL=http://influxdb:8086      # Internal InfluxDB (NOT production)
+GRAFANA_URL=http://grafana:3000        # Internal Grafana (NOT production)
+INFLUXDB_DATABASE=homy                 # Test database name
 CI=true                                # Enable headless mode
 ```
+
+### Test Environment Configuration
+
+The test uses a dedicated `.env.test` file that overrides the secrets path:
+```bash
+SECRETS_PATH=./secrets.test
+COMPOSE_PROJECT_NAME=homy-monitoring-e2e
+```
+
+This directs Docker Compose to use test secrets from `secrets.test/` instead of production `secrets/`:
+- `telegram_bot_token` - Local test bot token (copied from `secrets.local/`)
+- `telegram_chat_id` - Local test chat ID (copied from `secrets.local/`)
+- `influxdb_read_user` and `influxdb_read_user_password` - Test InfluxDB credentials
+
+These are completely separate from production credentials and prevent accidental use of production Telegram bots or services.
 
 ### Timeouts
 - Service readiness: 60 seconds

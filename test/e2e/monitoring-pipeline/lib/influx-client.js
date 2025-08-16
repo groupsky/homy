@@ -12,7 +12,7 @@ import { InfluxDB } from '@influxdata/influxdb-client'
  * @param {number} timeRangeMinutes - Time range in minutes to look back
  * @returns {Promise<Array>} Array of data points
  */
-export async function queryCommandFailures(influxUrl, measurement = 'command_failure', timeRangeMinutes = 60) {
+export async function queryCommandFailures(influxUrl, measurement = 'command_failure', timeRangeMinutes = 10) {
   console.log(`Querying InfluxDB for ${measurement} events in last ${timeRangeMinutes} minutes...`)
   
   const database = process.env.INFLUXDB_DATABASE || 'homy'
@@ -108,12 +108,12 @@ export function validateFailureEvents(events, influxData) {
         validation.errors.push(`Attempts mismatch for ${key}: expected ${event.attempts}, got ${record.attempts}`)
       }
       
-      if (record.expected_state !== (event.expectedState || true)) {
-        validation.errors.push(`Expected state mismatch for ${key}`)
+      if (record.expected_state !== event.expectedState) {
+        validation.errors.push(`Expected state mismatch for ${key}: expected ${event.expectedState}, got ${record.expected_state}`)
       }
       
-      if (record.actual_state !== (event.actualState || false)) {
-        validation.errors.push(`Actual state mismatch for ${key}`)
+      if (record.actual_state !== event.actualState) {
+        validation.errors.push(`Actual state mismatch for ${key}: expected ${event.actualState}, got ${record.actual_state}`)
       }
     }
   })

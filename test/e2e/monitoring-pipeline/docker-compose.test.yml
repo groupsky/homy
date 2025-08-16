@@ -1,5 +1,6 @@
 # Test overlay for monitoring pipeline E2E test
 # This completely removes external port mappings since tests run inside containers
+# Uses isolated test data directories (via DATA_PATH=./data.test) and local test secrets
 
 services:
   broker:
@@ -12,9 +13,22 @@ services:
   
   grafana:
     ports: !reset []  # Completely remove all port mappings
+    secrets:
+      # Re-enable only telegram secrets for testing
+      - telegram_bot_token
+      - telegram_chat_id
+    environment:
+      # Set Telegram credentials for alert testing
+      - TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token
+      - TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram_chat_id
     volumes:
-      # Override provisioning to disable problematic alert rules
-      - /dev/null:/etc/grafana/provisioning/alerting/bath-lights-alerts.yaml:ro
+      # Use Docker volume for test data to avoid permission issues
+      - homy-test-grafana-data:/var/lib/grafana
+      # Keep config files and ENABLE FIXED alert rules for Telegram testing
+      - ${GRAFANA_CONFIG_FILE}:/etc/grafana/grafana.ini:ro
+      - ${GRAFANA_CONFIG_PATH}/provisioning:/etc/grafana/provisioning:ro
+      - ${GRAFANA_CONFIG_PATH}/dashboards:/var/lib/grafana/dashboards:ro
+      - /etc/localtime:/etc/localtime:ro
   
   mqtt-influx-automation:
     # Remove secrets since we disabled InfluxDB auth
@@ -25,8 +39,10 @@ services:
       - MQTT_CLIENT_ID=mqtt-influx-automation
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_DATABASE=homy
-      - INFLUXDB_USERNAME=  # Empty for no auth
-      - INFLUXDB_PASSWORD=  # Empty for no auth
+      - INFLUXDB_TOKEN=""  # Explicitly empty token for no auth
+      - INFLUXDB_USERNAME=  # Override to empty
+      - INFLUXDB_PASSWORD=  # Override to empty
+      - TAGS={"component":"automation"}
   
   # Add a test runner container that can access services via internal network
   test-runner:
@@ -45,3 +61,9 @@ services:
       - grafana
       - mqtt-influx-automation
     command: tail -f /dev/null  # Keep container running
+
+# No need to override secrets - using .env.test with SECRETS_PATH=./secrets.test
+
+volumes:
+  homy-test-grafana-data:
+    driver: local

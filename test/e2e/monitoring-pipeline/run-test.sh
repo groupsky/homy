@@ -40,7 +40,7 @@ cleanup() {
     log_info "Cleaning up test environment..."
     
     # Stop and remove containers
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" down --volumes --remove-orphans 2>/dev/null || true
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" down --volumes --remove-orphans 2>/dev/null || true
     
     # Remove any dangling networks
     docker network prune -f 2>/dev/null || true
@@ -132,27 +132,31 @@ wait_for_service() {
 start_test_environment() {
     log_info "Starting monitoring pipeline E2E test environment..."
     
-    # Set project name to avoid conflicts
+    # Set project name to avoid conflicts and use test environment
     export COMPOSE_PROJECT_NAME="$PROJECT_NAME"
+    
+    # Use test environment configuration to avoid production secrets
+    log_info "Using test environment configuration (.env.test)"
+    export COMPOSE_ENV_FILES=".env.test"
     
     # Build and start only required services for monitoring pipeline
     log_info "Building and starting required services..."
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" up --build -d broker influxdb grafana mqtt-influx-automation test-runner
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" up --build -d broker influxdb grafana mqtt-influx-automation test-runner
     
     # Wait for core services to be ready
     log_info "Waiting for core services to be ready..."
     
     # Wait for MQTT broker
-    wait_for_service "MQTT broker" "docker compose -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec broker mosquitto_pub -t test -m ready"
+    wait_for_service "MQTT broker" "docker compose --env-file .env.test -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec broker mosquitto_pub -t test -m ready"
     
     # Wait for InfluxDB
-    wait_for_service "InfluxDB" "docker compose -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec test-runner wget -q -O - http://influxdb:8086/ping"
+    wait_for_service "InfluxDB" "docker compose --env-file .env.test -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec test-runner wget -q -O - http://influxdb:8086/ping"
     
     # Wait for Grafana
-    wait_for_service "Grafana" "docker compose -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec test-runner wget -q -O - http://grafana:3000/api/health"
+    wait_for_service "Grafana" "docker compose --env-file .env.test -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec test-runner wget -q -O - http://grafana:3000/api/health"
     
     # Wait for mqtt-influx-automation service
-    wait_for_service "mqtt-influx-automation" "docker compose -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec mqtt-influx-automation echo ready"
+    wait_for_service "mqtt-influx-automation" "docker compose --env-file .env.test -p '$PROJECT_NAME' -f '$COMPOSE_BASE' -f '$COMPOSE_TEST' exec mqtt-influx-automation echo ready"
     
     # Give services a moment to settle
     log_info "Allowing services to settle..."
@@ -167,11 +171,11 @@ run_e2e_test() {
     
     # Copy test files to test runner container
     log_info "Copying test files to test runner container..."
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" cp . test-runner:/usr/src/test/
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" cp . test-runner:/usr/src/test/
     
     # Install dependencies in test runner container
     log_info "Installing dependencies in test runner..."
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && npm install"
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && npm install"
     
     # Skip Playwright browser installation in containerized environment
     log_info "Skipping Playwright browser installation (using API-only tests)..."
@@ -189,7 +193,7 @@ run_e2e_test() {
     fi
     
     # Execute the test inside the container
-    if docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && CI=${CI:-false} SKIP_BROWSER_TESTS=true npm test"; then
+    if docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && CI=${CI:-false} SKIP_BROWSER_TESTS=true npm test"; then
         log_success "E2E test completed successfully!"
         return 0
     else
@@ -204,19 +208,19 @@ show_service_logs() {
     
     echo
     echo "=== MQTT Broker Logs ==="
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 broker || true
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 broker || true
     
     echo
     echo "=== InfluxDB Logs ==="
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 influxdb || true
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 influxdb || true
     
     echo
     echo "=== Grafana Logs ==="
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 grafana || true
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 grafana || true
     
     echo
     echo "=== mqtt-influx-automation Logs ==="
-    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 mqtt-influx-automation || true
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 mqtt-influx-automation || true
 }
 
 # Main execution

@@ -1,229 +1,34 @@
 apiVersion: 1
 
-groups:
-  - name: Bath Lights Command Verification
-    folder: automation
-    interval: 1m
-    rules:
-      - uid: bath-lights-high-failure-rate
-        title: Bath Lights High Failure Rate
-        condition: C
-        data:
-          - refId: A
-            queryType: ""
-            relativeTimeRange:
-              from: 600
-              to: 0
-            datasource:
-              type: influxdb
-              uid: influxdb
-            model:
-              query: 'SELECT last("failure_rate_percent") FROM "verification_summary" WHERE time > now() - 10m'
-              rawQuery: true
-          - refId: B
-            queryType: ""
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasource:
-              type: __expr__
-              uid: __expr__
-            model:
-              conditions:
-                - evaluator:
-                    params:
-                      - 10
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params:
-                      - A
-                  reducer:
-                    params: []
-                    type: last
-                  type: query
-              expression: A
-              intervalMs: 1000
-              maxDataPoints: 43200
-              reducer: last
-              refId: B
-              type: reduce
-          - refId: C
-            queryType: ""
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasource:
-              type: __expr__
-              uid: __expr__
-            model:
-              conditions:
-                - evaluator:
-                    params:
-                      - 10
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params:
-                      - B
-                  reducer:
-                    params: []
-                    type: last
-                  type: query
-              expression: B > 10
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: C
-              type: threshold
-        noDataState: NoData
-        execErrState: Alerting
-        for: 5m
-        annotations:
-          description: "Bath lights command verification failure rate is {{ $value }}% (threshold: 10%)"
-          runbook_url: "https://github.com/groupsky/homy/blob/master/docker/automations/monitoring/README.md"
-          summary: "Bath lights automation is experiencing high command failure rate"
-        labels:
-          severity: warning
-          component: automation
-          service: bath-lights
-        isPaused: false
-        
-      - uid: bath-lights-critical-failure-rate
-        title: Bath Lights Critical Failure Rate
-        condition: C
-        data:
-          - refId: A
-            queryType: ""
-            relativeTimeRange:
-              from: 600
-              to: 0
-            datasource:
-              type: influxdb
-              uid: influxdb
-            model:
-              query: 'SELECT last("failure_rate_percent") FROM "verification_summary" WHERE time > now() - 10m'
-              rawQuery: true
-          - refId: B
-            queryType: ""
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasource:
-              type: __expr__
-              uid: __expr__
-            model:
-              expression: A
-              reducer: last
-              refId: B
-              type: reduce
-          - refId: C
-            queryType: ""
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasource:
-              type: __expr__
-              uid: __expr__
-            model:
-              expression: B > 25
-              refId: C
-              type: threshold
-        noDataState: NoData
-        execErrState: Alerting
-        for: 2m
-        annotations:
-          description: "🚨 CRITICAL: Bath lights failure rate is {{ $value }}% - immediate attention required!"
-          runbook_url: "https://github.com/groupsky/homy/blob/master/docker/automations/monitoring/README.md"
-          summary: "Bath lights automation is critically failing"
-        labels:
-          severity: critical
-          component: automation
-          service: bath-lights
-        isPaused: false
-
-      - uid: bath-lights-repeated-failures
-        title: Bath Lights Repeated Failures
-        condition: C
-        data:
-          - refId: A
-            queryType: ""
-            relativeTimeRange:
-              from: 600
-              to: 0
-            datasource:
-              type: influxdb
-              uid: influxdb
-            model:
-              query: 'SELECT count("attempts") FROM "command_failure" WHERE time > now() - 10m'
-              rawQuery: true
-          - refId: B
-            queryType: ""
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasource:
-              type: __expr__
-              uid: __expr__
-            model:
-              expression: A
-              reducer: last
-              refId: B
-              type: reduce
-          - refId: C
-            queryType: ""
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasource:
-              type: __expr__
-              uid: __expr__
-            model:
-              expression: B > 5
-              refId: C
-              type: threshold
-        noDataState: NoData
-        execErrState: Alerting
-        for: 1m
-        annotations:
-          description: "{{ $value }} command failures in the last 10 minutes - possible device or network issues"
-          runbook_url: "https://github.com/groupsky/homy/blob/master/docker/automations/monitoring/README.md"
-          summary: "Multiple bath lights command failures detected"
-        labels:
-          severity: warning
-          component: automation
-          service: bath-lights
-        isPaused: false
-
 contactPoints:
-  - uid: telegram-bath-lights
+  - orgId: 1
     name: telegram-bath-lights
-    type: telegram
-    settings:
-      chatid: $TELEGRAM_CHAT_ID
-      message: |
-        🏠 **{{ .GroupLabels.service | title }} Alert**
-        
-        **Status:** {{ .Status | title }}
-        **Severity:** {{ .GroupLabels.severity | title }}
-        
-        {{ range .Alerts }}
-        📋 **{{ .Annotations.summary }}**
-        📊 {{ .Annotations.description }}
-        
-        🔗 [View Dashboard]({{ .GeneratorURL }})
-        📖 [Troubleshooting Guide]({{ .Annotations.runbook_url }})
-        {{ end }}
-        
-        ⏰ {{ .CommonAnnotations.timestamp }}
-      parseMode: Markdown
-      uploadImage: false
-    secureSettings:
-      bottoken: $TELEGRAM_BOT_TOKEN
+    receivers:
+      - uid: telegram-bath-lights
+        type: telegram
+        settings:
+          bottoken: $TELEGRAM_BOT_TOKEN
+          chatid: $TELEGRAM_CHAT_ID
+          message: |
+            🏠 **{{ .GroupLabels.service | title }} Alert**
+            
+            **Status:** {{ .Status | title }}
+            **Severity:** {{ .GroupLabels.severity | title }}
+            
+            {{ range .Alerts }}
+            📋 **{{ .Annotations.summary }}**
+            📊 {{ .Annotations.description }}
+            
+            🔗 [View Dashboard]({{ .GeneratorURL }})
+            📖 [Troubleshooting Guide]({{ .Annotations.runbook_url }})
+            {{ end }}
+            
+            ⏰ {{ .CommonAnnotations.timestamp }}
+          parseMode: Markdown
+          uploadImage: false
 
 policies:
-  - uid: bath-lights-notification-policy
+  - orgId: 1
     receiver: telegram-bath-lights
     group_by:
       - service

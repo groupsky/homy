@@ -31,6 +31,8 @@ docker compose up -d --build automations
 
 **IMPORTANT**: All containers must be built from the `docker/` directory structure. Each service should have its own subdirectory under `docker/` containing its Dockerfile and related files.
 
+**IMPORTANT**: All volume paths in docker-compose.yml should use environment variables: `CONFIG_PATH`, `DATA_PATH`, `SECRETS_PATH`, `BACKUP_PATH`, etc. Avoid hardcoded paths except for system mounts (like `/etc/localtime`, `/dev/bus/usb`, etc.).
+
 ## Architecture
 
 ### Service Architecture
@@ -108,6 +110,7 @@ When developing new features:
 2. **Backward compatibility**: Always maintain existing functionality when adding features
 3. **Configuration-driven**: Use declarative configuration patterns where possible
 4. **Testing**: Write comprehensive tests for all automation logic
+5. **Documentation standards**: Comments must explain what the code does and why for future maintainers. Avoid preserving development discussions, decision processes, or temporary implementation notes in production code.
 
 ### Documentation Updates
 When adding new features that affect architecture:
