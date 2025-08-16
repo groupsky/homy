@@ -1,0 +1,19 @@
+{
+  "name": "monitoring-pipeline-e2e-test",
+  "version": "1.0.0",
+  "description": "E2E test for bath-lights monitoring and alerting pipeline",
+  "type": "module",
+  "scripts": {
+    "test": "node --test monitoring-pipeline.e2e.test.js",
+    "test:verbose": "node --test --test-reporter=verbose monitoring-pipeline.e2e.test.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.3.4",
+    "@influxdata/influxdb-client": "^1.33.2",
+    "playwright": "^1.40.1"
+  },
+  "devDependencies": {},
+  "keywords": ["e2e", "monitoring", "bath-lights", "mqtt", "influxdb", "grafana"],
+  "author": "",
+  "license": "ISC"
+}
