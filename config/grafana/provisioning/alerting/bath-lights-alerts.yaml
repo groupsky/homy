@@ -8,7 +8,8 @@ contactPoints:
         type: telegram
         disableResolveMessage: false
         settings:
-          chatid: "$TELEGRAM_CHAT_ID"
+          chatid: |
+            $TELEGRAM_CHAT_ID
           bottoken: "$TELEGRAM_BOT_TOKEN"
           message: |
             🏠 <b>{{ .GroupLabels.service | title }} Alert</b>
