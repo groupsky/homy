@@ -76,12 +76,25 @@ export async function getRecentMessages(token, timeoutMs = 60000) {
  */
 export async function waitForAlertMessage(readerToken, expectedChatId, expectedKeywords = [], timeoutMs = 120000) {
   const startTime = Date.now()
+  const testStartTimestamp = Math.floor(startTime / 1000) // Convert to Unix timestamp
   const pollInterval = 10000 // Check every 10 seconds
+  
+  // Get current update_id to avoid processing old messages
   let lastUpdateId = 0
+  try {
+    const initialUpdates = await getChatUpdates(readerToken, 0)
+    if (initialUpdates.length > 0) {
+      lastUpdateId = Math.max(...initialUpdates.map(u => u.update_id)) + 1
+    }
+  } catch (error) {
+    console.log(`⚠️  Could not get initial update_id, starting from 0: ${error.message}`)
+  }
   
   console.log(`🔔 Waiting for Grafana alert message in chat ${expectedChatId}...`)
   console.log(`   Expected keywords: ${expectedKeywords.join(', ')}`)
   console.log(`   Timeout: ${timeoutMs / 1000}s`)
+  console.log(`   Test start time: ${new Date(testStartTimestamp * 1000).toISOString()}`)
+  console.log(`   Starting from update_id: ${lastUpdateId}`)
   
   while (Date.now() - startTime < timeoutMs) {
     try {
@@ -89,6 +102,8 @@ export async function waitForAlertMessage(readerToken, expectedChatId, expectedK
       const updates = await getChatUpdates(readerToken, lastUpdateId)
       
       if (updates.length > 0) {
+        console.log(`📬 Received ${updates.length} new updates`)
+        
         // Update the last seen update ID
         lastUpdateId = Math.max(...updates.map(u => u.update_id)) + 1
         
@@ -97,6 +112,19 @@ export async function waitForAlertMessage(readerToken, expectedChatId, expectedK
           if (update.message && update.message.chat.id.toString() === expectedChatId.toString()) {
             const message = update.message
             const text = message.text || ''
+            const messageTimestamp = message.date
+            
+            console.log(`📝 Chat message: "${text.substring(0, 80)}..."`)
+            console.log(`   From: ${message.from ? message.from.username || message.from.first_name : 'Bot'}`)
+            console.log(`   Time: ${new Date(messageTimestamp * 1000).toISOString()}`)
+            console.log(`   Age: ${Math.floor((testStartTimestamp - messageTimestamp) / 60)} minutes before test`)
+            
+            // Only consider messages sent after the test started (plus small buffer for clock differences)
+            const bufferSeconds = 30 // Allow 30 second clock difference
+            if (messageTimestamp < (testStartTimestamp - bufferSeconds)) {
+              console.log(`   ⏰ Skipping old message (sent before test started)`)
+              continue
+            }
             
             // Check if this message contains all expected keywords (case insensitive)
             const hasAllKeywords = expectedKeywords.every(keyword => 
@@ -104,25 +132,25 @@ export async function waitForAlertMessage(readerToken, expectedChatId, expectedK
             )
             
             if (hasAllKeywords) {
-              console.log(`✅ Found Grafana alert message: "${text.substring(0, 100)}..."`)
-              console.log(`   From: ${message.from ? message.from.username || message.from.first_name : 'Bot'}`)
-              console.log(`   Time: ${new Date(message.date * 1000).toISOString()}`)
+              console.log(`✅ Found matching Grafana alert message!`)
               
               return { 
                 success: true, 
                 message: {
                   text,
-                  timestamp: message.date,
+                  timestamp: messageTimestamp,
                   chatId: message.chat.id,
                   from: message.from,
                   messageId: message.message_id
                 }
               }
             } else {
-              console.log(`📝 Chat message (not alert): "${text.substring(0, 50)}..."`)
+              console.log(`   ❌ Message doesn't contain all required keywords`)
             }
           }
         }
+      } else {
+        console.log(`⏳ No new updates, continuing to wait...`)
       }
       
       const elapsed = Date.now() - startTime
