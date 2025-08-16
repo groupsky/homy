@@ -1,8 +1,9 @@
 # Test overlay for monitoring pipeline E2E test
-# Removes external port mappings since tests run inside containers
+# Only starts minimal services required for the monitoring pipeline test
 # Uses Docker managed volumes for complete isolation between test runs
 
 services:
+  # Only start essential services for monitoring pipeline test
   broker:
     ports: !reset []  # Remove port mappings for internal testing
   
@@ -12,19 +13,108 @@ services:
   grafana:
     ports: !reset []  # Remove port mappings for internal testing
   
-  # mqtt-influx-automation inherits FLUSH_IMMEDIATELY=true from .env.test
+  mqtt-influx-automation:
+    ports: !reset []  # Remove port mappings for internal testing
   
-  # Test runner container with internal network access
+  # Disable all other services that aren't needed for this specific test
+  vpn: 
+    deploy:
+      replicas: 0
+  automations:
+    deploy:
+      replicas: 0
+  features:
+    deploy:
+      replicas: 0
+  ha_discovery:
+    deploy:
+      replicas: 0
+  ha:
+    deploy:
+      replicas: 0
+  nodered:
+    deploy:
+      replicas: 0
+  mongo:
+    deploy:
+      replicas: 0
+  mongo-express:
+    deploy:
+      replicas: 0
+  mqtt-influx-primary:
+    deploy:
+      replicas: 0
+  mqtt-influx-secondary:
+    deploy:
+      replicas: 0
+  mqtt-influx-tetriary:
+    deploy:
+      replicas: 0
+  mqtt-mongo-history:
+    deploy:
+      replicas: 0
+  historian-primary:
+    deploy:
+      replicas: 0
+  historian-secondary:
+    deploy:
+      replicas: 0
+  main-power:
+    deploy:
+      replicas: 0
+  secondary-power:
+    deploy:
+      replicas: 0
+  tetriary-power:
+    deploy:
+      replicas: 0
+  solar:
+    deploy:
+      replicas: 0
+  inverter:
+    deploy:
+      replicas: 0
+  monitoring:
+    deploy:
+      replicas: 0
+  monitoring2:
+    deploy:
+      replicas: 0
+  dry-switches:
+    deploy:
+      replicas: 0
+  dmx-driver:
+    deploy:
+      replicas: 0
+  telegraf-ovms:
+    deploy:
+      replicas: 0
+  volman:
+    deploy:
+      replicas: 0
+  ingressgen:
+    deploy:
+      replicas: 0
+  
+  # Test runner container with internal network access and Playwright
   test-runner:
-    image: node:18-alpine
+    build:
+      context: ./test/e2e/monitoring-pipeline
+      dockerfile: Dockerfile.test
     working_dir: /usr/src/test
     networks:
       - automation
+      - default  # Add default network for external internet access
     environment:
       - BROKER=mqtt://broker:1883
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_DATABASE=homy
       - GRAFANA_URL=http://grafana:3000
+      - CI=true
+    secrets:
+      - telegram_bot_token
+      - telegram_reader_bot_token
+      - telegram_chat_id
     depends_on:
       - broker
       - influxdb
@@ -37,5 +127,10 @@ services:
 volumes:
   grafana-test-data:
   influxdb-test-data:
-  mongo-test-data:
+  mongo-test-data:  # Keep this volume definition even though mongo service is disabled
+
+# Test-specific secrets (only needed for E2E testing)
+secrets:
+  telegram_reader_bot_token:
+    file: ${SECRETS_PATH}/telegram_reader_bot_token
 
