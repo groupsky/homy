@@ -202,7 +202,14 @@ module.exports = {
         opened: 12 * 60000,   // 12 minutes - door usually left open
         toggled: 25 * 60000,  // 25 minutes - guest + kid friendly manual override
         unlocked: 3 * 60000,  // 3 minutes - accommodate kids cleanup time
-      }
+      },
+      commandConfig: {
+        verification: 300,    // 300ms verification timeout
+        maxRetries: 3,        // 3 retry attempts (standard reliability)
+        retryDelay: 50,       // 50ms between retries
+        failureTopic: 'homy/automation/lightBath1Controller/command_failed', // monitoring topic
+      },
+      verbose: true           // Enable detailed logging for Bath1 testing phase
     },
     lightBath2Controller: {
       type: 'bath-lights',
@@ -222,7 +229,7 @@ module.exports = {
       },
       timeouts: {
         closed: 3 * 60000,    // 3 minutes - kids take longer
-        opened: 6 * 60000,    // 6 minutes - kids might leave door open briefly  
+        opened: 6 * 60000,    // 6 minutes - kids might leave door open briefly
         toggled: 25 * 60000,  // 25 minutes - kids forget to turn off lights
         unlocked: 4 * 60000,  // 4 minutes - kids need more transition time
       }
