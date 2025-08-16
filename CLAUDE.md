@@ -109,7 +109,7 @@ When developing new features:
 1. **Service isolation**: Each service has its own directory and CLAUDE.md documentation
 2. **Backward compatibility**: Always maintain existing functionality when adding features
 3. **Configuration-driven**: Use declarative configuration patterns where possible
-4. **Testing**: Write comprehensive tests for all automation logic
+4. **Testing**: Write comprehensive tests for all automation logic using minimal mocking to ensure tests verify real system behavior
 5. **Documentation standards**: Comments must explain what the code does and why for future maintainers. Avoid preserving development discussions, decision processes, or temporary implementation notes in production code.
 
 ### Documentation Updates
@@ -119,3 +119,9 @@ When adding new features that affect architecture:
 2. **Update CLAUDE.md**: Add new MQTT topic patterns and bot capabilities
 3. **Create service-specific CLAUDE.md**: For complex services, add local documentation files
 4. **Maintain configuration examples**: Provide clear examples for gradual rollout strategies
+
+### Git Workflow
+When committing changes:
+
+1. **Selective staging**: Only stage files relevant to the current task. Never stage all untracked files with `git add .` unless all are part of the same logical change
+2. **Clean commits**: Avoid including unrelated files, temporary files, or development artifacts in commits
