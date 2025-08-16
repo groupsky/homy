@@ -13,16 +13,6 @@ This is a comprehensive home automation system built around Docker containers th
 
 ## Development Commands
 
-### Testing
-```bash
-# Run tests for the automations service
-cd docker/automations
-npm test
-
-# Run individual test files
-npx jest bots/irrigation.test.js
-```
-
 ### Docker Environment
 ```bash
 # Start the entire system
@@ -39,13 +29,6 @@ docker compose logs -f ha
 docker compose up -d --build automations
 ```
 
-### Automation Development
-```bash
-# Test automation configurations
-cd docker/automations
-node index.js  # Uses CONFIG env var or ./config file
-```
-
 ## Architecture
 
 ### Service Architecture
@@ -59,46 +42,20 @@ The system is built around multiple Docker services:
 - **modbus-serial**: Multiple instances for reading different Modbus devices
 - **influxdb/grafana**: Time-series data storage and visualization
 - **mongo**: Document storage for historical data
+- **mqtt-influx**: Multiple bridge services for MQTT to InfluxDB data pipeline
 
-### Automation Engine (`docker/automations/`)
+### Service-Specific Documentation
 
-The core automation logic is built around:
-
-- **Bots**: Individual automation units defined in configuration files
-- **Features**: Abstracted device states (lights, switches, sensors)
-- **Functions**: Reusable transformation utilities in `funcs/`
-- **Resolver**: Dynamic module loading system (`lib/resolve.js`)
-
-Key patterns:
-- Bots are configured declaratively and loaded dynamically
-- MQTT topics follow structured patterns like `/modbus/{bus}/{device}/{action}`
-- Feature states are managed through `homy/features/{type}/{name}/{action}` topics
-- Time-based automations use cron expressions and solar calculations
+For detailed development guidance, see service-specific CLAUDE.md files:
+- `docker/automations/CLAUDE.md` - Bot development, testing, command verification patterns
+- `docker/mqtt-influx/CLAUDE.md` - Converter development, data types, InfluxDB integration
 
 ### Configuration Structure
 
-- `config/automations/config.js`: Main automation bot configurations
-- `config/automations/features.js`: Feature definitions and mappings
-- `config/automations/ha_discovery.js`: Home Assistant integration setup
-- `config/modbus-serial/*.js`: Modbus device configurations for different buses
+- `config/automations/`: Bot configurations, feature definitions, Home Assistant integration
+- `config/modbus-serial/`: Modbus device configurations for different buses
+- `config/grafana/provisioning/`: Grafana dashboards, alerts, and data sources
 - Environment variables control service connections and secrets
-
-### Common Bot Types
-
-- `feature-toggle-on-feature-change`: Toggle outputs when inputs change
-- `bac002-*`: HVAC thermostat control and synchronization
-- `bath-lights`: Bathroom lighting automation with occupancy detection
-- `irrigation`: Scheduled watering systems with cron expressions
-- `solar-emitter`: Sunrise/sunset based device control
-- `timeout-emit`: Safety timeouts for devices
-
-### MQTT Topic Patterns
-
-- `/modbus/{bus}/{device}/reading` - Device status readings
-- `/modbus/{bus}/{device}/write` - Device control commands
-- `homy/features/{type}/{name}/status` - Feature state
-- `homy/features/{type}/{name}/set` - Feature control
-- `homeassistant/*/config` - Home Assistant discovery messages
 
 ### Hardware Integration
 
@@ -113,11 +70,13 @@ The system integrates with:
 ### Architecture
 - **System Architecture**: `ARCHITECTURE.md` - Comprehensive architectural overview covering data flow, service architecture, current state, and future direction for planning new features and improvements
 
-### Automation Bot Documentation
-- **Bathroom Controller**: `docker/automations/docs/bathroom-controller.md` - Comprehensive guide for bathroom lighting automation including configuration for Bath1 (guest/daytime), Bath2 (kids), and Bath3 (master) bathrooms
+### Service Documentation
+- **Automation Bots**: `docker/automations/docs/` - Bot-specific guides and implementation details
+- **Service Development**: Service-specific CLAUDE.md files provide development patterns and best practices
 
-### Configuration Files
-- **Automations Configuration**: `config/automations/config.js` - Main bot configurations including bathroom light controllers, irrigation schedules, HVAC automation, and Home Assistant discovery setup
+### Configuration References
+- **Main Configuration**: `config/automations/config.js` - Primary system configuration
+- **Architecture Overview**: `ARCHITECTURE.md` - Comprehensive system architecture documentation
 
 ## File Structure Notes
 
@@ -126,3 +85,29 @@ The system integrates with:
 - Persistent data is stored in `data/` directory
 - Secrets are managed through Docker secrets in `secrets/`
 - The `modbus-serial` service has device drivers in `devices/` subdirectory
+
+## Integration Best Practices
+
+### Monitoring Integration
+When adding monitoring capabilities:
+
+1. **Use existing infrastructure**: Leverage existing mqtt-influx services and Grafana setup
+2. **Follow naming conventions**: Use descriptive service names (e.g., `mqtt-influx-automation`)
+3. **Integrate with provisioning**: Place configs in `config/grafana/provisioning/`
+4. **Use existing alerting**: Configure alerts with existing Telegram notifiers
+
+### Development Standards
+When developing new features:
+
+1. **Service isolation**: Each service has its own directory and CLAUDE.md documentation
+2. **Backward compatibility**: Always maintain existing functionality when adding features
+3. **Configuration-driven**: Use declarative configuration patterns where possible
+4. **Testing**: Write comprehensive tests for all automation logic
+
+### Documentation Updates
+When adding new features that affect architecture:
+
+1. **Update ARCHITECTURE.md**: Add monitoring components to data pipeline services section
+2. **Update CLAUDE.md**: Add new MQTT topic patterns and bot capabilities
+3. **Create service-specific CLAUDE.md**: For complex services, add local documentation files
+4. **Maintain configuration examples**: Provide clear examples for gradual rollout strategies

@@ -624,6 +624,29 @@ services:
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
 
+  mqtt-influx-automation:
+    build: docker/mqtt-influx
+    depends_on:
+      - broker
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=homy/automation/+/command_failed
+      - MQTT_CLIENT_ID=mqtt-influx-automation
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - TAGS={"component":"automation"}
+
   dmx-driver:
     build: docker/dmx-driver
     depends_on:

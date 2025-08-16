@@ -25,6 +25,7 @@ const converters = {
     ex9em: require('./converters/ex9em'),
     'or-we-514': require('./converters/or-we-514'),
     sdm630: require('./converters/sdm630'),
+    'command-verification': require('./converters/command-verification'),
 }
 
 client.on('connect', function () {

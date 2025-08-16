@@ -129,6 +129,9 @@ module.exports = (name, {
                     // Emit failure event for monitoring
                     try {
                         mqtt.publish(`homy/automation/${name}/command_failed`, {
+                            _type: 'command-verification',
+                            type: 'command_failed',
+                            controller: name,
                             reason,
                             attempts: command.attempts,
                             expectedState,

@@ -78,10 +78,18 @@ Features provide state management and semantic mapping, publishing to `homy/feat
 Event-driven automation system with multiple bot types:
 - **feature-toggle-on-feature-change**: Input/output mappings with debouncing
 - **bac002-***: HVAC thermostat control and synchronization
-- **bath-lights**: Occupancy-based bathroom lighting with timeout logic
+- **bath-lights**: Occupancy-based bathroom lighting with timeout logic and optional command verification
 - **irrigation**: Cron-scheduled watering systems with safety timeouts
 - **solar-emitter**: Sunrise/sunset-based device automation
 - **timeout-emit**: Safety mechanisms and automatic shutoffs
+
+#### Command Verification System
+The bath-lights automation includes an optional command verification system that provides:
+- **State-based verification**: Tracks expected vs actual device states after commands
+- **Configurable retry logic**: Automatic retry with exponential backoff for failed commands  
+- **Manual override handling**: Gracefully handles external state changes
+- **Failure monitoring**: Publishes failure events to `homy/automation/{controller}/command_failed` for monitoring
+- **Backward compatibility**: Disabled by default, enabled per-controller via `commandConfig` parameter
 
 ### Layer 6: User Interfaces & External Systems
 Multiple interfaces for monitoring and control:
@@ -111,6 +119,8 @@ Multiple interfaces for monitoring and control:
 
 ### Data Pipeline Services
 - **mqtt-influx-***: Multiple services bridging MQTT to InfluxDB
+  - **mqtt-influx-primary/secondary/tetriary**: Modbus sensor data
+  - **mqtt-influx-automation**: Bath-lights command verification events
 - **mqtt-mongo-history**: MQTT message logging to MongoDB
 - **telegraf-ovms**: Vehicle telemetry integration
 - **historian-***: Manual data migration utilities
@@ -155,6 +165,7 @@ The system is actively running in production with:
 
 **Monitoring**
 - Grafana dashboards for system health and energy usage with Telegram alerting
+- Bath-lights command verification monitoring via mqtt-influx-automation service
 - MongoDB logs for MQTT message history and troubleshooting
 - MQTT topic monitoring for real-time troubleshooting
 - InfluxDB queries for historical analysis and trending

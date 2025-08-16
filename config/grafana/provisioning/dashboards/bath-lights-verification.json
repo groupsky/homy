@@ -1,0 +1,308 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "bath-lights-verification",
+    "title": "Bath Lights Command Verification",
+    "tags": ["automation", "bath-lights", "verification"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Command Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT last(\"total_commands\") - last(\"total_failures\") AS success, last(\"total_commands\") AS total FROM \"verification_summary\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "mappings": [
+              {
+                "type": "value",
+                "value": "null",
+                "text": "No Data"
+              }
+            ]
+          }
+        },
+        "transformations": [
+          {
+            "id": "calculateField",
+            "options": {
+              "mode": "binary",
+              "binary": {
+                "left": "success",
+                "operator": "/",
+                "right": "total"
+              },
+              "replaceFields": true
+            }
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Commands Last Hour",
+        "type": "stat",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT last(\"total_commands\") FROM \"verification_summary\" WHERE $timeFilter",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 100}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Recent Failures",
+        "type": "stat",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT count(\"attempts\") FROM \"command_failure\" WHERE time > now() - 10m",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Avg Retries per Failure",
+        "type": "stat",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT last(\"avg_retries_per_failure\") FROM \"verification_summary\" WHERE $timeFilter",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 2},
+                {"color": "red", "value": 3}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "id": 5,
+        "title": "Success Rate by Controller",
+        "type": "timeseries",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT mean(100 - \"failure_rate_percent\") FROM \"verification_by_controller\" WHERE $timeFilter GROUP BY time($__interval), \"controller\" fill(null)",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "never",
+              "pointSize": 5,
+              "stacking": {
+                "mode": "none",
+                "group": "A"
+              },
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "axisColorMode": "text",
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "Commands per Hour by Controller",
+        "type": "timeseries",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT mean(\"commands\") FROM \"verification_by_controller\" WHERE $timeFilter GROUP BY time(1h), \"controller\" fill(null)",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {
+              "drawStyle": "bars",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 80,
+              "gradientMode": "none"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 7,
+        "title": "Recent Failure Events",
+        "type": "table",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT time, \"controller\", \"reason\", \"attempts\", \"expected_state\", \"actual_state\" FROM \"command_failure\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      },
+      {
+        "id": 8,
+        "title": "Failures by Reason",
+        "type": "piechart",
+        "targets": [
+          {
+            "datasource": "InfluxDB", 
+            "query": "SELECT sum(\"failures\") FROM \"verification_by_reason\" WHERE $timeFilter GROUP BY \"reason\"",
+            "rawQuery": true,
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              }
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Bath1 Testing Status",
+        "type": "timeseries",
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT mean(\"failure_rate_percent\") FROM \"verification_by_controller\" WHERE \"controller\" =~ /Bath1/ AND $timeFilter GROUP BY time($__interval) fill(null)",
+            "rawQuery": true,
+            "refId": "A",
+            "alias": "Bath1 (Verification Mode)"
+          },
+          {
+            "datasource": "InfluxDB",
+            "query": "SELECT mean(\"failure_rate_percent\") FROM \"verification_by_controller\" WHERE \"controller\" =~ /Bath[23]/ AND $timeFilter GROUP BY time($__interval) fill(null)", 
+            "rawQuery": true,
+            "refId": "B",
+            "alias": "Bath2/Bath3 (Legacy Mode)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      }
+    ]
+  }
+}
