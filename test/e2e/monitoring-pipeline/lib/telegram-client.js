@@ -166,9 +166,15 @@ export async function waitForAlertMessage(readerToken, expectedChatId, expectedK
     }
   }
   
+  console.log(`❌ Telegram alert timeout reached after ${timeoutMs / 1000}s`)
+  console.log(`📊 Debug info:`)
+  console.log(`   - Expected keywords: ${expectedKeywords.join(', ')}`)
+  console.log(`   - Chat ID: ${expectedChatId}`)
+  console.log(`   - Test start: ${new Date(testStartTimestamp * 1000).toISOString()}`)
+  
   return { 
     success: false, 
-    error: `No Grafana alert message found within ${timeoutMs / 1000}s. Expected keywords: ${expectedKeywords.join(', ')}` 
+    error: `No Grafana alert message found within ${timeoutMs / 1000}s timeout. Expected keywords: ${expectedKeywords.join(', ')}. Check Grafana alert rules are configured and firing.` 
   }
 }
 

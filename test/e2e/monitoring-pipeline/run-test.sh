@@ -193,11 +193,17 @@ run_e2e_test() {
     fi
     
     # Execute the test inside the container
-    if docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && CI=${CI:-false} SKIP_BROWSER_TESTS=true npm test"; then
+    log_info "Executing E2E test with explicit exit code handling..."
+    
+    # Run the test and capture exit code explicitly
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && CI=${CI:-false} SKIP_BROWSER_TESTS=true npm test"
+    local test_exit_code=$?
+    
+    if [ $test_exit_code -eq 0 ]; then
         log_success "E2E test completed successfully!"
         return 0
     else
-        log_error "E2E test failed"
+        log_error "E2E test failed with exit code: $test_exit_code"
         return 1
     fi
 }
