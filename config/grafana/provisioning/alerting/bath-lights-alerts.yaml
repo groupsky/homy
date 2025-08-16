@@ -6,9 +6,10 @@ contactPoints:
     receivers:
       - uid: telegram-bath-lights
         type: telegram
+        disableResolveMessage: false
         settings:
-          bottoken: $TELEGRAM_BOT_TOKEN
-          chatid: $TELEGRAM_CHAT_ID
+          chatid: "$TELEGRAM_CHAT_ID"
+          bottoken: "$TELEGRAM_BOT_TOKEN"
           message: |
             🏠 **{{ .GroupLabels.service | title }} Alert**
             
@@ -38,3 +39,49 @@ policies:
     repeat_interval: 4h
     matchers:
       - service = bath-lights
+
+groups:
+  - orgId: 1
+    name: bath-lights-alerts
+    folder: alerting
+    interval: 60s
+    rules:
+      - uid: bath-lights-command-failures
+        title: Bath Lights Command Failures
+        condition: B
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              datasource:
+                type: influxdb
+                uid: P3C6603E967DC8568
+              query: 'SELECT count("attempts") FROM "command_failure" WHERE ("controller" = ''lightBath1Controller'') AND time >= now() - 5m'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: B
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              type: reduce
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: 'Bath lights controller has command failures in the last 5 minutes'
+          summary: Bath lights command verification failure detected
+        labels:
+          service: bath-lights
+          severity: warning
