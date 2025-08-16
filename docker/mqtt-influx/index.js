@@ -69,4 +69,12 @@ client.on('message', function (topic, message) {
     const points = converters[data._type](data)
 
     writeApi.writePoints(points)
+    
+    // Flush immediately to ensure data is written for E2E testing
+    // In production, InfluxDB client handles batching automatically
+    if (process.env.FLUSH_IMMEDIATELY === 'true') {
+        writeApi.flush().catch(err => {
+            console.error('InfluxDB flush error:', err)
+        })
+    }
 })

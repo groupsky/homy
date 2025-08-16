@@ -1,50 +1,31 @@
 # Test overlay for monitoring pipeline E2E test
-# This completely removes external port mappings since tests run inside containers
+# Removes external port mappings since tests run inside containers
 # Uses isolated test data directories (via DATA_PATH=./data.test) and local test secrets
 
 services:
   broker:
-    ports: !reset []  # Completely remove all port mappings
+    ports: !reset []  # Remove port mappings for internal testing
   
   influxdb:
-    ports: !reset []  # Completely remove all port mappings
-    environment:
-      - INFLUXDB_HTTP_AUTH_ENABLED=false  # Disable auth for testing
+    ports: !reset []  # Remove port mappings for internal testing
   
   grafana:
-    ports: !reset []  # Completely remove all port mappings
-    secrets:
-      # Re-enable only telegram secrets for testing
-      - telegram_bot_token
-      - telegram_chat_id
-    environment:
-      # Set Telegram credentials for alert testing
-      - TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token
-      - TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram_chat_id
-    volumes:
-      # Use Docker volume for test data to avoid permission issues
-      - homy-test-grafana-data:/var/lib/grafana
-      # Keep config files and ENABLE FIXED alert rules for Telegram testing
-      - ${GRAFANA_CONFIG_FILE}:/etc/grafana/grafana.ini:ro
-      - ${GRAFANA_CONFIG_PATH}/provisioning:/etc/grafana/provisioning:ro
-      - ${GRAFANA_CONFIG_PATH}/dashboards:/var/lib/grafana/dashboards:ro
-      - /etc/localtime:/etc/localtime:ro
+    ports: !reset []  # Remove port mappings for internal testing
   
+  # Enable immediate flushing for E2E testing
   mqtt-influx-automation:
-    # Remove secrets since we disabled InfluxDB auth
-    secrets: !reset []
     environment:
       - BROKER=mqtt://broker
       - TOPIC=homy/automation/+/command_failed
       - MQTT_CLIENT_ID=mqtt-influx-automation
       - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=homy
-      - INFLUXDB_TOKEN=""  # Explicitly empty token for no auth
-      - INFLUXDB_USERNAME=  # Override to empty
-      - INFLUXDB_PASSWORD=  # Override to empty
       - TAGS={"component":"automation"}
+      - FLUSH_IMMEDIATELY=true  # Enable immediate flush for E2E testing
   
-  # Add a test runner container that can access services via internal network
+  # Test runner container with internal network access
   test-runner:
     image: node:18-alpine
     working_dir: /usr/src/test
@@ -53,8 +34,8 @@ services:
     environment:
       - BROKER=mqtt://broker:1883
       - INFLUXDB_URL=http://influxdb:8086
-      - GRAFANA_URL=http://grafana:3000
       - INFLUXDB_DATABASE=homy
+      - GRAFANA_URL=http://grafana:3000
     depends_on:
       - broker
       - influxdb
@@ -62,8 +43,3 @@ services:
       - mqtt-influx-automation
     command: tail -f /dev/null  # Keep container running
 
-# No need to override secrets - using .env.test with SECRETS_PATH=./secrets.test
-
-volumes:
-  homy-test-grafana-data:
-    driver: local

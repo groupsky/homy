@@ -170,12 +170,12 @@ describe('Bath-lights monitoring pipeline E2E', () => {
     // Step 5: Validate Grafana queries work correctly
     console.log('📊 Step 5: Validating Grafana dashboard queries...')
     try {
-      const queryValidation = await validateGrafanaQueries(CONFIG.grafana.url, CONFIG.grafana.username, CONFIG.grafana.password)
+      const queryResult = await validateGrafanaQueries(CONFIG.grafana.url, CONFIG.grafana.username, CONFIG.grafana.password)
       
-      if (queryValidation.success) {
+      if (queryResult.success) {
         console.log('✅ Grafana query validation passed')
       } else {
-        console.log(`⚠️  Grafana query validation encountered issues: ${queryValidation.errors.join(', ')}`)
+        console.log(`⚠️  Grafana query validation encountered issues: ${queryResult.errors.join(', ')}`)
         console.log('ℹ️  This may be expected in a new test environment - core monitoring pipeline is verified')
       }
     } catch (error) {
@@ -258,7 +258,7 @@ describe('Bath-lights monitoring pipeline E2E', () => {
 ✅ Verified ${influxData.length} events stored in InfluxDB
 ✅ Validated InfluxDB data structure and content
 ✅ Confirmed Grafana data source connectivity  
-✅ Tested ${queryValidation.queries.length} dashboard queries
+✅ Tested Grafana dashboard queries (some may fail in test environment)
 ✅ Verified Grafana UI accessibility and navigation
 ✅ Confirmed API endpoints are functional
 

@@ -21,7 +21,13 @@ export async function queryCommandFailures(influxUrl, measurement = 'command_fai
   const url = `${influxUrl}/query?db=${database}&q=${encodeURIComponent(query)}`
   
   try {
-    const response = await fetch(url)
+    // Use test credentials for InfluxDB auth (reader/secret)
+    const auth = Buffer.from('reader:secret').toString('base64')
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Basic ${auth}`
+      }
+    })
     
     if (!response.ok) {
       throw new Error(`InfluxDB query failed: ${response.status} ${response.statusText}`)
