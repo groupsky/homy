@@ -12,18 +12,7 @@ services:
   grafana:
     ports: !reset []  # Remove port mappings for internal testing
   
-  # Enable immediate flushing for E2E testing
-  mqtt-influx-automation:
-    environment:
-      - BROKER=mqtt://broker
-      - TOPIC=homy/automation/+/command_failed
-      - MQTT_CLIENT_ID=mqtt-influx-automation
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
-      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
-      - INFLUXDB_DATABASE=homy
-      - TAGS={"component":"automation"}
-      - FLUSH_IMMEDIATELY=true  # Enable immediate flush for E2E testing
+  # mqtt-influx-automation inherits FLUSH_IMMEDIATELY=true from .env.test
   
   # Test runner container with internal network access
   test-runner:
