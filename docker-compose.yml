@@ -490,7 +490,7 @@ services:
       - INFLUXDB_WRITE_USER_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
     volumes:
       - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
-      - ${DATA_PATH}/influxdb:/var/lib/influxdb
+      - ${INFLUXDB_DATA_PATH:-${DATA_PATH}/influxdb}:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
 
   grafana:
@@ -575,6 +575,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"primary"}
+      - FLUSH_IMMEDIATELY=${FLUSH_IMMEDIATELY}
 
   mqtt-influx-secondary:
     build: docker/mqtt-influx
@@ -599,6 +600,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"secondary"}
+      - FLUSH_IMMEDIATELY=${FLUSH_IMMEDIATELY}
 
   mqtt-influx-tetriary:
     build: docker/mqtt-influx
@@ -623,6 +625,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
+      - FLUSH_IMMEDIATELY=${FLUSH_IMMEDIATELY}
 
   mqtt-influx-automation:
     build: docker/mqtt-influx
@@ -646,6 +649,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"component":"automation"}
+      - FLUSH_IMMEDIATELY=${FLUSH_IMMEDIATELY}
 
   dmx-driver:
     build: docker/dmx-driver

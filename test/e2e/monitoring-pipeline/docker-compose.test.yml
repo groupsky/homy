@@ -1,6 +1,6 @@
 # Test overlay for monitoring pipeline E2E test
 # Removes external port mappings since tests run inside containers
-# Uses isolated test data directories (via DATA_PATH=./data.test) and local test secrets
+# Uses Docker managed volumes for complete isolation between test runs
 
 services:
   broker:
@@ -31,4 +31,11 @@ services:
       - grafana
       - mqtt-influx-automation
     command: tail -f /dev/null  # Keep container running
+
+# Docker managed volumes for test isolation
+# These are automatically destroyed when containers are removed
+volumes:
+  grafana-test-data:
+  influxdb-test-data:
+  mongo-test-data:
 
