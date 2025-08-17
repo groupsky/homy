@@ -54,7 +54,7 @@ groups:
           - refId: A
             queryType: ''
             relativeTimeRange:
-              from: $BATH_LIGHTS_ALERT_TIME_RANGE
+              from: 300
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
