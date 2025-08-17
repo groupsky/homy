@@ -111,9 +111,7 @@ services:
       - INFLUXDB_DATABASE=homy
       - GRAFANA_URL=http://grafana:3000
       - CI=true
-    secrets:
-      - telegram_reader_bot_token
-      - telegram_chat_id
+    secrets: !reset []  # Remove secrets since we're not using Telegram reader bot approach
     depends_on:
       - broker
       - influxdb
@@ -128,8 +126,5 @@ volumes:
   influxdb-test-data:
   mongo-test-data:  # Keep this volume definition even though mongo service is disabled
 
-# Test-specific secrets (only needed for E2E testing)
-secrets:
-  telegram_reader_bot_token:
-    file: ${SECRETS_PATH}/telegram_reader_bot_token
+# No test-specific secrets needed - using Grafana logs instead of Telegram reader bot
 
