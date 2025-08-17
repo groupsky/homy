@@ -12,6 +12,9 @@ services:
   
   grafana:
     ports: !reset []  # Remove port mappings for internal testing
+    volumes:
+      # Override alerting configuration with fast test-specific settings
+      - ./config/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
   
   mqtt-influx-automation:
     ports: !reset []  # Remove port mappings for internal testing
