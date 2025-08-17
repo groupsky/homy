@@ -519,6 +519,9 @@ services:
       - INFLUXDB_USER_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
       - TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token
       - TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram_chat_id
+      - BATH_LIGHTS_ALERT_INTERVAL=${BATH_LIGHTS_ALERT_INTERVAL:-60s}
+      - BATH_LIGHTS_ALERT_TIME_RANGE=${BATH_LIGHTS_ALERT_TIME_RANGE:-300}
+      - BATH_LIGHTS_ALERT_FOR=${BATH_LIGHTS_ALERT_FOR:-1m}
       - TZ=${TZ}
       - VIRTUAL_HOST=grafana.${DOMAIN}
       - VIRTUAL_PORT=3000

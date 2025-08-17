@@ -45,7 +45,7 @@ groups:
   - orgId: 1
     name: bath-lights-alerts
     folder: alerting
-    interval: 60s
+    interval: $BATH_LIGHTS_ALERT_INTERVAL
     rules:
       - uid: bath-lights-command-failures
         title: Bath Lights Command Failures
@@ -54,7 +54,7 @@ groups:
           - refId: A
             queryType: ''
             relativeTimeRange:
-              from: 300
+              from: $BATH_LIGHTS_ALERT_TIME_RANGE
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
@@ -79,9 +79,9 @@ groups:
               type: reduce
         noDataState: NoData
         execErrState: Alerting
-        for: 1m
+        for: $BATH_LIGHTS_ALERT_FOR
         annotations:
-          description: 'Bath lights controller has command failures in the last 5 minutes'
+          description: 'Bath lights controller has command failures in the last $BATH_LIGHTS_ALERT_TIME_RANGE seconds'
           summary: Bath lights command verification failure detected
         labels:
           service: bath-lights
