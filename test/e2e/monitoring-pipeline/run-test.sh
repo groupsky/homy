@@ -196,15 +196,36 @@ run_e2e_test() {
     log_info "Executing E2E test with explicit exit code handling..."
     
     # Run the test and capture exit code explicitly
-    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && CI=${CI:-false} SKIP_BROWSER_TESTS=true npm test"
-    local test_exit_code=$?
+    docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" exec test-runner sh -c "cd /usr/src/test && CI=${CI:-false} npm test; echo TEST_EXIT_CODE=\$?" | tee /tmp/e2e_test_output.log
     
-    if [ $test_exit_code -eq 0 ]; then
+    # Extract the exit code from the output
+    local test_exit_code=$(grep "TEST_EXIT_CODE=" /tmp/e2e_test_output.log | tail -1 | cut -d'=' -f2)
+    
+    # If we couldn't extract the exit code, check Docker command exit code
+    if [ -z "$test_exit_code" ]; then
+        test_exit_code=${PIPESTATUS[0]}
+    fi
+    
+    if [ "$test_exit_code" -eq 0 ]; then
         log_success "E2E test completed successfully!"
         return 0
     else
         log_error "E2E test failed with exit code: $test_exit_code"
         return 1
+    fi
+}
+
+# Check Grafana logs for alert activity
+check_grafana_alerts() {
+    log_info "Checking Grafana logs for alert activity..."
+    
+    local alert_logs=$(docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs grafana --tail=100 2>/dev/null | grep -i -E "(alert|firing|telegram|notification)" || true)
+    
+    if [ -n "$alert_logs" ]; then
+        echo "🔔 Found alert-related activity in Grafana logs:"
+        echo "$alert_logs"
+    else
+        echo "⚠️  No alert activity found in Grafana logs"
     fi
 }
 
@@ -227,6 +248,10 @@ show_service_logs() {
     echo
     echo "=== mqtt-influx-automation Logs ==="
     docker compose --env-file .env.test -p "$PROJECT_NAME" -f "$COMPOSE_BASE" -f "$COMPOSE_TEST" logs --tail=50 mqtt-influx-automation || true
+    
+    # Check for alert activity
+    echo
+    check_grafana_alerts
 }
 
 # Main execution
@@ -246,6 +271,9 @@ main() {
     # Run the test
     if run_e2e_test; then
         log_success "🎉 All tests passed! Monitoring pipeline is working correctly."
+        echo
+        log_info "Checking alert activity..."
+        check_grafana_alerts
         exit 0
     else
         log_error "❌ Tests failed. Showing service logs for debugging..."

@@ -12,9 +12,17 @@ services:
   
   grafana:
     ports: !reset []  # Remove port mappings for internal testing
+    volumes:
+      - ./test/e2e/monitoring-pipeline/test-bath-lights-alerts.yaml:/etc/grafana/provisioning/alerting/bath-lights-alerts.yaml
   
   mqtt-influx-automation:
     ports: !reset []  # Remove port mappings for internal testing
+  
+  telegram-bridge:
+    deploy:
+      replicas: 0  # Disable in test environment - we use mock server instead
+    profiles:
+      - disabled  # Skip building this service in test
   
   # Disable all other services that aren't needed for this specific test
   vpn: 

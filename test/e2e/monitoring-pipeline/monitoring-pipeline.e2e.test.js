@@ -16,6 +16,7 @@ import { chromium } from 'playwright'
 import { createMqttClient, publishFailureEvents, disconnectMqttClient } from './lib/mqtt-client.js'
 import { queryCommandFailures, validateFailureEvents, waitForInfluxDB } from './lib/influx-client.js'
 import { checkGrafanaHealth, testDataSources, validateGrafanaQueries, waitForGrafana } from './lib/grafana-client.js'
+import { TelegramMockServer } from './lib/telegram-mock-server.js'
 
 // Test configuration
 const CONFIG = {
@@ -74,11 +75,17 @@ const TEST_FAILURE_EVENTS = [
 let mqttClient = null
 let browser = null
 let page = null
+let telegramMockServer = null
 
 describe('Bath-lights monitoring pipeline E2E', () => {
   
   before(async () => {
     console.log('🚀 Starting E2E test setup...')
+    
+    // Start Telegram mock server first (so it's available for Grafana notifications)
+    console.log('🤖 Starting Telegram mock server...')
+    telegramMockServer = new TelegramMockServer(8080)
+    await telegramMockServer.start()
     
     // Wait for all services to be ready
     console.log('⏳ Waiting for services to be ready...')
@@ -119,6 +126,7 @@ describe('Bath-lights monitoring pipeline E2E', () => {
     if (page) await page.close()
     if (browser) await browser.close()
     if (mqttClient) await disconnectMqttClient(mqttClient)
+    if (telegramMockServer) await telegramMockServer.stop()
     
     console.log('✅ E2E test cleanup complete')
   })
@@ -186,36 +194,70 @@ describe('Bath-lights monitoring pipeline E2E', () => {
     assert.strictEqual(queryResult.success, true, `Grafana query validation failed: ${queryResult.errors.join(', ')}`)
     console.log('✅ Grafana query validation passed')
     
-    // Step 6: Validate Grafana alert firing and notification
-    console.log('🔔 Step 6: Testing Grafana alert firing and notifications...')
-    const { waitForAlertToFire } = await import('./lib/grafana-client.js')
+    // Step 6: Test Grafana alert firing by intercepting Telegram notifications
+    console.log('🔔 Step 6: Testing Grafana alert firing and Telegram notifications...')
     
-    // Wait for Grafana alert to fire by checking logs
+    // Clear any existing messages in the mock server
+    telegramMockServer.clearMessages()
+    
+    // Verify alert rule configuration first
+    const { waitForAlertToFire } = await import('./lib/grafana-client.js')
     const alertResult = await waitForAlertToFire(
       'http://grafana:3000',
       'bath-lights-command-failures', 
-      30000 // 30 second timeout - fast alerts should fire quickly
+      5000 // Quick verification of rule configuration
     )
     
-    if (alertResult.success) {
-      console.log('✅ Grafana alert fired successfully')
-      console.log(`   Alert state: ${alertResult.alertState}`)
-      if (alertResult.logs && alertResult.logs.length > 0) {
-        console.log(`   Relevant logs (${alertResult.logs.length}):`)
-        alertResult.logs.slice(-3).forEach(log => console.log(`     ${log}`))
-      }
-    } else {
-      console.log('⚠️  Grafana alert did not fire within timeout - this may be expected with test timing')
+    if (!alertResult.success) {
+      console.log('❌ Alert rule verification FAILED')
       console.log(`   Error: ${alertResult.error}`)
-      console.log('   Note: Core monitoring pipeline (MQTT → InfluxDB → Grafana) is working correctly')
+      assert.fail(`Alert rule verification failed: ${alertResult.error}`)
+    }
+    
+    console.log('✅ Alert rule is properly configured')
+    console.log(`   ${alertResult.message}`)
+    
+    // Now wait for actual Telegram notification via mock server
+    console.log('📞 Waiting for Telegram notification via mock server...')
+    try {
+      const telegramMessage = await telegramMockServer.waitForMessage({
+        textContains: 'bath',  // Should contain 'bath' from bath-lights alert
+        since: new Date(Date.now() - 60000).toISOString()  // Messages from last minute
+      }, 45000) // 45 second timeout for alert evaluation + notification
       
-      // Don't fail the entire test for alert timeout - the core pipeline is validated
-      // The alert may take longer than expected to fire in some environments
+      console.log('✅ Telegram notification received successfully!')
+      console.log(`   Chat ID: ${telegramMessage.chatId}`)
+      console.log(`   Message: ${telegramMessage.text?.substring(0, 200)}...`)
+      console.log(`   Timestamp: ${telegramMessage.timestamp}`)
+      
+      // Validate the message content
+      assert.ok(telegramMessage.text, 'Telegram message should have text content')
+      assert.ok(telegramMessage.text.toLowerCase().includes('bath'), 'Message should mention bath-lights')
+      assert.ok(telegramMessage.chatId, 'Message should have chat ID')
+      
+    } catch (error) {
+      console.log('❌ Telegram notification test FAILED')
+      console.log(`   Error: ${error.message}`)
+      
+      // Show what messages we did receive for debugging
+      const allMessages = telegramMockServer.getReceivedMessages()
+      if (allMessages.length > 0) {
+        console.log(`   Received ${allMessages.length} messages:`)
+        allMessages.forEach((msg, i) => {
+          console.log(`     ${i + 1}. ${msg.timestamp}: ${msg.text?.substring(0, 100)}...`)
+        })
+      } else {
+        console.log('   No Telegram messages received at all')
+      }
+      
+      assert.fail(`Telegram notification verification failed: ${error.message}`)
     }
     
     // Step 7: Test Grafana UI accessibility using Playwright
     console.log('🎭 Step 7: Testing Grafana UI with Playwright...')
     assert.ok(page, 'Playwright browser should be available for UI testing')
+    
+    console.log('📱 Browser is available, running UI tests...')
     
     // Login to Grafana
     await page.goto(`${CONFIG.grafana.url}/login`)
@@ -278,7 +320,7 @@ describe('Bath-lights monitoring pipeline E2E', () => {
 ✅ Validated InfluxDB data structure and content
 ✅ Confirmed Grafana data source connectivity  
 ✅ Tested Grafana dashboard queries (some may fail in test environment)
-✅ Tested Telegram alert notification delivery (when configured)
+✅ Tested Grafana alert firing and notification delivery (API-based verification)
 ✅ Verified Grafana UI accessibility and navigation
 ✅ Confirmed API endpoints are functional
 
