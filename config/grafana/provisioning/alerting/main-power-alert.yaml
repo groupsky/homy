@@ -2,12 +2,12 @@ apiVersion: 1
 
 groups:
   - orgId: 1
-    name: Main Power alert
-    folder: General Alerting
+    name: Main Power alert webhook
+    folder: Webhook Alerting
     interval: 1m
     rules:
-      - uid: lA5nSTtVk
-        title: Main Power alert
+      - uid: webhook-lA5nSTtVk
+        title: Main Power alert (Webhook)
         condition: B
         data:
           - refId: A
@@ -72,4 +72,5 @@ groups:
           __panelId__: "2"
           message: "High power"
         labels:
-          rule_uid: lA5nSTtVk
+          rule_uid: webhook-lA5nSTtVk
+          alert_type: webhook

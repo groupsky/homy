@@ -2,12 +2,12 @@ apiVersion: 1
 
 groups:
   - orgId: 1
-    name: Water pump power alert
-    folder: General Alerting
+    name: Water pump power alert webhook
+    folder: Webhook Alerting
     interval: 1m
     rules:
-      - uid: z157Sot4z
-        title: Water pump power alert
+      - uid: webhook-z157Sot4z
+        title: Water pump power alert (Webhook)
         condition: B
         data:
           - refId: A
@@ -70,4 +70,5 @@ groups:
           __panelId__: "2"
           message: "Претоварване на сондажната помпа"
         labels:
-          rule_uid: z157Sot4z
+          rule_uid: webhook-z157Sot4z
+          alert_type: webhook

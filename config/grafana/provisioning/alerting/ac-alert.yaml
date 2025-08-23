@@ -2,12 +2,12 @@ apiVersion: 1
 
 groups:
   - orgId: 1
-    name: AC alert
-    folder: General Alerting
+    name: AC alert webhook
+    folder: Webhook Alerting
     interval: 1m
     rules:
-      - uid: 3057STtVkz
-        title: AC alert
+      - uid: webhook-3057STtVkz
+        title: AC alert (Webhook)
         condition: A
         data:
           - refId: maxV
@@ -107,4 +107,5 @@ groups:
           __panelId__: "3"
           message: "Outside 210-247V range"
         labels:
-          rule_uid: 3057STtVkz
+          rule_uid: webhook-3057STtVkz
+          alert_type: webhook

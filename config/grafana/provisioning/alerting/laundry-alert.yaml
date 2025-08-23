@@ -2,12 +2,12 @@ apiVersion: 1
 
 groups:
   - orgId: 1
-    name: Пералня
-    folder: General Alerting
+    name: Пералня webhook
+    folder: Webhook Alerting
     interval: 5m
     rules:
-      - uid: XA5nIopVk
-        title: Пералня
+      - uid: webhook-XA5nIopVk
+        title: Пералня (Webhook)
         condition: C
         data:
           - refId: A
@@ -105,4 +105,5 @@ groups:
           __panelId__: "2"
           message: "Пералнята е готова"
         labels:
-          rule_uid: XA5nIopVk
+          rule_uid: webhook-XA5nIopVk
+          alert_type: webhook

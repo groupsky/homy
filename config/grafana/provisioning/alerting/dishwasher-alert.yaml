@@ -2,12 +2,12 @@ apiVersion: 1
 
 groups:
   - orgId: 1
-    name: Миялна
-    folder: General Alerting
+    name: Миялна webhook
+    folder: Webhook Alerting
     interval: 5m
     rules:
-      - uid: rAc7STtVk
-        title: Миялна
+      - uid: webhook-rAc7STtVk
+        title: Миялна (Webhook)
         condition: C
         data:
           - refId: A
@@ -105,4 +105,5 @@ groups:
           __panelId__: "1"
           message: "Миялната е готова"
         labels:
-          rule_uid: rAc7STtVk
+          rule_uid: webhook-rAc7STtVk
+          alert_type: webhook

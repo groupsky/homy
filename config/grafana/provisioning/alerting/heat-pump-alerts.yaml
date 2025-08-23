@@ -2,12 +2,12 @@ apiVersion: 1
 
 groups:
   - orgId: 1
-    name: Термопомпа
-    folder: General Alerting
+    name: Термопомпа webhook
+    folder: Webhook Alerting
     interval: 1m
     rules:
-      - uid: 3A5nIop4k
-        title: Термопомпа не работи
+      - uid: webhook-3A5nIop4k
+        title: Термопомпа не работи (Webhook)
         condition: A
         data:
           - refId: power
@@ -73,9 +73,10 @@ groups:
           __panelId__: "2"
           message: "Консумация под 29W"
         labels:
-          rule_uid: 3A5nIop4k
-      - uid: lA5nSTt4k
-        title: Термопомпа претоварване
+          rule_uid: webhook-3A5nIop4k
+          alert_type: webhook
+      - uid: webhook-lA5nSTt4k
+        title: Термопомпа претоварване (Webhook)
         condition: B
         data:
           - refId: A
@@ -137,4 +138,5 @@ groups:
           __panelId__: "2"
           message: "Консумация над 3kW"
         labels:
-          rule_uid: lA5nSTt4k
+          rule_uid: webhook-lA5nSTt4k
+          alert_type: webhook
