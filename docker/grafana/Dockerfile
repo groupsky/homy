@@ -1,4 +1,4 @@
-FROM grafana/grafana:9.3.2
+FROM grafana/grafana:9.5.21
 
 ARG GF_INSTALL_IMAGE_RENDERER_PLUGIN="false"
 

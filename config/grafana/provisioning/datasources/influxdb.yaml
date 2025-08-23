@@ -3,6 +3,7 @@ apiVersion: 1
 datasources:
   - name: influxdb
     type: influxdb
+    uid: P3C6603E967DC8568
     version: 1
     editable: false
     isDefault: true

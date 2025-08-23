@@ -1,0 +1,58 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: telegram-webhook
+    receivers:
+      - uid: telegram-webhook
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: http://telegram-bridge:3000/webhook
+          httpMethod: POST
+          maxAlerts: 0
+          title: "Home Automation Alert"
+
+policies:
+  - orgId: 1
+    receiver: telegram-webhook
+    group_by:
+      - service
+      - severity
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+
+# Example alert group - can be extended for specific monitoring needs
+groups:
+  - orgId: 1
+    name: system-alerts
+    folder: alerting
+    interval: 60s
+    rules:
+      - uid: example-system-alert
+        title: Example System Alert
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              datasource:
+                type: influxdb
+                uid: P3C6603E967DC8568
+              query: 'SELECT 1'
+              rawQuery: true
+              resultFormat: time_series
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: 'Example alert demonstrating webhook-based Telegram integration'
+          summary: Example system alert
+        labels:
+          service: system
+          severity: info
