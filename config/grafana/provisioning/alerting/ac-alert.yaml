@@ -105,7 +105,9 @@ groups:
           __alertId__: "12"
           __dashboardUid__: "Nml0-Fonz"
           __panelId__: "3"
-          message: "Outside 210-247V range"
+          message: "🔌 AC Voltage Alert: Outside 210-247V range"
+          summary: "AC voltage monitoring alert"
+          description: "The AC voltage has gone outside the safe operating range of 210-247V. This could indicate power quality issues or electrical problems."
         labels:
           rule_uid: webhook-3057STtVkz
           alert_type: webhook
