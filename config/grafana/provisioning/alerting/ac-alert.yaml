@@ -35,6 +35,7 @@ groups:
                   - params: []
                     type: max
               tags:
+                # Exclude kitchen meter - faulty device that occasionally returns 0V readings
                 - key: "device.name"
                   operator: "!="
                   value: kitchen
@@ -63,6 +64,7 @@ groups:
                   - params: []
                     type: min
               tags:
+                # Exclude kitchen meter - faulty device that occasionally returns 0V readings  
                 - key: "device.name"
                   operator: "!="
                   value: kitchen
