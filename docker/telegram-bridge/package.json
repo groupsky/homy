@@ -1,0 +1,13 @@
+{
+  "name": "telegram-bridge",
+  "version": "1.0.0",
+  "description": "Webhook to Telegram bridge service for Grafana alerts",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
