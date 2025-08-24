@@ -20,12 +20,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Run containers
+      - name: Build containers
         run: |
           sudo chown -R 1000:1000 data/nodered
-          export DOCKER_BUILDKIT=1
-          export BUILDX_EXPERIMENTAL=1
-          docker compose --env-file example.env build --build-arg BUILDKIT_INLINE_CACHE=1 automations features broker
+          # Use docker buildx bake for GitHub Actions cache support
+          docker buildx bake \
+            --set "*.cache-from=type=gha,scope=lights-test" \
+            --set "*.cache-to=type=gha,mode=max,scope=lights-test,ignore-error=true" \
+            --file docker-compose.yml \
+            --load \
+            automations features broker
+        env:
+          COMPOSE_FILE: example.env
+          
+      - name: Start containers
+        run: |
           docker compose --env-file example.env up --force-recreate -d automations features broker
 
       - name: Setup node

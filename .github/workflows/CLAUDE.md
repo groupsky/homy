@@ -101,7 +101,7 @@ Use `docker/build-push-action` with optimized GitHub Actions cache:
 
 #### Docker Compose Builds
 
-For multi-container builds with docker compose:
+For multi-container builds with docker compose, use `docker buildx bake` with GitHub Actions cache:
 
 ```yaml
 - name: Set up Docker Buildx
@@ -109,11 +109,25 @@ For multi-container builds with docker compose:
 
 - name: Build containers
   run: |
-    export DOCKER_BUILDKIT=1
-    export BUILDX_EXPERIMENTAL=1
-    docker compose build --build-arg BUILDKIT_INLINE_CACHE=1
-    docker compose up --no-start
+    # Use docker buildx bake for GitHub Actions cache support
+    docker buildx bake \
+      --set "*.cache-from=type=gha,scope=compose-project" \
+      --set "*.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true" \
+      --file docker-compose.yml \
+      --load
+  env:
+    COMPOSE_FILE: example.env
+    
+- name: Start containers
+  run: |
+    docker compose --env-file example.env up --no-start
 ```
+
+**Why docker buildx bake?**
+- `docker compose build` doesn't support GitHub Actions cache parameters
+- `docker buildx bake` reads compose files and applies cache settings to all services
+- `--set "*.cache-from=..."` applies cache settings to all targets (services)
+- `--load` ensures images are available in local Docker daemon
 
 **Benefits:**
 - **GitHub Actions Cache (`type=gha`)**: Fastest cache backend for GitHub Actions

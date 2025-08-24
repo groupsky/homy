@@ -22,7 +22,15 @@ jobs:
 
       - name: Build all containers
         run: |
-          export DOCKER_BUILDKIT=1
-          export BUILDX_EXPERIMENTAL=1
-          docker compose --env-file example.env --file docker-compose.yml build --build-arg BUILDKIT_INLINE_CACHE=1
+          # Use docker buildx bake for GitHub Actions cache support
+          docker buildx bake \
+            --set "*.cache-from=type=gha,scope=infrastructure" \
+            --set "*.cache-to=type=gha,mode=max,scope=infrastructure,ignore-error=true" \
+            --file docker-compose.yml \
+            --load
+        env:
+          COMPOSE_FILE: example.env
+          
+      - name: Start containers
+        run: |
           docker compose --env-file example.env --file docker-compose.yml up --force-recreate --no-start
