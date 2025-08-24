@@ -102,8 +102,8 @@ jobs:
           context: docker/automations/
           push: false
           tags: automations-test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=automations
+          cache-to: type=gha,mode=max,scope=automations,ignore-error=true
           
       - name: Verify Docker image was built successfully
         run: |

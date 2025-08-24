@@ -102,8 +102,8 @@ jobs:
           context: docker/modbus-serial/
           push: false
           tags: modbus-serial-test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=modbus-serial
+          cache-to: type=gha,mode=max,scope=modbus-serial,ignore-error=true
           
       - name: Verify Docker image was built successfully
         run: |

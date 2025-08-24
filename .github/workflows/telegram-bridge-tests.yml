@@ -102,8 +102,8 @@ jobs:
           context: docker/telegram-bridge/
           push: false
           tags: telegram-bridge-test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=telegram-bridge
+          cache-to: type=gha,mode=max,scope=telegram-bridge,ignore-error=true
           
       - name: Start container with healthcheck
         run: |

@@ -82,7 +82,7 @@ For workflows building Docker images, always use Docker Buildx with GitHub Actio
 
 #### Single Image Builds (Recommended)
 
-Use `docker/build-push-action` with GitHub Actions cache:
+Use `docker/build-push-action` with optimized GitHub Actions cache:
 
 ```yaml
 - name: Set up Docker Buildx
@@ -94,8 +94,8 @@ Use `docker/build-push-action` with GitHub Actions cache:
     context: ./path/to/build/context
     push: false
     tags: image-name
-    cache-from: type=gha
-    cache-to: type=gha,mode=max
+    cache-from: type=gha,scope=service-name
+    cache-to: type=gha,mode=max,scope=service-name,ignore-error=true
 ```
 
 #### Docker Compose Builds
@@ -123,8 +123,16 @@ For multi-container builds with docker compose:
 **Important Notes:**
 - GitHub Actions cache requires `docker/build-push-action@v6` or later
 - Use `mode=max` to cache all intermediate layers (recommended for CI)
+- Use unique `scope` values for different services to prevent cache conflicts
+- Add `ignore-error=true` to prevent cache export failures from breaking builds
 - Cache is automatically shared across workflow runs and branches
 - Works only within GitHub Actions environment
+
+**Optimization Parameters:**
+- `scope=service-name`: Creates isolated cache namespace for each service
+- `ignore-error=true`: Continues build even if cache export fails
+- `mode=max`: Exports all build layers for maximum cache reuse
+- `ghtoken=${{ github.token }}`: Uses GitHub token to avoid API rate limiting (optional)
 
 ### Arduino CLI Caching
 
