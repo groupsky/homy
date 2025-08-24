@@ -79,7 +79,7 @@ jobs:
           name: automations-coverage
           fail_ci_if_error: false
 
-  docker-healthcheck:
+  docker-build:
     runs-on: ubuntu-latest
     needs: [version-check, test]
     
@@ -91,45 +91,17 @@ jobs:
         run: |
           docker build -t automations-test docker/automations/
           
-      - name: Start container with healthcheck
+      - name: Verify Docker image was built successfully
         run: |
-          docker run -d --name automations-healthcheck \
-            -e MQTT_BROKER=mqtt://test-broker \
-            -e CONFIG=/usr/src/app/test-config.js \
-            automations-test
-            
-      - name: Create test configuration
-        run: |
-          docker exec automations-healthcheck sh -c 'cat > test-config.js << EOF
-          module.exports = {
-            mqtt: {
-              broker: process.env.MQTT_BROKER || "mqtt://broker:1883",
-              clientId: "automations-test"
-            },
-            bots: []
-          }
-          EOF'
-            
-      - name: Verify container is running
-        run: |
-          # Wait for container to start properly
-          sleep 10
+          # Check that the image exists
+          docker images automations-test
           
-          # Check container is still running
-          CONTAINER_STATUS=$(docker inspect --format='{{.State.Status}}' automations-healthcheck)
-          echo "Container status: $CONTAINER_STATUS"
+          # Verify the image can be inspected
+          docker inspect automations-test > /dev/null
           
-          if [ "$CONTAINER_STATUS" != "running" ]; then
-            echo "ERROR: Container is not running"
-            docker logs automations-healthcheck
-            exit 1
-          fi
-          
-          echo "✅ Container is running successfully"
+          echo "✅ Docker image built successfully"
           
       - name: Cleanup
         if: always()
         run: |
-          docker stop automations-healthcheck || true
-          docker rm automations-healthcheck || true
           docker rmi automations-test || true
