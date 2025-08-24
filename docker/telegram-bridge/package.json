@@ -1,0 +1,17 @@
+{
+  "name": "telegram-bridge",
+  "version": "1.0.0",
+  "description": "Webhook to Telegram bridge service for Grafana alerts",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^30.0.5",
+    "msw": "^2.0.0"
+  }
+}

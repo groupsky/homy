@@ -1,0 +1,111 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Миялна webhook
+    folder: Webhook Alerting
+    interval: 5m
+    rules:
+      - uid: webhook-rAc7STtVk
+        title: Миялна (Webhook)
+        condition: C
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 3600
+              to: 1800
+            datasourceUid: P3C6603E967DC8568
+            model:
+              groupBy:
+                - params: ["$__interval"]
+                  type: time
+                - params: ["null"]
+                  type: fill
+              intervalMs: 1000
+              maxDataPoints: 43200
+              measurement: current_power
+              orderByTime: ASC
+              policy: default
+              resultFormat: time_series
+              select:
+                - - params: ["p"]
+                    type: field
+                  - params: []
+                    type: max
+              tags:
+                - key: "device.name"
+                  operator: "="
+                  value: dishwasher
+          - refId: B
+            queryType: ''
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              groupBy:
+                - params: ["$__interval"]
+                  type: time
+                - params: ["null"]
+                  type: fill
+              intervalMs: 1000
+              maxDataPoints: 43200
+              measurement: current_power
+              orderByTime: ASC
+              policy: default
+              resultFormat: time_series
+              select:
+                - - params: ["p"]
+                    type: field
+                  - params: []
+                    type: max
+              tags:
+                - key: "device.name"
+                  operator: "="
+                  value: dishwasher
+          - refId: C
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    params: [10]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: max
+                - evaluator:
+                    params: [10]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: max
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: OK
+        for: 0s
+        annotations:
+          __alertId__: "3"
+          __dashboardUid__: "reminders"
+          __panelId__: "1"
+          message: "🍽️ Известие за миялната: Миялната е готова"
+          summary: "Напомняне за миялна"
+          description: "Миялната завърши програмата си - консумацията спадна под 10W. Можете да изважите чистите съдове."
+        labels:
+          rule_uid: webhook-rAc7STtVk
+          alert_type: webhook

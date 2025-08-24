@@ -1,0 +1,125 @@
+name: Telegram Bridge Tests
+
+on:
+  push:
+    paths:
+      - 'docker/telegram-bridge/**'
+      - '.github/workflows/telegram-bridge-tests.yml'
+  pull_request:
+    paths:
+      - 'docker/telegram-bridge/**'
+      - '.github/workflows/telegram-bridge-tests.yml'
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    outputs:
+      node-version: ${{ steps.nvmrc.outputs.node-version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Read Node version from .nvmrc
+        id: nvmrc
+        run: |
+          NODE_VERSION=$(cat docker/telegram-bridge/.nvmrc)
+          echo "node-version=$NODE_VERSION" >> $GITHUB_OUTPUT
+          echo "Node version from .nvmrc: $NODE_VERSION"
+          
+      - name: Check Node version consistency
+        run: |
+          NODE_VERSION=$(cat docker/telegram-bridge/.nvmrc)
+          DOCKERFILE_VERSION=$(grep "FROM node:" docker/telegram-bridge/Dockerfile | cut -d: -f2 | cut -d- -f1)
+          WORKFLOW_VERSION=$(grep -A 10 "node-version-file:" .github/workflows/telegram-bridge-tests.yml | head -1 | grep -o "[0-9]*" || echo "$NODE_VERSION")
+          
+          echo "Node version in .nvmrc: $NODE_VERSION"
+          echo "Node version in Dockerfile: $DOCKERFILE_VERSION"
+          echo "Expected workflow version: $NODE_VERSION"
+          
+          if [ "$NODE_VERSION" != "$DOCKERFILE_VERSION" ]; then
+            echo "ERROR: Node version mismatch between .nvmrc ($NODE_VERSION) and Dockerfile ($DOCKERFILE_VERSION)"
+            exit 1
+          fi
+          
+          echo "✅ All Node versions are consistent"
+
+  test:
+    runs-on: ubuntu-latest
+    needs: version-check
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: 'docker/telegram-bridge/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/telegram-bridge/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: docker/telegram-bridge
+        run: npm ci
+        
+      - name: Run tests
+        working-directory: docker/telegram-bridge
+        run: npm test
+        
+      - name: Run test coverage
+        working-directory: docker/telegram-bridge
+        run: npm run test:coverage
+        
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: docker/telegram-bridge/coverage/lcov.info
+          directory: docker/telegram-bridge/coverage
+          flags: telegram-bridge
+          name: telegram-bridge-coverage
+          fail_ci_if_error: false
+
+  docker-healthcheck:
+    runs-on: ubuntu-latest
+    needs: [version-check, test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Build Docker image
+        run: |
+          docker build -t telegram-bridge-test docker/telegram-bridge/
+          
+      - name: Start container with healthcheck
+        run: |
+          docker run -d --name telegram-bridge-healthcheck \
+            -p 3001:3000 \
+            -e TELEGRAM_BOT_TOKEN=test_token_for_ci \
+            -e TELEGRAM_CHAT_ID=test_chat_for_ci \
+            telegram-bridge-test
+            
+      - name: Verify Docker healthcheck status
+        run: |
+          # Wait for healthcheck to run a few times
+          sleep 35
+          
+          # Check container is marked as healthy
+          HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' telegram-bridge-healthcheck)
+          echo "Docker health status: $HEALTH_STATUS"
+          
+          if [ "$HEALTH_STATUS" != "healthy" ]; then
+            echo "ERROR: Container is not healthy"
+            docker inspect --format='{{json .State.Health}}' telegram-bridge-healthcheck | jq .
+            docker logs telegram-bridge-healthcheck
+            exit 1
+          fi
+          
+          echo "✅ Docker healthcheck is working correctly"
+          
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop telegram-bridge-healthcheck || true
+          docker rm telegram-bridge-healthcheck || true
+          docker rmi telegram-bridge-test || true

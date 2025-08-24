@@ -530,6 +530,24 @@ services:
       - /etc/localtime:/etc/localtime:ro
     user: ${PUID}:${PGID}
 
+  telegram-bridge:
+    build: docker/telegram-bridge
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - telegram_bot_token
+      - telegram_chat_id
+    environment:
+      - TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token
+      - TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram_chat_id
+      - TZ=${TZ}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
   mqtt-mongo-history:
     build: docker/mqtt-mongo
     depends_on:

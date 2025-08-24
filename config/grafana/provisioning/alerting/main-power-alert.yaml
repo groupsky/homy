@@ -1,0 +1,78 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Main Power alert webhook
+    folder: Webhook Alerting
+    interval: 1m
+    rules:
+      - uid: webhook-lA5nSTtVk
+        title: Main Power alert (Webhook)
+        condition: B
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              alias: "$tag_phase"
+              groupBy:
+                - params: ["$__interval"]
+                  type: time
+                - params: ["phase"]
+                  type: tag
+                - params: ["linear"]
+                  type: fill
+              intervalMs: 1000
+              maxDataPoints: 43200
+              measurement: current_power
+              orderByTime: ASC
+              policy: default
+              resultFormat: time_series
+              select:
+                - - params: ["p"]
+                    type: field
+                  - params: []
+                    type: mean
+              tags:
+                - key: "device.name"
+                  operator: "="
+                  value: main
+          - refId: B
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    params: [10000]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: avg
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: OK
+        for: 5m
+        annotations:
+          __alertId__: "15"
+          __dashboardUid__: "injvKUbGz"
+          __panelId__: "2"
+          message: "⚡ Main Power Alert: High power consumption detected"
+          summary: "Main power consumption monitoring"
+          description: "Power consumption has exceeded 10kW for more than 5 minutes. This indicates unusually high electrical usage that may require attention."
+        labels:
+          rule_uid: webhook-lA5nSTtVk
+          alert_type: webhook
