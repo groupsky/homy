@@ -24,7 +24,9 @@ jobs:
         run: |
           sudo chown -R 1000:1000 data/nodered
           export DOCKER_BUILDKIT=1
-          docker compose --env-file example.env up --build --force-recreate -d automations features broker
+          export BUILDX_EXPERIMENTAL=1
+          docker compose --env-file example.env build --build-arg BUILDKIT_INLINE_CACHE=1 automations features broker
+          docker compose --env-file example.env up --force-recreate -d automations features broker
 
       - name: Setup node
         uses: actions/setup-node@v4.4.0

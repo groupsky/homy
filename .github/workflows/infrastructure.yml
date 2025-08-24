@@ -23,4 +23,6 @@ jobs:
       - name: Build all containers
         run: |
           export DOCKER_BUILDKIT=1
-          docker compose --env-file example.env --file docker-compose.yml up --build --force-recreate --no-start
+          export BUILDX_EXPERIMENTAL=1
+          docker compose --env-file example.env --file docker-compose.yml build --build-arg BUILDKIT_INLINE_CACHE=1
+          docker compose --env-file example.env --file docker-compose.yml up --force-recreate --no-start

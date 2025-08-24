@@ -97,9 +97,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
         
       - name: Build Docker image
-        run: |
-          export DOCKER_BUILDKIT=1
-          docker build -t telegram-bridge-test docker/telegram-bridge/
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/telegram-bridge/
+          push: false
+          tags: telegram-bridge-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           
       - name: Start container with healthcheck
         run: |

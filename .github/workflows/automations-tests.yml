@@ -97,9 +97,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
         
       - name: Build Docker image
-        run: |
-          export DOCKER_BUILDKIT=1
-          docker build -t automations-test docker/automations/
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/automations/
+          push: false
+          tags: automations-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           
       - name: Verify Docker image was built successfully
         run: |

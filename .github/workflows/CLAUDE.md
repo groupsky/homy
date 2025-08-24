@@ -78,23 +78,53 @@ For workflows using Node.js, always enable built-in npm caching with `setup-node
 
 ### Docker Build Caching
 
-For workflows building Docker images, always use Docker Buildx with BuildKit:
+For workflows building Docker images, always use Docker Buildx with GitHub Actions cache backend:
+
+#### Single Image Builds (Recommended)
+
+Use `docker/build-push-action` with GitHub Actions cache:
 
 ```yaml
 - name: Set up Docker Buildx
   uses: docker/setup-buildx-action@v3
 
 - name: Build Docker image
+  uses: docker/build-push-action@v6
+  with:
+    context: ./path/to/build/context
+    push: false
+    tags: image-name
+    cache-from: type=gha
+    cache-to: type=gha,mode=max
+```
+
+#### Docker Compose Builds
+
+For multi-container builds with docker compose:
+
+```yaml
+- name: Set up Docker Buildx
+  uses: docker/setup-buildx-action@v3
+
+- name: Build containers
   run: |
     export DOCKER_BUILDKIT=1
-    docker build -t image-name .
+    export BUILDX_EXPERIMENTAL=1
+    docker compose build --build-arg BUILDKIT_INLINE_CACHE=1
+    docker compose up --no-start
 ```
 
 **Benefits:**
-- Enables advanced Docker BuildKit features
-- Improves build performance through better layer caching
-- Supports multi-platform builds and advanced cache backends
-- Required for GitHub Actions cache integration with Docker
+- **GitHub Actions Cache (`type=gha`)**: Fastest cache backend for GitHub Actions
+- **Layer Caching**: Reuses Docker layers between workflow runs
+- **Significant Speed Improvements**: Can reduce build times by 90% on cache hits
+- **Automatic Cache Management**: GitHub automatically manages cache storage and cleanup
+
+**Important Notes:**
+- GitHub Actions cache requires `docker/build-push-action@v6` or later
+- Use `mode=max` to cache all intermediate layers (recommended for CI)
+- Cache is automatically shared across workflow runs and branches
+- Works only within GitHub Actions environment
 
 ### Arduino CLI Caching
 
