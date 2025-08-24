@@ -78,3 +78,48 @@ jobs:
           flags: telegram-bridge
           name: telegram-bridge-coverage
           fail_ci_if_error: false
+
+  docker-healthcheck:
+    runs-on: ubuntu-latest
+    needs: [version-check, test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Build Docker image
+        run: |
+          docker build -t telegram-bridge-test docker/telegram-bridge/
+          
+      - name: Start container with healthcheck
+        run: |
+          docker run -d --name telegram-bridge-healthcheck \
+            -p 3001:3000 \
+            -e TELEGRAM_BOT_TOKEN=test_token_for_ci \
+            -e TELEGRAM_CHAT_ID=test_chat_for_ci \
+            telegram-bridge-test
+            
+      - name: Verify Docker healthcheck status
+        run: |
+          # Wait for healthcheck to run a few times
+          sleep 35
+          
+          # Check container is marked as healthy
+          HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' telegram-bridge-healthcheck)
+          echo "Docker health status: $HEALTH_STATUS"
+          
+          if [ "$HEALTH_STATUS" != "healthy" ]; then
+            echo "ERROR: Container is not healthy"
+            docker inspect --format='{{json .State.Health}}' telegram-bridge-healthcheck | jq .
+            docker logs telegram-bridge-healthcheck
+            exit 1
+          fi
+          
+          echo "✅ Docker healthcheck is working correctly"
+          
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop telegram-bridge-healthcheck || true
+          docker rm telegram-bridge-healthcheck || true
+          docker rmi telegram-bridge-test || true
