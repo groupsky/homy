@@ -115,7 +115,8 @@ For multi-container builds with docker compose, use `docker compose config` to r
 - name: Build containers
   uses: docker/bake-action@v6
   with:
-    files: ./resolved-docker-compose.yml
+    files: |
+      cwd://resolved-docker-compose.yml
     set: |
       *.cache-from=type=gha,scope=compose-project
       *.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true
