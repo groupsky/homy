@@ -13,7 +13,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@influxdata/influxdb-client": "^1.33.2",
+    "@influxdata/influxdb-client": "^1.35.0",
     "async-mutex": "^0.4.0",
     "ieee754": "^1.1.13",
     "modbus-serial": "^8.0.21",
