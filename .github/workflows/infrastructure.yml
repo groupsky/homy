@@ -46,13 +46,14 @@ jobs:
           echo "Working directory: $(pwd)"
           echo "File size: $(wc -l < resolved-docker-compose.yml) lines"
           echo "First few lines of resolved config:"
-          head -20 resolved-docker-compose.yml
+          head -30 resolved-docker-compose.yml
 
       - name: Build all containers
         uses: docker/bake-action@v6
         with:
+          source: .
           files: |
-            cwd://resolved-docker-compose.yml
+            ./resolved-docker-compose.yml
           set: |
             *.cache-from=type=gha,scope=infrastructure
             *.cache-to=type=gha,mode=max,scope=infrastructure,ignore-error=true
