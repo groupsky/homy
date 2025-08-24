@@ -70,8 +70,7 @@ groups:
           __alertId__: "15"
           __dashboardUid__: "injvKUbGz"
           __panelId__: "2"
-          message: "⚡ Main Power Alert: High power consumption detected"
-          summary: "Main power consumption monitoring"
+          summary: "⚡📊 Main power consumption monitoring"
           description: "Power consumption has exceeded 10kW for more than 5 minutes. This indicates unusually high electrical usage that may require attention."
         labels:
           rule_uid: webhook-lA5nSTtVk

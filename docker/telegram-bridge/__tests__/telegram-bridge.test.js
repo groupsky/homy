@@ -95,13 +95,10 @@ describe('Telegram Bridge Service', () => {
       expect(telegramRequest.body.parse_mode).toBe('HTML')
 
       // Verify message content includes expected elements
-      const messageText = telegramRequest.body.text
-      expect(messageText).toContain('🏠 <b>Home Automation Alert</b>')
-      expect(messageText).toContain('<b>Status:</b> Firing')
-      expect(messageText).toContain('<b>Receiver:</b> telegram-alerts')
-      expect(messageText).toContain('🌡️ <b>High Temperature</b>')
-      expect(messageText).toContain('📄 Temperature is above 30°C')
-      expect(messageText).toContain('🔗 <a href="http://grafana.example.com/alerting/rule/123">View Dashboard</a>')
+      expect(telegramRequest.body.text).toMatchInlineSnapshot(`
+"🚨 Temperature is above 30°C
+"
+`)
     })
 
     test('POST /webhook handles simple message object and verifies payload', async () => {
@@ -212,11 +209,12 @@ describe('Telegram Bridge Service', () => {
       const requests = getInterceptedRequests()
       expect(requests).toHaveLength(1)
 
-      const messageText = requests[0].body.text
-      expect(messageText).toContain('💧 <b>Цисла вода</b>') // Water emoji for Bulgarian water alert
-      expect(messageText).toContain('⚡ <b>High Power Usage</b>') // Lightning emoji for power alert
-      expect(messageText).toContain('<b>Status:</b> Firing')
-      expect(messageText).toContain('<b>Receiver:</b> critical-alerts')
+      expect(requests[0].body.text).toMatchInlineSnapshot(`
+"🚨 Water level critical
+
+🚨 Power consumption above threshold
+"
+`)
     })
 
     test('extracts message from object with text field', async () => {

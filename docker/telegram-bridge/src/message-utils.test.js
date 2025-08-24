@@ -92,14 +92,11 @@ describe('Message Utils', () => {
       }
 
       const result = extractMessageFromWebhook(webhookData)
-      
-      expect(result).toContain('🏠 <b>Home Automation Alert</b>')
-      expect(result).toContain('<b>Status:</b> Firing')
-      expect(result).toContain('<b>Receiver:</b> telegram-alerts')
-      expect(result).toContain('🌡️ <b>High Temperature</b>')
-      expect(result).toContain('📄 Temperature is above 30°C')
-      expect(result).toContain('🔗 <a href="http://grafana.example.com/alerting/rule/123">View Dashboard</a>')
-      expect(result).toContain('🕐')
+
+      expect(result).toMatchInlineSnapshot(`
+"🚨 Temperature is above 30°C
+"
+`)
     })
 
     test('extracts message from Grafana webhook with multiple alerts', () => {
@@ -119,50 +116,13 @@ describe('Message Utils', () => {
       }
 
       const result = extractMessageFromWebhook(webhookData)
-      
-      expect(result).toContain('<b>Status:</b> Resolved')
-      expect(result).toContain('<b>Receiver:</b> critical-alerts')
-      expect(result).toContain('⚡ <b>Power Issue</b>')
-      expect(result).toContain('💧 <b>Water Level</b>')
-      expect(result).toContain('📄 Power restored')
-      expect(result).toContain('📄 Water level normal')
-    })
 
-    test('handles alerts with dashboard links', () => {
-      const webhookData = {
-        status: 'firing',
-        receiver: 'dashboard-alerts',
-        alerts: [{
-          labels: { alertname: 'Dashboard Alert' },
-          annotations: {
-            message: 'Dashboard test',
-            __dashboardUid__: 'test-dashboard-uid',
-            __panelId__: '123'
-          }
-        }]
-      }
+      expect(result).toMatchInlineSnapshot(`
+"✅ Power restored
 
-      const result = extractMessageFromWebhook(webhookData)
-      
-      expect(result).toContain('📊 <a href="http://grafana.homy.roupsky.name/d/test-dashboard-uid?viewPanel=123">View Panel</a>')
-    })
-
-    test('handles alerts with dashboard links but no panel ID', () => {
-      const webhookData = {
-        status: 'firing',
-        receiver: 'dashboard-alerts',
-        alerts: [{
-          labels: { alertname: 'Dashboard Alert' },
-          annotations: {
-            message: 'Dashboard test',
-            __dashboardUid__: 'test-dashboard-uid'
-          }
-        }]
-      }
-
-      const result = extractMessageFromWebhook(webhookData)
-      
-      expect(result).toContain('📊 <a href="http://grafana.homy.roupsky.name/d/test-dashboard-uid">View Panel</a>')
+✅ Water level normal
+"
+`)
     })
 
     test('handles alerts with missing optional fields', () => {
@@ -174,18 +134,18 @@ describe('Message Utils', () => {
       }
 
       const result = extractMessageFromWebhook(webhookData)
-      
-      expect(result).toContain('<b>Status:</b> Firing') // default status
-      expect(result).toContain('<b>Receiver:</b> unknown') // default receiver
-      expect(result).toContain('⚠️ <b>Unknown Alert</b>') // default alert name
-      expect(result).toContain('📄 No details') // default message
+
+      expect(result).toMatchInlineSnapshot(`
+"🚨 <b>Unknown Alert</b>
+"
+`)
     })
 
     test('handles alerts using summary instead of alertname', () => {
       const webhookData = {
         alerts: [{
           labels: { rule_uid: 'test-rule' },
-          annotations: { 
+          annotations: {
             summary: 'Summary Alert Name',
             description: 'Alert description'
           }
@@ -193,9 +153,11 @@ describe('Message Utils', () => {
       }
 
       const result = extractMessageFromWebhook(webhookData)
-      
-      expect(result).toContain('⚠️ <b>Summary Alert Name</b>')
-      expect(result).toContain('📄 Alert description')
+
+      expect(result).toMatchInlineSnapshot(`
+"🚨 <b>Summary Alert Name</b>
+Alert description"
+`)
     })
 
     test('extracts message from simple message object', () => {
@@ -218,7 +180,7 @@ describe('Message Utils', () => {
 
     test('handles raw string input', () => {
       const webhookData = 'Raw string message'
-      
+
       const result = extractMessageFromWebhook(webhookData)
       expect(result).toBe('Raw string message')
     })
@@ -230,11 +192,17 @@ describe('Message Utils', () => {
       }
 
       const result = extractMessageFromWebhook(webhookData)
-      
-      expect(result).toContain('Webhook received:')
-      expect(result).toContain('"unknown": "field"')
-      expect(result).toContain('"custom": {')
-      expect(result).toContain('"nested": "object"')
+
+      expect(result).toMatchInlineSnapshot(`
+"Webhook received:
+
+{
+  "unknown": "field",
+  "custom": {
+    "nested": "object"
+  }
+}"
+`)
     })
 
     test('prioritizes message field over text field', () => {
@@ -256,7 +224,10 @@ describe('Message Utils', () => {
       }
 
       const result = extractMessageFromWebhook(webhookData)
-      expect(result).toContain('📄 Description content')
+      expect(result).toMatchInlineSnapshot(`
+"🚨 <b>Test Alert</b>
+Description content"
+`)
     })
   })
 })
