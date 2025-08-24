@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:24-alpine
 
 WORKDIR /usr/src/app
 
@@ -10,12 +10,7 @@ RUN npm ci --only=production
 
 # Copy source code
 COPY index.js ./
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-USER nodejs
+COPY src/ ./src/
 
 EXPOSE 3000
 
