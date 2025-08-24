@@ -11,6 +11,16 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v5.0.0
 
+    - name: Cache Arduino CLI and libraries
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.arduino15
+          ~/Arduino/libraries
+        key: arduino-${{ runner.os }}-${{ hashFiles('arduino/arduino.ino') }}
+        restore-keys: |
+          arduino-${{ runner.os }}-
+
     - name: Setup Arduino CLI
       uses: arduino/setup-arduino-cli@v2.0.0
       with:
