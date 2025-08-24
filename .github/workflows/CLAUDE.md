@@ -109,14 +109,17 @@ For multi-container builds with docker compose, use `docker buildx bake` with Gi
 
 - name: Build containers
   run: |
+    # Load environment variables from env file (required for docker-compose.yml)
+    set -a
+    source example.env
+    set +a
+    
     # Use docker buildx bake for GitHub Actions cache support
     docker buildx bake \
       --set "*.cache-from=type=gha,scope=compose-project" \
       --set "*.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true" \
       --file docker-compose.yml \
       --load
-  env:
-    COMPOSE_FILE: example.env
     
 - name: Start containers
   run: |

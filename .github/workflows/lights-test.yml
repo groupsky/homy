@@ -23,6 +23,12 @@ jobs:
       - name: Build containers
         run: |
           sudo chown -R 1000:1000 data/nodered
+          
+          # Load environment variables from example.env
+          set -a
+          source example.env
+          set +a
+          
           # Use docker buildx bake for GitHub Actions cache support
           docker buildx bake \
             --set "*.cache-from=type=gha,scope=lights-test" \
@@ -30,8 +36,6 @@ jobs:
             --file docker-compose.yml \
             --load \
             automations features broker
-        env:
-          COMPOSE_FILE: example.env
           
       - name: Start containers
         run: |
