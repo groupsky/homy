@@ -26,13 +26,31 @@ jobs:
 
       - name: Generate resolved compose config
         run: |
-          # Use docker compose config to resolve all environment variables
-          docker compose --env-file example.env --file docker-compose.yml config > resolved-docker-compose.yml
+          # Debug: Check if example.env exists
+          echo "Checking example.env file:"
+          ls -la example.env
           
-          # Debug: verify the file was created and show its location
+          # Load environment variables from example.env and export them
+          # This ensures variable expansion works properly
+          set -a
+          source example.env
+          set +a
+          
+          # Debug: Show some resolved variables
+          echo "Resolved variables:"
+          echo "CONFIG_PATH=$CONFIG_PATH"
+          echo "VPN_CONFIG_PATH=$VPN_CONFIG_PATH"
+          echo "DOMAIN=$DOMAIN"
+          
+          # Generate resolved compose config (now with variables in environment)
+          docker compose --file docker-compose.yml config > resolved-docker-compose.yml
+          
+          # Debug: verify the file was created and show its content
           ls -la resolved-docker-compose.yml
           echo "Working directory: $(pwd)"
           echo "File size: $(wc -l < resolved-docker-compose.yml) lines"
+          echo "First few lines of resolved config:"
+          head -20 resolved-docker-compose.yml
 
       - name: Build containers
         uses: docker/bake-action@v6
