@@ -24,12 +24,24 @@ jobs:
         run: |
           sudo chown -R 1000:1000 data/nodered
 
+      - name: Load environment variables
+        run: |
+          # Export all variables from example.env to GITHUB_ENV
+          while IFS='=' read -r key value; do
+            # Skip empty lines and comments
+            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+            # Remove any leading/trailing whitespace and quotes
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            # Expand variables in value (basic expansion)
+            value=$(eval echo "$value")
+            echo "$key=$value" >> $GITHUB_ENV
+          done < example.env
+
       - name: Build containers
         uses: docker/bake-action@v6
         with:
-          files: |
-            ./docker-compose.yml
-            ./example.env
+          files: ./docker-compose.yml
           targets: automations,features,broker
           set: |
             *.cache-from=type=gha,scope=lights-test

@@ -101,18 +101,30 @@ Use `docker/build-push-action` with optimized GitHub Actions cache:
 
 #### Docker Compose Builds
 
-For multi-container builds with docker compose, use `docker/bake-action@v6` with GitHub Actions cache:
+For multi-container builds with docker compose, use `docker/bake-action@v6` with proper environment variable loading:
 
 ```yaml
 - name: Set up Docker Buildx
   uses: docker/setup-buildx-action@v3
 
+- name: Load environment variables
+  run: |
+    # Export all variables from .env file to GITHUB_ENV
+    while IFS='=' read -r key value; do
+      # Skip empty lines and comments
+      [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+      # Remove any leading/trailing whitespace
+      key=$(echo "$key" | xargs)
+      value=$(echo "$value" | xargs)
+      # Expand variables in value (basic expansion)
+      value=$(eval echo "$value")
+      echo "$key=$value" >> $GITHUB_ENV
+    done < .env
+
 - name: Build containers
   uses: docker/bake-action@v6
   with:
-    files: |
-      ./docker-compose.yml
-      ./example.env
+    files: ./docker-compose.yml
     set: |
       *.cache-from=type=gha,scope=compose-project
       *.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true
@@ -120,15 +132,14 @@ For multi-container builds with docker compose, use `docker/bake-action@v6` with
     
 - name: Start containers
   run: |
-    docker compose --env-file example.env up --no-start
+    docker compose up --no-start
 ```
 
-**Why docker/bake-action@v6?**
-- **Handles environment files automatically**: Supports both compose files and .env files
-- **Better cache integration**: Optimized for GitHub Actions cache backend
-- **Git context by default**: No need for actions/checkout in most cases
-- **Cleaner syntax**: Declarative configuration vs shell commands
-- **Built-in error handling**: More reliable than manual docker buildx bake commands
+**Important Notes:**
+- **Files parameter**: Only accepts bake definition files (`.hcl`, docker-compose files), not environment files
+- **Environment variables**: Must be loaded into GitHub Actions environment using `GITHUB_ENV`
+- **Variable expansion**: The script handles basic variable expansion (e.g., `${CONFIG_PATH:-./config}`)
+- **Comments and empty lines**: Properly skips commented and empty lines in env files
 
 **Benefits:**
 - **GitHub Actions Cache (`type=gha`)**: Fastest cache backend for GitHub Actions
