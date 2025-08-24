@@ -109,14 +109,14 @@ For multi-container builds with docker compose, use `docker compose config` to r
 
 - name: Generate resolved compose config
   run: |
-    # Use docker compose config to resolve all environment variables
     docker compose --env-file example.env --file docker-compose.yml config > resolved-docker-compose.yml
 
 - name: Build containers
   uses: docker/bake-action@v6
   with:
+    source: .
     files: |
-      cwd://resolved-docker-compose.yml
+      ./resolved-docker-compose.yml
     set: |
       *.cache-from=type=gha,scope=compose-project
       *.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true
