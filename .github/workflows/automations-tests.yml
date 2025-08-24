@@ -101,6 +101,7 @@ jobs:
         with:
           context: docker/automations/
           push: false
+          load: true
           tags: automations-test
           cache-from: type=gha,scope=automations
           cache-to: type=gha,mode=max,scope=automations,ignore-error=true

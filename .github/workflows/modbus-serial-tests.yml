@@ -101,6 +101,7 @@ jobs:
         with:
           context: docker/modbus-serial/
           push: false
+          load: true
           tags: modbus-serial-test
           cache-from: type=gha,scope=modbus-serial
           cache-to: type=gha,mode=max,scope=modbus-serial,ignore-error=true

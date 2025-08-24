@@ -93,6 +93,7 @@ Use `docker/build-push-action` with optimized GitHub Actions cache:
   with:
     context: ./path/to/build/context
     push: false
+    load: true
     tags: image-name
     cache-from: type=gha,scope=service-name
     cache-to: type=gha,mode=max,scope=service-name,ignore-error=true
@@ -122,6 +123,7 @@ For multi-container builds with docker compose:
 
 **Important Notes:**
 - GitHub Actions cache requires `docker/build-push-action@v6` or later
+- Use `load: true` when `push: false` to make images available in local Docker daemon
 - Use `mode=max` to cache all intermediate layers (recommended for CI)
 - Use unique `scope` values for different services to prevent cache conflicts
 - Add `ignore-error=true` to prevent cache export failures from breaking builds
@@ -129,6 +131,7 @@ For multi-container builds with docker compose:
 - Works only within GitHub Actions environment
 
 **Optimization Parameters:**
+- `load: true`: Loads built image into local Docker daemon (required when push: false)
 - `scope=service-name`: Creates isolated cache namespace for each service
 - `ignore-error=true`: Continues build even if cache export fails
 - `mode=max`: Exports all build layers for maximum cache reuse

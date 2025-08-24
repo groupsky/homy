@@ -101,6 +101,7 @@ jobs:
         with:
           context: docker/telegram-bridge/
           push: false
+          load: true
           tags: telegram-bridge-test
           cache-from: type=gha,scope=telegram-bridge
           cache-to: type=gha,mode=max,scope=telegram-bridge,ignore-error=true
