@@ -101,30 +101,21 @@ Use `docker/build-push-action` with optimized GitHub Actions cache:
 
 #### Docker Compose Builds
 
-For multi-container builds with docker compose, use `docker/bake-action@v6` with proper environment variable loading:
+For multi-container builds with docker compose, use `docker compose config` to resolve environment variables:
 
 ```yaml
 - name: Set up Docker Buildx
   uses: docker/setup-buildx-action@v3
 
-- name: Load environment variables
+- name: Generate resolved compose config
   run: |
-    # Export all variables from .env file to GITHUB_ENV
-    while IFS='=' read -r key value; do
-      # Skip empty lines and comments
-      [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-      # Remove any leading/trailing whitespace
-      key=$(echo "$key" | xargs)
-      value=$(echo "$value" | xargs)
-      # Expand variables in value (basic expansion)
-      value=$(eval echo "$value")
-      echo "$key=$value" >> $GITHUB_ENV
-    done < .env
+    # Use docker compose config to resolve all environment variables
+    docker compose --env-file example.env --file docker-compose.yml config > resolved-docker-compose.yml
 
 - name: Build containers
   uses: docker/bake-action@v6
   with:
-    files: ./docker-compose.yml
+    files: ./resolved-docker-compose.yml
     set: |
       *.cache-from=type=gha,scope=compose-project
       *.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true
@@ -132,14 +123,15 @@ For multi-container builds with docker compose, use `docker/bake-action@v6` with
     
 - name: Start containers
   run: |
-    docker compose up --no-start
+    docker compose --env-file example.env up --no-start
 ```
 
-**Important Notes:**
-- **Files parameter**: Only accepts bake definition files (`.hcl`, docker-compose files), not environment files
-- **Environment variables**: Must be loaded into GitHub Actions environment using `GITHUB_ENV`
-- **Variable expansion**: The script handles basic variable expansion (e.g., `${CONFIG_PATH:-./config}`)
-- **Comments and empty lines**: Properly skips commented and empty lines in env files
+**Why docker compose config?**
+- **Clean environment**: Doesn't pollute GitHub Actions environment variables
+- **Complete resolution**: Handles all variable expansion, defaults, and substitutions
+- **Works with any env file**: Can use `example.env`, `.env.production`, etc.
+- **Self-contained**: Generated file has all variables resolved and requires no external dependencies
+- **Standard approach**: Uses Docker Compose's built-in configuration resolution
 
 **Benefits:**
 - **GitHub Actions Cache (`type=gha`)**: Fastest cache backend for GitHub Actions

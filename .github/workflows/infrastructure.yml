@@ -20,24 +20,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Load environment variables
+      - name: Generate resolved compose config
         run: |
-          # Export all variables from example.env to GITHUB_ENV
-          while IFS='=' read -r key value; do
-            # Skip empty lines and comments
-            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-            # Remove any leading/trailing whitespace and quotes
-            key=$(echo "$key" | xargs)
-            value=$(echo "$value" | xargs)
-            # Expand variables in value (basic expansion)
-            value=$(eval echo "$value")
-            echo "$key=$value" >> $GITHUB_ENV
-          done < example.env
+          # Use docker compose config to resolve all environment variables
+          docker compose --env-file example.env --file docker-compose.yml config > resolved-docker-compose.yml
 
       - name: Build all containers
         uses: docker/bake-action@v6
         with:
-          files: ./docker-compose.yml
+          files: ./resolved-docker-compose.yml
           set: |
             *.cache-from=type=gha,scope=infrastructure
             *.cache-to=type=gha,mode=max,scope=infrastructure,ignore-error=true
