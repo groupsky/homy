@@ -64,7 +64,7 @@ groups:
                   - params: []
                     type: min
               tags:
-                # Exclude kitchen meter - faulty device that occasionally returns 0V readings  
+                # Exclude kitchen meter - faulty device that occasionally returns 0V readings
                 - key: "device.name"
                   operator: "!="
                   value: kitchen
@@ -107,8 +107,7 @@ groups:
           __alertId__: "12"
           __dashboardUid__: "Nml0-Fonz"
           __panelId__: "3"
-          message: "🔌 AC Voltage Alert: Outside 210-247V range"
-          summary: "AC voltage monitoring alert"
+          summary: "⚡ AC voltage out of range"
           description: "The AC voltage has gone outside the safe operating range of 210-247V. This could indicate power quality issues or electrical problems."
         labels:
           rule_uid: webhook-3057STtVkz
