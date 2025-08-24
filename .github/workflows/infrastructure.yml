@@ -21,18 +21,15 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build all containers
-        run: |
-          # Load environment variables from example.env
-          set -a
-          source example.env
-          set +a
-          
-          # Use docker buildx bake for GitHub Actions cache support
-          docker buildx bake \
-            --set "*.cache-from=type=gha,scope=infrastructure" \
-            --set "*.cache-to=type=gha,mode=max,scope=infrastructure,ignore-error=true" \
-            --file docker-compose.yml \
-            --load
+        uses: docker/bake-action@v6
+        with:
+          files: |
+            ./docker-compose.yml
+            ./example.env
+          set: |
+            *.cache-from=type=gha,scope=infrastructure
+            *.cache-to=type=gha,mode=max,scope=infrastructure,ignore-error=true
+          load: true
           
       - name: Start containers
         run: |

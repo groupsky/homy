@@ -101,36 +101,34 @@ Use `docker/build-push-action` with optimized GitHub Actions cache:
 
 #### Docker Compose Builds
 
-For multi-container builds with docker compose, use `docker buildx bake` with GitHub Actions cache:
+For multi-container builds with docker compose, use `docker/bake-action@v6` with GitHub Actions cache:
 
 ```yaml
 - name: Set up Docker Buildx
   uses: docker/setup-buildx-action@v3
 
 - name: Build containers
-  run: |
-    # Load environment variables from env file (required for docker-compose.yml)
-    set -a
-    source example.env
-    set +a
-    
-    # Use docker buildx bake for GitHub Actions cache support
-    docker buildx bake \
-      --set "*.cache-from=type=gha,scope=compose-project" \
-      --set "*.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true" \
-      --file docker-compose.yml \
-      --load
+  uses: docker/bake-action@v6
+  with:
+    files: |
+      ./docker-compose.yml
+      ./example.env
+    set: |
+      *.cache-from=type=gha,scope=compose-project
+      *.cache-to=type=gha,mode=max,scope=compose-project,ignore-error=true
+    load: true
     
 - name: Start containers
   run: |
     docker compose --env-file example.env up --no-start
 ```
 
-**Why docker buildx bake?**
-- `docker compose build` doesn't support GitHub Actions cache parameters
-- `docker buildx bake` reads compose files and applies cache settings to all services
-- `--set "*.cache-from=..."` applies cache settings to all targets (services)
-- `--load` ensures images are available in local Docker daemon
+**Why docker/bake-action@v6?**
+- **Handles environment files automatically**: Supports both compose files and .env files
+- **Better cache integration**: Optimized for GitHub Actions cache backend
+- **Git context by default**: No need for actions/checkout in most cases
+- **Cleaner syntax**: Declarative configuration vs shell commands
+- **Built-in error handling**: More reliable than manual docker buildx bake commands
 
 **Benefits:**
 - **GitHub Actions Cache (`type=gha`)**: Fastest cache backend for GitHub Actions
