@@ -25,22 +25,22 @@ jobs:
           # Debug: Check if example.env exists
           echo "Checking example.env file:"
           ls -la example.env
-          
+
           # Load environment variables from example.env and export them
           # This ensures variable expansion works properly
           set -a
           source example.env
           set +a
-          
+
           # Debug: Show some resolved variables
           echo "Resolved variables:"
           echo "CONFIG_PATH=$CONFIG_PATH"
           echo "VPN_CONFIG_PATH=$VPN_CONFIG_PATH"
           echo "DOMAIN=$DOMAIN"
-          
+
           # Generate resolved compose config (now with variables in environment)
-          docker compose --file docker-compose.yml config > resolved-docker-compose.yml
-          
+          docker compose --env-file example.env --file docker-compose.yml config > resolved-docker-compose.yml
+
           # Debug: verify the file was created and show its content
           ls -la resolved-docker-compose.yml
           echo "Working directory: $(pwd)"
@@ -57,7 +57,7 @@ jobs:
             *.cache-from=type=gha,scope=infrastructure
             *.cache-to=type=gha,mode=max,scope=infrastructure,ignore-error=true
           load: true
-          
+
       - name: Start containers
         run: |
           docker compose --env-file example.env --file docker-compose.yml up --force-recreate --no-start
