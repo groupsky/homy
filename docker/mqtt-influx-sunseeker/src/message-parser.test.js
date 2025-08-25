@@ -46,7 +46,8 @@ describe('SunseekerMessageParser', () => {
         { mode: 0, expected: 'Standby' },
         { mode: 1, expected: 'Mowing' },
         { mode: 2, expected: 'Going Home' },
-        { mode: 3, expected: 'Charging' }
+        { mode: 3, expected: 'Charging' },
+        { mode: 7, expected: 'Departing' }
       ];
 
       const topic = '/device/22031680002700015651/update';
@@ -125,6 +126,38 @@ describe('SunseekerMessageParser', () => {
       expect(commandPoint.measurement).toBe('sunseeker_commands');
       expect(commandPoint.fields.command).toBe(101);
       expect(commandPoint.fields.result).toBe(true);
+    });
+
+    it('should parse cmd 512 battery info messages', () => {
+      const topic = '/device/22031680002700015651/update';
+      const payload = '{"cmd":512,"bat_type":"5S1P_SUMSANG_25R","bat_id":131792897,"bat_ctimes":93,"bat_dtimes":93}';
+
+      const result = parser.parseMessage(topic, payload);
+
+      expect(result).not.toBeNull();
+      expect(result).toHaveLength(1);
+
+      const batteryInfoPoint = result[0];
+      expect(batteryInfoPoint.measurement).toBe('sunseeker_battery_info');
+      expect(batteryInfoPoint.fields.battery_type).toBe('5S1P_SUMSANG_25R');
+      expect(batteryInfoPoint.fields.battery_id).toBe(131792897);
+      expect(batteryInfoPoint.fields.charge_times).toBe(93);
+      expect(batteryInfoPoint.fields.discharge_times).toBe(93);
+    });
+
+    it('should handle cmd 512 messages with partial battery info', () => {
+      const topic = '/device/22031680002700015651/update';
+      const payload = '{"cmd":512,"bat_type":"5S1P_SUMSANG_25R","bat_ctimes":95}';
+
+      const result = parser.parseMessage(topic, payload);
+
+      expect(result).not.toBeNull();
+      const batteryInfoPoint = result[0];
+      expect(batteryInfoPoint.measurement).toBe('sunseeker_battery_info');
+      expect(batteryInfoPoint.fields.battery_type).toBe('5S1P_SUMSANG_25R');
+      expect(batteryInfoPoint.fields.charge_times).toBe(95);
+      expect(batteryInfoPoint.fields.discharge_times).toBeUndefined();
+      expect(batteryInfoPoint.fields.battery_id).toBeUndefined();
     });
 
     it('should parse app topic messages', () => {

@@ -35,14 +35,14 @@ When creating a new Docker service:
    ```
 4. Ensure the directory path matches the location of your Dockerfile and dependency files
 
-This ensures that both base image updates and application dependency updates are automatically tracked and can be applied through pull requests, even for test containers or services that only use existing images.
+This ensures that both base image updates and application dependency updates are automatically tracked and can be applied through pull requests, even for test containers or services that only use external images.
 
 ### Service Types
 
 **Production Services**: Services that run in the main docker-compose setup
 **Test Containers**: Testing-only services that may have separate compose files
 **Custom Services**: Full application code with complex Dockerfiles
-**Existing Image Services**: May only contain a minimal Dockerfile with `FROM [image]` to enable version pinning and Dependabot monitoring
+**External Image Services**: Services using existing images with minimal Dockerfile for version pinning
 
 ### Service Structure
 
@@ -59,94 +59,52 @@ For production services:
 - Follow existing naming conventions for MQTT topics
 - Use environment variables for configuration that may vary between environments
 - Implement proper health checks where applicable
+- Use Docker secrets pattern for sensitive configuration
 
-## Lessons Learned from Service Development
+## Common Development Patterns
 
-### TDD Development with Node.js Services
+### Test-Driven Development
 
-**Test-First Development Approach** - From developing the **mqtt-influx-sunseeker** service:
+**Recommended Approach:**
+1. Write comprehensive tests before implementation
+2. Follow Red-Green-Refactor cycle
+3. Test external integrations with proper mocking
+4. Create standalone health check scripts for Docker
 
-1. **Write Tests First**: Create comprehensive Jest tests before implementation
-   - Message parser tests defining expected behavior
-   - Integration tests for MQTT-InfluxDB flow  
-   - Health check tests for Docker monitoring
+### Code Organization
 
-2. **Red-Green-Refactor Cycle**: 
-   - **Red**: Tests fail initially (expected)
-   - **Green**: Implement minimal code to pass tests
-   - **Refactor**: Extract constants, utilities, improve structure
-
-### Code Organization Patterns
-
-**Successful patterns:**
-- **Constants extraction**: All magic numbers/strings moved to `constants.js`
-- **Utilities module**: Common functions like Docker secrets, validation
-- **Standardized logging**: Consistent emoji-prefixed logging with context
-- **Error handling**: Centralized error creation with proper context
+**Best Practices:**
+- Extract constants and magic values to dedicated files
+- Create utilities modules for common functions (secrets, validation)
+- Implement standardized logging with consistent formatting
+- Use centralized error handling with proper context
 
 ### Configuration Management
 
 **Docker Secrets Pattern:**
-- Support both direct env vars and `_FILE` variants  
-- Implement `loadSecret()` utility for consistent secret loading
-- Validate configuration early with clear error messages
-- Use descriptive prefixes: `MQTT_`, `INFLUX_` for clarity
+- Support both direct environment variables and `_FILE` variants
+- Implement consistent secret loading utilities
+- Validate configuration early with descriptive error messages
+- Use meaningful prefixes for environment variables
 
-### Service Integration
+### External Service Integration
 
-**Docker Compose Integration:**
-- Follow existing network patterns (automation, egress)
-- Use existing secrets where possible (influxdb_write_user)
-- Maintain security with `no-new-privileges:true`
-- Add new secrets only when necessary
-
-**InfluxDB Data Modeling:**
-- Use measurement names that clearly indicate data type
-- Leverage tags for filtering (device_id, alert levels)  
-- Store raw values as fields for aggregation
-- Include connection health tracking
-
-### Testing External Dependencies  
-
-**MQTT and InfluxDB Mocking:**
-- Use Jest's `unstable_mockModule` for ES modules
-- Mock external connections but test real parsing logic
-- Integration tests verify end-to-end flow
-- Create standalone executable script for Docker healthcheck
-
-### Production Deployment
-
-**Performance & Reliability:**
-- Batch InfluxDB writes for efficiency
-- Implement proper connection recovery  
+**MQTT Integration:**
+- Implement proper connection recovery mechanisms
 - Handle partial data gracefully
-- Provide meaningful error messages
-- Never log sensitive data (passwords, tokens)
+- Provide connection health tracking
+- Never log sensitive data
 
-### Development Workflow
+**Database Integration:**
+- Use appropriate data modeling for time-series data
+- Batch writes for efficiency where possible
+- Include proper error handling and retry logic
+- Implement health checks for database connections
 
-**Using Subagents Effectively:**
-- Leverage specialized agents for focused tasks
-- Use general-purpose agents for complex multi-step work
-- Break large tasks into manageable chunks
-- Minimize context pollution with targeted agent use
+### Performance and Reliability
 
-### Monitoring and Observability
-
-**Grafana Dashboard Development:**
-- Create connected dashboards with navigation links
-- Use standard panel types: stat, timeseries, table for consistency
-- Implement proper time ranges and refresh intervals
-- Provide both overview and detailed views for different use cases
-
-**Alerting Best Practices:**
-- Set meaningful thresholds based on operational requirements
-- Use appropriate notification channels (existing Telegram setup)
-- Implement multi-condition alerts for complex scenarios
-- Include proper alert recovery conditions
-
-**GitHub Actions Integration:**
-- Follow existing workflow patterns for consistency
-- Include Docker Hub authentication for all Docker operations
-- Implement comprehensive testing including health checks
-- Use version pinning and Dependabot for dependency management
+**Production Considerations:**
+- Implement graceful degradation for external service failures
+- Provide meaningful error messages and logging
+- Handle edge cases and malformed data
+- Include metrics and monitoring capabilities

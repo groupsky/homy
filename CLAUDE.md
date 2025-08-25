@@ -109,6 +109,33 @@ When developing new features:
 4. **Testing**: Write comprehensive tests for all automation logic using minimal mocking to ensure tests verify real system behavior
 5. **Documentation standards**: Comments must explain what the code does and why for future maintainers. Avoid preserving development discussions, decision processes, or temporary implementation notes in production code.
 
+### Test-Driven Development (TDD)
+
+**Project-wide TDD Guidelines:**
+- Follow Red-Green-Refactor cycle for all new features
+- Write tests first to define expected behavior
+- Use proper mocking for external dependencies
+- Create comprehensive test coverage for critical paths
+- Implement integration tests for end-to-end workflows
+
+### Monitoring and Observability
+
+**System-wide Monitoring:**
+- Leverage existing mqtt-influx services and Grafana setup for new monitoring needs
+- Create connected dashboards with proper navigation and consistent panel types
+- Use standard time ranges and refresh intervals across dashboards
+- Implement meaningful alerts with proper thresholds and notification channels
+- Include both overview and detailed monitoring views
+
+### Configuration and Secrets Management
+
+**Project Standards:**
+- Use Docker secrets pattern for all sensitive configuration
+- Support both direct environment variables and `_FILE` variants consistently
+- Implement early validation with descriptive error messages
+- Use meaningful prefixes for environment variables by service type
+- Never log sensitive data (passwords, tokens, secrets)
+
 ### Documentation Updates
 When adding new features that affect architecture:
 
