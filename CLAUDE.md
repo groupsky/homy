@@ -136,6 +136,18 @@ When developing new features:
 - Use meaningful prefixes for environment variables by service type
 - Never log sensitive data (passwords, tokens, secrets)
 
+**Environment Variables:**
+- **IMPORTANT**: All new environment variables must be added to `example.env` with example values
+- Use descriptive names with service prefixes (e.g., `SUNSEEKER_DEVICE_ID`, `MQTT_USERNAME`)
+- Include comments explaining the purpose and expected format
+- Provide realistic example values that clearly indicate they are examples
+
+**Secrets Management:**
+- **IMPORTANT**: When adding new secrets, create example files in the `secrets/` directory
+- Use descriptive filenames matching the environment variable pattern
+- Example files should contain placeholder values, not real secrets
+- Document secret requirements in service-specific CLAUDE.md files
+
 ### Documentation Updates
 When adding new features that affect architecture:
 

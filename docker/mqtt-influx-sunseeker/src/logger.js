@@ -3,6 +3,8 @@
  * Provides standardized logging with emoji prefixes and consistent formatting
  */
 
+import { redactSecret } from './utils.js';
+
 /**
  * Log levels and their corresponding emoji prefixes
  */
@@ -140,11 +142,11 @@ class Logger {
     console.log(`${LOG_LEVELS.INFO} Configuration loaded:`);
     console.log(`  MQTT URL: ${config.mqtt.url}`);
     console.log(`  MQTT Username: ${config.mqtt.username}`);
-    console.log(`  MQTT Password: ${config.mqtt.password ? '[REDACTED]' : '[NOT SET]'}`);
+    console.log(`  MQTT Password: ${redactSecret(config.mqtt.password)}`);
     console.log(`  Device ID: ${config.mqtt.deviceId}`);
     console.log(`  App ID: ${config.mqtt.appId}`);
     console.log(`  InfluxDB URL: ${config.influx.url}`);
-    console.log(`  InfluxDB Token: ${config.influx.token ? '[REDACTED]' : '[NOT SET]'}`);
+    console.log(`  InfluxDB Token: ${redactSecret(config.influx.token)}`);
     console.log(`  InfluxDB Org: ${config.influx.org}`);
     console.log(`  InfluxDB Bucket: ${config.influx.bucket}`);
   }

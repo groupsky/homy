@@ -5,6 +5,7 @@
 
 import { SunseekerMessageParser } from './message-parser.js';
 import { extractDeviceIdFromTopic } from './utils.js';
+import { TEST_DEVICE_ID, TEST_APP_ID, TEST_TOPICS, TEST_MESSAGES } from './test-constants.js';
 
 describe('SunseekerMessageParser', () => {
   let parser;
@@ -15,8 +16,8 @@ describe('SunseekerMessageParser', () => {
 
   describe('parseMessage', () => {
     it('should parse cmd 501 status updates with mode, power, station', () => {
-      const topic = '/device/22031680002700015651/update';
-      const payload = '{"cmd":501,"mode":3,"power":96,"station":true}';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = JSON.stringify(TEST_MESSAGES.STATUS_UPDATE);
 
       const result = parser.parseMessage(topic, payload);
 
@@ -26,7 +27,7 @@ describe('SunseekerMessageParser', () => {
       // Verify mode data point
       const modePoint = result.find(p => p.measurement === 'sunseeker_mode');
       expect(modePoint).toBeDefined();
-      expect(modePoint.device_id).toBe('22031680002700015651');
+      expect(modePoint.device_id).toBe(TEST_DEVICE_ID);
       expect(modePoint.fields.mode).toBe(3);
       expect(modePoint.fields.mode_text).toBe('Charging');
 
@@ -50,7 +51,7 @@ describe('SunseekerMessageParser', () => {
         { mode: 7, expected: 'Departing' }
       ];
 
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
 
       testCases.forEach(({ mode, expected }) => {
         const payload = JSON.stringify({ cmd: 501, mode, power: 95, station: false });
@@ -62,8 +63,8 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should parse cmd 509 log messages with detailed battery information', () => {
-      const topic = '/device/22031680002700015651/update';
-      const payload = '{"cmd":509,"lv":3,"log":"I/charging [Sun Aug 24 22:58:16 2025] (637)bat vol=20182,min=3995mV,max=4003mV,temp=24,current=1538,percent=94,lstr=0,rstr=0,pitch=178,roll=1,heading=20\\n"}';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = JSON.stringify(TEST_MESSAGES.LOG_MESSAGE);
 
       const result = parser.parseMessage(topic, payload);
 
@@ -84,7 +85,7 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should parse cmd 509 waiting status log messages', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":509,"lv":3,"log":"I/waiting [Sun Aug 24 19:12:43 2025] (856)bat vol=20096mV, percent=97,min=3974mV,max=3980mV,temp=32\\n"}';
 
       const result = parser.parseMessage(topic, payload);
@@ -101,7 +102,7 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should parse cmd 511 state change messages', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":511,"time":1756076015,"msg":1}';
 
       const result = parser.parseMessage(topic, payload);
@@ -116,7 +117,7 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should parse cmd 400 command acknowledgment messages', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":400,"command":101,"result":true}';
 
       const result = parser.parseMessage(topic, payload);
@@ -129,8 +130,8 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should parse cmd 512 battery info messages', () => {
-      const topic = '/device/22031680002700015651/update';
-      const payload = '{"cmd":512,"bat_type":"5S1P_SUMSANG_25R","bat_id":131792897,"bat_ctimes":93,"bat_dtimes":93}';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = JSON.stringify(TEST_MESSAGES.BATTERY_INFO);
 
       const result = parser.parseMessage(topic, payload);
 
@@ -139,14 +140,14 @@ describe('SunseekerMessageParser', () => {
 
       const batteryInfoPoint = result[0];
       expect(batteryInfoPoint.measurement).toBe('sunseeker_battery_info');
-      expect(batteryInfoPoint.fields.battery_type).toBe('5S1P_SUMSANG_25R');
-      expect(batteryInfoPoint.fields.battery_id).toBe(131792897);
+      expect(batteryInfoPoint.fields.battery_type).toBe('5S1P_TEST_BATTERY');
+      expect(batteryInfoPoint.fields.battery_id).toBe(123456789);
       expect(batteryInfoPoint.fields.charge_times).toBe(93);
       expect(batteryInfoPoint.fields.discharge_times).toBe(93);
     });
 
     it('should handle cmd 512 messages with partial battery info', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":512,"bat_type":"5S1P_SUMSANG_25R","bat_ctimes":95}';
 
       const result = parser.parseMessage(topic, payload);
@@ -161,19 +162,19 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should parse app topic messages', () => {
-      const topic = '/app/12480368/get';
-      const payload = '{"mode":3,"station":true,"cmd":501,"power":96,"deviceSn":"22031680002700015651"}';
+      const topic = TEST_TOPICS.APP_GET;
+      const payload = JSON.stringify(TEST_MESSAGES.APP_MESSAGE);
 
       const result = parser.parseMessage(topic, payload);
 
       expect(result).not.toBeNull();
       // Should extract device ID from payload when in app topic
       const modePoint = result.find(p => p.measurement === 'sunseeker_mode');
-      expect(modePoint.device_id).toBe('22031680002700015651');
+      expect(modePoint.device_id).toBe(TEST_DEVICE_ID);
     });
 
     it('should handle invalid JSON gracefully', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = 'invalid json';
 
       const result = parser.parseMessage(topic, payload);
@@ -181,7 +182,7 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should handle unsupported command types', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":999,"data":"unknown"}';
 
       const result = parser.parseMessage(topic, payload);
@@ -192,9 +193,9 @@ describe('SunseekerMessageParser', () => {
   describe('extractDeviceIdFromTopic', () => {
     it('should extract device ID from different topic formats', () => {
       const testCases = [
-        { topic: '/device/22031680002700015651/update', expected: '22031680002700015651' },
-        { topic: '/device/22031680002700015651/get', expected: '22031680002700015651' },
-        { topic: '/app/12480368/get', expected: null } // No device ID in topic
+        { topic: TEST_TOPICS.DEVICE_UPDATE, expected: 'TEST_DEVICE_ID' },
+        { topic: TEST_TOPICS.DEVICE_GET, expected: 'TEST_DEVICE_ID' },
+        { topic: TEST_TOPICS.APP_GET, expected: null } // No device ID in topic
       ];
 
       testCases.forEach(({ topic, expected }) => {
@@ -252,7 +253,7 @@ describe('SunseekerMessageParser', () => {
 
   describe('battery temperature alerts', () => {
     it('should tag high temperature alerts', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":509,"lv":3,"log":"I/waiting [Sun Aug 24 19:12:43 2025] (856)bat vol=20096mV, percent=97,temp=45\\n"}';
 
       const result = parser.parseMessage(topic, payload);
@@ -262,7 +263,7 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should tag normal temperature', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":509,"lv":3,"log":"I/waiting [Sun Aug 24 19:12:43 2025] (856)bat vol=20096mV, percent=97,temp=25\\n"}';
 
       const result = parser.parseMessage(topic, payload);
@@ -272,7 +273,7 @@ describe('SunseekerMessageParser', () => {
     });
 
     it('should tag low temperature alerts', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":509,"lv":3,"log":"I/waiting [Sun Aug 24 19:12:43 2025] (856)bat vol=20096mV, percent=97,temp=5\\n"}';
 
       const result = parser.parseMessage(topic, payload);
@@ -284,7 +285,7 @@ describe('SunseekerMessageParser', () => {
 
   describe('connection health tracking', () => {
     it('should create connection health data points', () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":501,"mode":1,"power":85,"station":false}';
 
       const result = parser.parseMessage(topic, payload);

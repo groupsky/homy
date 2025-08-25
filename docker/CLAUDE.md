@@ -101,6 +101,28 @@ For production services:
 - Include proper error handling and retry logic
 - Implement health checks for database connections
 
+### Testing Standards
+
+**JavaScript Services Testing:**
+- **IMPORTANT**: Use Jest as the primary testing framework for JavaScript services
+- **IMPORTANT**: Use MSW (Mock Service Worker) for mocking HTTP and network requests instead of manual mocking
+- **IMPORTANT**: Use proper test constants to avoid real data in tests
+- Create comprehensive test coverage with unit tests, integration tests, and end-to-end tests
+- Never use real credentials, device IDs, or sensitive data in tests
+
+**Test Structure:**
+- Create `test-constants.js` file for all test data and configuration
+- Use descriptive test names that explain the expected behavior
+- Implement proper setup and teardown for test environments
+- Avoid arbitrary timeouts - use proper async/await patterns or mocking
+- Test error scenarios and edge cases comprehensively
+
+**MSW Usage:**
+- Set up MSW handlers for external API calls
+- Mock MQTT brokers and database connections using MSW where applicable
+- Use realistic test data that mirrors production structure without real values
+- Implement request/response validation in MSW handlers
+
 ### Performance and Reliability
 
 **Production Considerations:**
