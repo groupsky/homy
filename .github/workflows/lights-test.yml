@@ -17,16 +17,40 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Run containers
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare directories
         run: |
           sudo chown -R 1000:1000 data/nodered
-          docker compose --env-file example.env up --build --force-recreate -d automations features broker
+
+      - name: Generate resolved compose config
+        run: |
+          docker compose --env-file example.env --file docker-compose.yml config > resolved-docker-compose.yml
+
+      - name: Build containers
+        uses: docker/bake-action@v6
+        with:
+          source: .
+          files: |
+            ./resolved-docker-compose.yml
+          targets: automations,features,broker
+          set: |
+            *.cache-from=type=gha,scope=lights-test
+            *.cache-to=type=gha,mode=max,scope=lights-test,ignore-error=true
+          load: true
+          
+      - name: Start containers
+        run: |
+          docker compose --env-file example.env up --force-recreate -d automations features broker
 
       - name: Setup node
         uses: actions/setup-node@v4.4.0
         with:
           node-version: 22
           node-version-file: docker/test/.nvmrc
+          cache: 'npm'
+          cache-dependency-path: 'docker/test/package-lock.json'
 
       - name: Run tests
         run: |
