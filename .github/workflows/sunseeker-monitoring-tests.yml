@@ -68,7 +68,7 @@ jobs:
         working-directory: docker/sunseeker-monitoring
         run: npm ci
         
-      - name: Run tests
+      - name: Run unit tests
         working-directory: docker/sunseeker-monitoring
         run: npm test
         
@@ -256,3 +256,66 @@ jobs:
         run: |
           docker compose -f docker-compose.test.yml down -v
           docker system prune -f
+
+  testcontainers-integration:
+    runs-on: ubuntu-latest
+    needs: [version-check, test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5.0.0
+        
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          
+      - name: Setup Node.js from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: 'docker/sunseeker-monitoring/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/sunseeker-monitoring/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: docker/sunseeker-monitoring
+        run: npm ci
+        
+      - name: Run Testcontainers integration tests
+        working-directory: docker/sunseeker-monitoring
+        run: |
+          # Enable Testcontainers resource cleanup
+          export TESTCONTAINERS_REUSE_ENABLE=false
+          # Set timeout for container operations in CI
+          export TESTCONTAINERS_WAIT_TIMEOUT=120
+          # Run only Testcontainers integration tests
+          npm test -- __tests__/integration/testcontainers-integration.test.js
+        env:
+          # Docker configuration for Testcontainers in CI
+          DOCKER_HOST: unix:///var/run/docker.sock
+          # Testcontainers configuration
+          TESTCONTAINERS_HOST_OVERRIDE: localhost
+        
+      - name: Check Docker resources usage
+        if: always()
+        run: |
+          echo "🐳 Docker resources after tests:"
+          docker ps -a
+          docker images
+          docker network ls
+          docker volume ls
+          
+      - name: Cleanup Docker resources
+        if: always()
+        run: |
+          echo "🧹 Cleaning up Docker resources..."
+          # Stop and remove any containers that might still be running
+          docker ps -q | xargs -r docker stop
+          docker ps -aq | xargs -r docker rm
+          # Clean up networks created by Testcontainers
+          docker network ls | grep -E 'testcontainers|sunseeker-test' | awk '{print $1}' | xargs -r docker network rm || true
+          # Clean up volumes
+          docker volume ls -q | xargs -r docker volume rm || true
+          # General cleanup
+          docker system prune -af --volumes

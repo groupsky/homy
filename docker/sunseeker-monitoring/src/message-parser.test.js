@@ -6,6 +6,7 @@
 import { SunseekerMessageParser } from './message-parser.js';
 import { extractDeviceIdFromTopic } from './utils.js';
 import { TEST_DEVICE_ID, TEST_APP_ID, TEST_TOPICS, TEST_MESSAGES } from './test-constants.js';
+import {jest} from "@jest/globals";
 
 describe('SunseekerMessageParser', () => {
   let parser;
@@ -13,6 +14,10 @@ describe('SunseekerMessageParser', () => {
   beforeEach(() => {
     parser = new SunseekerMessageParser();
   });
+
+  afterEach(() => {
+    jest.resetAllMocks()
+  })
 
   describe('parseMessage', () => {
     it('should parse cmd 501 status updates with mode, power, station', () => {
@@ -177,6 +182,7 @@ describe('SunseekerMessageParser', () => {
       const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = 'invalid json';
 
+      jest.spyOn(console, 'error').mockImplementation(() => {});
       const result = parser.parseMessage(topic, payload);
       expect(result).toBeNull();
     });
@@ -185,23 +191,20 @@ describe('SunseekerMessageParser', () => {
       const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":999,"data":"unknown"}';
 
+      jest.spyOn(console, 'log').mockImplementation(() => {})
       const result = parser.parseMessage(topic, payload);
       expect(result).toBeNull();
     });
   });
 
   describe('extractDeviceIdFromTopic', () => {
-    it('should extract device ID from different topic formats', () => {
-      const testCases = [
-        { topic: TEST_TOPICS.DEVICE_UPDATE, expected: 'TEST_DEVICE_ID' },
-        { topic: TEST_TOPICS.DEVICE_GET, expected: 'TEST_DEVICE_ID' },
-        { topic: TEST_TOPICS.APP_GET, expected: null } // No device ID in topic
-      ];
-
-      testCases.forEach(({ topic, expected }) => {
+    it.each([
+      { topic: TEST_TOPICS.DEVICE_UPDATE, expected: TEST_DEVICE_ID },
+      { topic: TEST_TOPICS.DEVICE_GET, expected: TEST_DEVICE_ID },
+      { topic: TEST_TOPICS.APP_GET, expected: null } // No device ID in topic
+    ])('should extract device ID from topic $topic', ({ topic, expected }) => {
         const result = extractDeviceIdFromTopic(topic);
         expect(result).toBe(expected);
-      });
     });
   });
 

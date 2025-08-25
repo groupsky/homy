@@ -18,9 +18,11 @@ export default {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   transformIgnorePatterns: [
-    'node_modules/(?!(msw)/)'
+    'node_modules/(?!(msw|testcontainers)/)'
   ],
   clearMocks: true,
   resetMocks: false,
-  resetModules: false
+  resetModules: false,
+  // Add timeout for Testcontainers
+  testTimeout: 120000
 };

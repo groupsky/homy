@@ -147,17 +147,167 @@ const percentMatch = logText.match(/percent=(\d+)/);
 }
 ```
 
-### External Dependencies Testing
+### Integration Testing with Testcontainers
 
-**MQTT and InfluxDB Mocking:**
-- Use Jest's `unstable_mockModule` for ES modules
-- Mock external connections but test real parsing logic
-- Integration tests verify end-to-end flow without external dependencies
-- Create standalone executable health check script for Docker
+**IMPORTANT RULE**: All service integration tests MUST use Testcontainers for external dependencies (MQTT, InfluxDB, databases). This ensures tests run against real services while maintaining isolation and reproducibility.
 
-**Mock Patterns:**
+**Installation:**
+```bash
+npm install testcontainers --save-dev
+```
+
+**MQTT Container Setup:**
 ```javascript
-// Mock MQTT client
+const { GenericContainer, Wait } = require('testcontainers');
+const mqtt = require('mqtt');
+
+describe('MQTT Integration Tests', () => {
+  let mosquittoContainer;
+  let mqttClient;
+
+  beforeAll(async () => {
+    mosquittoContainer = await new GenericContainer('eclipse-mosquitto:2.0')
+      .withExposedPorts(1883)
+      .withWaitStrategy(Wait.forLogMessage('mosquitto version'))
+      .withNetworkAliases('mqtt-broker')
+      .start();
+
+    const mqttUrl = `mqtt://${mosquittoContainer.getHost()}:${mosquittoContainer.getMappedPort(1883)}`;
+    mqttClient = mqtt.connect(mqttUrl);
+  });
+
+  afterAll(async () => {
+    if (mqttClient) await mqttClient.endAsync();
+    if (mosquittoContainer) await mosquittoContainer.stop();
+  });
+});
+```
+
+**InfluxDB Container Setup:**
+```javascript
+const { GenericContainer, Wait } = require('testcontainers');
+const { InfluxDB } = require('@influxdata/influxdb-client');
+
+describe('InfluxDB Integration Tests', () => {
+  let influxContainer;
+  let influxClient;
+
+  beforeAll(async () => {
+    influxContainer = await new GenericContainer('influxdb:2.7')
+      .withExposedPorts(8086)
+      .withEnvironment({
+        DOCKER_INFLUXDB_INIT_MODE: 'setup',
+        DOCKER_INFLUXDB_INIT_USERNAME: 'test-user',
+        DOCKER_INFLUXDB_INIT_PASSWORD: 'test-password',
+        DOCKER_INFLUXDB_INIT_ORG: 'test-org',
+        DOCKER_INFLUXDB_INIT_BUCKET: 'test-bucket',
+        DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: 'test-token'
+      })
+      .withWaitStrategy(Wait.forHttps(8086, '/health'))
+      .start();
+
+    const url = `http://${influxContainer.getHost()}:${influxContainer.getMappedPort(8086)}`;
+    influxClient = new InfluxDB({ url, token: 'test-token' });
+  });
+
+  afterAll(async () => {
+    if (influxContainer) await influxContainer.stop();
+  });
+});
+```
+
+**Full Service Integration Test:**
+```javascript
+const { GenericContainer, Network, Wait } = require('testcontainers');
+
+describe('Sunseeker MQTT-InfluxDB Bridge Integration', () => {
+  let network;
+  let mosquittoContainer;
+  let influxContainer;
+
+  beforeAll(async () => {
+    // Create dedicated network for container communication
+    network = await new Network().start();
+
+    // Start MQTT broker
+    mosquittoContainer = await new GenericContainer('eclipse-mosquitto:2.0')
+      .withNetwork(network)
+      .withNetworkAliases('mqtt-broker')
+      .withExposedPorts(1883)
+      .withWaitStrategy(Wait.forLogMessage('mosquitto version'))
+      .start();
+
+    // Start InfluxDB
+    influxContainer = await new GenericContainer('influxdb:2.7')
+      .withNetwork(network)
+      .withNetworkAliases('influxdb')
+      .withExposedPorts(8086)
+      .withEnvironment({
+        DOCKER_INFLUXDB_INIT_MODE: 'setup',
+        DOCKER_INFLUXDB_INIT_USERNAME: 'admin',
+        DOCKER_INFLUXDB_INIT_PASSWORD: 'password',
+        DOCKER_INFLUXDB_INIT_ORG: 'test-org',
+        DOCKER_INFLUXDB_INIT_BUCKET: 'test-bucket',
+        DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: 'test-token'
+      })
+      .withWaitStrategy(Wait.forHttps(8086, '/health'))
+      .start();
+  });
+
+  afterAll(async () => {
+    await Promise.all([
+      influxContainer?.stop(),
+      mosquittoContainer?.stop(),
+      network?.stop()
+    ]);
+  });
+
+  test('should bridge Sunseeker MQTT messages to InfluxDB', async () => {
+    // Test implementation that publishes real MQTT messages
+    // and verifies data is written to InfluxDB
+  });
+});
+```
+
+**Jest Configuration for Testcontainers:**
+```javascript
+// jest.config.js
+module.exports = {
+  testTimeout: 60000, // Increased timeout for container operations
+  setupFilesAfterEnv: ['<rootDir>/test/setup.js'],
+  detectOpenHandles: true,
+  maxConcurrency: 4, // Limit parallel tests to avoid resource contention
+};
+```
+
+**Testcontainers Best Practices:**
+
+1. **Container Reuse**: Enable `TESTCONTAINERS_REUSE_ENABLE=true` for faster test runs
+2. **Resource Management**: Set memory and CPU limits to prevent resource exhaustion
+3. **Network Isolation**: Use dedicated networks for multi-container tests
+4. **Cleanup Strategy**: Containers auto-cleanup via Ryuk, manual cleanup for shared resources
+5. **CI/CD Integration**: Ensure Docker is available in CI pipeline, consider resource limits
+
+**Environment Variables for Testing:**
+```javascript
+const testContainer = await new GenericContainer('sunseeker-monitoring:latest')
+  .withNetwork(network)
+  .withEnvironment({
+    NODE_ENV: 'test',
+    MQTT_BROKER_URL: 'mqtt://mqtt-broker:1883',
+    INFLUXDB_URL: 'http://influxdb:8086',
+    INFLUXDB_TOKEN: 'test-token',
+    INFLUXDB_ORG: 'test-org',
+    INFLUXDB_BUCKET: 'test-bucket'
+  })
+  .withWaitStrategy(Wait.forLogMessage('Service ready'))
+  .start();
+```
+
+**Unit Testing with Mocks (for isolated logic):**
+Use mocks only for unit tests of parsing logic and utilities:
+```javascript
+// Mock MQTT client for unit tests
 const mockMqttClient = {
   connect: jest.fn(),
   on: jest.fn(),

@@ -83,6 +83,7 @@ describe('Health Check', () => {
   });
 
   it('should handle service creation errors', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
     const result = await healthCheck(); // Don't provide service to trigger creation error
 
     expect(result.status).toBe('unhealthy');

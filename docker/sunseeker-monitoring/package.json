@@ -19,9 +19,9 @@
     "mqtt": "^5.0.0"
   },
   "devDependencies": {
-    "axios": "^1.11.0",
     "jest": "^30.0.5",
-    "msw": "^2.10.5"
+    "msw": "^2.10.5",
+    "testcontainers": "^10.18.0"
   },
   "engines": {
     "node": "22"
