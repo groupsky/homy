@@ -59,3 +59,74 @@ For production services:
 - Follow existing naming conventions for MQTT topics
 - Use environment variables for configuration that may vary between environments
 - Implement proper health checks where applicable
+
+## Lessons Learned from Service Development
+
+### TDD Development with Node.js Services
+
+**Test-First Development Approach** - From developing the **mqtt-influx-sunseeker** service:
+
+1. **Write Tests First**: Create comprehensive Jest tests before implementation
+   - Message parser tests defining expected behavior
+   - Integration tests for MQTT-InfluxDB flow  
+   - Health check tests for Docker monitoring
+
+2. **Red-Green-Refactor Cycle**: 
+   - **Red**: Tests fail initially (expected)
+   - **Green**: Implement minimal code to pass tests
+   - **Refactor**: Extract constants, utilities, improve structure
+
+### Code Organization Patterns
+
+**Successful patterns:**
+- **Constants extraction**: All magic numbers/strings moved to `constants.js`
+- **Utilities module**: Common functions like Docker secrets, validation
+- **Standardized logging**: Consistent emoji-prefixed logging with context
+- **Error handling**: Centralized error creation with proper context
+
+### Configuration Management
+
+**Docker Secrets Pattern:**
+- Support both direct env vars and `_FILE` variants  
+- Implement `loadSecret()` utility for consistent secret loading
+- Validate configuration early with clear error messages
+- Use descriptive prefixes: `MQTT_`, `INFLUX_` for clarity
+
+### Service Integration
+
+**Docker Compose Integration:**
+- Follow existing network patterns (automation, egress)
+- Use existing secrets where possible (influxdb_write_user)
+- Maintain security with `no-new-privileges:true`
+- Add new secrets only when necessary
+
+**InfluxDB Data Modeling:**
+- Use measurement names that clearly indicate data type
+- Leverage tags for filtering (device_id, alert levels)  
+- Store raw values as fields for aggregation
+- Include connection health tracking
+
+### Testing External Dependencies  
+
+**MQTT and InfluxDB Mocking:**
+- Use Jest's `unstable_mockModule` for ES modules
+- Mock external connections but test real parsing logic
+- Integration tests verify end-to-end flow
+- Create standalone executable script for Docker healthcheck
+
+### Production Deployment
+
+**Performance & Reliability:**
+- Batch InfluxDB writes for efficiency
+- Implement proper connection recovery  
+- Handle partial data gracefully
+- Provide meaningful error messages
+- Never log sensitive data (passwords, tokens)
+
+### Development Workflow
+
+**Using Subagents Effectively:**
+- Leverage specialized agents for focused tasks
+- Use general-purpose agents for complex multi-step work
+- Break large tasks into manageable chunks
+- Minimize context pollution with targeted agent use
