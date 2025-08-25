@@ -642,8 +642,8 @@ services:
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
 
-  mqtt-influx-sunseeker:
-    build: docker/mqtt-influx-sunseeker
+  sunseeker-monitoring:
+    build: docker/sunseeker-monitoring
     depends_on:
       - influxdb
     restart: unless-stopped

@@ -1,0 +1,30 @@
+FROM node:22-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies for integration testing
+RUN npm install -g npm@latest
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies including dev dependencies for testing
+RUN npm install
+
+# Copy test constants and integration tests
+COPY src/test-constants.js ./src/
+COPY __tests__/integration/ ./__tests__/integration/
+
+# Install additional test utilities for integration testing
+RUN npm install --no-save mqtt@^5.0.0 @influxdata/influxdb-client@^1.33.2 axios@^1.7.0
+
+# Add integration test script
+COPY test-scripts/ ./test-scripts/
+
+# Health check for the test container
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node --version || exit 1
+
+# Default command runs integration tests
+CMD ["npm", "run", "test:integration:real"]

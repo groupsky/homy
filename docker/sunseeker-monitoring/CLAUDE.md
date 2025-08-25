@@ -1,10 +1,10 @@
-# CLAUDE.md - MQTT-InfluxDB Sunseeker Service
+# CLAUDE.md - Sunseeker Monitoring Service
 
-This service bridges MQTT messages from Sunseeker lawn mower devices to InfluxDB for monitoring and analytics.
+This service provides comprehensive monitoring for Sunseeker lawn mower devices by bridging MQTT messages to InfluxDB for data collection, analysis, and alerting.
 
 ## Service Overview
 
-This Node.js service:
+The Sunseeker monitoring service:
 - Connects to external MQTT broker at `mqtts.sk-robot.com`
 - Parses Sunseeker-specific message formats
 - Stores structured data in InfluxDB with appropriate measurements and tags
@@ -134,7 +134,7 @@ const percentMatch = logText.match(/percent=(\d+)/);
 ```javascript
 {
   measurement: 'sunseeker_battery_detail',
-  device_id: '22031680002700015651',
+  device_id: 'EXAMPLE_DEVICE_ID',
   fields: {
     voltage_mv: 20182,
     temperature: 24,
@@ -242,16 +242,16 @@ npm run type-check
 
 ```bash
 # Build service
-docker compose build mqtt-influx-sunseeker
+docker compose build sunseeker-monitoring
 
 # Run service with logs
-docker compose up mqtt-influx-sunseeker
+docker compose up sunseeker-monitoring
 
 # Health check
-docker compose exec mqtt-influx-sunseeker node health-check.js
+docker compose exec sunseeker-monitoring node health-check.js
 
 # View service logs
-docker compose logs -f mqtt-influx-sunseeker
+docker compose logs -f sunseeker-monitoring
 ```
 
 ## Monitoring

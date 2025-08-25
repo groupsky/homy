@@ -4,6 +4,15 @@
  */
 
 import { jest } from '@jest/globals';
+import { setupServer } from 'msw/node';
+import { http, HttpResponse } from 'msw';
+import {
+  TEST_MQTT_CONFIG,
+  TEST_INFLUX_CONFIG,
+  TEST_MESSAGES,
+  TEST_TOPICS,
+  TEST_DEVICE_ID
+} from '../src/test-constants.js';
 
 // Mock external dependencies
 jest.unstable_mockModule('mqtt', () => ({
@@ -23,6 +32,13 @@ const mqtt = await import('mqtt');
 const { InfluxDB, Point } = await import('@influxdata/influxdb-client');
 const { SunseekerMqttInfluxService } = await import('../src/mqtt-influx-service.js');
 
+// Set up MSW server for HTTP requests (if needed for health checks, etc.)
+const server = setupServer(
+  http.get(`${TEST_INFLUX_CONFIG.url}/health`, () => {
+    return HttpResponse.json({ status: 'pass' });
+  })
+);
+
 describe('SunseekerMqttInfluxService Integration Tests', () => {
   let service;
   let mockMqttClient;
@@ -30,7 +46,19 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
   let mockWriteApi;
   let mockQueryApi;
 
+  beforeAll(() => {
+    // Start MSW server before all tests
+    server.listen({ onUnhandledRequest: 'error' });
+  });
+
+  afterAll(() => {
+    // Clean up MSW server
+    server.close();
+  });
+
   beforeEach(() => {
+    // Reset MSW handlers
+    server.resetHandlers();
     // Reset mocks
     jest.clearAllMocks();
 
@@ -82,21 +110,10 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
       timestamp: jest.fn().mockReturnThis()
     }));
 
-    // Create service instance
+    // Create service instance with test configuration
     service = new SunseekerMqttInfluxService({
-      mqtt: {
-        url: 'mqtts://mqtts.sk-robot.com:8883',
-        username: 'app',
-        password: 'h4ijwkTnyrA',
-        deviceId: '22031680002700015651',
-        appId: '12480368'
-      },
-      influx: {
-        url: 'http://influxdb:8086',
-        token: 'test-token',
-        org: 'test-org',
-        bucket: 'sunseeker'
-      }
+      mqtt: TEST_MQTT_CONFIG,
+      influx: TEST_INFLUX_CONFIG
     });
   });
 
@@ -111,9 +128,9 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
       await service.start();
 
       const connectFn = mqtt.default ? mqtt.default.connect : mqtt.connect;
-      expect(connectFn).toHaveBeenCalledWith('mqtts://mqtts.sk-robot.com:8883', {
-        username: 'app',
-        password: 'h4ijwkTnyrA',
+      expect(connectFn).toHaveBeenCalledWith(TEST_MQTT_CONFIG.url, {
+        username: TEST_MQTT_CONFIG.username,
+        password: TEST_MQTT_CONFIG.password,
         clientId: expect.stringContaining('sunseeker-mqtt-influx'),
         clean: true,
         reconnectPeriod: 1000,
@@ -125,8 +142,8 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
       await service.start();
 
       expect(InfluxDB).toHaveBeenCalledWith({
-        url: 'http://influxdb:8086',
-        token: 'test-token'
+        url: TEST_INFLUX_CONFIG.url,
+        token: TEST_INFLUX_CONFIG.token
       });
     });
 
@@ -136,8 +153,8 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
       // Allow async operations to complete
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(mockMqttClient.subscribe).toHaveBeenCalledWith('/device/22031680002700015651/+', expect.any(Function));
-      expect(mockMqttClient.subscribe).toHaveBeenCalledWith('/app/12480368/+', expect.any(Function));
+      expect(mockMqttClient.subscribe).toHaveBeenCalledWith(TEST_TOPICS.DEVICE_UPDATE.replace('/update', '/+'), expect.any(Function));
+      expect(mockMqttClient.subscribe).toHaveBeenCalledWith(TEST_TOPICS.APP_GET.replace('/get', '/+'), expect.any(Function));
     });
   });
 
@@ -150,8 +167,8 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
     });
 
     it('should process cmd 501 messages and write to InfluxDB', async () => {
-      const topic = '/device/22031680002700015651/update';
-      const message = Buffer.from('{"cmd":501,"mode":3,"power":96,"station":true}');
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const message = Buffer.from(JSON.stringify(TEST_MESSAGES.STATUS_UPDATE));
 
       // Simulate message receipt
       const messageHandler = mockMqttClient.on.mock.calls.find(call => call[0] === 'message')[1];
@@ -166,8 +183,8 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
     });
 
     it('should process cmd 509 battery log messages', async () => {
-      const topic = '/device/22031680002700015651/update';
-      const message = Buffer.from('{"cmd":509,"lv":3,"log":"I/charging [Sun Aug 24 22:58:16 2025] (637)bat vol=20182,min=3995mV,max=4003mV,temp=24,current=1538,percent=94\\n"}');
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const message = Buffer.from(JSON.stringify(TEST_MESSAGES.LOG_MESSAGE));
 
       const messageHandler = mockMqttClient.on.mock.calls.find(call => call[0] === 'message')[1];
       messageHandler(topic, message);
@@ -184,8 +201,8 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
     });
 
     it('should process app topic messages with deviceSn', async () => {
-      const topic = '/app/12480368/get';
-      const message = Buffer.from('{"mode":3,"station":true,"cmd":501,"power":96,"deviceSn":"22031680002700015651"}');
+      const topic = TEST_TOPICS.APP_GET;
+      const message = Buffer.from(JSON.stringify(TEST_MESSAGES.APP_MESSAGE));
 
       const messageHandler = mockMqttClient.on.mock.calls.find(call => call[0] === 'message')[1];
       messageHandler(topic, message);
@@ -196,7 +213,7 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
     });
 
     it('should handle invalid JSON messages gracefully', async () => {
-      const topic = '/device/22031680002700015651/update';
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
       const message = Buffer.from('invalid json');
 
       const messageHandler = mockMqttClient.on.mock.calls.find(call => call[0] === 'message')[1];
@@ -253,8 +270,9 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
       const messageHandler = mockMqttClient.on.mock.calls.find(call => call[0] === 'message')[1];
       
       for (let i = 0; i < 5; i++) {
-        const message = Buffer.from(`{"cmd":501,"mode":${i % 4},"power":95,"station":false}`);
-        if (messageHandler) messageHandler('/device/22031680002700015651/update', message);
+        const testMessage = { ...TEST_MESSAGES.STATUS_UPDATE, mode: i % 4, power: 95, station: false };
+        const message = Buffer.from(JSON.stringify(testMessage));
+        if (messageHandler) messageHandler(TEST_TOPICS.DEVICE_UPDATE, message);
       }
 
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -287,10 +305,11 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
       mockWriteApi.writePoints.mockRejectedValueOnce(new Error('InfluxDB error'));
 
       const messageHandler = mockMqttClient.on.mock.calls.find(call => call[0] === 'message')[1];
-      const message = Buffer.from('{"cmd":501,"mode":1,"power":85,"station":false}');
+      const testMessage = { ...TEST_MESSAGES.STATUS_UPDATE, mode: 1, power: 85, station: false };
+      const message = Buffer.from(JSON.stringify(testMessage));
 
       // Should not throw even with InfluxDB errors
-      expect(() => messageHandler('/device/22031680002700015651/update', message)).not.toThrow();
+      expect(() => messageHandler(TEST_TOPICS.DEVICE_UPDATE, message)).not.toThrow();
     });
   });
 
@@ -314,13 +333,7 @@ describe('SunseekerMqttInfluxService Integration Tests', () => {
     it('should validate InfluxDB configuration', () => {
       expect(() => {
         new SunseekerMqttInfluxService({
-          mqtt: {
-            url: 'mqtts://test.com',
-            username: 'user',
-            password: 'pass',
-            deviceId: 'device',
-            appId: 'app'
-          },
+          mqtt: TEST_MQTT_CONFIG,
           influx: {
             // Missing required fields
           }

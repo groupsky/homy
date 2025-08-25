@@ -10,6 +10,7 @@ export default {
     'src/**/*.js',
     'index.js',
     '!jest.config.js',
+    '!test-setup.js',
     '!**/node_modules/**',
     '!**/__tests__/**',
     '!**/*.test.js'
@@ -18,5 +19,8 @@ export default {
   coverageReporters: ['text', 'lcov', 'html'],
   transformIgnorePatterns: [
     'node_modules/(?!(msw)/)'
-  ]
+  ],
+  clearMocks: true,
+  resetMocks: false,
+  resetModules: false
 };

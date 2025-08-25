@@ -133,14 +133,14 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
-    directory: "/docker/mqtt-influx-sunseeker"
+    directory: "/docker/sunseeker-monitoring"
     schedule:
       interval: "monthly"
     reviewers:
       - "groupsky"
 
   - package-ecosystem: "npm"
-    directory: "/docker/mqtt-influx-sunseeker"
+    directory: "/docker/sunseeker-monitoring"
     schedule:
       interval: "monthly"
     reviewers:

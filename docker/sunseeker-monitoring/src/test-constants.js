@@ -42,7 +42,7 @@ export const TEST_MESSAGES = {
   LOG_MESSAGE: {
     cmd: 509,
     lv: 3,
-    log: 'I/charging [Sun Aug 24 22:58:16 2025] (637)bat vol=18500,min=3700mV,max=3750mV,temp=25,current=1200,percent=85,lstr=0,rstr=0,pitch=180,roll=0,heading=90\\n'
+    log: 'I/charging [Sun Aug 24 22:58:16 2025] (637)bat vol=20182,min=3995mV,max=4003mV,temp=24,current=1538,percent=94,lstr=0,rstr=0,pitch=178,roll=1,heading=20\\n'
   },
   STATE_CHANGE: {
     cmd: 511,
