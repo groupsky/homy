@@ -130,3 +130,23 @@ For production services:
 - Use general-purpose agents for complex multi-step work
 - Break large tasks into manageable chunks
 - Minimize context pollution with targeted agent use
+
+### Monitoring and Observability
+
+**Grafana Dashboard Development:**
+- Create connected dashboards with navigation links
+- Use standard panel types: stat, timeseries, table for consistency
+- Implement proper time ranges and refresh intervals
+- Provide both overview and detailed views for different use cases
+
+**Alerting Best Practices:**
+- Set meaningful thresholds based on operational requirements
+- Use appropriate notification channels (existing Telegram setup)
+- Implement multi-condition alerts for complex scenarios
+- Include proper alert recovery conditions
+
+**GitHub Actions Integration:**
+- Follow existing workflow patterns for consistency
+- Include Docker Hub authentication for all Docker operations
+- Implement comprehensive testing including health checks
+- Use version pinning and Dependabot for dependency management
