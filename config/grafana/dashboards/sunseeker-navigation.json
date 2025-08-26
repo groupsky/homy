@@ -331,7 +331,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"connected\"), last(\"signal_strength\"), last(\"latency\"), last(\"error_count\") FROM \"sunseeker_connection\" WHERE $timeFilter",
+          "query": "SELECT last(\"connected\") FROM \"sunseeker_connection\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -643,7 +643,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"signal_strength\") AS \"signal_strength\", mean(\"latency\") AS \"latency\", sum(\"error_count\") AS \"error_count\" FROM \"sunseeker_connection\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
+          "query": "SELECT mean(\"connected\") AS \"connection_status\" FROM \"sunseeker_connection\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
           "rawQuery": true,
           "refId": "A"
         }
@@ -779,7 +779,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT sum(case when \"value\" = 1 then 1 else 0 end) / 3600 AS \"mowing_time\" FROM \"sunseeker_mode\" WHERE $timeFilter AND \"value\" = 1 GROUP BY time(1d) fill(0)",
+          "query": "SELECT sum(case when \"mode\" = 1 then 1 else 0 end) / 3600 AS \"mowing_time\" FROM \"sunseeker_mode\" WHERE $timeFilter AND \"mode\" = 1 GROUP BY time(1d) fill(0)",
           "rawQuery": true,
           "refId": "A"
         },
@@ -788,7 +788,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT sum(case when \"value\" = 3 then 1 else 0 end) / 3600 AS \"charging_time\" FROM \"sunseeker_mode\" WHERE $timeFilter AND \"value\" = 3 GROUP BY time(1d) fill(0)",
+          "query": "SELECT sum(case when \"mode\" = 3 then 1 else 0 end) / 3600 AS \"charging_time\" FROM \"sunseeker_mode\" WHERE $timeFilter AND \"mode\" = 3 GROUP BY time(1d) fill(0)",
           "rawQuery": true,
           "refId": "B"
         }
@@ -928,7 +928,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"voltage\" * \"current\") AS \"power_consumption\", mean(100 * \"voltage\" / 28.0) AS \"battery_efficiency\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
+          "query": "SELECT mean(\"voltage_mv\" * \"current_ma\" / 1000000) AS \"power_consumption\", mean(\"percentage\") AS \"battery_efficiency\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
           "rawQuery": true,
           "refId": "A"
         }

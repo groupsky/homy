@@ -143,7 +143,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") FROM \"sunseeker_mode\" WHERE $timeFilter",
+          "query": "SELECT last(\"mode\") FROM \"sunseeker_mode\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -211,7 +211,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") FROM \"sunseeker_power\" WHERE $timeFilter",
+          "query": "SELECT last(\"battery_percentage\") FROM \"sunseeker_power\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -292,7 +292,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") FROM \"sunseeker_station\" WHERE $timeFilter",
+          "query": "SELECT last(\"at_station\") FROM \"sunseeker_station\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -484,7 +484,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"value\") AS \"mode\" FROM \"sunseeker_mode\" WHERE $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT mean(\"mode\") AS \"mode\" FROM \"sunseeker_mode\" WHERE $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "A"
         }
@@ -626,7 +626,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"value\") AS \"battery\" FROM \"sunseeker_power\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
+          "query": "SELECT mean(\"battery_percentage\") AS \"battery\" FROM \"sunseeker_power\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
           "rawQuery": true,
           "refId": "A"
         },
@@ -635,7 +635,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"value\") AS \"at_station\" FROM \"sunseeker_station\" WHERE $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT mean(\"at_station\") AS \"at_station\" FROM \"sunseeker_station\" WHERE $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "B"
         }
@@ -710,7 +710,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT \"from_state\", \"to_state\", \"duration\" FROM \"sunseeker_state_change\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
+          "query": "SELECT \"message_code\", \"timestamp\" FROM \"sunseeker_state_change\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
           "rawQuery": true,
           "refId": "A"
         }
@@ -785,7 +785,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT \"command\", \"response\" FROM \"sunseeker_commands\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
+          "query": "SELECT \"command\", \"result\" FROM \"sunseeker_commands\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
           "rawQuery": true,
           "refId": "A"
         }
