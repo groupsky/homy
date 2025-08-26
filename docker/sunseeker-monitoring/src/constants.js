@@ -77,7 +77,7 @@ export const COMMAND_TYPES = {
 // Default configuration values
 export const DEFAULTS = {
   MQTT: {
-    URL: 'mqtts://mqtts.sk-robot.com:8883',
+    URL: 'mqtt://mqtts.sk-robot.com:1883',
     USERNAME: 'app'
   },
   INFLUX: {

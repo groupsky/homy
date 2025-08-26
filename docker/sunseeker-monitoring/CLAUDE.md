@@ -362,7 +362,7 @@ export function createError(message, context, originalError = null) {
 
 **Environment Variables:**
 ```bash
-MQTT_URL=mqtts://mqtts.sk-robot.com:8883
+MQTT_URL=mqtt://mqtts.sk-robot.com:1883
 MQTT_USERNAME=app
 MQTT_PASSWORD_FILE=/run/secrets/sunseeker_mqtt_password
 MQTT_DEVICE_ID=${SUNSEEKER_DEVICE_ID}
