@@ -220,14 +220,26 @@ Apply caching to workflows that:
 
 ### Docker Health Check Testing
 
-**Include health check validation in workflows:**
+For services with Docker HEALTHCHECK in Dockerfile, validate the container health status:
+
 ```yaml
-- name: Test Docker health check
+- name: Verify Docker healthcheck status
   run: |
-    docker compose up -d service-name
-    sleep 10
-    docker compose exec -T service-name node health-check.js
-    docker compose down
+    # Wait for healthcheck to run multiple times
+    sleep 35
+
+    # Check container is marked as healthy or unhealthy (not starting)
+    HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' service-name-healthcheck)
+    echo "Docker health status: $HEALTH_STATUS"
+
+    if [ "$HEALTH_STATUS" != "healthy" ]; then
+      echo "ERROR: Container is not healthy"
+      docker inspect --format='{{json .State.Health}}' service-name-healthcheck | jq .
+      docker logs service-name-healthcheck
+      exit 1
+    fi
+
+    echo "✅ Docker healthcheck is working correctly"
 ```
 
 ### Version Consistency Checks
@@ -244,14 +256,6 @@ Apply caching to workflows that:
       exit 1
     fi
 ```
-
-### Integration Testing with External Services
-
-**For services requiring external connections:**
-- Use proper environment setup for integration tests
-- Mock external services appropriately in CI environment
-- Include timeout handling for external service connections
-- Provide graceful degradation when external services are unavailable
 
 ### Test Coverage and Quality Gates
 
