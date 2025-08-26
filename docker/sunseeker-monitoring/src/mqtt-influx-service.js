@@ -16,7 +16,7 @@ export class SunseekerMqttInfluxService {
     this.mqttClient = null;
     this.influxDB = null;
     this.writeApi = null;
-    
+
     // Health and metrics tracking
     this.isConnected = false;
     this.metrics = {
@@ -32,7 +32,7 @@ export class SunseekerMqttInfluxService {
    */
   async start() {
     logger.start('Starting Sunseeker MQTT-InfluxDB service...');
-    
+
     try {
       await this._connectMqtt();
       await this._connectInfluxDB();
@@ -48,20 +48,20 @@ export class SunseekerMqttInfluxService {
    */
   async stop() {
     logger.stop('Stopping Sunseeker MQTT-InfluxDB service...');
-    
+
     try {
       if (this.mqttClient) {
         this.mqttClient.end(true);
       }
-      
+
       if (this.writeApi) {
         await this.writeApi.close();
       }
-      
+
       if (this.influxDB) {
         this.influxDB.close();
       }
-      
+
       logger.success('Service stopped successfully');
     } catch (error) {
       logger.error('Error during service shutdown', error);
@@ -73,10 +73,10 @@ export class SunseekerMqttInfluxService {
    */
   isHealthy() {
     const hasRecentActivity = isTimestampRecent(
-      this.metrics.lastMessageTime, 
+      this.metrics.lastMessageTime,
       HEALTH_CHECK.RECENT_ACTIVITY_TIMEOUT_MS
     );
-    
+
     return this.isConnected && hasRecentActivity;
   }
 
@@ -96,7 +96,7 @@ export class SunseekerMqttInfluxService {
    */
   async _connectMqtt() {
     const { url, username, password } = this.config.mqtt;
-    
+
     const options = {
       username,
       password,
@@ -107,7 +107,7 @@ export class SunseekerMqttInfluxService {
     };
 
     logger.connection(`Connecting to MQTT broker: ${url}`);
-    
+
     return new Promise((resolve, reject) => {
       this.mqttClient = mqtt.connect(url, options);
 
@@ -141,7 +141,7 @@ export class SunseekerMqttInfluxService {
    */
   _subscribeToTopics() {
     const { deviceId, appId } = this.config.mqtt;
-    
+
     const topics = [
       `/device/${deviceId}/+`,
       `/app/${appId}/+`
@@ -166,12 +166,12 @@ export class SunseekerMqttInfluxService {
     try {
       const payload = messageBuffer.toString();
       logger.message(`Received message on ${topic}`);
-      
+
       this.metrics.messagesProcessed++;
       this.metrics.lastMessageTime = Date.now();
 
       const dataPoints = this.parser.parseMessage(topic, payload);
-      
+
       if (dataPoints && dataPoints.length > 0) {
         await this._writeToInfluxDB(dataPoints);
         logger.write(`Wrote ${dataPoints.length} points to InfluxDB`);
@@ -187,12 +187,12 @@ export class SunseekerMqttInfluxService {
    */
   async _connectInfluxDB() {
     const { url, token, org, bucket } = this.config.influx;
-    
+
     logger.database(`Connecting to InfluxDB: ${url}`);
-    
+
     this.influxDB = new InfluxDB({ url, token });
     this.writeApi = this.influxDB.getWriteApi(org, bucket);
-    
+
     // Configure write API
     this.writeApi.useDefaultTags({ service: 'sunseeker-mqtt-influx' });
   }
@@ -204,10 +204,10 @@ export class SunseekerMqttInfluxService {
   async _writeToInfluxDB(dataPoints) {
     try {
       const points = dataPoints.map(dataPoint => this._createInfluxPoint(dataPoint));
-      
+
       this.writeApi.writePoints(points);
       await this.writeApi.flush();
-      
+
       this.metrics.pointsWritten += points.length;
     } catch (error) {
       logger.error('Failed to write to InfluxDB', error);
@@ -221,13 +221,13 @@ export class SunseekerMqttInfluxService {
    */
   _createInfluxPoint(dataPoint) {
     const point = new Point(dataPoint.measurement);
-    
+
     // Add tags
     point.tag('device_id', dataPoint.device_id);
     Object.entries(dataPoint.tags).forEach(([key, value]) => {
       point.tag(key, value);
     });
-    
+
     // Add fields
     Object.entries(dataPoint.fields).forEach(([key, value]) => {
       if (typeof value === 'number') {
@@ -242,10 +242,10 @@ export class SunseekerMqttInfluxService {
         point.stringField(key, String(value));
       }
     });
-    
+
     // Set timestamp
     point.timestamp(dataPoint.timestamp);
-    
+
     return point;
   }
 
@@ -256,16 +256,15 @@ export class SunseekerMqttInfluxService {
   _validateConfig(config) {
     const schema = {
       'mqtt.url': 'MQTT URL',
-      'mqtt.username': 'MQTT username', 
+      'mqtt.username': 'MQTT username',
       'mqtt.password': 'MQTT password',
       'mqtt.deviceId': 'MQTT device ID',
       'mqtt.appId': 'MQTT app ID',
       'influx.url': 'InfluxDB URL',
       'influx.token': 'InfluxDB token',
-      'influx.org': 'InfluxDB organization', 
       'influx.bucket': 'InfluxDB bucket'
     };
-    
+
     validateConfig(config, schema);
     return config;
   }

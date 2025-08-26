@@ -7,7 +7,7 @@
 export const HEALTH_CHECK = {
   /** Maximum time without messages before considering service degraded (5 minutes) */
   RECENT_ACTIVITY_TIMEOUT_MS: 5 * 60 * 1000, // 5 minutes
-  
+
   /** Health status values */
   STATUS: {
     HEALTHY: 'healthy',
@@ -16,14 +16,14 @@ export const HEALTH_CHECK = {
   }
 };
 
-// Temperature monitoring constants  
+// Temperature monitoring constants
 export const TEMPERATURE = {
   /** High temperature alert threshold (celsius) */
   HIGH_THRESHOLD: 40,
-  
+
   /** Low temperature alert threshold (celsius) */
   LOW_THRESHOLD: 10,
-  
+
   /** Temperature alert levels */
   ALERTS: {
     HIGH: 'high',
@@ -36,10 +36,10 @@ export const TEMPERATURE = {
 export const MQTT = {
   /** Default MQTT reconnection period (milliseconds) */
   RECONNECT_PERIOD_MS: 1000,
-  
+
   /** Default MQTT connection timeout (milliseconds) */
   CONNECT_TIMEOUT_MS: 30 * 1000, // 30 seconds
-  
+
   /** Client ID prefix for random generation */
   CLIENT_ID_PREFIX: 'sunseeker-mqtt-influx-'
 };
@@ -47,7 +47,7 @@ export const MQTT = {
 // Sunseeker device mode mappings
 export const SUNSEEKER_MODES = {
   0: 'Standby',
-  1: 'Mowing', 
+  1: 'Mowing',
   2: 'Going Home',
   3: 'Charging',
   7: 'Departing'
@@ -82,7 +82,7 @@ export const DEFAULTS = {
   },
   INFLUX: {
     URL: 'http://influxdb:8086',
-    ORG: 'homy',
+    ORG: '',
     BUCKET: 'sunseeker'
   }
 };

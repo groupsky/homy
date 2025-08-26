@@ -17,7 +17,7 @@ export const TEST_MQTT_CONFIG = {
 };
 
 // Test InfluxDB configuration
-export const TEST_INFLUX_CONFIG = {
+export const TEST_INFLUXDB_CONFIG = {
   url: 'http://test-influxdb:8086',
   token: 'test-influx-token-12345',
   org: 'test-org',

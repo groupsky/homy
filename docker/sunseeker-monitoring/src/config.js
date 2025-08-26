@@ -13,9 +13,9 @@ import { logger } from './logger.js';
  */
 const CONFIG_SCHEMA = {
   'mqtt.password': 'MQTT_PASSWORD',
-  'mqtt.deviceId': 'MQTT_DEVICE_ID', 
+  'mqtt.deviceId': 'MQTT_DEVICE_ID',
   'mqtt.appId': 'MQTT_APP_ID',
-  'influx.token': 'INFLUX_TOKEN, INFLUXDB_TOKEN, or INFLUX_USERNAME/INFLUX_PASSWORD'
+  'influx.token': 'INFLUXDB_TOKEN, or INFLUXDB_USERNAME/INFLUXDB_PASSWORD'
 };
 
 /**
@@ -31,20 +31,10 @@ export function loadConfig() {
   const appId = process.env.MQTT_APP_ID;
 
   // InfluxDB Configuration
-  const influxUrl = process.env.INFLUX_URL || process.env.INFLUXDB_URL || DEFAULTS.INFLUX.URL;
-  
-  // Support both token-based auth and username:password auth (like mqtt-influx)
-  let influxToken = loadSecret('INFLUX_TOKEN') || loadSecret('INFLUXDB_TOKEN') || loadSecret('INFLUXDB_WRITE_TOKEN');
-  if (!influxToken) {
-    const influxUsername = loadSecret('INFLUX_USERNAME') || loadSecret('INFLUXDB_USERNAME');
-    const influxPassword = loadSecret('INFLUX_PASSWORD') || loadSecret('INFLUXDB_PASSWORD');
-    if (influxUsername && influxPassword) {
-      influxToken = `${influxUsername}:${influxPassword}`;
-    }
-  }
-  
-  const influxOrg = process.env.INFLUX_ORG || process.env.INFLUXDB_ORG || DEFAULTS.INFLUX.ORG;
-  const influxBucket = process.env.INFLUX_BUCKET || process.env.INFLUXDB_BUCKET || DEFAULTS.INFLUX.BUCKET;
+  const influxUrl = process.env.INFLUXDB_URL || DEFAULTS.INFLUX.URL;
+  const influxToken = loadSecret('INFLUXDB_TOKEN') || `${loadSecret('INFLUXDB_USERNAME')}:${loadSecret('INFLUXDB_PASSWORD')}`;
+  const influxOrg = process.env.INFLUXDB_ORG || DEFAULTS.INFLUX.ORG;
+  const influxBucket = process.env.INFLUXDB_BUCKET || (process.env.INFLUXDB_DATABASE ? `${process.env.INFLUXDB_DATABASE}/${process.env.INFLUXDB_RP || 'autogen'}` : DEFAULTS.INFLUX.BUCKET);
 
   const config = {
     mqtt: {

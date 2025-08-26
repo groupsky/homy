@@ -661,11 +661,10 @@ services:
       - MQTT_PASSWORD_FILE=/run/secrets/sunseeker_mqtt_password
       - MQTT_DEVICE_ID=${SUNSEEKER_DEVICE_ID}
       - MQTT_APP_ID=${SUNSEEKER_APP_ID}
-      - INFLUX_URL=http://influxdb:8086
-      - INFLUX_USERNAME_FILE=/run/secrets/influxdb_write_user
-      - INFLUX_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
-      - INFLUX_ORG=${INFLUXDB_DATABASE}
-      - INFLUX_BUCKET=sunseeker
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
 
   dmx-driver:
     build: docker/dmx-driver

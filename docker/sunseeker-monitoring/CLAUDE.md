@@ -95,7 +95,7 @@ export function loadSecret(name) {
 
 **Configuration Validation:**
 - Validate all required fields early with clear error messages
-- Use descriptive prefixes: `MQTT_`, `INFLUX_` for clarity
+- Use descriptive prefixes: `MQTT_`, `INFLUXDB_` for clarity
 - Provide meaningful defaults where appropriate
 
 ### Message Parsing
