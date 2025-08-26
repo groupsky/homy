@@ -662,7 +662,8 @@ services:
       - MQTT_DEVICE_ID=${SUNSEEKER_DEVICE_ID}
       - MQTT_APP_ID=${SUNSEEKER_APP_ID}
       - INFLUX_URL=http://influxdb:8086
-      - INFLUX_TOKEN_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUX_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUX_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUX_ORG=${INFLUXDB_DATABASE}
       - INFLUX_BUCKET=sunseeker
 
