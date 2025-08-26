@@ -10,7 +10,7 @@ import { redactSecret } from './utils.js';
  */
 const LOG_LEVELS = {
   INFO: '📋',
-  SUCCESS: '✅', 
+  SUCCESS: '✅',
   WARNING: '⚠️',
   ERROR: '❌',
   CONNECTION: '📡',
@@ -141,7 +141,7 @@ class Logger {
   logConfig(config) {
     console.log(`${LOG_LEVELS.INFO} Configuration loaded:`);
     console.log(`  MQTT URL: ${config.mqtt.url}`);
-    console.log(`  MQTT Username: ${config.mqtt.username}`);
+    console.log(`  MQTT Username: ${redactSecret(config.mqtt.username)}`);
     console.log(`  MQTT Password: ${redactSecret(config.mqtt.password)}`);
     console.log(`  Device ID: ${config.mqtt.deviceId}`);
     console.log(`  App ID: ${config.mqtt.appId}`);

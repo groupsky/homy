@@ -46,7 +46,12 @@ coverage
 *.lcov
 .nyc_output
 
-# Test files and directories (keep core test files but exclude artifacts)
+# Test files and directories
+*.test.js
+jest.config.*
+test-constants.js
+__tests__/
+test-config/
 test-results/
 coverage/
 .jest-cache/

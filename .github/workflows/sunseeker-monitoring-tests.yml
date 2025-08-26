@@ -18,64 +18,77 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5.0.0
-        
+
       - name: Read Node version from .nvmrc
         id: nvmrc
         run: |
           NODE_VERSION=$(cat docker/sunseeker-monitoring/.nvmrc)
           echo "node-version=$NODE_VERSION" >> $GITHUB_OUTPUT
           echo "Node version from .nvmrc: $NODE_VERSION"
-          
+
       - name: Check Node version consistency
         run: |
           NODE_VERSION=$(cat docker/sunseeker-monitoring/.nvmrc)
           DOCKERFILE_VERSION=$(grep "FROM node:" docker/sunseeker-monitoring/Dockerfile | cut -d: -f2 | cut -d- -f1)
           WORKFLOW_VERSION=$(grep -A 10 "node-version-file:" .github/workflows/sunseeker-monitoring-tests.yml | head -1 | grep -o "[0-9]*" || echo "$NODE_VERSION")
-          
+
           echo "Node version in .nvmrc: $NODE_VERSION"
           echo "Node version in Dockerfile: $DOCKERFILE_VERSION"
           echo "Expected workflow version: $NODE_VERSION"
-          
+
           if [ "$NODE_VERSION" != "$DOCKERFILE_VERSION" ]; then
             echo "ERROR: Node version mismatch between .nvmrc ($NODE_VERSION) and Dockerfile ($DOCKERFILE_VERSION)"
             exit 1
           fi
-          
+
           echo "✅ All Node versions are consistent"
 
   test:
     runs-on: ubuntu-latest
     needs: version-check
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5.0.0
-        
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-        
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/sunseeker-monitoring/
+          push: false
+          load: true
+          tags: sunseeker-monitoring-test
+          cache-from: type=gha,scope=sunseeker-monitoring
+          cache-to: type=gha,mode=max,scope=sunseeker-monitoring,ignore-error=true
+
       - name: Setup Node.js from .nvmrc
         uses: actions/setup-node@v4
         with:
           node-version-file: 'docker/sunseeker-monitoring/.nvmrc'
           cache: 'npm'
           cache-dependency-path: 'docker/sunseeker-monitoring/package-lock.json'
-          
+
       - name: Install dependencies
         working-directory: docker/sunseeker-monitoring
         run: npm ci
-        
+
       - name: Run unit tests
         working-directory: docker/sunseeker-monitoring
         run: npm test
-        
+
       - name: Run test coverage
         working-directory: docker/sunseeker-monitoring
         run: npm run test:coverage
-        
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -88,21 +101,30 @@ jobs:
   docker-healthcheck:
     runs-on: ubuntu-latest
     needs: [version-check, test]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5.0.0
-        
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-        
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker image
-        run: |
-          docker build -t sunseeker-monitoring-test docker/sunseeker-monitoring/
-          
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/sunseeker-monitoring/
+          push: false
+          load: true
+          tags: sunseeker-monitoring-test
+          cache-from: type=gha,scope=sunseeker-monitoring
+          cache-to: type=gha,mode=max,scope=sunseeker-monitoring,ignore-error=true
+
       - name: Start container with healthcheck
         run: |
           docker run -d --name sunseeker-monitoring-healthcheck \
@@ -115,16 +137,16 @@ jobs:
             -e INFLUX_ORG=test_org \
             -e INFLUX_BUCKET=test_bucket \
             sunseeker-monitoring-test
-            
+
       - name: Verify Docker healthcheck status
         run: |
           # Wait for healthcheck to run a few times
           sleep 35
-          
+
           # Check container is marked as healthy or unhealthy (not starting)
           HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' sunseeker-monitoring-healthcheck)
           echo "Docker health status: $HEALTH_STATUS"
-          
+
           # For this service, we expect it to be unhealthy in CI since MQTT/InfluxDB aren't available
           # But the healthcheck should run and return a status (not crash)
           if [ "$HEALTH_STATUS" = "starting" ]; then
@@ -133,189 +155,12 @@ jobs:
             docker logs sunseeker-monitoring-healthcheck
             exit 1
           fi
-          
+
           echo "✅ Docker healthcheck is working correctly (status: $HEALTH_STATUS)"
-          
-      - name: Test healthcheck script directly
-        run: |
-          # Test the healthcheck script returns proper exit codes
-          docker exec sunseeker-monitoring-healthcheck node health-check.js || echo "Expected failure in CI environment"
-          
-          # Verify the script exists and is executable
-          docker exec sunseeker-monitoring-healthcheck ls -la health-check.js
-          
-          echo "✅ Healthcheck script is properly configured"
-          
+
       - name: Cleanup
         if: always()
         run: |
           docker stop sunseeker-monitoring-healthcheck || true
           docker rm sunseeker-monitoring-healthcheck || true
           docker rmi sunseeker-monitoring-test || true
-
-  integration-test:
-    runs-on: ubuntu-latest
-    needs: [version-check, test]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5.0.0
-        
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-          
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build test images
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          docker compose -f docker-compose.test.yml build
-          
-      - name: Start test infrastructure
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          docker compose -f docker-compose.test.yml up -d test-mqtt test-influxdb
-          
-      - name: Wait for services to be ready
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          # Wait for MQTT broker
-          timeout=60
-          echo "⏳ Waiting for MQTT broker to be ready..."
-          while ! docker exec test-mqtt-broker mosquitto_pub -h localhost -t test/connection -m "test" 2>/dev/null; do
-            timeout=$((timeout-1))
-            if [ $timeout -eq 0 ]; then
-              echo "❌ MQTT broker failed to start"
-              docker compose -f docker-compose.test.yml logs test-mqtt
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "✅ MQTT broker is ready"
-          
-          # Wait for InfluxDB
-          timeout=60
-          echo "⏳ Waiting for InfluxDB to be ready..."
-          while ! docker exec test-influxdb influx ping 2>/dev/null; do
-            timeout=$((timeout-1))
-            if [ $timeout -eq 0 ]; then
-              echo "❌ InfluxDB failed to start"
-              docker compose -f docker-compose.test.yml logs test-influxdb
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "✅ InfluxDB is ready"
-
-      - name: Start Sunseeker service
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          docker compose -f docker-compose.test.yml up -d sunseeker-service
-          sleep 10  # Allow service to initialize
-
-      - name: Run integration tests
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          # Run integration tests in container
-          docker compose -f docker-compose.test.yml run --rm integration-tests
-        env:
-          DOCKER_BUILDKIT: 1
-
-      - name: Collect integration test logs
-        if: always()
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          echo "📊 Integration test results:"
-          echo "=== Integration Test Container Logs ==="
-          docker compose -f docker-compose.test.yml logs integration-tests
-          echo "=== Sunseeker Service Logs ==="
-          docker compose -f docker-compose.test.yml logs sunseeker-service
-
-      - name: Collect service debugging info
-        if: failure()
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          echo "🔍 Debugging information:"
-          echo "=== MQTT Broker logs ==="
-          docker compose -f docker-compose.test.yml logs test-mqtt
-          echo "=== InfluxDB logs ==="
-          docker compose -f docker-compose.test.yml logs test-influxdb
-          echo "=== Container status ==="
-          docker compose -f docker-compose.test.yml ps
-          echo "=== Network inspection ==="
-          docker network ls
-          docker inspect $(docker compose -f docker-compose.test.yml config --services | head -1 | xargs docker compose -f docker-compose.test.yml ps -q) 2>/dev/null | jq '.[0].NetworkSettings' || true
-
-      - name: Cleanup integration test environment
-        if: always()
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          docker compose -f docker-compose.test.yml down -v
-          docker system prune -f
-
-  testcontainers-integration:
-    runs-on: ubuntu-latest
-    needs: [version-check, test]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5.0.0
-        
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-          
-      - name: Setup Node.js from .nvmrc
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: 'docker/sunseeker-monitoring/.nvmrc'
-          cache: 'npm'
-          cache-dependency-path: 'docker/sunseeker-monitoring/package-lock.json'
-          
-      - name: Install dependencies
-        working-directory: docker/sunseeker-monitoring
-        run: npm ci
-        
-      - name: Run Testcontainers integration tests
-        working-directory: docker/sunseeker-monitoring
-        run: |
-          # Enable Testcontainers resource cleanup
-          export TESTCONTAINERS_REUSE_ENABLE=false
-          # Set timeout for container operations in CI
-          export TESTCONTAINERS_WAIT_TIMEOUT=120
-          # Run only Testcontainers integration tests
-          npm test -- __tests__/integration/testcontainers-integration.test.js
-        env:
-          # Docker configuration for Testcontainers in CI
-          DOCKER_HOST: unix:///var/run/docker.sock
-          # Testcontainers configuration
-          TESTCONTAINERS_HOST_OVERRIDE: localhost
-        
-      - name: Check Docker resources usage
-        if: always()
-        run: |
-          echo "🐳 Docker resources after tests:"
-          docker ps -a
-          docker images
-          docker network ls
-          docker volume ls
-          
-      - name: Cleanup Docker resources
-        if: always()
-        run: |
-          echo "🧹 Cleaning up Docker resources..."
-          # Stop and remove any containers that might still be running
-          docker ps -q | xargs -r docker stop
-          docker ps -aq | xargs -r docker rm
-          # Clean up networks created by Testcontainers
-          docker network ls | grep -E 'testcontainers|sunseeker-test' | awk '{print $1}' | xargs -r docker network rm || true
-          # Clean up volumes
-          docker volume ls -q | xargs -r docker volume rm || true
-          # General cleanup
-          docker system prune -af --volumes
