@@ -163,6 +163,7 @@ services:
       - TZ=${TZ}
       - VIRTUAL_HOST=${MONGO_EXPRESS_DOMAIN}
       - VIRTUAL_PORT=8081
+      - ME_CONFIG_MONGODB_SERVER=mongo
       - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
       - ME_CONFIG_MONGODB_ADMINUSERNAME_FILE=/run/secrets/mongo_root_username
       - ME_CONFIG_MONGODB_ADMINPASSWORD_FILE=/run/secrets/mongo_root_password
