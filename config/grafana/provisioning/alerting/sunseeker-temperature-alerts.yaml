@@ -1,0 +1,127 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Sunseeker Temperature Alerts
+    folder: Lawn Mower
+    interval: 30s
+    rules:
+      - uid: sunseeker-battery-temp-high
+        title: Sunseeker Battery Temperature High
+        condition: A
+        data:
+          - refId: temperature
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              measurement: sunseeker_battery_detail
+              select:
+                - - params: ["temperature"]
+                    type: field
+                  - params: []
+                    type: last
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 45
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - temperature
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: temperature
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: threshold
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: "Sunseeker battery temperature is dangerously high at {{ $values.temperature.Value }}°C"
+          runbook_url: ""
+          summary: "Battery temperature exceeds safe operating limits"
+        labels:
+          severity: warning
+          device: sunseeker
+          type: temperature
+          
+      - uid: sunseeker-battery-temp-low
+        title: Sunseeker Battery Temperature Low
+        condition: A
+        data:
+          - refId: temperature
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              measurement: sunseeker_battery_detail
+              select:
+                - - params: ["temperature"]
+                    type: field
+                  - params: []
+                    type: last
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 5
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - temperature
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: temperature
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: threshold
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: "Sunseeker battery temperature is critically low at {{ $values.temperature.Value }}°C"
+          runbook_url: ""
+          summary: "Battery temperature below safe operating limits"
+        labels:
+          severity: warning
+          device: sunseeker
+          type: temperature

@@ -12,7 +12,7 @@ load_secret() {
 }
 
 for secret in \
-  INFLUX_TOKEN \
+  INFLUXDB_TOKEN \
   INFLUXDB_USERNAME \
   INFLUXDB_PASSWORD
 do

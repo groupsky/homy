@@ -191,3 +191,83 @@ Apply caching to workflows that:
 - Always add appropriate caching based on the technology stack
 - Use meaningful job and step names
 - Include proper error handling and cleanup steps
+
+## Service-Specific Workflow Patterns
+
+### Node.js Service Testing
+
+**For Node.js services with Jest:**
+```yaml
+- name: Setup Node.js
+  uses: actions/setup-node@v4
+  with:
+    node-version-file: 'docker/service-name/.nvmrc'
+    cache: 'npm'
+    cache-dependency-path: 'docker/service-name/package-lock.json'
+
+- name: Install dependencies
+  working-directory: docker/service-name
+  run: npm ci
+
+- name: Run tests
+  working-directory: docker/service-name
+  run: npm test
+
+- name: Run linting
+  working-directory: docker/service-name
+  run: npm run lint
+```
+
+### Docker Health Check Testing
+
+For services with Docker HEALTHCHECK in Dockerfile, validate the container health status:
+
+```yaml
+- name: Verify Docker healthcheck status
+  run: |
+    # Wait for healthcheck to run multiple times
+    sleep 35
+
+    # Check container is marked as healthy or unhealthy (not starting)
+    HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' service-name-healthcheck)
+    echo "Docker health status: $HEALTH_STATUS"
+
+    if [ "$HEALTH_STATUS" != "healthy" ]; then
+      echo "ERROR: Container is not healthy"
+      docker inspect --format='{{json .State.Health}}' service-name-healthcheck | jq .
+      docker logs service-name-healthcheck
+      exit 1
+    fi
+
+    echo "✅ Docker healthcheck is working correctly"
+```
+
+### Version Consistency Checks
+
+**For services with package.json:**
+```yaml
+- name: Check version consistency
+  working-directory: docker/service-name
+  run: |
+    DOCKER_VERSION=$(grep 'LABEL version=' Dockerfile | cut -d'"' -f2)
+    PACKAGE_VERSION=$(node -p "require('./package.json').version")
+    if [ "$DOCKER_VERSION" != "$PACKAGE_VERSION" ]; then
+      echo "Version mismatch: Dockerfile=$DOCKER_VERSION, package.json=$PACKAGE_VERSION"
+      exit 1
+    fi
+```
+
+### Test Coverage and Quality Gates
+
+**Recommended quality gates:**
+```yaml
+- name: Generate test coverage
+  working-directory: docker/service-name
+  run: npm run test:coverage
+
+- name: Upload coverage to Codecov
+  uses: codecov/codecov-action@v4
+  with:
+    file: docker/service-name/coverage/lcov.info
+    flags: service-name
+```

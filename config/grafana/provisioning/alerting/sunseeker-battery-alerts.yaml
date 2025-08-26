@@ -1,0 +1,127 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Sunseeker Battery Alerts
+    folder: Lawn Mower
+    interval: 30s
+    rules:
+      - uid: sunseeker-battery-low
+        title: Sunseeker Battery Low
+        condition: A
+        data:
+          - refId: battery
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              measurement: sunseeker_power
+              select:
+                - - params: ["battery_percentage"]
+                    type: field
+                  - params: []
+                    type: last
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 15
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - battery
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: battery
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: threshold
+        noDataState: NoData
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          description: "Sunseeker lawn mower battery is critically low at {{ $values.battery.Value }}%"
+          runbook_url: ""
+          summary: "Battery level is below 15%"
+        labels:
+          severity: critical
+          device: sunseeker
+          type: battery
+          
+      - uid: sunseeker-battery-voltage-low
+        title: Sunseeker Battery Voltage Critical
+        condition: A
+        data:
+          - refId: voltage
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              measurement: sunseeker_battery_detail
+              select:
+                - - params: ["voltage"]
+                    type: field
+                  - params: []
+                    type: last
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 18
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - voltage
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: voltage
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: threshold
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: "Sunseeker battery voltage critically low at {{ $values.voltage.Value }}mV"
+          runbook_url: ""
+          summary: "Battery voltage below safe operating threshold"
+        labels:
+          severity: critical
+          device: sunseeker
+          type: battery

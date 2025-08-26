@@ -133,6 +133,20 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/sunseeker-monitoring"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/sunseeker-monitoring"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/mqtt-mongo"
     schedule:
       interval: "monthly"

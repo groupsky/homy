@@ -1,0 +1,29 @@
+{
+  "name": "sunseeker-monitoring",
+  "version": "1.0.0",
+  "description": "Sunseeker lawn mower monitoring service - MQTT to InfluxDB bridge",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
+    "test:integration": "NODE_OPTIONS='--experimental-vm-modules' jest __tests__/",
+    "test:unit": "NODE_OPTIONS='--experimental-vm-modules' jest src/",
+    "test:integration:real": "NODE_OPTIONS='--experimental-vm-modules' jest __tests__/integration/",
+    "test:integration:docker": "docker compose -f docker-compose.test.yml up --build --abort-on-container-exit integration-tests"
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.33.2",
+    "mqtt": "^5.0.0"
+  },
+  "devDependencies": {
+    "jest": "^30.0.5",
+    "msw": "^2.10.5",
+    "testcontainers": "^10.18.0"
+  },
+  "engines": {
+    "node": "22"
+  }
+}

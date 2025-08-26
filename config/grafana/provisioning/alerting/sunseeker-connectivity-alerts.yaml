@@ -1,0 +1,67 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Sunseeker Connectivity Alerts
+    folder: Lawn Mower
+    interval: 30s
+    rules:
+      - uid: sunseeker-connection-lost
+        title: Sunseeker Connection Lost
+        condition: A
+        data:
+          - refId: connection
+            queryType: ''
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              measurement: sunseeker_connection
+              select:
+                - - params: ["connected"]
+                    type: field
+                  - params: []
+                    type: last
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - connection
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: connection
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: threshold
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 30m
+        annotations:
+          description: "Lost connection to Sunseeker lawn mower - no messages received for 30+ minutes"
+          runbook_url: ""
+          summary: "Mower is not responding to communication"
+        labels:
+          severity: warning
+          device: sunseeker
+          type: connectivity

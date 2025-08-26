@@ -642,6 +642,30 @@ services:
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
 
+  sunseeker-monitoring:
+    build: docker/sunseeker-monitoring
+    depends_on:
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - sunseeker_mqtt_password
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      - MQTT_USERNAME=app
+      - MQTT_PASSWORD_FILE=/run/secrets/sunseeker_mqtt_password
+      - MQTT_DEVICE_ID=${SUNSEEKER_DEVICE_ID}
+      - MQTT_APP_ID=${SUNSEEKER_APP_ID}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+
   dmx-driver:
     build: docker/dmx-driver
     depends_on:
@@ -872,6 +896,8 @@ secrets:
     file: ${SECRETS_PATH}/ovms_mqtt_password
   ovms_mqtt_user:
     file: ${SECRETS_PATH}/ovms_mqtt_user
+  sunseeker_mqtt_password:
+    file: ${SECRETS_PATH}/sunseeker_mqtt_password
   telegram_bot_token:
     file: ${SECRETS_PATH}/telegram_bot_token
   telegram_chat_id:
