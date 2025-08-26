@@ -237,10 +237,12 @@ export class SunseekerMessageParser {
   _extractLogData(logText) {
     const data = {};
 
-    // Extract battery voltage
+    // Extract battery voltage (convert mV to V)
     const volMatch = logText.match(/bat vol=(\d+)(?:mV)?/);
     if (volMatch) {
-      data.voltage_mv = parseInt(volMatch[1], 10);
+      const millivolts = parseInt(volMatch[1], 10);
+      data.voltage_mv = millivolts; // Keep original for compatibility
+      data.voltage = millivolts / 1000; // Convert to volts
     }
 
     // Extract percentage
@@ -249,16 +251,20 @@ export class SunseekerMessageParser {
       data.percentage = parseInt(percentMatch[1], 10);
     }
 
-    // Extract min cell voltage
+    // Extract min cell voltage (convert mV to V)
     const minMatch = logText.match(/min=(\d+)mV/);
     if (minMatch) {
-      data.min_cell_mv = parseInt(minMatch[1], 10);
+      const millivolts = parseInt(minMatch[1], 10);
+      data.min_cell_mv = millivolts; // Keep original for compatibility
+      data.min_cell_voltage = millivolts / 1000; // Convert to volts
     }
 
-    // Extract max cell voltage
+    // Extract max cell voltage (convert mV to V)
     const maxMatch = logText.match(/max=(\d+)mV/);
     if (maxMatch) {
-      data.max_cell_mv = parseInt(maxMatch[1], 10);
+      const millivolts = parseInt(maxMatch[1], 10);
+      data.max_cell_mv = millivolts; // Keep original for compatibility
+      data.max_cell_voltage = millivolts / 1000; // Convert to volts
     }
 
     // Extract temperature
@@ -267,10 +273,12 @@ export class SunseekerMessageParser {
       data.temperature = parseInt(tempMatch[1], 10);
     }
 
-    // Extract current
+    // Extract current (convert mA to A)
     const currentMatch = logText.match(/current=(\d+)/);
     if (currentMatch) {
-      data.current_ma = parseInt(currentMatch[1], 10);
+      const milliamperes = parseInt(currentMatch[1], 10);
+      data.current_ma = milliamperes; // Keep original for compatibility
+      data.current = milliamperes / 1000; // Convert to amperes
     }
 
     // Extract pitch

@@ -221,11 +221,13 @@ describe('Sunseeker Service Integration Tests', () => {
         });
       });
 
-      expect(rows).toHaveLength(9)
+      expect(rows).toHaveLength(13) // Updated for new voltage/current fields
 
+      // Check original mV/mA fields
       const voltageRow = rows.find(r => r._field === 'voltage_mv');
       const tempRow = rows.find(r => r._field === 'temperature');
       const percentRow = rows.find(r => r._field === 'percentage');
+      const currentRow = rows.find(r => r._field === 'current_ma');
 
       expect(voltageRow).toBeDefined();
       expect(voltageRow._value).toBe(20182);
@@ -235,6 +237,27 @@ describe('Sunseeker Service Integration Tests', () => {
 
       expect(percentRow).toBeDefined();
       expect(percentRow._value).toBe(94);
+      
+      expect(currentRow).toBeDefined();
+      expect(currentRow._value).toBe(1538);
+
+      // Check converted V/A fields
+      const voltageConvertedRow = rows.find(r => r._field === 'voltage');
+      const currentConvertedRow = rows.find(r => r._field === 'current');
+      const minCellVoltageRow = rows.find(r => r._field === 'min_cell_voltage');
+      const maxCellVoltageRow = rows.find(r => r._field === 'max_cell_voltage');
+
+      expect(voltageConvertedRow).toBeDefined();
+      expect(voltageConvertedRow._value).toBe(20.182);
+
+      expect(currentConvertedRow).toBeDefined();
+      expect(currentConvertedRow._value).toBe(1.538);
+
+      expect(minCellVoltageRow).toBeDefined();
+      expect(minCellVoltageRow._value).toBe(3.995);
+
+      expect(maxCellVoltageRow).toBeDefined();
+      expect(maxCellVoltageRow._value).toBe(4.003);
     }, 30000);
 
     it('should process app topic messages', async () => {

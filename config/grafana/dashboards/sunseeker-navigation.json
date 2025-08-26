@@ -928,7 +928,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"voltage_mv\" * \"current_ma\" / 1000000) AS \"power_consumption\", mean(\"percentage\") AS \"battery_efficiency\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
+          "query": "SELECT mean(\"voltage\" * \"current\") AS \"power_consumption\", mean(\"percentage\") AS \"battery_efficiency\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
           "rawQuery": true,
           "refId": "A"
         }

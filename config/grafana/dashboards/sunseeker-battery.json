@@ -114,7 +114,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"voltage_mv\") FROM \"sunseeker_battery_detail\" WHERE $timeFilter",
+          "query": "SELECT last(\"voltage\") FROM \"sunseeker_battery_detail\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -254,7 +254,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"current_ma\") FROM \"sunseeker_battery_detail\" WHERE $timeFilter",
+          "query": "SELECT last(\"current\") FROM \"sunseeker_battery_detail\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -582,7 +582,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"voltage_mv\") AS \"voltage\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
+          "query": "SELECT mean(\"voltage\") AS \"voltage\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
           "rawQuery": true,
           "refId": "A"
         },
@@ -690,7 +690,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"current_ma\") AS \"current\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
+          "query": "SELECT mean(\"current\") AS \"current\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
           "rawQuery": true,
           "refId": "A"
         }
@@ -778,7 +778,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"min_cell_mv\") AS \"Min Cell\", mean(\"max_cell_mv\") AS \"Max Cell\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
+          "query": "SELECT mean(\"min_cell_voltage\") AS \"Min Cell\", mean(\"max_cell_voltage\") AS \"Max Cell\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter GROUP BY time($__interval) fill(linear)",
           "rawQuery": true,
           "refId": "A"
         }
@@ -959,7 +959,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"voltage_mv\") AS \"avg_voltage\", mean(\"temperature\") AS \"avg_temperature\", mean(\"current_ma\") AS \"avg_current\", min(\"voltage_mv\") AS \"min_voltage\", max(\"voltage_mv\") AS \"max_voltage\", min(\"temperature\") AS \"min_temperature\", max(\"temperature\") AS \"max_temperature\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter",
+          "query": "SELECT mean(\"voltage\") AS \"avg_voltage\", mean(\"temperature\") AS \"avg_temperature\", mean(\"current\") AS \"avg_current\", min(\"voltage\") AS \"min_voltage\", max(\"voltage\") AS \"max_voltage\", min(\"temperature\") AS \"min_temperature\", max(\"temperature\") AS \"max_temperature\" FROM \"sunseeker_battery_detail\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }

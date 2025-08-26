@@ -292,7 +292,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"at_station\") FROM \"sunseeker_station\" WHERE $timeFilter",
+          "query": "SELECT last(\"at_station\") AS \"value\" FROM \"sunseeker_station\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -373,7 +373,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"connected\") FROM \"sunseeker_connection\" WHERE $timeFilter",
+          "query": "SELECT last(\"connected\") AS \"value\" FROM \"sunseeker_connection\" WHERE $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -635,7 +635,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"at_station\") AS \"at_station\" FROM \"sunseeker_station\" WHERE $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT last(\"at_station\") AS \"at_station\" FROM \"sunseeker_station\" WHERE $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "B"
         }
