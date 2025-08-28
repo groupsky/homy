@@ -38,22 +38,36 @@ export class SunseekerMessageParser {
    */
   _parseByCommand(data, deviceId) {
     const cmd = data.cmd;
+    let points = [];
     
     switch (cmd) {
       case COMMAND_TYPES.STATUS_UPDATE:
-        return this._parseStatusMessage(data, deviceId);
+        points = this._parseStatusMessage(data, deviceId);
+        break;
       case COMMAND_TYPES.LOG_MESSAGE:
-        return this._parseLogMessage(data, deviceId);
+        points = this._parseLogMessage(data, deviceId);
+        break;
       case COMMAND_TYPES.STATE_CHANGE:
-        return this._parseStateChangeMessage(data, deviceId);
+        points = this._parseStateChangeMessage(data, deviceId);
+        break;
       case COMMAND_TYPES.BATTERY_INFO:
-        return this._parseBatteryInfoMessage(data, deviceId);
+        points = this._parseBatteryInfoMessage(data, deviceId);
+        break;
       case COMMAND_TYPES.COMMAND_ACK:
-        return this._parseCommandAckMessage(data, deviceId);
+        points = this._parseCommandAckMessage(data, deviceId);
+        break;
       default:
         logger.warn(`Unsupported command type: ${cmd}`);
         return null;
     }
+
+    // Add connection health point for all successfully parsed messages
+    if (points && points.length > 0) {
+      const connectionPoint = this._createConnectionHealthPoint(deviceId);
+      points.push(connectionPoint);
+    }
+
+    return points;
   }
 
   /**
@@ -103,17 +117,6 @@ export class SunseekerMessageParser {
         timestamp
       });
     }
-
-    // Connection health point
-    points.push({
-      measurement: MEASUREMENTS.CONNECTION,
-      device_id: deviceId,
-      fields: {
-        connected: true
-      },
-      tags: {},
-      timestamp
-    });
 
     return points;
   }
@@ -300,5 +303,21 @@ export class SunseekerMessageParser {
     }
 
     return data;
+  }
+
+  /**
+   * Create connection health point for all message types
+   * @private
+   */
+  _createConnectionHealthPoint(deviceId) {
+    return {
+      measurement: MEASUREMENTS.CONNECTION,
+      device_id: deviceId,
+      fields: {
+        connected: true
+      },
+      tags: {},
+      timestamp: new Date()
+    };
   }
 }

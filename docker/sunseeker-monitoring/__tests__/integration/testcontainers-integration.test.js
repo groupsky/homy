@@ -194,7 +194,7 @@ describe('Sunseeker Service Integration Tests', () => {
       const deviceTopic = `/device/${TEST_DEVICE_ID}/update`;
       const testMessage = TEST_MESSAGES.LOG_MESSAGE;
 
-      const waitForLogPromise = waitForLog(/Wrote 1 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote 2 points to InfluxDB/i)
 
       mqttClient.publish(deviceTopic, JSON.stringify(testMessage));
 
