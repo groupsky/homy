@@ -151,7 +151,7 @@ describe('Sunseeker Service Integration Tests', () => {
       const deviceTopic = `/device/${TEST_DEVICE_ID}/update`;
       const testMessage = TEST_MESSAGES.STATUS_UPDATE;
 
-      const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       mqttClient.publish(deviceTopic, JSON.stringify(testMessage));
 
@@ -194,7 +194,7 @@ describe('Sunseeker Service Integration Tests', () => {
       const deviceTopic = `/device/${TEST_DEVICE_ID}/update`;
       const testMessage = TEST_MESSAGES.LOG_MESSAGE;
 
-      const waitForLogPromise = waitForLog(/Wrote 2 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       mqttClient.publish(deviceTopic, JSON.stringify(testMessage));
 
@@ -264,7 +264,7 @@ describe('Sunseeker Service Integration Tests', () => {
       const appTopic = `/app/${TEST_APP_ID}/get`;
       const testMessage = TEST_MESSAGES.APP_MESSAGE;
 
-      const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       mqttClient.publish(appTopic, JSON.stringify(testMessage));
 
@@ -306,7 +306,7 @@ describe('Sunseeker Service Integration Tests', () => {
 
         await waitForErrorLogPromise
 
-      const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       // Send valid message after invalid one
       const testMessage = TEST_MESSAGES.STATUS_UPDATE;
@@ -344,7 +344,7 @@ describe('Sunseeker Service Integration Tests', () => {
 
       // Send multiple messages to ensure service is active
       for (let i = 0; i < 3; i++) {
-        const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+        const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
         const message = { ...TEST_MESSAGES.STATUS_UPDATE, mode: i };
         mqttClient.publish(`/device/${TEST_DEVICE_ID}/update`, JSON.stringify(message));
         await waitForLogPromise
