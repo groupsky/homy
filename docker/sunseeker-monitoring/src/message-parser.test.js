@@ -74,25 +74,42 @@ describe('SunseekerMessageParser', () => {
       const result = parser.parseMessage(topic, payload);
 
       expect(result).not.toBeNull();
-      const batteryPoint = result.find(p => p.measurement === 'sunseeker_battery_detail');
-      expect(batteryPoint).toBeDefined();
+      
+      // Verify battery detail point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_battery_detail',
+        device_id: TEST_DEVICE_ID,
+        fields: expect.objectContaining({
+          voltage_mv: 20182,
+          voltage: 20.182,
+          min_cell_mv: 3995,
+          min_cell_voltage: 3.995,
+          max_cell_mv: 4003,
+          max_cell_voltage: 4.003,
+          temperature: 24,
+          current_ma: 1538,
+          current: 1.538,
+          percentage: 94,
+          pitch: 178,
+          roll: 1,
+          heading: 20
+        }),
+        tags: expect.objectContaining({
+          temp_alert: 'normal'
+        }),
+        timestamp: expect.any(Date)
+      }));
 
-      // Check extracted battery data - original mV/mA fields
-      expect(batteryPoint.fields.voltage_mv).toBe(20182);
-      expect(batteryPoint.fields.min_cell_mv).toBe(3995);
-      expect(batteryPoint.fields.max_cell_mv).toBe(4003);
-      expect(batteryPoint.fields.temperature).toBe(24);
-      expect(batteryPoint.fields.current_ma).toBe(1538);
-      expect(batteryPoint.fields.percentage).toBe(94);
-      expect(batteryPoint.fields.pitch).toBe(178);
-      expect(batteryPoint.fields.roll).toBe(1);
-      expect(batteryPoint.fields.heading).toBe(20);
-
-      // Check converted V/A fields
-      expect(batteryPoint.fields.voltage).toBe(20.182);
-      expect(batteryPoint.fields.current).toBe(1.538);
-      expect(batteryPoint.fields.min_cell_voltage).toBe(3.995);
-      expect(batteryPoint.fields.max_cell_voltage).toBe(4.003);
+      // Verify connection health point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_connection',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          connected: true
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
     });
 
     it('should parse cmd 509 waiting status log messages', () => {
@@ -102,20 +119,37 @@ describe('SunseekerMessageParser', () => {
       const result = parser.parseMessage(topic, payload);
 
       expect(result).not.toBeNull();
-      const batteryPoint = result.find(p => p.measurement === 'sunseeker_battery_detail');
-      expect(batteryPoint).toBeDefined();
 
-      // Check original fields
-      expect(batteryPoint.fields.voltage_mv).toBe(20096);
-      expect(batteryPoint.fields.percentage).toBe(97);
-      expect(batteryPoint.fields.temperature).toBe(32);
-      expect(batteryPoint.fields.min_cell_mv).toBe(3974);
-      expect(batteryPoint.fields.max_cell_mv).toBe(3980);
-      
-      // Check converted voltage fields
-      expect(batteryPoint.fields.voltage).toBe(20.096);
-      expect(batteryPoint.fields.min_cell_voltage).toBe(3.974);
-      expect(batteryPoint.fields.max_cell_voltage).toBe(3.980);
+      // Verify battery detail point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_battery_detail',
+        device_id: TEST_DEVICE_ID,
+        fields: expect.objectContaining({
+          voltage_mv: 20096,
+          voltage: 20.096,
+          percentage: 97,
+          min_cell_mv: 3974,
+          min_cell_voltage: 3.974,
+          max_cell_mv: 3980,
+          max_cell_voltage: 3.980,
+          temperature: 32
+        }),
+        tags: expect.objectContaining({
+          temp_alert: 'normal'
+        }),
+        timestamp: expect.any(Date)
+      }));
+
+      // Verify connection health point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_connection',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          connected: true
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
     });
 
     it('should parse cmd 511 state change messages', () => {
@@ -125,12 +159,29 @@ describe('SunseekerMessageParser', () => {
       const result = parser.parseMessage(topic, payload);
 
       expect(result).not.toBeNull();
-      expect(result).toHaveLength(1);
 
-      const statePoint = result[0];
-      expect(statePoint.measurement).toBe('sunseeker_state_change');
-      expect(statePoint.fields.message_code).toBe(1);
-      expect(statePoint.fields.timestamp).toBe(1756076015);
+      // Verify state change point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_state_change',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          message_code: 1,
+          timestamp: 1756076015
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
+
+      // Verify connection health point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_connection',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          connected: true
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
     });
 
     it('should parse cmd 400 command acknowledgment messages', () => {
@@ -140,10 +191,29 @@ describe('SunseekerMessageParser', () => {
       const result = parser.parseMessage(topic, payload);
 
       expect(result).not.toBeNull();
-      const commandPoint = result[0];
-      expect(commandPoint.measurement).toBe('sunseeker_commands');
-      expect(commandPoint.fields.command).toBe(101);
-      expect(commandPoint.fields.result).toBe(true);
+
+      // Verify command point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_commands',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          command: 101,
+          result: true
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
+
+      // Verify connection health point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_connection',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          connected: true
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
     });
 
     it('should parse cmd 512 battery info messages', () => {
@@ -153,14 +223,31 @@ describe('SunseekerMessageParser', () => {
       const result = parser.parseMessage(topic, payload);
 
       expect(result).not.toBeNull();
-      expect(result).toHaveLength(1);
 
-      const batteryInfoPoint = result[0];
-      expect(batteryInfoPoint.measurement).toBe('sunseeker_battery_info');
-      expect(batteryInfoPoint.fields.battery_type).toBe('5S1P_TEST_BATTERY');
-      expect(batteryInfoPoint.fields.battery_id).toBe(123456789);
-      expect(batteryInfoPoint.fields.charge_times).toBe(93);
-      expect(batteryInfoPoint.fields.discharge_times).toBe(93);
+      // Verify battery info point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_battery_info',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          battery_type: '5S1P_TEST_BATTERY',
+          battery_id: 123456789,
+          charge_times: 93,
+          discharge_times: 93
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
+
+      // Verify connection health point
+      expect(result).toContainEqual(expect.objectContaining({
+        measurement: 'sunseeker_connection',
+        device_id: TEST_DEVICE_ID,
+        fields: {
+          connected: true
+        },
+        tags: {},
+        timestamp: expect.any(Date)
+      }));
     });
 
     it('should handle cmd 512 messages with partial battery info', () => {
@@ -397,7 +484,7 @@ describe('SunseekerMessageParser', () => {
   });
 
   describe('connection health tracking', () => {
-    it('should create connection health data points', () => {
+    it('should create connection health data points for cmd 501 status updates', () => {
       const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":501,"mode":1,"power":85,"station":false}';
 
@@ -406,6 +493,76 @@ describe('SunseekerMessageParser', () => {
       const healthPoint = result.find(p => p.measurement === 'sunseeker_connection');
       expect(healthPoint).toBeDefined();
       expect(healthPoint.fields.connected).toBe(true);
+      expect(healthPoint.device_id).toBe(TEST_DEVICE_ID);
+      expect(healthPoint.timestamp).toBeInstanceOf(Date);
+    });
+
+    it('should create connection health data points for cmd 509 log messages', () => {
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = JSON.stringify(TEST_MESSAGES.LOG_MESSAGE);
+
+      const result = parser.parseMessage(topic, payload);
+
+      const healthPoint = result.find(p => p.measurement === 'sunseeker_connection');
+      expect(healthPoint).toBeDefined();
+      expect(healthPoint.fields.connected).toBe(true);
+      expect(healthPoint.device_id).toBe(TEST_DEVICE_ID);
+    });
+
+    it('should create connection health data points for cmd 511 state change messages', () => {
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = '{"cmd":511,"time":1756076015,"msg":1}';
+
+      const result = parser.parseMessage(topic, payload);
+
+      const healthPoint = result.find(p => p.measurement === 'sunseeker_connection');
+      expect(healthPoint).toBeDefined();
+      expect(healthPoint.fields.connected).toBe(true);
+      expect(healthPoint.device_id).toBe(TEST_DEVICE_ID);
+    });
+
+    it('should create connection health data points for cmd 512 battery info messages', () => {
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = JSON.stringify(TEST_MESSAGES.BATTERY_INFO);
+
+      const result = parser.parseMessage(topic, payload);
+
+      const healthPoint = result.find(p => p.measurement === 'sunseeker_connection');
+      expect(healthPoint).toBeDefined();
+      expect(healthPoint.fields.connected).toBe(true);
+      expect(healthPoint.device_id).toBe(TEST_DEVICE_ID);
+    });
+
+    it('should create connection health data points for cmd 400 command acknowledgments', () => {
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = '{"cmd":400,"command":101,"result":true}';
+
+      const result = parser.parseMessage(topic, payload);
+
+      const healthPoint = result.find(p => p.measurement === 'sunseeker_connection');
+      expect(healthPoint).toBeDefined();
+      expect(healthPoint.fields.connected).toBe(true);
+      expect(healthPoint.device_id).toBe(TEST_DEVICE_ID);
+    });
+
+    it('should not create connection health data points for invalid messages', () => {
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = '{"cmd":999,"data":"unknown"}';
+
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      const result = parser.parseMessage(topic, payload);
+
+      expect(result).toBeNull();
+    });
+
+    it('should not create connection health data points for invalid JSON', () => {
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = 'invalid json';
+
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      const result = parser.parseMessage(topic, payload);
+
+      expect(result).toBeNull();
     });
   });
 });

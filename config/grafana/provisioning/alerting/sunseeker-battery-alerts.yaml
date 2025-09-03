@@ -17,12 +17,8 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              measurement: sunseeker_power
-              select:
-                - - params: ["battery_percentage"]
-                    type: field
-                  - params: []
-                    type: last
+              query: 'SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter'
+              rawQuery: true
               resultFormat: time_series
           - refId: A
             queryType: ''
@@ -77,12 +73,8 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              measurement: sunseeker_battery_detail
-              select:
-                - - params: ["voltage"]
-                    type: field
-                  - params: []
-                    type: last
+              query: 'SELECT last("voltage") FROM "sunseeker_battery_detail" WHERE $timeFilter'
+              rawQuery: true
               resultFormat: time_series
           - refId: A
             queryType: ''

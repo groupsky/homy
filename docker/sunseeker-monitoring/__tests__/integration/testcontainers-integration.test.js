@@ -151,7 +151,7 @@ describe('Sunseeker Service Integration Tests', () => {
       const deviceTopic = `/device/${TEST_DEVICE_ID}/update`;
       const testMessage = TEST_MESSAGES.STATUS_UPDATE;
 
-      const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       mqttClient.publish(deviceTopic, JSON.stringify(testMessage));
 
@@ -194,7 +194,7 @@ describe('Sunseeker Service Integration Tests', () => {
       const deviceTopic = `/device/${TEST_DEVICE_ID}/update`;
       const testMessage = TEST_MESSAGES.LOG_MESSAGE;
 
-      const waitForLogPromise = waitForLog(/Wrote 1 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       mqttClient.publish(deviceTopic, JSON.stringify(testMessage));
 
@@ -264,7 +264,7 @@ describe('Sunseeker Service Integration Tests', () => {
       const appTopic = `/app/${TEST_APP_ID}/get`;
       const testMessage = TEST_MESSAGES.APP_MESSAGE;
 
-      const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       mqttClient.publish(appTopic, JSON.stringify(testMessage));
 
@@ -306,7 +306,7 @@ describe('Sunseeker Service Integration Tests', () => {
 
         await waitForErrorLogPromise
 
-      const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+      const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
 
       // Send valid message after invalid one
       const testMessage = TEST_MESSAGES.STATUS_UPDATE;
@@ -344,7 +344,7 @@ describe('Sunseeker Service Integration Tests', () => {
 
       // Send multiple messages to ensure service is active
       for (let i = 0; i < 3; i++) {
-        const waitForLogPromise = waitForLog( /Wrote 4 points to InfluxDB/i)
+        const waitForLogPromise = waitForLog(/Wrote \d+ points to InfluxDB/i)
         const message = { ...TEST_MESSAGES.STATUS_UPDATE, mode: i };
         mqttClient.publish(`/device/${TEST_DEVICE_ID}/update`, JSON.stringify(message));
         await waitForLogPromise
@@ -379,12 +379,38 @@ describe('Sunseeker Service Integration Tests', () => {
 
   async function waitForLog(expectedLog, timeoutMs = 1000) {
     return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        const recentLogs = [];
+        const maxLogLines = 10; // Keep last 10 log lines for debugging
+        
         const timeoutId = setTimeout(() => {
           serviceLogStream.off("data", onData);
-          reject(new Error('Timeout waiting for log message'));
+          
+          const elapsed = Date.now() - startTime;
+          const expectedPattern = expectedLog instanceof RegExp 
+            ? `pattern: ${expectedLog.toString()}` 
+            : `text: "${expectedLog}"`;
+          
+          const errorMsg = [
+            `Timeout waiting for log message after ${elapsed}ms`,
+            `Expected ${expectedPattern}`,
+            `Recent logs (last ${Math.min(recentLogs.length, maxLogLines)} lines):`,
+            ...recentLogs.slice(-maxLogLines).map(line => `  ${line}`)
+          ].join('\n');
+          
+          reject(new Error(errorMsg));
         }, timeoutMs);
+        
         function onData(chunk) {
-          const log = chunk.toString('utf8');
+          const log = chunk.toString('utf8').trim();
+          if (log) {
+            recentLogs.push(log);
+            // Keep only recent logs to prevent memory issues
+            if (recentLogs.length > maxLogLines * 2) {
+              recentLogs.splice(0, maxLogLines);
+            }
+          }
+          
           if (expectedLog instanceof RegExp ? expectedLog.test(log) : log.includes(expectedLog)) {
               clearTimeout(timeoutId);
             serviceLogStream.off("data", onData);

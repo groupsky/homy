@@ -17,12 +17,8 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              measurement: sunseeker_connection
-              select:
-                - - params: ["connected"]
-                    type: field
-                  - params: []
-                    type: last
+              query: 'SELECT last("connected") FROM "sunseeker_connection" WHERE $timeFilter'
+              rawQuery: true
               resultFormat: time_series
           - refId: A
             queryType: ''
