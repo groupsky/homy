@@ -74,6 +74,9 @@ The system integrates with:
 ### Architecture
 - **System Architecture**: `ARCHITECTURE.md` - Comprehensive architectural overview covering data flow, service architecture, current state, and future direction for planning new features and improvements
 
+### System Specifications
+- **Infrastructure Documentation**: `docs/CLAUDE.md` - System-level specifications and technical documentation index
+
 ### Service Documentation
 - **Automation Bots**: `docker/automations/docs/` - Bot-specific guides and implementation details
 - **Service Development**: Service-specific CLAUDE.md files provide development patterns and best practices
