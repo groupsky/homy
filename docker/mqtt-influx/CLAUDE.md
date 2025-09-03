@@ -12,6 +12,7 @@ The mqtt-influx service bridges MQTT messages to InfluxDB time-series storage. M
 - **mqtt-influx-primary**: Primary electrical monitoring bus (`/modbus/main/+/+`)
 - **mqtt-influx-secondary**: Secondary circuits and boiler monitoring (`/modbus/secondary/+/+`)
 - **mqtt-influx-tetriary**: Additional power monitoring points (`/modbus/tetriary/+/+`)
+- **Water System Integration**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, boiler, and heat pump energy monitoring
 
 ### Data Flow
 ```
