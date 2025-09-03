@@ -19,9 +19,14 @@ water_system:
     ground_water_source:
       type: "borehole"
       depth: "13m"
-      location: {floor: "underground", coords: [x, y, -13]}
+      diameter: "80mm"
+      location: 
+        manhole: "Sonda shahta"
+        coords: [24.64155, 42.11554, -13]
+        depth_in_manhole: "13m from surface"
       pump:
         model: "Grundfos SQE3-80"
+        depth: "11m from surface"
         specs:
           power: "1.68kW"
           voltage: "200-240V 1Ph"
@@ -31,6 +36,7 @@ water_system:
         controller:
           model: "CU301"
           type: "constant_pressure"
+          location: "service_room"
           pressure_range: "2-5 bar (29-72 psi)"
           current_setting: "2 bar"
           communication: "Power Line Communication"
@@ -40,15 +46,18 @@ water_system:
     
     # Filtration System
     filtration:
-      location: {floor: 1, room: "service"}
+      location: {manhole: "Sonda shahta"}
       sequence:
         - type: "pressure_tank"
           purpose: "pump controller stabilization"
+          location: "Sonda_shahta_manhole"
         - type: "mechanical_filter"
           mesh: "50 micron"
+          location: "Sonda_shahta_manhole"
           replacement_schedule: "end of summer"
         - type: "mechanical_filter" 
           mesh: "5 micron"
+          location: "Sonda_shahta_manhole"
           replacement_schedule: "end of summer"
     
     # Hot Water System
@@ -142,11 +151,37 @@ water_system:
         floor1_underfloor: "active"
         floor2_underfloor: "active"
     
-    # Hot Water Circulation (Currently Disconnected)
-    hot_water_circulation:
+    # Hot Water System
+    hot_water_distribution:
+      status: "operational"
+      source: "boiler"
+      path: "boiler → distribution1 → consumers → distribution2"
+      distributions:
+        distribution1:
+          type: "manifold_hot_out"
+          location: "service_room_near_boiler"
+          valve_type: "manual_per_consumer"
+        distribution2:
+          type: "manifold_return"
+          location: "service_room_near_boiler"
+          valve_type: "manual_per_consumer"
+      consumers:
+        - {name: "bath1", floor: 1, valve: "manual", includes: ["sink", "shower"]}
+        - {name: "bath2", floor: 2, valve: "manual", elevation: "+3m", includes: ["sink", "shower"]}
+        - {name: "bath3", floor: 2, valve: "manual", elevation: "+3m", includes: ["sink", "shower"]}
+        - {name: "kitchen_sink", floor: 1, valve: "manual"}
+        - {name: "unused_outside_behind_bath1", status: "unused", valve: "manual"}
+        - {name: "reserve", status: "unused", valve: "manual"}
+      reverse_valves:
+        type: "PPR_Ball_Valve"
+        status: "currently_closed"
+        reference_image: "https://europlastica.bg/resources/KRAN-SFERICHEN-1519127993448.png"
+        location: "unknown" # clarify location and purpose
+
+    hot_water_recirculation:
       pump:
         model: "unknown"
-        status: "disconnected" 
+        status: "electrically_disconnected" 
         intended_location: "between_distribution2_and_boiler"
         control: "planned_manual_or_automatic"
   
@@ -182,15 +217,9 @@ water_system:
         pipe: "3/4 inch PPR"
         household_branch:
           consumers:
-            - {name: "bath1_toilet", floor: 1}
-            - {name: "bath1_sink", floor: 1, sequence: "before_shower"}
-            - {name: "bath1_shower", floor: 1, sequence: "after_sink"}
-            - {name: "bath2_toilet", floor: 2}
-            - {name: "bath2_sink", floor: 2, sequence: "before_shower", elevation: "+3m"}
-            - {name: "bath2_shower", floor: 2, sequence: "after_sink", elevation: "+3m"}
-            - {name: "bath3_toilet", floor: 2, elevation: "+3m"}
-            - {name: "bath3_sink", floor: 2, sequence: "before_shower", elevation: "+3m"}
-            - {name: "bath3_shower", floor: 2, sequence: "after_sink", elevation: "+3m"}
+            - {name: "bath1", floor: 1, includes: ["toilet", "sink", "shower"]}
+            - {name: "bath2", floor: 2, elevation: "+3m", includes: ["toilet", "sink", "shower"]}
+            - {name: "bath3", floor: 2, elevation: "+3m", includes: ["toilet", "sink", "shower"]}
             - {name: "kitchen_sink", floor: 1}
             - {name: "washing_machine", floor: 1, location: "next_to_kitchen_sink"}
             - {name: "laundry_room", floor: 2, location: "next_to_bath3"}
@@ -203,19 +232,19 @@ water_system:
             - {name: "external_sink_east_wall", location: "3m_from_south", floor: 1}
             - {name: "unused_irrigation_east_wall", location: "5-6m_from_south", status: "unused"}
     
-    # Hot Water Circuit (Planned)
-    hot_water_circulation:
+    # Hot Water Circuit (Operational)
+    hot_water_distribution:
       source: "boiler"
-      status: "circulation_pump_disconnected"
-      path: "boiler → distribution1 → consumers → distribution2 → [pump] → boiler"
+      status: "operational"
+      path: "boiler → distribution1 → consumers → distribution2"
       distributions:
         distribution1:
           type: "manifold_hot_out"
-          location: "near_boiler_or_central" # clarify location
+          location: "service_room_near_boiler"
           valve_type: "manual_per_consumer"
         distribution2:
           type: "manifold_return"
-          location: "near_boiler_or_central" # clarify location
+          location: "service_room_near_boiler"
           valve_type: "manual_per_consumer"
       consumers:
         - {name: "bath1_sink", floor: 1, valve: "manual"}
@@ -228,8 +257,20 @@ water_system:
         - {name: "unused_outside_behind_bath1", status: "unused", valve: "manual"}
         - {name: "reserve", status: "unused", valve: "manual"}
       reverse_valves:
+        type: "PPR_Ball_Valve"
         status: "currently_closed"
+        reference_image: "https://europlastica.bg/resources/KRAN-SFERICHEN-1519127993448.png"
         location: "unknown" # clarify location and purpose
+    
+    hot_water_recirculation:
+      source: "distribution2"
+      status: "pump_electrically_disconnected"
+      path: "distribution2 → [disconnected_pump] → boiler"
+      pump:
+        model: "unknown"
+        status: "electrically_disconnected" 
+        intended_location: "between_distribution2_and_boiler"
+        control: "planned_manual_or_automatic"
     
     # Solar Heating Circuit
     solar_heating:
@@ -316,14 +357,17 @@ water_system:
 ## Key Clarifications Needed
 
 **High Priority:**
-1. Distribution manifold locations - where exactly are distribution1 and distribution2?
-2. Reverse valve locations and intended function
+1. ~~Distribution manifold locations~~ ✅ *Resolved: service room near boiler*
+2. ~~Reverse valve specifications~~ ✅ *Resolved: PPR Ball Valves* - location still unknown
 
 **Medium Priority:**
-3. Hot water circulation pump specifications
-4. Pressure tank size and location details
+3. Hot water circulation pump specifications → [Issue #1003](https://github.com/groupsky/homy/issues/1003)
+4. Pressure tank size and location details → [Issue #1005](https://github.com/groupsky/homy/issues/1005)
 5. Physical pipe routing maps
-6. Valve numbering/identification system
+6. Valve numbering/identification system → [Issue #1006](https://github.com/groupsky/homy/issues/1006)
+
+**Related Documentation:**
+- Electrical system specification → [Issue #1004](https://github.com/groupsky/homy/issues/1004)
 
 ## Extension Framework
 
@@ -333,9 +377,3 @@ This structure supports future additions for:
 - **Irrigation:** `irrigation_system:` for zones, schedules, sensors
 - **Sensors:** Cross-system sensor registry with unified monitoring
 - **Automation:** Links to MQTT topics, Node-RED flows, HA entities
-
-Would you like me to:
-A) Refine this YAML structure based on missing details
-B) Add electrical system framework 
-C) Create visualization layer (Mermaid diagrams)
-D) Design query/management system architecture

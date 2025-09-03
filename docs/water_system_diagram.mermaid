@@ -1,0 +1,69 @@
+graph TD
+    %% Ground Water Source
+    BH[Borehole<br/>13m depth, 80mm<br/>Sonda shahta manhole] --> P[Grundfos SQE3-80<br/>11m depth<br/>1.68kW]
+    P --> PT[Pressure Tank<br/>Sonda shahta manhole]
+    PT --> F1[50μm Filter<br/>Sonda shahta manhole]
+    F1 --> F2[5μm Filter<br/>Sonda shahta manhole]
+    F2 --> MS[Main Split]
+    
+    %% Controller
+    PC[CU301 Controller<br/>Service Room<br/>2 bar setting] -.->|PLC| P
+    PC --> MT1[MQTT: /modbus/secondary/<br/>water_pump/reading]
+    
+    %% Main Distribution
+    MS --> IRR[Irrigation Circuit<br/>50mm HDPE]
+    MS --> DOM[Domestic Cold<br/>32mm HDPE]
+    
+    %% Heat Pump Connection
+    DOM --> HPC[Heat Pump Connection]
+    HPC --> HP[Heat Pump<br/>Service Room]
+    HP --> DR[Drainage 250mm<br/>to irrigation channel]
+    
+    %% Hot Water System
+    DOM --> BR[Boiler<br/>Eldom FV20060S2<br/>200L Service Room]
+    
+    %% Solar System
+    SP[Solar Panels<br/>Roof 7m] --> SC[Solar Controller]
+    SC --> SPump[Solar Circulation Pump]
+    SPump --> BLS[Boiler Lower Serpentine<br/>4.2L, 0.35m²]
+    BLS --> ET[Expansion Tank]
+    
+    %% Boiler Details
+    BR --> BHS[Boiler Upper Serpentine<br/>1.79L, 0.86m² - Unused]
+    BR --> EH[Electric Heater 3kW]
+    EH --> MT2[MQTT: homy/features/relay/<br/>service_boiler_contactor]
+    
+    %% Temperature Sensors
+    BR --> TS1[Temp Sensor Bottom<br/>45cm height]
+    BR --> TS2[Temp Sensor Top<br/>107cm height]
+    TS1 --> MT3[MQTT: temperature_boiler_low]
+    TS2 --> MT4[MQTT: temperature_boiler_high]
+    SP --> MT5[MQTT: temperature_solar_panel]
+    
+    %% Hot Water Distribution (Operational)
+    BR --> D1[Distribution1<br/>Hot Out Manifold<br/>Service Room]
+    D1 --> CONS[Hot Water Consumers<br/>Bath1, Bath2, Bath3<br/>Kitchen, Reserve]
+    CONS --> D2[Distribution2<br/>Return Manifold<br/>Service Room]
+    D2 --> RV[PPR Ball Valves<br/>Currently Closed<br/>Unknown location]
+    
+    %% Hot Water Recirculation (Disconnected)
+    D2 -.->|pump disconnected| HWP[Hot Water Pump<br/>Unknown model]
+    HWP -.-> BR
+    
+    %% Underfloor Heating
+    HP --> UF1[Floor 1 Underfloor]
+    HP --> UF2[Floor 2 Underfloor]
+    
+    %% Energy Monitoring
+    P --> EM1[Energy Monitor<br/>Water Pump]
+    HP --> EM2[Energy Monitor<br/>Heat Pump]
+    EH --> EM3[Energy Monitor<br/>Boiler]
+    
+    %% Styling
+    classDef operational fill:#90EE90
+    classDef disconnected fill:#FFB6C1,stroke-dasharray: 5 5
+    classDef monitoring fill:#87CEEB
+    
+    class P,PT,F1,F2,BR,HP,SP,SPump,D1,D2,CONS,RV operational
+    class HWP disconnected
+    class MT1,MT2,MT3,MT4,MT5,EM1,EM2,EM3 monitoring
