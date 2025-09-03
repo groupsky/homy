@@ -74,6 +74,9 @@ The system integrates with:
 ### Architecture
 - **System Architecture**: `ARCHITECTURE.md` - Comprehensive architectural overview covering data flow, service architecture, current state, and future direction for planning new features and improvements
 
+### System Specifications
+- **Infrastructure Documentation**: `docs/CLAUDE.md` - System-level specifications and technical documentation index
+
 ### Service Documentation
 - **Automation Bots**: `docker/automations/docs/` - Bot-specific guides and implementation details
 - **Service Development**: Service-specific CLAUDE.md files provide development patterns and best practices
@@ -155,6 +158,8 @@ When adding new features that affect architecture:
 2. **Update CLAUDE.md**: Add new MQTT topic patterns and bot capabilities
 3. **Create service-specific CLAUDE.md**: For complex services, add local documentation files
 4. **Maintain configuration examples**: Provide clear examples for gradual rollout strategies
+5. **Avoid link duplication**: Reference detailed documentation from the most relevant service-specific CLAUDE.md files rather than duplicating links in multiple locations. Use `docs/CLAUDE.md` as the central documentation index.
+6. **Strategic cross-referencing**: Add cross-references to system documentation only in service-specific CLAUDE.md files where developers would actually need that information (e.g., water system specs in automations, grafana, and mqtt-influx CLAUDE.md files, but not in unrelated services).
 
 ### Git Workflow
 When committing changes:

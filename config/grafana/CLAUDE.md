@@ -100,6 +100,10 @@ from(bucket: "home_automation")
 - `sunseeker-battery.json` - Detailed battery health, voltage trends, temperature
 - `sunseeker-navigation.json` - Quick navigation between views
 
+**Water System Monitoring:**
+- `heatpump.json` - Heat pump energy consumption and performance metrics
+- **System Reference**: See `docs/water_system_spec.md` for complete MQTT topic mappings and monitoring points
+
 ### Variable Configuration
 
 **Standard Variables:**
