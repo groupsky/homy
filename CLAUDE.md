@@ -158,6 +158,7 @@ When adding new features that affect architecture:
 2. **Update CLAUDE.md**: Add new MQTT topic patterns and bot capabilities
 3. **Create service-specific CLAUDE.md**: For complex services, add local documentation files
 4. **Maintain configuration examples**: Provide clear examples for gradual rollout strategies
+5. **Avoid link duplication**: Reference detailed documentation from the most relevant service-specific CLAUDE.md files rather than duplicating links in multiple locations. Use `docs/CLAUDE.md` as the central documentation index.
 
 ### Git Workflow
 When committing changes:

@@ -121,6 +121,7 @@ Key patterns:
 #### `irrigation` - Scheduled watering systems
 - **Purpose**: Cron-based irrigation with safety timeouts
 - **Features**: Schedule expressions, safety shutoffs, weather integration
+- **System Reference**: See `docs/water_system_spec.md` for complete irrigation circuit specifications
 
 #### `bac002-*` - HVAC thermostat control
 - **Purpose**: BACnet thermostat synchronization and control
@@ -157,6 +158,7 @@ const subscribe = (topic, callback) => {
 - **Input topics**: Listen to feature status topics and modbus readings
 - **Output topics**: Publish to feature command topics and automation events
 - **Monitoring topics**: Publish failure events to `homy/automation/{name}/command_failed`
+- **Water System Topics**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, sensors, and controls
 
 ### Feature Integration
 - Use the features service for device abstraction
