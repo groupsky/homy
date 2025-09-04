@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "cron-parser": "^4.9.0",
+    "cron-parser": "^5.3.0",
     "mqtt": "^5.14.0",
     "suncalc": "^1.9.0"
   },
