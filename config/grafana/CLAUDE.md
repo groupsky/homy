@@ -88,6 +88,21 @@ from(bucket: "home_automation")
 - **Temperature alerts**: >40°C high, <5°C low
 - **Connection alerts**: >30 minutes no data
 
+**Deleting Provisioned Alerts:**
+File-provisioned alerts cannot be deleted through the Grafana UI or standard API calls. To remove them, create a temporary deletion configuration file:
+
+```yaml
+apiVersion: 1
+
+deleteRules:
+  - orgId: 1
+    uid: alert-rule-uid-1
+  - orgId: 1
+    uid: alert-rule-uid-2
+```
+
+Deploy this file, wait for Grafana to process the deletions, then remove the temporary file. This is the proper method for cleaning up orphaned alerts in Grafana v9.5+.
+
 ### Dashboard Families
 
 **Service Monitoring Pattern:**
