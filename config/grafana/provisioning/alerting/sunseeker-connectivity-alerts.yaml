@@ -8,7 +8,7 @@ groups:
     rules:
       - uid: sunseeker-connection-lost
         title: Sunseeker Connection Lost
-        condition: A
+        condition: connection
         data:
           - refId: connection
             queryType: ''
@@ -20,36 +20,6 @@ groups:
               query: 'SELECT last("connected") FROM "sunseeker_connection" WHERE $timeFilter'
               rawQuery: true
               resultFormat: time_series
-          - refId: A
-            queryType: ''
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasourceUid: __expr__
-            model:
-              conditions:
-                - evaluator:
-                    params:
-                      - 0
-                    type: eq
-                  operator:
-                    type: and
-                  query:
-                    params:
-                      - connection
-                  reducer:
-                    params: []
-                    type: last
-                  type: query
-              datasource:
-                type: __expr__
-                uid: __expr__
-              expression: connection
-              hide: false
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              type: threshold
         noDataState: Alerting
         execErrState: Alerting
         for: 30m
