@@ -59,18 +59,21 @@ from(bucket: "home_automation")
 
 **InfluxDB v1 (InfluxQL) - Used for Alerting:**
 ```sql
--- Correct syntax for ALERTS - NO $timeFilter variable
-SELECT last("battery_percentage") FROM "sunseeker_power"
-SELECT last("voltage") FROM "sunseeker_battery_detail"  
-SELECT last("temperature") FROM "sunseeker_battery_detail"
+-- Correct syntax for ALERTS - explicit time filtering required
+SELECT last("battery_percentage") FROM "sunseeker_power" WHERE time >= now() - 15m
+SELECT last("voltage") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m
+SELECT last("temperature") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m
 
 -- Incorrect syntax - will cause alert failures in Grafana 9.5+
 SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
+-- Also incorrect - no time filtering means data from any time period
+SELECT last("battery_percentage") FROM "sunseeker_power"
 ```
 
 **Best Practices:**
-- **Alert queries**: Do NOT use `$timeFilter` in Grafana 9.5+ (known issue with provisioned alerts)
-- **Alert time filtering**: Handled automatically by `relativeTimeRange` parameter in alert configuration
+- **Alert queries**: Do NOT use `$timeFilter` in Grafana 9.5+ (known issue with provisioned alerts)  
+- **Alert time filtering**: `relativeTimeRange` does NOT filter InfluxQL queries - must use explicit `WHERE time >= now() - [duration]`
+- **All alert queries need explicit time filtering** to prevent using stale data from disconnected devices
 - **Dashboard queries**: Can use `$timeFilter` normally - works fine in dashboard context
 - Use appropriate time aggregation (`aggregateWindow` for Flux, aggregate functions for InfluxQL)
 - Filter by measurement and device_id early in queries
@@ -97,7 +100,7 @@ SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
         to: 0
       datasourceUid: P3C6603E967DC8568
       model:
-        query: 'SELECT last("temperature") FROM "sunseeker_battery_detail"'
+        query: 'SELECT last("temperature") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m'
         rawQuery: true
         resultFormat: time_series
     - refId: A                    # Condition expression
@@ -137,7 +140,7 @@ SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
         to: 0
       datasourceUid: P3C6603E967DC8568
       model:
-        query: 'SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true'
+        query: 'SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true AND time >= now() - 30m'
         rawQuery: true
         resultFormat: time_series
     - refId: A                     # Condition expression
@@ -169,16 +172,18 @@ SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
 
 *Threshold Alerts (with conditions):*
 - Use for numeric comparisons (temperature > 45°C, battery < 15%)
-- Require both data query and condition expression
-- Data query: `refId: "field_name"` (e.g., "temperature")
+- Require both data query and condition expression with explicit time filtering
+- Data query: `refId: "field_name"` (e.g., "temperature") with `WHERE time >= now() - [duration]`
 - Condition: `refId: "A"`, references data query in `expression` and `query.params`
+- **Critical**: Without time filtering, alerts use stale data and won't detect device disconnection
 
 *Connectivity Alerts (count-based):*
 - Use for heartbeat/connectivity monitoring where only positive states are recorded
 - Count records of positive connectivity states in time window
-- Use `SELECT count("field") WHERE "field" = true` with threshold `< 1`
-- Example: `SELECT count("connected") FROM "measurement" WHERE "connected" = true`
+- Use `SELECT count("field") WHERE "field" = true AND time >= now() - 30m` with threshold `< 1`
+- Example: `SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true AND time >= now() - 30m`
 - Alert when count = 0 (no positive connectivity records in time window)
+- **Important**: Include explicit time filtering with `time >= now() - [duration]` as `relativeTimeRange` alone doesn't limit InfluxQL queries
 
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning

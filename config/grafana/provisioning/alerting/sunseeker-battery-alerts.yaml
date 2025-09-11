@@ -17,7 +17,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("battery_percentage") FROM "sunseeker_power"'
+              query: 'SELECT last("battery_percentage") FROM "sunseeker_power" WHERE time >= now() - 15m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -73,7 +73,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("voltage") FROM "sunseeker_battery_detail"'
+              query: 'SELECT last("voltage") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m'
               rawQuery: true
               resultFormat: time_series
           - refId: A

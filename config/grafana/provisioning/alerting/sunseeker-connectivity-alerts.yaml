@@ -17,7 +17,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true'
+              query: 'SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true AND time >= now() - 30m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
