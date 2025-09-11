@@ -30,8 +30,8 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 1
-                    type: lt
+                      - 0
+                    type: eq
                   operator:
                     type: and
                   query:
