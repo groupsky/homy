@@ -124,6 +124,47 @@ SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
   execErrState: Alerting
 ```
 
+**Connectivity Alert Configuration Example:**
+```yaml
+- uid: sunseeker-connection-lost
+  title: "Sunseeker Connection Lost"
+  condition: A                     # References the expression refId
+  data:
+    - refId: connection            # Data query (count)
+      queryType: ""
+      relativeTimeRange:
+        from: 1800                 # 30 minutes lookback
+        to: 0
+      datasourceUid: P3C6603E967DC8568
+      model:
+        query: 'SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true'
+        rawQuery: true
+        resultFormat: time_series
+    - refId: A                     # Condition expression
+      queryType: ""
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: classic_conditions   # ✅ Use classic_conditions
+        conditions:
+          - evaluator:
+              params: [1]
+              type: lt             # count < 1 = disconnected
+            operator:
+              type: and
+            query:
+              params: [connection] # References data query refId
+            reducer:
+              type: last
+            type: query
+        expression: connection
+  noDataState: NoData
+  execErrState: Alerting
+  for: 30m                         # Wait 30 minutes before alerting
+```
+
 **Alert Patterns:**
 
 *Threshold Alerts (with conditions):*
@@ -132,11 +173,12 @@ SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
 - Data query: `refId: "field_name"` (e.g., "temperature")
 - Condition: `refId: "A"`, references data query in `expression` and `query.params`
 
-*NoData Alerts (direct query):*
-- Use for connectivity/availability monitoring
-- Single data query with `condition: query_refId`
-- Triggered by `noDataState: Alerting` when query returns no data
-- Example: Connection monitoring, service health checks
+*Connectivity Alerts (count-based):*
+- Use for heartbeat/connectivity monitoring where only positive states are recorded
+- Count records of positive connectivity states in time window
+- Use `SELECT count("field") WHERE "field" = true` with threshold `< 1`
+- Example: `SELECT count("connected") FROM "measurement" WHERE "connected" = true`
+- Alert when count = 0 (no positive connectivity records in time window)
 
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning
@@ -302,10 +344,11 @@ contactPoints:
 - Review alert rule evaluation frequency
 
 **Alert Query Syntax Issues:**
-- **Symptoms**: Alerts showing "Error" state with "[no value]" in descriptions, or "condition must not be empty" in Grafana UI
+- **Symptoms**: Alerts showing "Error" state with "[no value]" in descriptions, "condition must not be empty", or "time series data and only reduced data can be alerted on"
 - **Primary Causes**: 
   1. `$timeFilter` variable incompatibility in Grafana 9.5+ provisioned alerts
   2. Incorrect condition `type` configuration (`threshold` vs `classic_conditions`)
+  3. Time series queries used directly as conditions without proper reduction
 - **Solutions**: 
   1. Remove `$timeFilter` from alert queries, time filtering handled by `relativeTimeRange`:
      ```sql
@@ -317,6 +360,11 @@ contactPoints:
      model:
        type: classic_conditions  # ✅ Works reliably
        # type: threshold         # ❌ Can cause "condition must not be empty" errors
+     ```
+  3. For connectivity alerts, use count queries with proper conditions:
+     ```sql
+     ✅ SELECT count("connected") WHERE "connected" = true  # Returns single value
+     ❌ SELECT last("connected")                          # May return time series
      ```
 - **GitHub Issues**: Known problems documented in issues #77466 and #8195
 - **Testing**: Use data source query editor to validate syntax before provisioning

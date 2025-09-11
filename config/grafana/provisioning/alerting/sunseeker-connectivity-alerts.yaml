@@ -8,7 +8,7 @@ groups:
     rules:
       - uid: sunseeker-connection-lost
         title: Sunseeker Connection Lost
-        condition: connection
+        condition: A
         data:
           - refId: connection
             queryType: ''
@@ -17,10 +17,40 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("connected") FROM "sunseeker_connection"'
+              query: 'SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true'
               rawQuery: true
               resultFormat: time_series
-        noDataState: Alerting
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - connection
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: connection
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: classic_conditions
+        noDataState: NoData
         execErrState: Alerting
         for: 30m
         annotations:
