@@ -1,0 +1,7 @@
+apiVersion: 1
+
+deleteRules:
+  - orgId: 1
+    uid: sunseeker-tilt-warning
+  - orgId: 1
+    uid: sunseeker-stuck-alert
