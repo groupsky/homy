@@ -4,7 +4,7 @@ groups:
   - orgId: 1
     name: Sunseeker Connectivity Alerts
     folder: Lawn Mower
-    interval: 30s
+    interval: 5m
     rules:
       - uid: sunseeker-connection-lost
         title: Sunseeker Connection Lost
