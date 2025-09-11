@@ -47,6 +47,8 @@ This directory contains Grafana configuration, dashboards, and provisioning for 
 ### Data Source Integration
 
 **InfluxDB Queries:**
+
+**InfluxDB v2 (Flux):**
 ```flux
 from(bucket: "home_automation")
   |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
@@ -55,11 +57,24 @@ from(bucket: "home_automation")
   |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)
 ```
 
+**InfluxDB v1 (InfluxQL) - Used for Alerting:**
+```sql
+-- Correct syntax - field names WITHOUT quotes
+SELECT last(battery_percentage) FROM "sunseeker_power" WHERE $timeFilter
+SELECT last(voltage) FROM "sunseeker_battery_detail" WHERE $timeFilter
+SELECT last(temperature) FROM "sunseeker_battery_detail" WHERE $timeFilter
+
+-- Incorrect syntax - will cause alert failures
+SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
+```
+
 **Best Practices:**
-- Use appropriate time aggregation (`aggregateWindow`) for performance
+- **Alert queries**: Use InfluxQL syntax without quotes around field names
+- **Dashboard queries**: Can use either Flux or InfluxQL depending on data source configuration
+- Use appropriate time aggregation (`aggregateWindow` for Flux, aggregate functions for InfluxQL)
 - Filter by measurement and device_id early in queries
 - Use dashboard variables for dynamic filtering
-- Implement proper null handling with `createEmpty: false`
+- Implement proper null handling with `createEmpty: false` (Flux) or appropriate WHERE clauses (InfluxQL)
 
 ### Alerting Integration
 
@@ -245,6 +260,17 @@ contactPoints:
 - Verify contact point configurations
 - Check notification policy routing
 - Review alert rule evaluation frequency
+
+**Alert Query Syntax Issues:**
+- **Symptoms**: Alerts showing "Error" state with "[no value]" in descriptions
+- **Common Cause**: Incorrect InfluxQL field name syntax in alert queries
+- **Solution**: Remove quotes from field names in SELECT statements:
+  ```sql
+  ✅ SELECT last(field_name) FROM "measurement" WHERE $timeFilter
+  ❌ SELECT last("field_name") FROM "measurement" WHERE $timeFilter
+  ```
+- **Testing**: Use Grafana's data source query editor to validate syntax before adding to alerts
+- **Verification**: Check alert instances via `/api/alertmanager/grafana/api/v2/alerts` for error details
 
 ### Monitoring Grafana Health
 

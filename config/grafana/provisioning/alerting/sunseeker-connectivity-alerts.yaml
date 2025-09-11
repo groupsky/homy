@@ -17,7 +17,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("connected") FROM "sunseeker_connection" WHERE $timeFilter'
+              query: 'SELECT last(connected) FROM "sunseeker_connection" WHERE $timeFilter'
               rawQuery: true
               resultFormat: time_series
         noDataState: Alerting
