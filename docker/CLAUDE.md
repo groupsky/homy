@@ -130,3 +130,24 @@ For production services:
 - Provide meaningful error messages and logging
 - Handle edge cases and malformed data
 - Include metrics and monitoring capabilities
+
+### Node.js npm Installation
+
+**For Node.js services using npm in Dockerfiles:**
+
+**npm 8.0+ (Node 16+)**: Use `--omit=dev` to exclude development dependencies
+```dockerfile
+RUN npm ci --omit=dev
+```
+
+**npm 7.x and earlier**: Use `--only=production` (deprecated in npm 8.0+)
+```dockerfile  
+RUN npm ci --only=production
+```
+
+**Note**: npm 8.0+ will show warnings when using `--only=production`:
+```
+npm WARN config only Use `--omit=dev` to omit dev dependencies from the install.
+```
+
+Use `--omit=dev` for all new services and update existing services when upgrading Node.js base images to v16 or later.

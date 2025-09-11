@@ -20,7 +20,7 @@ FROM base AS build
 
 # Install Build tools
 RUN apk add --no-cache --virtual buildtools build-base linux-headers udev python3 && \
-    npm ci --unsafe-perm --no-update-notifier --only=production && \
+    npm ci --unsafe-perm --no-update-notifier --omit=dev && \
     cp -R node_modules prod_node_modules
 
 #### Stage RELEASE #####################################################################################################
