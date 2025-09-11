@@ -1,8 +1,0 @@
-apiVersion: 1
-
-groups:
-  - orgId: 1
-    name: Sunseeker Operation Alerts
-    folder: Lawn Mower
-    interval: 30s
-    rules:
