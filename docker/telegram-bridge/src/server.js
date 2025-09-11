@@ -1,6 +1,11 @@
 import http from 'http'
+import debug from 'debug'
 import { extractMessageFromWebhook } from './message-utils.js'
 import { sendToTelegram } from './telegram.js'
+
+// Create debug instances for server operations
+const debugServer = debug('telegram-bridge:server')
+const debugTelegram = debug('telegram-bridge:telegram')
 
 export function createTelegramBridgeServer(botToken, chatId) {
   return http.createServer(async (req, res) => {
@@ -26,6 +31,7 @@ export function createTelegramBridgeServer(botToken, chatId) {
     }
 
     if (req.method === 'POST' && req.url === '/webhook') {
+      debugServer('Webhook POST request received')
       await handleWebhook(req, res, botToken, chatId)
       return
     }
@@ -47,6 +53,9 @@ async function handleWebhook(req, res, botToken, chatId) {
     console.log('📥 Webhook received:')
     console.log(`   Content-Type: ${req.headers['content-type']}`)
     console.log(`   Body length: ${body.length}`)
+    
+    debugServer('Webhook headers: %O', req.headers)
+    debugServer('Webhook body length: %d bytes', body.length)
 
     // Parse the webhook payload
     let webhookData
@@ -65,10 +74,12 @@ async function handleWebhook(req, res, botToken, chatId) {
     console.log(`📝 Extracted message: ${messageText.substring(0, 200)}${messageText.length > 200 ? '...' : ''}`)
 
     // Send to Telegram
+    debugTelegram('Sending message to Telegram: %s', messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''))
     const telegramResult = await sendToTelegram(messageText, botToken, chatId)
 
     if (telegramResult.success) {
       console.log('✅ Message sent to Telegram successfully')
+      debugTelegram('Telegram API response: %O', telegramResult.data)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ 
         success: true, 
@@ -77,6 +88,7 @@ async function handleWebhook(req, res, botToken, chatId) {
       }))
     } else {
       console.log('❌ Failed to send message to Telegram')
+      debugTelegram('Telegram API error: %O', telegramResult.error)
       res.writeHead(500, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ 
         success: false, 

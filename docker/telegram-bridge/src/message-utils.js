@@ -1,3 +1,9 @@
+import debug from 'debug'
+
+// Create debug instances for different aspects of the service
+const debugWebhook = debug('telegram-bridge:webhook')
+const debugMessage = debug('telegram-bridge:message')
+
 export function getAlertEmoji(alertName) {
   const name = alertName.toLowerCase()
 
@@ -35,12 +41,45 @@ export function getStatusEmoji(status) {
             return '✅'
         case 'warning':
             return '⚠️'
+        case 'nodata':
+            return '📵'  // No data/mobile off
+        case 'error':
+            return '🚧'  // Under construction/broken
         default:
             return 'ℹ️'
     }
 }
 
+function isSystemAlert(alert) {
+  return alert.labels?.alertname === 'DatasourceNoData' || alert.labels?.alertname === 'DatasourceError'
+}
+
+function formatSystemAlert(alert, overallStatus) {
+  const isError = alert.labels?.alertname === 'DatasourceError'
+  const isResolved = overallStatus === 'resolved'
+  
+  // Use single emojis - different for resolved vs active states
+  let statusEmoji
+  if (isResolved) {
+    statusEmoji = '✅'  // Always use checkmark for resolved
+  } else {
+    statusEmoji = isError ? '🚧' : '📵'  // Under construction for error, no data for no data
+  }
+  
+  const systemType = isError ? 'ALERT SYSTEM' : 'DATA SOURCE'
+  const systemStatus = isResolved ? 'RECOVERED' : (isError ? 'ERROR' : 'ISSUE')
+  const statusText = `${systemType} ${systemStatus}`
+  
+  const ruleName = alert.labels?.rulename || 'Unknown Rule'
+  const description = alert.annotations?.description || alert.annotations?.summary || 'System alert'
+  
+  return `${statusEmoji} <b>${statusText}</b>\n<i>Alert Rule:</i> "${ruleName}"\n${description}`
+}
+
 export function extractMessageFromWebhook(webhookData) {
+  // Debug log the incoming webhook data
+  debugWebhook('Received Grafana webhook: %O', webhookData)
+  
   // Handle Grafana webhook format
   if (webhookData.alerts && Array.isArray(webhookData.alerts)) {
     const status = webhookData.status || 'firing'
@@ -49,6 +88,14 @@ export function extractMessageFromWebhook(webhookData) {
     const statusEmoji = getStatusEmoji(status)
 
     const message = alerts.map((alert) => {
+        // Handle system alerts (DatasourceNoData, DatasourceError) with special formatting
+        if (isSystemAlert(alert)) {
+            debugMessage('Processing system alert: %s', alert.labels?.alertname)
+            return formatSystemAlert(alert, status)
+        }
+        
+        debugMessage('Processing regular alert: %s', alert.labels?.alertname || 'Unknown')
+        
         if (alert.annotations?.message) {
             return `${statusEmoji} ${alert.annotations.message}\n`
         }
@@ -56,6 +103,7 @@ export function extractMessageFromWebhook(webhookData) {
       return `${statusEmoji} <b>${alert.annotations?.summary || alert.labels?.alertname || 'Unknown Alert'}</b>\n${alert.annotations?.description || ''}`
     }).join('\n')
 
+    debugMessage('Generated message text: %s', message.substring(0, 100) + (message.length > 100 ? '...' : ''))
     return message
   }
 
@@ -75,5 +123,8 @@ export function extractMessageFromWebhook(webhookData) {
   }
 
   // Fallback: stringify the entire payload
+  debugWebhook('Using fallback JSON stringify for webhook data')
   return `Webhook received:\n\n${JSON.stringify(webhookData, null, 2)}`
 }
+
+export { debugWebhook, debugMessage }

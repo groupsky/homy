@@ -19,6 +19,7 @@ The service is split into modular components:
 - `PORT` - Server port (default: 3000)
 - `TELEGRAM_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN_FILE` - Bot token for Telegram API
 - `TELEGRAM_CHAT_ID` or `TELEGRAM_CHAT_ID_FILE` - Target chat/group ID
+- `DEBUG` - Enable debug logging (see Debug Logging section)
 
 ### Docker Secrets Pattern
 
@@ -67,19 +68,40 @@ Health check endpoint returns service status.
 For Grafana webhooks, the service generates rich HTML messages with:
 - Alert status and receiver info
 - Individual alert details with appropriate emojis
+- Special formatting for system alerts (DatasourceNoData, DatasourceError)
 - Links to Grafana dashboards and panels
 - Timestamp in Europe/Sofia timezone
 
+**System Alert Formatting:**
+The service provides distinct formatting for Grafana system alerts:
+
+- **DatasourceNoData alerts** use 📵 emoji and "DATA SOURCE ISSUE" text
+- **DatasourceError alerts** use 🚧 emoji and "ALERT SYSTEM ERROR" text  
+- **Resolved system alerts** use ✅ emoji with "RECOVERED" status
+- All system alerts highlight the affected alert rule name clearly
+- System alerts use single, distinctive emojis separate from regular alerts
+
+This helps distinguish between actual service issues and problems with the alert system itself.
+
 ### Emoji Assignment
 
-Alert emojis are assigned based on alert names:
+**Alert Type Emojis** (based on alert names):
 - 💧 Water/pump related (цисла, water, pump)
 - 🔴 Signal alerts (сигла)
-- 🔥 Temperature/heat related (термопомпа, heat, temperature)
+- 🌡️ Temperature/heat related (термопомпа, heat, temperature)
 - ⚡ Power related (power)
 - 🔌 AC/voltage related (ac, voltage)  
 - 💨 Humidity related (humidity)
+- 🍽️ Dishwasher related (миялна, dishwasher)
 - ⚠️ Default for unknown alerts
+
+**Alert Status Emojis**:
+- 🚨 Firing/Critical/Alerting state
+- ✅ Resolved/OK state  
+- ⚠️ Warning state
+- 📵 NoData state (data source issues)
+- 🚧 Error state (alert system issues)
+- ℹ️ Info/Unknown states
 
 ## Development
 
@@ -129,6 +151,15 @@ npm run test:coverage
 1. Update `getAlertEmoji()` in `src/message-utils.js`
 2. Add test cases in `src/message-utils.test.js`
 3. Verify with actual Grafana alert names from provisioning config
+
+### Customizing System Alert Formatting
+
+The system alert formatting logic is in `formatSystemAlert()` function:
+
+1. **For different alert states**: Modify the `getStatusEmoji()` mapping
+2. **For different system messages**: Update the status text in `formatSystemAlert()`
+3. **For additional system alert types**: Extend the `isSystemAlert()` detection logic
+4. **Always add comprehensive tests** for any new alert state handling
 
 ### Development Commands
 
@@ -193,6 +224,44 @@ The service provides structured console logging with emojis for visual parsing:
 - 📤 Telegram API calls
 - ✅ Success operations
 - ❌ Error conditions
+
+### Debug Logging
+
+The service uses the [`debug`](https://www.npmjs.com/package/debug) package for detailed logging. Enable debug output with the `DEBUG` environment variable:
+
+**Basic Usage:**
+```bash
+# Enable all telegram-bridge debug logs
+DEBUG=telegram-bridge:* npm start
+
+# Enable only webhook debug logs
+DEBUG=telegram-bridge:webhook npm start
+
+# Enable webhook and message processing logs
+DEBUG=telegram-bridge:webhook,telegram-bridge:message npm start
+
+# Enable everything (including other packages)
+DEBUG=* npm start
+```
+
+**Available Debug Namespaces:**
+- `telegram-bridge:webhook` - Incoming webhook data and processing
+- `telegram-bridge:message` - Message formatting and transformation
+- `telegram-bridge:server` - HTTP server operations and routing
+- `telegram-bridge:telegram` - Telegram API communication
+
+**Docker Usage:**
+```yaml
+telegram-bridge:
+  environment:
+    DEBUG: "telegram-bridge:*"
+  # ... other config
+```
+
+**Production Considerations:**
+- Debug logging is disabled by default (no performance impact)
+- Use specific namespaces in production to avoid verbose output
+- For troubleshooting: `DEBUG=telegram-bridge:webhook,telegram-bridge:telegram`
 
 ## Error Handling
 

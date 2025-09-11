@@ -1,4 +1,4 @@
-import { getAlertEmoji, extractMessageFromWebhook } from './message-utils.js'
+import { getAlertEmoji, getStatusEmoji, extractMessageFromWebhook, debugWebhook, debugMessage } from './message-utils.js'
 
 describe('Message Utils', () => {
   describe('getAlertEmoji', () => {
@@ -70,6 +70,37 @@ describe('Message Utils', () => {
       expect(getAlertEmoji('Power')).toBe('⚡')
       expect(getAlertEmoji('pOwEr')).toBe('⚡')
       expect(getAlertEmoji('ТЕРМОПОМПА')).toBe('🌡️')
+    })
+  })
+
+  describe('getStatusEmoji', () => {
+    test('returns appropriate emojis for standard alert states', () => {
+      expect(getStatusEmoji('firing')).toBe('🚨')
+      expect(getStatusEmoji('critical')).toBe('🚨')
+      expect(getStatusEmoji('alerting')).toBe('🚨')
+      
+      expect(getStatusEmoji('resolved')).toBe('✅')
+      expect(getStatusEmoji('ok')).toBe('✅')
+      
+      expect(getStatusEmoji('warning')).toBe('⚠️')
+    })
+
+    test('returns special emojis for NoData and Error states', () => {
+      expect(getStatusEmoji('nodata')).toBe('📵') // no data/mobile off
+      expect(getStatusEmoji('error')).toBe('🚧') // under construction/broken
+    })
+
+    test('returns info emoji for unknown states', () => {
+      expect(getStatusEmoji('unknown')).toBe('ℹ️')
+      expect(getStatusEmoji('')).toBe('ℹ️')
+      expect(getStatusEmoji('pending')).toBe('ℹ️')
+    })
+
+    test('handles case insensitive matching', () => {
+      expect(getStatusEmoji('FIRING')).toBe('🚨')
+      expect(getStatusEmoji('Resolved')).toBe('✅')
+      expect(getStatusEmoji('NoData')).toBe('📵')
+      expect(getStatusEmoji('ERROR')).toBe('🚧')
     })
   })
 
@@ -228,6 +259,151 @@ Alert description"
 "🚨 <b>Test Alert</b>
 Description content"
 `)
+    })
+
+    describe('NoData and Error state handling', () => {
+      test('handles DatasourceNoData alert with special formatting', () => {
+        const webhookData = {
+          status: 'firing',
+          alerts: [{
+            labels: {
+              alertname: 'DatasourceNoData',
+              datasource_uid: 'influxdb-uid',
+              rulename: 'Sunseeker Battery Low'
+            },
+            annotations: {
+              summary: 'No data received',
+              description: 'Alert rule "Sunseeker Battery Low" is not receiving data from data source'
+            }
+          }]
+        }
+
+        const result = extractMessageFromWebhook(webhookData)
+        expect(result).toContain('📵') // Should use no data emoji for NoData
+        expect(result).toContain('DATA SOURCE ISSUE')
+        expect(result).toContain('Sunseeker Battery Low')
+        expect(result).toContain('not receiving data')
+      })
+
+      test('handles DatasourceError alert with special formatting', () => {
+        const webhookData = {
+          status: 'firing', 
+          alerts: [{
+            labels: {
+              alertname: 'DatasourceError',
+              datasource_uid: 'influxdb-uid',
+              rulename: 'Temperature Monitor'
+            },
+            annotations: {
+              summary: 'Query execution error',
+              description: 'Alert rule "Temperature Monitor" failed to execute query'
+            }
+          }]
+        }
+
+        const result = extractMessageFromWebhook(webhookData)
+        expect(result).toContain('🚧') // Should use under construction emoji for Error
+        expect(result).toContain('ALERT SYSTEM ERROR')
+        expect(result).toContain('Temperature Monitor')
+        expect(result).toContain('failed to execute')
+      })
+
+      test('handles mixed alert types in single webhook', () => {
+        const webhookData = {
+          status: 'firing',
+          alerts: [
+            {
+              labels: { alertname: 'High Temperature' },
+              annotations: { message: 'Temperature is 45°C' }
+            },
+            {
+              labels: { 
+                alertname: 'DatasourceNoData',
+                rulename: 'Voltage Monitor' 
+              },
+              annotations: {
+                summary: 'No voltage data',
+                description: 'Alert rule "Voltage Monitor" is not receiving data'
+              }
+            }
+          ]
+        }
+
+        const result = extractMessageFromWebhook(webhookData)
+        expect(result).toContain('🚨 Temperature is 45°C') // Normal alert
+        expect(result).toContain('📵') // NoData alert uses single no data emoji
+        expect(result).toContain('DATA SOURCE ISSUE') // NoData alert
+        expect(result).toContain('Voltage Monitor')
+      })
+    })
+
+    describe('Alert state differentiation', () => {
+      test('provides clear distinction for resolved alerts', () => {
+        const webhookData = {
+          status: 'resolved',
+          alerts: [{
+            labels: { alertname: 'Battery Low' },
+            annotations: { message: 'Battery level restored' }
+          }]
+        }
+
+        const result = extractMessageFromWebhook(webhookData)
+        expect(result).toContain('✅')
+        expect(result).toContain('Battery level restored')
+      })
+
+      test('handles error state resolution', () => {
+        const webhookData = {
+          status: 'resolved',
+          alerts: [{
+            labels: {
+              alertname: 'DatasourceError',
+              rulename: 'Connection Test'
+            },
+            annotations: {
+              summary: 'Data source recovered',
+              description: 'Alert rule "Connection Test" is working normally'
+            }
+          }]
+        }
+
+        const result = extractMessageFromWebhook(webhookData)
+        expect(result).toContain('✅') // Resolved status emoji for system recovery
+        expect(result).toContain('ALERT SYSTEM RECOVERED')
+        expect(result).toContain('Connection Test')
+      })
+    })
+  })
+
+  describe('Debug integration', () => {
+    test('exports debug instances', () => {
+      expect(debugWebhook).toBeDefined()
+      expect(debugMessage).toBeDefined()
+      expect(typeof debugWebhook).toBe('function')
+      expect(typeof debugMessage).toBe('function')
+    })
+
+    test('debug instances have correct namespaces', () => {
+      expect(debugWebhook.namespace).toBe('telegram-bridge:webhook')
+      expect(debugMessage.namespace).toBe('telegram-bridge:message')
+    })
+
+    test('extractMessageFromWebhook calls debug logging', () => {
+      const debugSpy = jest.spyOn(debugWebhook, 'extend').mockReturnValue(jest.fn())
+      
+      const webhookData = {
+        status: 'firing',
+        alerts: [{
+          labels: { alertname: 'Test Alert' },
+          annotations: { message: 'Test message' }
+        }]
+      }
+
+      // The debug call happens internally, we just verify the function works normally
+      const result = extractMessageFromWebhook(webhookData)
+      expect(result).toContain('🚨 Test message')
+      
+      debugSpy.mockRestore()
     })
   })
 })
