@@ -59,18 +59,19 @@ from(bucket: "home_automation")
 
 **InfluxDB v1 (InfluxQL) - Used for Alerting:**
 ```sql
--- Correct syntax - field names WITHOUT quotes
-SELECT last(battery_percentage) FROM "sunseeker_power" WHERE $timeFilter
-SELECT last(voltage) FROM "sunseeker_battery_detail" WHERE $timeFilter
-SELECT last(temperature) FROM "sunseeker_battery_detail" WHERE $timeFilter
+-- Correct syntax for ALERTS - NO $timeFilter variable
+SELECT last("battery_percentage") FROM "sunseeker_power"
+SELECT last("voltage") FROM "sunseeker_battery_detail"  
+SELECT last("temperature") FROM "sunseeker_battery_detail"
 
--- Incorrect syntax - will cause alert failures
+-- Incorrect syntax - will cause alert failures in Grafana 9.5+
 SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
 ```
 
 **Best Practices:**
-- **Alert queries**: Use InfluxQL syntax without quotes around field names
-- **Dashboard queries**: Can use either Flux or InfluxQL depending on data source configuration
+- **Alert queries**: Do NOT use `$timeFilter` in Grafana 9.5+ (known issue with provisioned alerts)
+- **Alert time filtering**: Handled automatically by `relativeTimeRange` parameter in alert configuration
+- **Dashboard queries**: Can use `$timeFilter` normally - works fine in dashboard context
 - Use appropriate time aggregation (`aggregateWindow` for Flux, aggregate functions for InfluxQL)
 - Filter by measurement and device_id early in queries
 - Use dashboard variables for dynamic filtering
@@ -83,20 +84,59 @@ SELECT last("battery_percentage") FROM "sunseeker_power" WHERE $timeFilter
 - Use descriptive alert names and labels
 - Include recovery conditions for all alerts
 
-**Notification Configuration:**
+**Working Alert Configuration Example:**
 ```yaml
-- uid: sunseeker_battery_low
-  title: "Sunseeker Battery Low"
-  condition: battery_percentage
+- uid: sunseeker-battery-temp-high
+  title: "Sunseeker Battery Temperature High"
+  condition: A                    # References the expression refId
   data:
-    - refId: A
+    - refId: temperature          # Data query
       queryType: ""
       relativeTimeRange:
-        from: 300
+        from: 900                 # 15 minutes lookback
         to: 0
+      datasourceUid: P3C6603E967DC8568
       model:
-        # InfluxDB query for battery percentage
+        query: 'SELECT last("temperature") FROM "sunseeker_battery_detail"'
+        rawQuery: true
+        resultFormat: time_series
+    - refId: A                    # Condition expression
+      queryType: ""
+      relativeTimeRange:
+        from: 0
+        to: 0
+      datasourceUid: __expr__
+      model:
+        type: classic_conditions  # ✅ Use classic_conditions
+        conditions:
+          - evaluator:
+              params: [45]
+              type: gt
+            operator:
+              type: and
+            query:
+              params: [temperature]  # References data query refId
+            reducer:
+              type: last
+            type: query
+        expression: temperature
+  noDataState: NoData
+  execErrState: Alerting
 ```
+
+**Alert Patterns:**
+
+*Threshold Alerts (with conditions):*
+- Use for numeric comparisons (temperature > 45°C, battery < 15%)
+- Require both data query and condition expression
+- Data query: `refId: "field_name"` (e.g., "temperature")
+- Condition: `refId: "A"`, references data query in `expression` and `query.params`
+
+*NoData Alerts (direct query):*
+- Use for connectivity/availability monitoring
+- Single data query with `condition: query_refId`
+- Triggered by `noDataState: Alerting` when query returns no data
+- Example: Connection monitoring, service health checks
 
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning
@@ -262,15 +302,31 @@ contactPoints:
 - Review alert rule evaluation frequency
 
 **Alert Query Syntax Issues:**
-- **Symptoms**: Alerts showing "Error" state with "[no value]" in descriptions
-- **Common Cause**: Incorrect InfluxQL field name syntax in alert queries
-- **Solution**: Remove quotes from field names in SELECT statements:
-  ```sql
-  ✅ SELECT last(field_name) FROM "measurement" WHERE $timeFilter
-  ❌ SELECT last("field_name") FROM "measurement" WHERE $timeFilter
-  ```
-- **Testing**: Use Grafana's data source query editor to validate syntax before adding to alerts
+- **Symptoms**: Alerts showing "Error" state with "[no value]" in descriptions, or "condition must not be empty" in Grafana UI
+- **Primary Causes**: 
+  1. `$timeFilter` variable incompatibility in Grafana 9.5+ provisioned alerts
+  2. Incorrect condition `type` configuration (`threshold` vs `classic_conditions`)
+- **Solutions**: 
+  1. Remove `$timeFilter` from alert queries, time filtering handled by `relativeTimeRange`:
+     ```sql
+     ✅ SELECT last("field_name") FROM "measurement"
+     ❌ SELECT last("field_name") FROM "measurement" WHERE $timeFilter
+     ```
+  2. Use `classic_conditions` type for reliable alert evaluation:
+     ```yaml
+     model:
+       type: classic_conditions  # ✅ Works reliably
+       # type: threshold         # ❌ Can cause "condition must not be empty" errors
+     ```
+- **GitHub Issues**: Known problems documented in issues #77466 and #8195
+- **Testing**: Use data source query editor to validate syntax before provisioning
 - **Verification**: Check alert instances via `/api/alertmanager/grafana/api/v2/alerts` for error details
+
+**$timeFilter Variable Limitations:**
+- **Grafana 9.5+ Alerting**: `$timeFilter` gets stripped or causes evaluation failures
+- **Dashboard Context**: `$timeFilter` works normally in dashboard panels
+- **Provisioned vs UI**: File-provisioned alerts more affected than UI-created alerts
+- **Workaround**: Use alert's `relativeTimeRange` parameter instead of `WHERE $timeFilter`
 
 ### Monitoring Grafana Health
 
