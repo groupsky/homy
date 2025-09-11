@@ -4,7 +4,7 @@ groups:
   - orgId: 1
     name: Sunseeker Battery Alerts
     folder: Lawn Mower
-    interval: 30s
+    interval: 5m
     rules:
       - uid: sunseeker-battery-low
         title: Sunseeker Battery Low
@@ -13,7 +13,7 @@ groups:
           - refId: battery
             queryType: ''
             relativeTimeRange:
-              from: 300
+              from: 900
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
@@ -52,7 +52,7 @@ groups:
               type: threshold
         noDataState: NoData
         execErrState: Alerting
-        for: 2m
+        for: 10m
         annotations:
           description: "Sunseeker lawn mower battery is critically low at {{ $values.battery.Value }}%"
           runbook_url: ""
@@ -69,7 +69,7 @@ groups:
           - refId: voltage
             queryType: ''
             relativeTimeRange:
-              from: 300
+              from: 900
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
@@ -108,7 +108,7 @@ groups:
               type: threshold
         noDataState: NoData
         execErrState: Alerting
-        for: 1m
+        for: 5m
         annotations:
           description: "Sunseeker battery voltage critically low at {{ $values.voltage.Value }}mV"
           runbook_url: ""
