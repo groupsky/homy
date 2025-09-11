@@ -4,7 +4,7 @@ groups:
   - orgId: 1
     name: Sunseeker Temperature Alerts
     folder: Lawn Mower
-    interval: 30s
+    interval: 5m
     rules:
       - uid: sunseeker-battery-temp-high
         title: Sunseeker Battery Temperature High
@@ -13,7 +13,7 @@ groups:
           - refId: temperature
             queryType: ''
             relativeTimeRange:
-              from: 300
+              from: 900
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
@@ -52,7 +52,7 @@ groups:
               type: threshold
         noDataState: NoData
         execErrState: Alerting
-        for: 5m
+        for: 10m
         annotations:
           description: "Sunseeker battery temperature is dangerously high at {{ $values.temperature.Value }}°C"
           runbook_url: ""
@@ -69,7 +69,7 @@ groups:
           - refId: temperature
             queryType: ''
             relativeTimeRange:
-              from: 300
+              from: 900
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
@@ -108,7 +108,7 @@ groups:
               type: threshold
         noDataState: NoData
         execErrState: Alerting
-        for: 5m
+        for: 10m
         annotations:
           description: "Sunseeker battery temperature is critically low at {{ $values.temperature.Value }}°C"
           runbook_url: ""
