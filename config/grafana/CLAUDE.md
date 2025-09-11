@@ -59,9 +59,9 @@ from(bucket: "home_automation")
 
 **InfluxDB v1 (InfluxQL) - Used for Alerting:**
 ```sql
--- Correct syntax for ALERTS - explicit time filtering required
-SELECT last("battery_percentage") FROM "sunseeker_power" WHERE time >= now() - 15m
-SELECT last("voltage") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m
+-- Correct syntax for ALERTS - explicit time filtering required  
+SELECT last("battery_percentage") FROM "sunseeker_power" WHERE time >= now() - 4h
+SELECT last("voltage") FROM "sunseeker_battery_detail" WHERE time >= now() - 4h
 SELECT last("temperature") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m
 
 -- Incorrect syntax - will cause alert failures in Grafana 9.5+
@@ -74,6 +74,7 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
 - **Alert queries**: Do NOT use `$timeFilter` in Grafana 9.5+ (known issue with provisioned alerts)  
 - **Alert time filtering**: `relativeTimeRange` does NOT filter InfluxQL queries - must use explicit `WHERE time >= now() - [duration]`
 - **All alert queries need explicit time filtering** to prevent using stale data from disconnected devices
+- **Data frequency varies**: Temperature data ~15min intervals, battery data ~1-4h intervals (device-dependent)
 - **Dashboard queries**: Can use `$timeFilter` normally - works fine in dashboard context
 - Use appropriate time aggregation (`aggregateWindow` for Flux, aggregate functions for InfluxQL)
 - Filter by measurement and device_id early in queries
