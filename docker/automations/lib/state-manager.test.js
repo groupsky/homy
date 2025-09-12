@@ -10,7 +10,7 @@ describe('StateManager', () => {
 
   beforeEach(async () => {
     await fs.rm(TEST_STATE_DIR, { recursive: true, force: true })
-    stateManager = new StateManager(TEST_STATE_DIR)
+    stateManager = new StateManager({stateDir: TEST_STATE_DIR})
   })
 
   afterEach(async () => {
@@ -35,7 +35,7 @@ describe('StateManager', () => {
     })
 
     it('should use provided state directory parameter', () => {
-      const customManager = new StateManager('/custom/path')
+      const customManager = new StateManager({stateDir: '/custom/path'})
       expect(customManager.stateDir).toBe('/custom/path')
     })
   })

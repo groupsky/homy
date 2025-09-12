@@ -2,11 +2,11 @@ const fs = require('fs').promises
 const path = require('path')
 
 class StateManager {
-  constructor(stateDir = process.env.STATE_DIR || '/app/state') {
+  constructor({stateDir = process.env.STATE_DIR || '/app/state', debounceMs = 100} = {}) {
     this.stateDir = stateDir
     this.cache = new Map()
     this.writeTimeouts = new Map()
-    this.debounceMs = 100
+    this.debounceMs = debounceMs
   }
 
   async _ensureStateDir() {
