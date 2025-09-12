@@ -29,6 +29,7 @@ module.exports = {
       clientId: process.env.MQTT_CLIENT_ID || 'stateful-example'
     },
     state: {
+      enabled: true,
       dir: process.env.STATE_DIR || '/app/state',
       debounceMs: 100
     }

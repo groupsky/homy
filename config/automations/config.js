@@ -376,5 +376,8 @@ module.exports = {
       url: process.env.BROKER,
       clientId: process.env.MQTT_CLIENT_ID,
     },
+    state: {
+      enabled: true
+    }
   }
 }
