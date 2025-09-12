@@ -106,12 +106,18 @@ playground.bots.forEach(bot => {
 
 process.on('SIGTERM', async () => {
   console.log('Received SIGTERM, cleaning up...')
-  await stateManager.cleanup()
+  await Promise.all([
+    playground.gates.mqtt.endAsync(),
+    playground.gates.state.cleanup()
+  ])
   process.exit(0)
 })
 
 process.on('SIGINT', async () => {
   console.log('Received SIGINT, cleaning up...')
-  await stateManager.cleanup()
+  await Promise.all([
+    playground.gates.mqtt.endAsync(),
+    playground.gates.state.cleanup()
+  ])
   process.exit(0)
 })

@@ -377,7 +377,8 @@ module.exports = {
       clientId: process.env.MQTT_CLIENT_ID,
     },
     state: {
-      enabled: true
+      enabled: true,
+      dir: process.env.STATE_DIR || '/app/state',
     }
   }
 }
