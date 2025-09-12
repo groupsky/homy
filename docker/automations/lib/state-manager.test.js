@@ -38,6 +38,19 @@ describe('StateManager', () => {
       const customManager = new StateManager({stateDir: '/custom/path'})
       expect(customManager.stateDir).toBe('/custom/path')
     })
+
+    it('should be enabled by default', () => {
+      const defaultManager = new StateManager()
+      expect(defaultManager.enabled).toBe(true)
+    })
+
+    it('should accept enabled parameter in constructor', () => {
+      const enabledManager = new StateManager({enabled: true})
+      expect(enabledManager.enabled).toBe(true)
+      
+      const disabledManager = new StateManager({enabled: false})
+      expect(disabledManager.enabled).toBe(false)
+    })
   })
 
   describe('createBotState', () => {
@@ -286,6 +299,82 @@ describe('StateManager', () => {
       )
 
       consoleSpy.mockRestore()
+      writeFileSpy.mockRestore()
+    })
+  })
+
+  describe('disabled state manager', () => {
+    let disabledStateManager
+
+    beforeEach(async () => {
+      await fs.rm(TEST_STATE_DIR, { recursive: true, force: true })
+      disabledStateManager = new StateManager({stateDir: TEST_STATE_DIR, enabled: false})
+    })
+
+    afterEach(async () => {
+      if (disabledStateManager) {
+        await disabledStateManager.cleanup()
+      }
+      await fs.rm(TEST_STATE_DIR, { recursive: true, force: true })
+    })
+
+    it('should not save state when disabled', async () => {
+      const botState = disabledStateManager.createBotState('disabled-bot')
+      await botState.set({ count: 42, name: 'test' })
+      await disabledStateManager.flushAll()
+
+      const statePath = path.join(TEST_STATE_DIR, 'disabled-bot.json')
+      const fileExists = await fs.access(statePath).then(() => true).catch(() => false)
+      expect(fileExists).toBe(false)
+    })
+
+    it('should return default state when disabled and no existing state', async () => {
+      const botState = disabledStateManager.createBotState('no-state-bot')
+      const defaultState = { count: 0, enabled: true }
+      const state = await botState.get(defaultState)
+      expect(state).toEqual(defaultState)
+    })
+
+    it('should return empty object when disabled and no default provided', async () => {
+      const botState = disabledStateManager.createBotState('empty-bot')
+      const state = await botState.get()
+      expect(state).toEqual({})
+    })
+
+    it('should not load existing state from disk when disabled', async () => {
+      const testState = { count: 99, settings: { theme: 'dark' } }
+      const statePath = path.join(TEST_STATE_DIR, 'existing-bot.json')
+
+      await fs.mkdir(TEST_STATE_DIR, { recursive: true })
+      await fs.writeFile(statePath, JSON.stringify(testState), 'utf8')
+
+      const botState = disabledStateManager.createBotState('existing-bot')
+      const defaultState = { count: 0 }
+      const loadedState = await botState.get(defaultState)
+
+      expect(loadedState).toEqual(defaultState)
+    })
+
+    it('should not create state directory when disabled', async () => {
+      const botState = disabledStateManager.createBotState('no-dir-bot')
+      await botState.set({ test: true })
+      await disabledStateManager.flushAll()
+
+      const dirExists = await fs.access(TEST_STATE_DIR).then(() => true).catch(() => false)
+      expect(dirExists).toBe(false)
+    })
+
+    it('should not debounce writes when disabled', async () => {
+      const writeFileSpy = jest.spyOn(fs, 'writeFile')
+      const botState = disabledStateManager.createBotState('no-debounce-bot')
+
+      await botState.set({ count: 1 })
+      await botState.set({ count: 2 })
+      await botState.set({ count: 3 })
+
+      await new Promise(resolve => setTimeout(resolve, 150))
+
+      expect(writeFileSpy).not.toHaveBeenCalled()
       writeFileSpy.mockRestore()
     })
   })

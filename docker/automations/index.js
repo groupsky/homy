@@ -12,13 +12,14 @@ const {
       clientId: mqttClientId = 'homy-automations'
     },
     state: {
+      enabled = false,
       dir: stateDir = process.env.STATE_DIR || '/app/state',
       debounceMs: stateDebounceMs = 100
     }
   }
 } = require(process.env.CONFIG || './config')
 
-const stateManager = new StateManager({stateDir, debounceMs: stateDebounceMs})
+const stateManager = new StateManager({enabled, stateDir, debounceMs: stateDebounceMs})
 
 const playground = {
   bots: Object.entries(botConfigs).map(([name, config]) => {

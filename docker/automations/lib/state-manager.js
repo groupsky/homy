@@ -2,11 +2,12 @@ const fs = require('fs').promises
 const path = require('path')
 
 class StateManager {
-  constructor({stateDir = process.env.STATE_DIR || '/app/state', debounceMs = 100} = {}) {
+  constructor({stateDir = process.env.STATE_DIR || '/app/state', debounceMs = 100, enabled = true} = {}) {
     this.stateDir = stateDir
     this.cache = new Map()
     this.writeTimeouts = new Map()
     this.debounceMs = debounceMs
+    this.enabled = enabled
   }
 
   async _ensureStateDir() {
@@ -26,6 +27,9 @@ class StateManager {
   }
 
   async _loadFromDisk(botName) {
+    if (!this.enabled) {
+      return null
+    }
     const statePath = this._getStatePath(botName)
     try {
       const data = await fs.readFile(statePath, 'utf8')
@@ -39,6 +43,9 @@ class StateManager {
   }
 
   async _saveToDisk(botName, state) {
+    if (!this.enabled) {
+      return
+    }
     await this._ensureStateDir()
     const statePath = this._getStatePath(botName)
     const tempPath = `${statePath}.tmp`
@@ -56,6 +63,9 @@ class StateManager {
   }
 
   _debouncedSave(botName, state) {
+    if (!this.enabled) {
+      return
+    }
     if (this.writeTimeouts.has(botName)) {
       clearTimeout(this.writeTimeouts.get(botName))
     }
