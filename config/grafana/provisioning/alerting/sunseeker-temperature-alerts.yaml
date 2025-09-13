@@ -13,11 +13,11 @@ groups:
           - refId: temperature
             queryType: ''
             relativeTimeRange:
-              from: 900
+              from: 1800
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("temperature") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m'
+              query: 'SELECT last("temperature") FROM "sunseeker_battery_detail" WHERE time >= now() - 30m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -69,11 +69,11 @@ groups:
           - refId: temperature
             queryType: ''
             relativeTimeRange:
-              from: 900
+              from: 1800
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("temperature") FROM "sunseeker_battery_detail" WHERE time >= now() - 15m'
+              query: 'SELECT last("temperature") FROM "sunseeker_battery_detail" WHERE time >= now() - 30m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
