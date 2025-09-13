@@ -102,6 +102,35 @@ const haSwitch = (
   }
 })
 
+const haSelect = (
+  {
+    name,
+    feature_type,
+    feature,
+    options,
+    config
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          command_topic: `${featuresPrefix}/${feature_type}/${feature}/set`,
+          state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
+          options,
+          value_template: `{{ value_json.mode if value_json.mode is defined else 'automatic' }}`,
+          optimistic: false,
+          unique_id: `homy_${feature_type}_${feature}`,
+          ...config
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/select/${feature}/config`, retain: true } }
+  }
+})
+
 /**
  * @param {string} name
  * @param {string} feature
@@ -920,6 +949,33 @@ const config = {
         device: devices.boiler,
         object_id: 'solar_heater_electric_heater',
         unique_id: 'homy_solar_heater_electric_heater',
+      },
+    }),
+
+    ...haSelect({
+      name: 'boilerControllerMode',
+      feature_type: 'control_mode',
+      feature: 'boiler_controller',
+      options: ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d'],
+      config: {
+        name: 'Режим управление бойлер',
+        unique_id: 'boiler_controller_mode',
+        device: devices.boiler,
+        icon: 'mdi:water-boiler',
+      }
+    }),
+
+    ...haSensor({
+      name: 'boilerControllerStatus',
+      feature: 'boiler_controller_status',
+      type: null,
+      config: {
+        name: 'Състояние контролер бойлер',
+        device: devices.boiler,
+        object_id: 'boiler_controller_status',
+        unique_id: 'homy_boiler_controller_status',
+        value_template: '{{ value_json.reason }}',
+        json_attributes_topic: `homy/automation/boiler_controller/status`
       },
     }),
   },
