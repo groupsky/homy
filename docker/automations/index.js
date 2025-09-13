@@ -15,7 +15,7 @@ const {
       enabled = false,
       dir: stateDir = process.env.STATE_DIR || '/app/state',
       debounceMs: stateDebounceMs = 100
-    }
+    } = {}
   }
 } = require(process.env.CONFIG || './config')
 
