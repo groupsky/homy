@@ -1,30 +1,31 @@
 module.exports = (name, { bacTopic: topicPrefix, switches }) => ({
-  start: async ({ mqtt, createPersistedState }) => {
-    const readingTopic = `${topicPrefix}/reading`
-    const writeTopic = `${topicPrefix}/write`
-
-    const defaultState = {
+  persistedCache: {
+    version: 1,
+    default: {
       switchStates: new Array(switches.length).fill(false),
       wasOn: false
     }
+  },
 
-    const persistedState = await createPersistedState(defaultState)
+  start: async ({ mqtt, persistedCache }) => {
+    const readingTopic = `${topicPrefix}/reading`
+    const writeTopic = `${topicPrefix}/write`
 
     switches.forEach(({topic, isOpen}, index) => {
       mqtt.subscribe(topic, (payload) => {
-        persistedState.switchStates[index] = isOpen(payload)
+        persistedCache.switchStates[index] = isOpen(payload)
       })
     })
 
     mqtt.subscribe(readingTopic, (payload) => {
-      const allClosed = persistedState.switchStates.every(open => !open)
+      const allClosed = persistedCache.switchStates.every(open => !open)
 
       if (payload.power === 'on' && !allClosed) {
         mqtt.publish(writeTopic, { power: 'off' })
-        persistedState.wasOn = true
-      } else if (persistedState.wasOn && payload.power === 'off' && allClosed) {
+        persistedCache.wasOn = true
+      } else if (persistedCache.wasOn && payload.power === 'off' && allClosed) {
         mqtt.publish(writeTopic, { power: 'on' })
-        persistedState.wasOn = false
+        persistedCache.wasOn = false
       }
     })
   }
