@@ -53,49 +53,30 @@ describe('StateManager', () => {
     })
   })
 
-  describe('createPersistedStateFactory', () => {
-    it('should create factory function for a bot', () => {
-      const createPersistedState = stateManager.createPersistedStateFactory('test-bot')
-      expect(typeof createPersistedState).toBe('function')
-    })
+  describe('direct cache creation', () => {
+    it('should create reactive cache with config directly', async () => {
+      const defaultState = { count: 5, items: [] }
+      const migrate = ({ version, defaultState, state }) => {
+        return { ...state, migrated: true }
+      }
 
-    it('should create reactive state when factory is called', async () => {
-      const createPersistedState = stateManager.createPersistedStateFactory('test-bot')
-      const defaultState = { count: 0, enabled: true }
-      const persistedState = await createPersistedState(defaultState)
+      const persistedCache = await stateManager.createBotState('config-test', defaultState, 2, migrate)
 
-      expect(persistedState).toEqual(defaultState)
-      expect(typeof persistedState).toBe('object')
-    })
+      expect(persistedCache.count).toBe(5)
+      expect(persistedCache.items).toEqual([])
 
-    it('should return default state when no state exists', async () => {
-      const createPersistedState = stateManager.createPersistedStateFactory('new-bot')
-      const defaultState = { count: 0, enabled: true }
-      const persistedState = await createPersistedState(defaultState)
-      expect(persistedState).toEqual(defaultState)
-    })
-
-    it('should return empty object as default when no default provided', async () => {
-      const createPersistedState = stateManager.createPersistedStateFactory('new-bot')
-      const persistedState = await createPersistedState()
-      expect(persistedState).toEqual({})
-    })
-
-    it('should make state reactive - mutations trigger persistence', async () => {
-      const createPersistedState = stateManager.createPersistedStateFactory('reactive-bot')
-      const persistedState = await createPersistedState({ count: 0 })
-
-      // Mutate the state
-      persistedState.count = 42
-      persistedState.name = 'test'
-
+      persistedCache.count = 10
       await stateManager.flushAll()
 
-      const statePath = path.join(TEST_STATE_DIR, 'reactive-bot.json')
+      const statePath = path.join(TEST_STATE_DIR, 'config-test.json')
       const savedData = await fs.readFile(statePath, 'utf8')
       const parsedState = JSON.parse(savedData)
 
-      expect(parsedState).toEqual({ count: 42, name: 'test' })
+      expect(parsedState).toEqual({
+        version: 2,
+        default: { count: 5, items: [] },
+        state: { count: 10, items: [] }
+      })
     })
   })
 
@@ -132,7 +113,7 @@ describe('StateManager', () => {
       const savedData = await fs.readFile(statePath, 'utf8')
       const parsedState = JSON.parse(savedData)
 
-      expect(parsedState).toEqual({ count: 42, name: 'test' })
+      expect(parsedState).toEqual({ version: 1, default: { count: 0 }, state: { count: 42, name: 'test' } })
     })
   })
 
@@ -149,15 +130,16 @@ describe('StateManager', () => {
       const savedData = await fs.readFile(statePath, 'utf8')
       const parsedState = JSON.parse(savedData)
 
-      expect(parsedState).toEqual({ count: 42, name: 'test' })
+      expect(parsedState).toEqual({ version: 1, default: { count: 0 }, state: { count: 42, name: 'test' } })
     })
 
     it('should load persisted state from filesystem', async () => {
       const testState = { count: 99, settings: { theme: 'dark' } }
+      const fileData = { version: 1, default: {}, state: testState }
       const statePath = path.join(TEST_STATE_DIR, 'loaded-bot.json')
 
       await fs.mkdir(TEST_STATE_DIR, { recursive: true })
-      await fs.writeFile(statePath, JSON.stringify(testState), 'utf8')
+      await fs.writeFile(statePath, JSON.stringify(fileData), 'utf8')
 
       const botState = await stateManager.createBotState('loaded-bot')
       expect(botState).toEqual(testState)
@@ -188,8 +170,8 @@ describe('StateManager', () => {
       const savedData = await fs.readFile(statePath, 'utf8')
       const parsedState = JSON.parse(savedData)
 
-      expect(parsedState.user.name).toBe('Jane')
-      expect(parsedState.user.settings.theme).toBe('dark')
+      expect(parsedState.state.user.name).toBe('Jane')
+      expect(parsedState.state.user.settings.theme).toBe('dark')
     })
 
     it('should trigger persistence on array changes', async () => {
@@ -208,8 +190,8 @@ describe('StateManager', () => {
       const savedData = await fs.readFile(statePath, 'utf8')
       const parsedState = JSON.parse(savedData)
 
-      expect(parsedState.items).toEqual(['changed', 'b', 'c', 'd'])
-      expect(parsedState.counts).toEqual([1, 99, 3])
+      expect(parsedState.state.items).toEqual(['changed', 'b', 'c', 'd'])
+      expect(parsedState.state.counts).toEqual([1, 99, 3])
     })
   })
 
@@ -244,7 +226,7 @@ describe('StateManager', () => {
       const savedData = await fs.readFile(statePath, 'utf8')
       const parsedState = JSON.parse(savedData)
 
-      expect(parsedState).toEqual({ count: 3 })
+      expect(parsedState).toEqual({ version: 1, default: { count: 0 }, state: { count: 3 } })
     })
   })
 
@@ -289,6 +271,25 @@ describe('StateManager', () => {
       expect(readFileSpy).toHaveBeenCalledTimes(1)
 
       readFileSpy.mockRestore()
+    })
+
+    it('should return same reactive instance for multiple createBotState calls with same params', async () => {
+      const botState1 = await stateManager.createBotState('same-instance-bot', { count: 0 })
+      const botState2 = await stateManager.createBotState('same-instance-bot', { count: 0 })
+
+      expect(botState1).toBe(botState2)
+
+      botState1.count = 42
+      expect(botState2.count).toBe(42)
+    })
+
+    it('should return different reactive instance for different defaults', async () => {
+      const botState1 = await stateManager.createBotState('different-defaults-bot', { count: 0 })
+      const botState2 = await stateManager.createBotState('different-defaults-bot', { differentDefault: true })
+
+      expect(botState1).not.toBe(botState2)
+      expect(botState1.count).toBe(0)
+      expect(botState2.differentDefault).toBe(true)
     })
 
     it('should reflect changes immediately in reactive state', async () => {
@@ -345,8 +346,8 @@ describe('StateManager', () => {
       const file1Data = await fs.readFile(path.join(TEST_STATE_DIR, 'cleanup-bot1.json'), 'utf8')
       const file2Data = await fs.readFile(path.join(TEST_STATE_DIR, 'cleanup-bot2.json'), 'utf8')
 
-      expect(JSON.parse(file1Data)).toEqual({ cleanup: 1 })
-      expect(JSON.parse(file2Data)).toEqual({ cleanup: 2 })
+      expect(JSON.parse(file1Data)).toEqual({ version: 1, default: { cleanup: 0 }, state: { cleanup: 1 } })
+      expect(JSON.parse(file2Data)).toEqual({ version: 1, default: { cleanup: 0 }, state: { cleanup: 2 } })
     })
 
     it('should clear cache on cleanup', async () => {
@@ -476,6 +477,107 @@ describe('StateManager', () => {
 
       botState.name = 'test'
       expect(botState.name).toBe('test')
+    })
+  })
+
+  describe('state migration', () => {
+    it('should migrate state when version changes', async () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+      // Create initial state with version 1
+      const botState1 = await stateManager.createBotState('migration-bot', { count: 0 }, 1)
+      botState1.count = 42
+      await stateManager.flushAll()
+
+      // Create new instance with version 2 and migration
+      const migrate = ({ version, defaultState, state }) => {
+        return { ...state, newField: 'migrated' }
+      }
+      const botState2 = await stateManager.createBotState('migration-bot', { count: 0, newField: 'default' }, 2, migrate)
+
+      expect(botState2.count).toBe(42)
+      expect(botState2.newField).toBe('migrated')
+      expect(consoleSpy).not.toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should migrate state when default changes', async () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+      // Create initial state
+      const botState1 = await stateManager.createBotState('default-change-bot', { count: 0 })
+      botState1.count = 42
+      await stateManager.flushAll()
+
+      // Create new instance with different default and migration
+      const migrate = ({ version, defaultState, state }) => {
+        return { ...state, items: defaultState.items }
+      }
+      const botState2 = await stateManager.createBotState('default-change-bot', { count: 0, items: [] }, 1, migrate)
+
+      expect(botState2.count).toBe(42)
+      expect(botState2.items).toEqual([])
+      expect(consoleSpy).not.toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should warn and discard state when no migrate function provided', async () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+      // Create initial state
+      const botState1 = await stateManager.createBotState('no-migrate-bot', { count: 0 }, 1)
+      botState1.count = 42
+      await stateManager.flushAll()
+
+      // Create new instance with different version but no migration
+      const botState2 = await stateManager.createBotState('no-migrate-bot', { count: 0 }, 2)
+
+      expect(botState2.count).toBe(0) // Reset to default
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[StateManager] Bot no-migrate-bot version/default changed but no migrate function provided')
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should warn and use default state when migration fails', async () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+      // Create initial state
+      const botState1 = await stateManager.createBotState('migration-error-bot', { count: 0 }, 1)
+      botState1.count = 42
+      await stateManager.flushAll()
+
+      // Create new instance with failing migration
+      const migrate = () => {
+        throw new Error('Migration failed')
+      }
+      const botState2 = await stateManager.createBotState('migration-error-bot', { count: 0 }, 2, migrate)
+
+      expect(botState2.count).toBe(0) // Reset to default
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[StateManager] Migration failed for bot migration-error-bot'),
+        expect.any(Error)
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should not migrate when version and default are unchanged', async () => {
+      const migrate = jest.fn()
+
+      // Create initial state
+      const botState1 = await stateManager.createBotState('no-migration-needed', { count: 0 }, 1, migrate)
+      botState1.count = 42
+      await stateManager.flushAll()
+
+      // Create new instance with same version and default
+      const botState2 = await stateManager.createBotState('no-migration-needed', { count: 0 }, 1, migrate)
+
+      expect(botState2.count).toBe(42)
+      expect(migrate).not.toHaveBeenCalled()
     })
   })
 })

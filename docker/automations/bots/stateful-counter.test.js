@@ -3,20 +3,18 @@ const createStatefulCounter = require('./stateful-counter')
 
 describe('stateful-counter bot', () => {
   let mockMqtt
-  let mockCreatePersistedState
   let bot
-  let reactiveState
+  let persistedCache
 
   beforeEach(() => {
-    reactiveState = {}
-
-    mockCreatePersistedState = jest.fn().mockImplementation((defaultState) => {
-      // Initialize with default state if empty, otherwise use existing state
-      if (Object.keys(reactiveState).length === 0) {
-        Object.assign(reactiveState, defaultState)
-      }
-      return Promise.resolve(reactiveState)
-    })
+    // Initialize with the default state from the bot
+    const botInstance = createStatefulCounter('test-counter', {})
+    persistedCache = {
+      count: 0,
+      lastReset: new Date().toISOString(),
+      totalIncrements: 0,
+      history: []
+    }
 
     mockMqtt = {
       subscribe: jest.fn().mockImplementation((topic, callback) => {
@@ -43,88 +41,94 @@ describe('stateful-counter bot', () => {
   })
 
   it('should initialize with default state', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
-    expect(mockCreatePersistedState).toHaveBeenCalledWith({
-      count: 0,
-      lastReset: expect.any(String),
-      totalIncrements: 0
-    })
+    // Should initialize with the expected default state
+    expect(persistedCache.count).toBe(0)
+    expect(persistedCache.totalIncrements).toBe(0)
+    expect(persistedCache.history).toEqual([])
   })
 
   it('should subscribe to increment topic', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     expect(mockMqtt.subscribe).toHaveBeenCalledWith('/test/increment', expect.any(Function))
   })
 
   it('should increment count when receiving increment message', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     await mockMqtt._triggerMessage('/test/increment', { increment: 1 })
 
-    expect(reactiveState.count).toBe(1)
-    expect(reactiveState.totalIncrements).toBe(1)
+    expect(persistedCache.count).toBe(1)
+    expect(persistedCache.totalIncrements).toBe(1)
   })
 
   it('should use default increment of 1 when not specified', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     await mockMqtt._triggerMessage('/test/increment', {})
 
-    expect(reactiveState.count).toBe(1)
-    expect(reactiveState.totalIncrements).toBe(1)
+    expect(persistedCache.count).toBe(1)
+    expect(persistedCache.totalIncrements).toBe(1)
   })
 
   it('should use custom increment value', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     await mockMqtt._triggerMessage('/test/increment', { increment: 5 })
 
-    expect(reactiveState.count).toBe(5)
-    expect(reactiveState.totalIncrements).toBe(1)
+    expect(persistedCache.count).toBe(5)
+    expect(persistedCache.totalIncrements).toBe(1)
   })
 
   it('should publish output when outputTopic is configured', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     await mockMqtt._triggerMessage('/test/increment', { increment: 3 })
 
     expect(mockMqtt.publish).toHaveBeenCalledWith('/test/output', {
       count: 3,
       totalIncrements: 1,
+      history: expect.arrayContaining([
+        expect.objectContaining({
+          increment: 3,
+          newCount: 3,
+          timestamp: expect.any(String)
+        })
+      ]),
       botName: 'test-counter'
     })
   })
 
   it('should reset count when receiving reset message', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     // Set up the state first
-    reactiveState.count = 10
-    reactiveState.totalIncrements = 5
-    reactiveState.lastReset = '2023-01-01T00:00:00.000Z'
+    persistedCache.count = 10
+    persistedCache.totalIncrements = 5
+    persistedCache.lastReset = '2023-01-01T00:00:00.000Z'
 
     await mockMqtt._triggerMessage('/test/reset', {})
 
-    expect(reactiveState.count).toBe(0)
-    expect(reactiveState.totalIncrements).toBe(5)
-    expect(reactiveState.lastReset).not.toBe('2023-01-01T00:00:00.000Z')
+    expect(persistedCache.count).toBe(0)
+    expect(persistedCache.totalIncrements).toBe(5)
+    expect(persistedCache.lastReset).not.toBe('2023-01-01T00:00:00.000Z')
   })
 
   it('should preserve totalIncrements across resets', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     await mockMqtt._triggerMessage('/test/increment', {})
     await mockMqtt._triggerMessage('/test/increment', {})
     await mockMqtt._triggerMessage('/test/reset', {})
 
-    expect(reactiveState.count).toBe(0)
-    expect(reactiveState.totalIncrements).toBe(2)
+    expect(persistedCache.count).toBe(0)
+    expect(persistedCache.totalIncrements).toBe(2)
   })
 
   it('should publish reset confirmation', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     await mockMqtt._triggerMessage('/test/reset', {})
 
@@ -138,12 +142,12 @@ describe('stateful-counter bot', () => {
   })
 
   it('should handle status requests', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     // Set up the state first
-    reactiveState.count = 42
-    reactiveState.totalIncrements = 100
-    reactiveState.lastReset = '2023-01-01T00:00:00.000Z'
+    persistedCache.count = 42
+    persistedCache.totalIncrements = 100
+    persistedCache.lastReset = '2023-01-01T00:00:00.000Z'
 
     await mockMqtt._triggerMessage('/test/status', {})
 
@@ -162,20 +166,20 @@ describe('stateful-counter bot', () => {
     }
     const minimalBot = createStatefulCounter('minimal-counter', minimalConfig)
 
-    await expect(minimalBot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })).resolves.not.toThrow()
+    await expect(minimalBot.start({ mqtt: mockMqtt, persistedCache })).resolves.not.toThrow()
 
     expect(mockMqtt.subscribe).toHaveBeenCalledTimes(1)
     expect(mockMqtt.subscribe).toHaveBeenCalledWith('/test/increment', expect.any(Function))
   })
 
   it('should accumulate count across multiple increments', async () => {
-    await bot.start({ mqtt: mockMqtt, createPersistedState: mockCreatePersistedState })
+    await bot.start({ mqtt: mockMqtt, persistedCache })
 
     await mockMqtt._triggerMessage('/test/increment', { increment: 5 })
     await mockMqtt._triggerMessage('/test/increment', { increment: 3 })
     await mockMqtt._triggerMessage('/test/increment', { increment: 2 })
 
-    expect(reactiveState.count).toBe(10)
-    expect(reactiveState.totalIncrements).toBe(3)
+    expect(persistedCache.count).toBe(10)
+    expect(persistedCache.totalIncrements).toBe(3)
   })
 })

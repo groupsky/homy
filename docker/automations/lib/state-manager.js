@@ -1,11 +1,40 @@
 const fs = require('fs').promises
 const path = require('path')
 const { reactive, watch } = require('@vue/reactivity')
+const stringify = require('fast-json-stable-stringify')
+
+function handleStateMigration(botName, cachedData, version, defaultState, migrate) {
+  if (cachedData === null) {
+    return structuredClone(defaultState)
+  }
+
+  const { version: cachedVersion = 1, default: cachedDefault = {}, state: cachedState = {} } = cachedData
+  const needsMigration = cachedVersion !== version ||
+                        stringify(cachedDefault) !== stringify(defaultState)
+
+  if (!needsMigration) {
+    return structuredClone(cachedState || {})
+  }
+
+  if (!migrate) {
+    console.warn(`[StateManager] Bot ${botName} version/default changed but no migrate function provided, discarding saved state`)
+    return structuredClone(defaultState)
+  }
+
+  try {
+    const migratedState = migrate({ version, defaultState, state: structuredClone(cachedState || {}) })
+    return structuredClone(migratedState)
+  } catch (error) {
+    console.warn(`[StateManager] Migration failed for bot ${botName}, using default state:`, error)
+    return structuredClone(defaultState)
+  }
+}
 
 class StateManager {
   constructor({stateDir = process.env.STATE_DIR || '/app/state', debounceMs = 100, enabled = true} = {}) {
     this.stateDir = stateDir
     this.cache = new Map()
+    this.reactiveStates = new Map()
     this.writeTimeouts = new Map()
     this.debounceMs = debounceMs
     this.enabled = enabled
@@ -52,7 +81,7 @@ class StateManager {
     const tempPath = `${statePath}.tmp`
 
     try {
-      await fs.writeFile(tempPath, JSON.stringify(state, null, 2), 'utf8')
+      await fs.writeFile(tempPath, stringify(state, { space: 2 }), 'utf8')
       await fs.rename(tempPath, statePath)
     } catch (error) {
       try {
@@ -90,30 +119,34 @@ class StateManager {
     }
   }
 
-  async createBotState(botName, defaultState = {}) {
-    await this._ensureCached(botName)
-    const cachedState = this.cache.get(botName)
-    const initialState = cachedState !== null ? cachedState : defaultState
+  async createBotState(botName, defaultState = {}, version = 1, migrate = null) {
+    const cacheKey = `${botName}-${version}-${stringify(defaultState)}`
 
-    const reactiveState = reactive(initialState)
+    if (this.reactiveStates.has(cacheKey)) {
+      return this.reactiveStates.get(cacheKey)
+    }
+
+    await this._ensureCached(botName)
+    const cachedData = this.cache.get(botName)
+    const userState = handleStateMigration(botName, cachedData, version, defaultState, migrate)
+
+    const reactiveState = reactive(userState)
 
     watch(
       () => reactiveState,
       (newState) => {
-        this.cache.set(botName, JSON.parse(JSON.stringify(newState)))
-        this._debouncedSave(botName, JSON.parse(JSON.stringify(newState)))
+        const plainState = JSON.parse(stringify(newState))
+        const dataWithMetadata = { version, default: defaultState, state: plainState }
+        this.cache.set(botName, structuredClone(dataWithMetadata))
+        this._debouncedSave(botName, structuredClone(dataWithMetadata))
       },
       { deep: true, flush: 'sync' }
     )
 
+    this.reactiveStates.set(cacheKey, reactiveState)
     return reactiveState
   }
 
-  createPersistedStateFactory(botName) {
-    return (defaultState = {}) => {
-      return this.createBotState(botName, defaultState)
-    }
-  }
 
   async flushAll() {
     const flushPromises = []
@@ -133,6 +166,7 @@ class StateManager {
   async cleanup() {
     await this.flushAll()
     this.cache.clear()
+    this.reactiveStates.clear()
   }
 }
 

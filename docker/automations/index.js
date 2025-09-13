@@ -51,9 +51,10 @@ const contentProcessors = {
 
 playground.gates.mqtt.setMaxListeners(1000)
 
-playground.bots.forEach(bot => {
+playground.bots.forEach(async bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
-  bot.hooks.start({
+
+  const startParams = {
     mqtt: {
       subscribe: async (topic, cb) => new Promise((resolve, reject) => {
         playground.gates.mqtt.on('connect', () => {
@@ -99,9 +100,24 @@ playground.bots.forEach(bot => {
           resolve()
         }))
       }
-    },
-    createPersistedState: playground.gates.state.createPersistedStateFactory(bot.name)
-  })
+    }
+  }
+
+  if (bot.hooks.persistedCache) {
+    const { version = 1, default: defaultState = {}, migrate } = bot.hooks.persistedCache
+    startParams.persistedCache = await playground.gates.state.createBotState(bot.name, defaultState, version, migrate)
+  } else {
+    // Provide warning getter to catch accidental usage
+    Object.defineProperty(startParams, 'persistedCache', {
+      get() {
+        console.warn(`[${bot.name}] Attempted to access persistedCache but bot.persistedCache not configured. Changes will not persist!`)
+        return null
+      },
+      enumerable: false
+    })
+  }
+
+  bot.hooks.start(startParams)
 })
 
 process.on('SIGTERM', async () => {
