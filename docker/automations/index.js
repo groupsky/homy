@@ -2,6 +2,7 @@
 /* eslint-env node */
 const mqtt = require('mqtt')
 const resolve = require('./lib/resolve')
+const StateManager = require('./lib/state-manager')
 
 const {
   bots: botConfigs,
@@ -9,9 +10,16 @@ const {
     mqtt: {
       url: mqttUrl = 'mqtt://localhost',
       clientId: mqttClientId = 'homy-automations'
-    }
+    },
+    state: {
+      enabled = false,
+      dir: stateDir = process.env.STATE_DIR || '/app/state',
+      debounceMs: stateDebounceMs = 100
+    } = {}
   }
 } = require(process.env.CONFIG || './config')
+
+const stateManager = new StateManager({enabled, stateDir, debounceMs: stateDebounceMs})
 
 const playground = {
   bots: Object.entries(botConfigs).map(([name, config]) => {
@@ -25,7 +33,8 @@ const playground = {
   gates: {
     mqtt: mqtt.connect(mqttUrl, {
       clientId: mqttClientId
-    })
+    }),
+    state: stateManager
   }
 }
 
@@ -42,9 +51,10 @@ const contentProcessors = {
 
 playground.gates.mqtt.setMaxListeners(1000)
 
-playground.bots.forEach(bot => {
+playground.bots.forEach(async bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
-  bot.hooks.start({
+
+  const startParams = {
     mqtt: {
       subscribe: async (topic, cb) => new Promise((resolve, reject) => {
         playground.gates.mqtt.on('connect', () => {
@@ -91,5 +101,39 @@ playground.bots.forEach(bot => {
         }))
       }
     }
-  })
+  }
+
+  if (bot.hooks.persistedCache) {
+    const { version = 1, default: defaultState = {}, migrate } = bot.hooks.persistedCache
+    startParams.persistedCache = await playground.gates.state.createBotState(bot.name, defaultState, version, migrate)
+  } else {
+    // Provide warning getter to catch accidental usage
+    Object.defineProperty(startParams, 'persistedCache', {
+      get() {
+        console.warn(`[${bot.name}] Attempted to access persistedCache but bot.persistedCache not configured. Changes will not persist!`)
+        return null
+      },
+      enumerable: false
+    })
+  }
+
+  bot.hooks.start(startParams)
+})
+
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM, cleaning up...')
+  await Promise.all([
+    playground.gates.mqtt.endAsync(),
+    playground.gates.state.cleanup()
+  ])
+  process.exit(0)
+})
+
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT, cleaning up...')
+  await Promise.all([
+    playground.gates.mqtt.endAsync(),
+    playground.gates.state.cleanup()
+  ])
+  process.exit(0)
 })

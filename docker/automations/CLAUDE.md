@@ -57,11 +57,29 @@ CONFIG=/path/to/test-config.js node index.js
 Each bot follows this standard pattern:
 ```javascript
 module.exports = (name, config) => ({
-    start: ({mqtt}) => {
-        // Initialization logic
-        
+    persistedCache: {
+        version: 2,
+        default: {
+            count: 0,
+            items: [],
+            settings: { timeout: 5000 }
+        },
+        migrate: ({ version, defaultState, state }) => {
+            // Migration logic when version or default changes
+            if (!state.items) state.items = []
+            if (!state.settings) state.settings = defaultState.settings
+            return state
+        }
+    },
+
+    start: async ({ mqtt, persistedCache }) => {
+        // persistedCache is automatically created and migrated
         // Subscribe to MQTT topics
         mqtt.subscribe(config.inputTopic, (payload) => {
+            // Direct property updates - automatic persistence
+            persistedCache.someProperty = newValue
+            persistedCache.arrayProperty[index] = newArrayValue
+
             // Process input and trigger outputs
             mqtt.publish(config.outputTopic, result)
         })
@@ -95,10 +113,12 @@ Key patterns:
 #### `feature-toggle-on-feature-change` - Input/output mapping
 - **Purpose**: Direct mapping of input changes to output toggles with debouncing
 - **Use Cases**: Light switches, relay controls, button mappings
+- **State**: No persistent state - stateless operation
 
 #### `bath-lights` - Occupancy-based lighting
 - **Purpose**: Bathroom lighting automation with timeout logic
 - **Features**: Door/lock sensors, toggle switches, multiple timeout scenarios
+- **State**: Uses persistent cache for timeout management and light verification
 - **Configuration**:
   ```javascript
   {
@@ -126,6 +146,51 @@ Key patterns:
 #### `bac002-*` - HVAC thermostat control
 - **Purpose**: BACnet thermostat synchronization and control
 - **Features**: Clock sync, power management based on door/window states
+- **State**: Uses persistent cache for switch state tracking
+
+#### `stateful-counter` - Example with persistent cache and migration
+- **Purpose**: Demonstrates persistent cache patterns with versioning
+- **Features**: Incrementing counter with history tracking and reset functionality
+- **State**: Complete example of persistent cache with migration
+- **Example**:
+  ```javascript
+  module.exports = (name, config) => ({
+    persistedCache: {
+      version: 2,
+      default: {
+        count: 0,
+        lastReset: new Date().toISOString(),
+        totalIncrements: 0,
+        history: []
+      },
+      migrate: ({ version, defaultState, state }) => {
+        // Migration: add history array for v2
+        if (!state.history) state.history = []
+        return state
+      }
+    },
+
+    start: async ({ mqtt, persistedCache }) => {
+      mqtt.subscribe(config.incrementTopic, (message) => {
+        const increment = message.increment || 1
+        persistedCache.count += increment
+        persistedCache.totalIncrements += 1
+
+        // Add to history
+        persistedCache.history.push({
+          timestamp: new Date().toISOString(),
+          increment,
+          newCount: persistedCache.count
+        })
+
+        // Keep only last 10 entries
+        if (persistedCache.history.length > 10) {
+          persistedCache.history = persistedCache.history.slice(-10)
+        }
+      })
+    }
+  })
+  ```
 
 ## Testing Guidelines
 
@@ -172,15 +237,69 @@ const subscribe = (topic, callback) => {
 
 ## Best Practices
 
+### State Management
+- **Declarative cache definition**: Define cache structure in `persistedCache` object
+- **Automatic cache creation**: Cache is automatically created and passed to `bot.start()`
+- **Reactive persistence**: Direct property mutations trigger automatic persistence with debouncing
+- **Version-based migration**: Migration function handles schema changes
+- **Deterministic serialization**: Uses fast-json-stable-stringify for consistent JSON output
+
+**Reactive Pattern:**
+```javascript
+module.exports = (name, config) => ({
+    persistedCache: {
+        version: 2,  // Increment when cache structure changes
+        default: {   // Initial cache structure
+            count: 0,
+            items: [],
+            settings: { timeout: 5000 }
+        },
+        migrate: ({ version, defaultState, state }) => {
+            // Called when version or defaultState changes
+            // Migration logic - modify state and return it
+            if (!state.items) state.items = []
+            if (version >= 2 && !state.settings) {
+                state.settings = defaultState.settings
+            }
+            return state
+        }
+    },
+
+    start: async ({ mqtt, persistedCache }) => {
+        // persistedCache is ready to use - no initialization needed
+        persistedCache.count += 1  // Direct mutations trigger persistence
+        persistedCache.items.push('item')
+        persistedCache.settings.timeout = 10000
+    }
+})
+```
+
+**Cache Migration Design:**
+- **Migration triggers**: Runs when `version` number or `default` structure changes
+- **Migration function**: Receives `{ version, defaultState, state }` object
+- **Failure handling**: Missing migration warns and discards old cache (safe fallback)
+- **Cache semantics**: Designed for non-critical data that can be safely reset
+- **Deterministic comparison**: Uses stable JSON stringification for reliable change detection
+
+**Reactive Cache Manager Design:**
+- Built on @vue/reactivity for automatic change detection
+- Direct property mutations trigger persistence automatically
+- Deep watching for nested objects and arrays
+- File I/O happens asynchronously with debouncing in the background
+- No manual synchronization required - reduces developer errors
+- Persistence failures are logged internally, no error handling needed
+
 ### Error Handling
 - Always handle null/undefined payloads gracefully
 - Use try-catch blocks around MQTT publish operations
 - Log errors with sufficient context for debugging
+- Handle state persistence failures without affecting bot operation
 
 ### Performance
 - Avoid blocking operations in MQTT callbacks
 - Use efficient state tracking with Maps and Sets
 - Clean up timers and subscriptions properly
+- Update local state immediately for fast reads
 
 ### Maintainability
 - Keep bot logic focused and single-purpose
