@@ -272,20 +272,6 @@ module.exports = {
       },
       verbose: false
     },
-    boilerOnSchedule: {
-      type: 'solar-emitter',
-      statusTopic: 'homy/features/relay/service_boiler_contactor/status',
-      commandTopic: 'homy/features/relay/service_boiler_contactor/set',
-      stateParser: ({ state }) => state,
-      commandTemplate: (state) => ({ state }),
-      lat: 42.1354,
-      lon: 24.7453,
-      solarTimeStates: {
-        goldenHour: true,
-        nadir: false
-      },
-      verbose: false
-    },
     haBoilerEnergyMeter: {
       type: 'mqtt-publish',
       topic: 'homeassistant/sensor/boiler-energy-meter/config',
