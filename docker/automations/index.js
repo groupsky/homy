@@ -100,7 +100,7 @@ playground.bots.forEach(bot => {
         }))
       }
     },
-    state: playground.gates.state.createBotState(bot.name)
+    createPersistedState: playground.gates.state.createPersistedStateFactory(bot.name)
   })
 })
 

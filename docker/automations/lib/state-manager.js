@@ -1,5 +1,6 @@
 const fs = require('fs').promises
 const path = require('path')
+const { reactive, watch } = require('@vue/reactivity')
 
 class StateManager {
   constructor({stateDir = process.env.STATE_DIR || '/app/state', debounceMs = 100, enabled = true} = {}) {
@@ -89,18 +90,28 @@ class StateManager {
     }
   }
 
-  createBotState(botName) {
-    return {
-      get: async (defaultState = {})=> {
-        await this._ensureCached(botName)
-        const cachedState = this.cache.get(botName)
-        return cachedState !== null ? cachedState : defaultState
-      },
+  async createBotState(botName, defaultState = {}) {
+    await this._ensureCached(botName)
+    const cachedState = this.cache.get(botName)
+    const initialState = cachedState !== null ? cachedState : defaultState
 
-      set: (newState) => {
-        this.cache.set(botName, newState)
-        this._debouncedSave(botName, newState)
-      }
+    const reactiveState = reactive(initialState)
+
+    watch(
+      () => reactiveState,
+      (newState) => {
+        this.cache.set(botName, JSON.parse(JSON.stringify(newState)))
+        this._debouncedSave(botName, JSON.parse(JSON.stringify(newState)))
+      },
+      { deep: true, flush: 'sync' }
+    )
+
+    return reactiveState
+  }
+
+  createPersistedStateFactory(botName) {
+    return (defaultState = {}) => {
+      return this.createBotState(botName, defaultState)
     }
   }
 

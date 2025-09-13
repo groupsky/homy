@@ -47,48 +47,109 @@ describe('StateManager', () => {
     it('should accept enabled parameter in constructor', () => {
       const enabledManager = new StateManager({enabled: true})
       expect(enabledManager.enabled).toBe(true)
-      
+
       const disabledManager = new StateManager({enabled: false})
       expect(disabledManager.enabled).toBe(false)
     })
   })
 
-  describe('createBotState', () => {
-    it('should create scoped state for a bot', () => {
-      const botState = stateManager.createBotState('test-bot')
-      expect(botState).toHaveProperty('get')
-      expect(botState).toHaveProperty('set')
-      expect(typeof botState.get).toBe('function')
-      expect(typeof botState.set).toBe('function')
+  describe('createPersistedStateFactory', () => {
+    it('should create factory function for a bot', () => {
+      const createPersistedState = stateManager.createPersistedStateFactory('test-bot')
+      expect(typeof createPersistedState).toBe('function')
+    })
+
+    it('should create reactive state when factory is called', async () => {
+      const createPersistedState = stateManager.createPersistedStateFactory('test-bot')
+      const defaultState = { count: 0, enabled: true }
+      const persistedState = await createPersistedState(defaultState)
+
+      expect(persistedState).toEqual(defaultState)
+      expect(typeof persistedState).toBe('object')
     })
 
     it('should return default state when no state exists', async () => {
-      const botState = stateManager.createBotState('new-bot')
+      const createPersistedState = stateManager.createPersistedStateFactory('new-bot')
       const defaultState = { count: 0, enabled: true }
-      const state = await botState.get(defaultState)
-      expect(state).toEqual(defaultState)
+      const persistedState = await createPersistedState(defaultState)
+      expect(persistedState).toEqual(defaultState)
     })
 
     it('should return empty object as default when no default provided', async () => {
-      const botState = stateManager.createBotState('new-bot')
-      const state = await botState.get()
-      expect(state).toEqual({})
+      const createPersistedState = stateManager.createPersistedStateFactory('new-bot')
+      const persistedState = await createPersistedState()
+      expect(persistedState).toEqual({})
+    })
+
+    it('should make state reactive - mutations trigger persistence', async () => {
+      const createPersistedState = stateManager.createPersistedStateFactory('reactive-bot')
+      const persistedState = await createPersistedState({ count: 0 })
+
+      // Mutate the state
+      persistedState.count = 42
+      persistedState.name = 'test'
+
+      await stateManager.flushAll()
+
+      const statePath = path.join(TEST_STATE_DIR, 'reactive-bot.json')
+      const savedData = await fs.readFile(statePath, 'utf8')
+      const parsedState = JSON.parse(savedData)
+
+      expect(parsedState).toEqual({ count: 42, name: 'test' })
+    })
+  })
+
+  describe('createBotState (legacy)', () => {
+    it('should create reactive state for a bot', async () => {
+      const defaultState = { count: 0, enabled: true }
+      const botState = await stateManager.createBotState('test-bot', defaultState)
+
+      expect(botState).toEqual(defaultState)
+      expect(typeof botState).toBe('object')
+    })
+
+    it('should return default state when no state exists', async () => {
+      const defaultState = { count: 0, enabled: true }
+      const botState = await stateManager.createBotState('new-bot', defaultState)
+      expect(botState).toEqual(defaultState)
+    })
+
+    it('should return empty object as default when no default provided', async () => {
+      const botState = await stateManager.createBotState('new-bot')
+      expect(botState).toEqual({})
+    })
+
+    it('should make state reactive - mutations trigger persistence', async () => {
+      const botState = await stateManager.createBotState('reactive-bot', { count: 0 })
+
+      // Mutate the state
+      botState.count = 42
+      botState.name = 'test'
+
+      await stateManager.flushAll()
+
+      const statePath = path.join(TEST_STATE_DIR, 'reactive-bot.json')
+      const savedData = await fs.readFile(statePath, 'utf8')
+      const parsedState = JSON.parse(savedData)
+
+      expect(parsedState).toEqual({ count: 42, name: 'test' })
     })
   })
 
   describe('state persistence', () => {
-    it('should persist state to filesystem', async () => {
-      const botState = stateManager.createBotState('persistent-bot')
-      const testState = { count: 42, name: 'test' }
+    it('should persist state to filesystem when properties change', async () => {
+      const botState = await stateManager.createBotState('persistent-bot', { count: 0 })
 
-      await botState.set(testState)
+      botState.count = 42
+      botState.name = 'test'
+
       await stateManager.flushAll()
 
       const statePath = path.join(TEST_STATE_DIR, 'persistent-bot.json')
       const savedData = await fs.readFile(statePath, 'utf8')
       const parsedState = JSON.parse(savedData)
 
-      expect(parsedState).toEqual(testState)
+      expect(parsedState).toEqual({ count: 42, name: 'test' })
     })
 
     it('should load persisted state from filesystem', async () => {
@@ -98,15 +159,13 @@ describe('StateManager', () => {
       await fs.mkdir(TEST_STATE_DIR, { recursive: true })
       await fs.writeFile(statePath, JSON.stringify(testState), 'utf8')
 
-      const botState = stateManager.createBotState('loaded-bot')
-      const loadedState = await botState.get()
-
-      expect(loadedState).toEqual(testState)
+      const botState = await stateManager.createBotState('loaded-bot')
+      expect(botState).toEqual(testState)
     })
 
     it('should create state directory if it does not exist', async () => {
-      const botState = stateManager.createBotState('test-bot')
-      await botState.set({ test: true })
+      const botState = await stateManager.createBotState('test-bot', { test: true })
+      botState.test = false
       await stateManager.flushAll()
 
       const dirExists = await fs.access(TEST_STATE_DIR).then(() => true).catch(() => false)
@@ -114,14 +173,54 @@ describe('StateManager', () => {
     })
   })
 
+  describe('reactive behavior', () => {
+    it('should trigger persistence on nested object changes', async () => {
+      const botState = await stateManager.createBotState('nested-bot', {
+        user: { name: 'John', settings: { theme: 'light' } }
+      })
+
+      botState.user.name = 'Jane'
+      botState.user.settings.theme = 'dark'
+
+      await stateManager.flushAll()
+
+      const statePath = path.join(TEST_STATE_DIR, 'nested-bot.json')
+      const savedData = await fs.readFile(statePath, 'utf8')
+      const parsedState = JSON.parse(savedData)
+
+      expect(parsedState.user.name).toBe('Jane')
+      expect(parsedState.user.settings.theme).toBe('dark')
+    })
+
+    it('should trigger persistence on array changes', async () => {
+      const botState = await stateManager.createBotState('array-bot', {
+        items: ['a', 'b', 'c'],
+        counts: [1, 2, 3]
+      })
+
+      botState.items[0] = 'changed'
+      botState.items.push('d')
+      botState.counts[1] = 99
+
+      await stateManager.flushAll()
+
+      const statePath = path.join(TEST_STATE_DIR, 'array-bot.json')
+      const savedData = await fs.readFile(statePath, 'utf8')
+      const parsedState = JSON.parse(savedData)
+
+      expect(parsedState.items).toEqual(['changed', 'b', 'c', 'd'])
+      expect(parsedState.counts).toEqual([1, 99, 3])
+    })
+  })
+
   describe('debouncing', () => {
     it('should debounce rapid state changes', async () => {
-      const botState = stateManager.createBotState('debounce-bot')
       const writeFileSpy = jest.spyOn(fs, 'writeFile')
+      const botState = await stateManager.createBotState('debounce-bot', { count: 0 })
 
-      await botState.set({ count: 1 })
-      await botState.set({ count: 2 })
-      await botState.set({ count: 3 })
+      botState.count = 1
+      botState.count = 2
+      botState.count = 3
 
       await new Promise(resolve => setTimeout(resolve, 50))
       expect(writeFileSpy).not.toHaveBeenCalled()
@@ -133,11 +232,11 @@ describe('StateManager', () => {
     })
 
     it('should use latest state after debouncing', async () => {
-      const botState = stateManager.createBotState('latest-bot')
+      const botState = await stateManager.createBotState('latest-bot', { count: 0 })
 
-      await botState.set({ count: 1 })
-      await botState.set({ count: 2 })
-      await botState.set({ count: 3 })
+      botState.count = 1
+      botState.count = 2
+      botState.count = 3
 
       await stateManager.flushAll()
 
@@ -151,10 +250,10 @@ describe('StateManager', () => {
 
   describe('atomic writes', () => {
     it('should use temporary file for atomic writes', async () => {
-      const botState = stateManager.createBotState('atomic-bot')
       const renameSpy = jest.spyOn(fs, 'rename')
+      const botState = await stateManager.createBotState('atomic-bot', { atomic: false })
 
-      await botState.set({ atomic: true })
+      botState.atomic = true
       await stateManager.flushAll()
 
       expect(renameSpy).toHaveBeenCalledWith(
@@ -166,7 +265,6 @@ describe('StateManager', () => {
     })
 
     it('should clean up temp file on write error', async () => {
-      const botState = stateManager.createBotState('error-bot')
       const writeFileError = new Error('Write failed')
       const writeFileSpy = jest.spyOn(fs, 'writeFile').mockRejectedValue(writeFileError)
       const unlinkSpy = jest.spyOn(fs, 'unlink').mockResolvedValue()
@@ -183,51 +281,47 @@ describe('StateManager', () => {
   describe('cache behavior', () => {
     it('should cache state in memory after first load', async () => {
       const readFileSpy = jest.spyOn(fs, 'readFile')
-      const botState = stateManager.createBotState('cached-bot')
 
-      await botState.get({ initial: true })
-      await botState.get({ initial: true })
-      await botState.get({ initial: true })
+      await stateManager.createBotState('cached-bot', { initial: true })
+      await stateManager.createBotState('cached-bot', { initial: true })
+      await stateManager.createBotState('cached-bot', { initial: true })
 
       expect(readFileSpy).toHaveBeenCalledTimes(1)
 
       readFileSpy.mockRestore()
     })
 
-    it('should update cache when setting new state', async () => {
-      const botState = stateManager.createBotState('cache-update-bot')
+    it('should reflect changes immediately in reactive state', async () => {
+      const botState = await stateManager.createBotState('immediate-bot', { version: 1 })
 
-      await botState.set({ version: 1 })
-      const state1 = await botState.get()
-      expect(state1).toEqual({ version: 1 })
+      expect(botState.version).toBe(1)
 
-      await botState.set({ version: 2 })
-      const state2 = await botState.get()
-      expect(state2).toEqual({ version: 2 })
+      botState.version = 2
+      expect(botState.version).toBe(2)
+
+      botState.version = 3
+      expect(botState.version).toBe(3)
     })
   })
 
   describe('multiple bots', () => {
     it('should isolate state between different bots', async () => {
-      const bot1State = stateManager.createBotState('bot1')
-      const bot2State = stateManager.createBotState('bot2')
+      const bot1State = await stateManager.createBotState('bot1', { bot: 'first', value: 0 })
+      const bot2State = await stateManager.createBotState('bot2', { bot: 'second', value: 0 })
 
-      await bot1State.set({ bot: 'first', value: 100 })
-      await bot2State.set({ bot: 'second', value: 200 })
+      bot1State.value = 100
+      bot2State.value = 200
 
-      const state1 = await bot1State.get()
-      const state2 = await bot2State.get()
-
-      expect(state1).toEqual({ bot: 'first', value: 100 })
-      expect(state2).toEqual({ bot: 'second', value: 200 })
+      expect(bot1State).toEqual({ bot: 'first', value: 100 })
+      expect(bot2State).toEqual({ bot: 'second', value: 200 })
     })
 
     it('should create separate files for different bots', async () => {
-      const bot1State = stateManager.createBotState('file-bot1')
-      const bot2State = stateManager.createBotState('file-bot2')
+      const bot1State = await stateManager.createBotState('file-bot1', { id: 0 })
+      const bot2State = await stateManager.createBotState('file-bot2', { id: 0 })
 
-      await bot1State.set({ id: 1 })
-      await bot2State.set({ id: 2 })
+      bot1State.id = 1
+      bot2State.id = 2
       await stateManager.flushAll()
 
       const file1Exists = await fs.access(path.join(TEST_STATE_DIR, 'file-bot1.json')).then(() => true).catch(() => false)
@@ -240,11 +334,11 @@ describe('StateManager', () => {
 
   describe('cleanup', () => {
     it('should flush all pending writes on cleanup', async () => {
-      const bot1State = stateManager.createBotState('cleanup-bot1')
-      const bot2State = stateManager.createBotState('cleanup-bot2')
+      const bot1State = await stateManager.createBotState('cleanup-bot1', { cleanup: 0 })
+      const bot2State = await stateManager.createBotState('cleanup-bot2', { cleanup: 0 })
 
-      await bot1State.set({ cleanup: 1 })
-      await bot2State.set({ cleanup: 2 })
+      bot1State.cleanup = 1
+      bot2State.cleanup = 2
 
       await stateManager.cleanup()
 
@@ -256,8 +350,8 @@ describe('StateManager', () => {
     })
 
     it('should clear cache on cleanup', async () => {
-      const botState = stateManager.createBotState('cache-clear-bot')
-      await botState.set({ cached: true })
+      const botState = await stateManager.createBotState('cache-clear-bot', { cached: true })
+      botState.cached = false
 
       expect(stateManager.cache.size).toBeGreaterThan(0)
 
@@ -269,11 +363,9 @@ describe('StateManager', () => {
 
   describe('error handling', () => {
     it('should handle missing state files gracefully', async () => {
-      const botState = stateManager.createBotState('missing-bot')
       const defaultState = { missing: true }
-
-      const state = await botState.get(defaultState)
-      expect(state).toEqual(defaultState)
+      const botState = await stateManager.createBotState('missing-bot', defaultState)
+      expect(botState).toEqual(defaultState)
     })
 
     it('should handle invalid JSON gracefully', async () => {
@@ -288,8 +380,8 @@ describe('StateManager', () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation()
       const writeFileSpy = jest.spyOn(fs, 'writeFile').mockRejectedValue(new Error('Disk full'))
 
-      const botState = stateManager.createBotState('error-save-bot')
-      await botState.set({ test: true })
+      const botState = await stateManager.createBotState('error-save-bot', { test: false })
+      botState.test = true
 
       await new Promise(resolve => setTimeout(resolve, 150))
 
@@ -319,8 +411,9 @@ describe('StateManager', () => {
     })
 
     it('should not save state when disabled', async () => {
-      const botState = disabledStateManager.createBotState('disabled-bot')
-      await botState.set({ count: 42, name: 'test' })
+      const botState = await disabledStateManager.createBotState('disabled-bot', { count: 0 })
+      botState.count = 42
+      botState.name = 'test'
       await disabledStateManager.flushAll()
 
       const statePath = path.join(TEST_STATE_DIR, 'disabled-bot.json')
@@ -329,16 +422,14 @@ describe('StateManager', () => {
     })
 
     it('should return default state when disabled and no existing state', async () => {
-      const botState = disabledStateManager.createBotState('no-state-bot')
       const defaultState = { count: 0, enabled: true }
-      const state = await botState.get(defaultState)
-      expect(state).toEqual(defaultState)
+      const botState = await disabledStateManager.createBotState('no-state-bot', defaultState)
+      expect(botState).toEqual(defaultState)
     })
 
     it('should return empty object when disabled and no default provided', async () => {
-      const botState = disabledStateManager.createBotState('empty-bot')
-      const state = await botState.get()
-      expect(state).toEqual({})
+      const botState = await disabledStateManager.createBotState('empty-bot')
+      expect(botState).toEqual({})
     })
 
     it('should not load existing state from disk when disabled', async () => {
@@ -348,16 +439,15 @@ describe('StateManager', () => {
       await fs.mkdir(TEST_STATE_DIR, { recursive: true })
       await fs.writeFile(statePath, JSON.stringify(testState), 'utf8')
 
-      const botState = disabledStateManager.createBotState('existing-bot')
       const defaultState = { count: 0 }
-      const loadedState = await botState.get(defaultState)
+      const botState = await disabledStateManager.createBotState('existing-bot', defaultState)
 
-      expect(loadedState).toEqual(defaultState)
+      expect(botState).toEqual(defaultState)
     })
 
     it('should not create state directory when disabled', async () => {
-      const botState = disabledStateManager.createBotState('no-dir-bot')
-      await botState.set({ test: true })
+      const botState = await disabledStateManager.createBotState('no-dir-bot', { test: false })
+      botState.test = true
       await disabledStateManager.flushAll()
 
       const dirExists = await fs.access(TEST_STATE_DIR).then(() => true).catch(() => false)
@@ -366,16 +456,26 @@ describe('StateManager', () => {
 
     it('should not debounce writes when disabled', async () => {
       const writeFileSpy = jest.spyOn(fs, 'writeFile')
-      const botState = disabledStateManager.createBotState('no-debounce-bot')
+      const botState = await disabledStateManager.createBotState('no-debounce-bot', { count: 0 })
 
-      await botState.set({ count: 1 })
-      await botState.set({ count: 2 })
-      await botState.set({ count: 3 })
+      botState.count = 1
+      botState.count = 2
+      botState.count = 3
 
       await new Promise(resolve => setTimeout(resolve, 150))
 
       expect(writeFileSpy).not.toHaveBeenCalled()
       writeFileSpy.mockRestore()
+    })
+
+    it('should still be reactive when disabled (just no persistence)', async () => {
+      const botState = await disabledStateManager.createBotState('reactive-disabled', { count: 0 })
+
+      botState.count = 42
+      expect(botState.count).toBe(42)
+
+      botState.name = 'test'
+      expect(botState.name).toBe('test')
     })
   })
 })

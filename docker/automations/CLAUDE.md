@@ -57,20 +57,16 @@ CONFIG=/path/to/test-config.js node index.js
 Each bot follows this standard pattern:
 ```javascript
 module.exports = (name, config) => ({
-    start: async ({mqtt, state}) => {
-        // Initialize state
+    start: async ({mqtt, createPersistedState}) => {
+        // Initialize reactive state
         const defaultState = { /* initial state */ }
-        const currentState = await state.get(defaultState)
+        const persistedState = await createPersistedState(defaultState)
 
         // Subscribe to MQTT topics
         mqtt.subscribe(config.inputTopic, (payload) => {
-            // Create new state
-            const newState = { ...currentState }
-            // ... modify newState ...
-
-            // Update local state first, then persist
-            Object.assign(currentState, newState)
-            state.set(newState)
+            // Direct property updates - automatic persistence
+            persistedState.someProperty = newValue
+            persistedState.arrayProperty[index] = newArrayValue
 
             // Process input and trigger outputs
             mqtt.publish(config.outputTopic, result)
@@ -183,26 +179,29 @@ const subscribe = (topic, callback) => {
 ## Best Practices
 
 ### State Management
-- **Update local state first**: Always update `currentState` before persistence for consistency
-- **Simple persistence**: Use `state.set(newState)` synchronously - it updates cache immediately and handles file I/O in background
-- **Single initialization**: Use `await state.get(defaultState)` only once during bot startup
-- **Local state as source of truth**: Read from `currentState` for immediate operations, not from state manager
+- **Reactive state**: Use `await createPersistedState(defaultState)` to get a reactive state object
+- **Automatic persistence**: Direct property mutations trigger automatic persistence with debouncing
+- **Single initialization**: Call `createPersistedState()` only once during bot startup
+- **Direct property updates**: Modify state properties directly - no manual synchronization required
 
-**Correct Pattern:**
+**Reactive Pattern:**
 ```javascript
-// In MQTT callback
-const newState = { ...currentState }
-newState.someProperty = newValue
+// Initialize reactive state (once during startup)
+const persistedState = await createPersistedState(defaultState)
 
-Object.assign(currentState, newState)  // Update local first
-state.set(newState)                    // Then persist (synchronous call, async I/O)
+// In MQTT callbacks - direct property updates
+persistedState.someProperty = newValue
+persistedState.arrayProperty[index] = newArrayValue
+persistedState.objectProperty.nestedProp = value
 ```
 
-**State Manager Design:**
-- `state.set()` immediately updates an in-memory cache
+**Reactive State Manager Design:**
+- Built on @vue/reactivity for automatic change detection
+- Direct property mutations trigger persistence automatically
+- Deep watching for nested objects and arrays
 - File I/O happens asynchronously with debouncing in the background
-- No error handling needed - persistence failures are logged internally
-- Cache serves as the persistent state, local state provides immediate access
+- No manual `state.set()` calls required - reduces developer errors
+- Persistence failures are logged internally, no error handling needed
 
 ### Error Handling
 - Always handle null/undefined payloads gracefully

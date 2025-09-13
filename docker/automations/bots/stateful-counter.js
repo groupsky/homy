@@ -1,28 +1,22 @@
 module.exports = function createStatefulCounter(name, config) {
   return {
-    start: async ({ mqtt, state }) => {
+    start: async ({ mqtt, createPersistedState }) => {
       const defaultState = {
         count: 0,
         lastReset: new Date().toISOString(),
         totalIncrements: 0
       }
 
-      const currentState = await state.get(defaultState)
+      const persistedState = await createPersistedState(defaultState)
 
       await mqtt.subscribe(config.incrementTopic, (message) => {
-        const newState = {
-          ...currentState,
-          count: currentState.count + (message.increment || 1),
-          totalIncrements: currentState.totalIncrements + 1
-        }
-
-        Object.assign(currentState, newState)
-        state.set(newState)
+        persistedState.count += (message.increment || 1)
+        persistedState.totalIncrements += 1
 
         if (config.outputTopic) {
           mqtt.publish(config.outputTopic, {
-            count: newState.count,
-            totalIncrements: newState.totalIncrements,
+            count: persistedState.count,
+            totalIncrements: persistedState.totalIncrements,
             botName: name
           })
         }
@@ -30,20 +24,14 @@ module.exports = function createStatefulCounter(name, config) {
 
       if (config.resetTopic) {
         await mqtt.subscribe(config.resetTopic, () => {
-          const newState = {
-            count: 0,
-            lastReset: new Date().toISOString(),
-            totalIncrements: currentState.totalIncrements
-          }
-
-          Object.assign(currentState, newState)
-          state.set(newState)
+          persistedState.count = 0
+          persistedState.lastReset = new Date().toISOString()
 
           if (config.outputTopic) {
             mqtt.publish(config.outputTopic, {
               count: 0,
-              lastReset: newState.lastReset,
-              totalIncrements: newState.totalIncrements,
+              lastReset: persistedState.lastReset,
+              totalIncrements: persistedState.totalIncrements,
               botName: name,
               action: 'reset'
             })
@@ -54,7 +42,9 @@ module.exports = function createStatefulCounter(name, config) {
       if (config.statusTopic) {
         await mqtt.subscribe(config.statusTopic, () => {
           mqtt.publish(config.outputTopic || `${config.statusTopic}/response`, {
-            ...currentState,
+            count: persistedState.count,
+            lastReset: persistedState.lastReset,
+            totalIncrements: persistedState.totalIncrements,
             botName: name,
             action: 'status'
           })
