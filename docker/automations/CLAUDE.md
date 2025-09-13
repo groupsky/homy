@@ -57,11 +57,21 @@ CONFIG=/path/to/test-config.js node index.js
 Each bot follows this standard pattern:
 ```javascript
 module.exports = (name, config) => ({
-    start: ({mqtt}) => {
-        // Initialization logic
-        
+    start: async ({mqtt, state}) => {
+        // Initialize state
+        const defaultState = { /* initial state */ }
+        const currentState = await state.get(defaultState)
+
         // Subscribe to MQTT topics
         mqtt.subscribe(config.inputTopic, (payload) => {
+            // Create new state
+            const newState = { ...currentState }
+            // ... modify newState ...
+
+            // Update local state first, then persist
+            Object.assign(currentState, newState)
+            state.set(newState)
+
             // Process input and trigger outputs
             mqtt.publish(config.outputTopic, result)
         })
@@ -172,15 +182,39 @@ const subscribe = (topic, callback) => {
 
 ## Best Practices
 
+### State Management
+- **Update local state first**: Always update `currentState` before persistence for consistency
+- **Simple persistence**: Use `state.set(newState)` synchronously - it updates cache immediately and handles file I/O in background
+- **Single initialization**: Use `await state.get(defaultState)` only once during bot startup
+- **Local state as source of truth**: Read from `currentState` for immediate operations, not from state manager
+
+**Correct Pattern:**
+```javascript
+// In MQTT callback
+const newState = { ...currentState }
+newState.someProperty = newValue
+
+Object.assign(currentState, newState)  // Update local first
+state.set(newState)                    // Then persist (synchronous call, async I/O)
+```
+
+**State Manager Design:**
+- `state.set()` immediately updates an in-memory cache
+- File I/O happens asynchronously with debouncing in the background
+- No error handling needed - persistence failures are logged internally
+- Cache serves as the persistent state, local state provides immediate access
+
 ### Error Handling
 - Always handle null/undefined payloads gracefully
 - Use try-catch blocks around MQTT publish operations
 - Log errors with sufficient context for debugging
+- Handle state persistence failures without affecting bot operation
 
 ### Performance
 - Avoid blocking operations in MQTT callbacks
 - Use efficient state tracking with Maps and Sets
 - Clean up timers and subscriptions properly
+- Update local state immediately for fast reads
 
 ### Maintainability
 - Keep bot logic focused and single-purpose

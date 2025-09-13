@@ -9,18 +9,18 @@ module.exports = function createStatefulCounter(name, config) {
 
       const currentState = await state.get(defaultState)
 
-      await mqtt.subscribe(config.incrementTopic, async (message) => {
+      await mqtt.subscribe(config.incrementTopic, (message) => {
         const newState = {
           ...currentState,
           count: currentState.count + (message.increment || 1),
           totalIncrements: currentState.totalIncrements + 1
         }
 
-        await state.set(newState)
         Object.assign(currentState, newState)
+        state.set(newState)
 
         if (config.outputTopic) {
-          await mqtt.publish(config.outputTopic, {
+          mqtt.publish(config.outputTopic, {
             count: newState.count,
             totalIncrements: newState.totalIncrements,
             botName: name
@@ -29,18 +29,18 @@ module.exports = function createStatefulCounter(name, config) {
       })
 
       if (config.resetTopic) {
-        await mqtt.subscribe(config.resetTopic, async () => {
+        await mqtt.subscribe(config.resetTopic, () => {
           const newState = {
             count: 0,
             lastReset: new Date().toISOString(),
             totalIncrements: currentState.totalIncrements
           }
 
-          await state.set(newState)
           Object.assign(currentState, newState)
+          state.set(newState)
 
           if (config.outputTopic) {
-            await mqtt.publish(config.outputTopic, {
+            mqtt.publish(config.outputTopic, {
               count: 0,
               lastReset: newState.lastReset,
               totalIncrements: newState.totalIncrements,
@@ -52,11 +52,9 @@ module.exports = function createStatefulCounter(name, config) {
       }
 
       if (config.statusTopic) {
-        await mqtt.subscribe(config.statusTopic, async () => {
-          const currentStateSnapshot = await state.get(defaultState)
-
-          await mqtt.publish(config.outputTopic || `${config.statusTopic}/response`, {
-            ...currentStateSnapshot,
+        await mqtt.subscribe(config.statusTopic, () => {
+          mqtt.publish(config.outputTopic || `${config.statusTopic}/response`, {
+            ...currentState,
             botName: name,
             action: 'status'
           })

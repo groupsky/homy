@@ -97,7 +97,7 @@ class StateManager {
         return cachedState !== null ? cachedState : defaultState
       },
 
-      set: async (newState) => {
+      set: (newState) => {
         this.cache.set(botName, newState)
         this._debouncedSave(botName, newState)
       }
