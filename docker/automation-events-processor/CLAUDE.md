@@ -61,7 +61,7 @@ The service processes automation decision events with this structure:
   _tz: 1726325400000,
 
   // Decision data (source of truth)
-  reason: 'comfort_heating_top_45.2C',
+  reason: 'comfort_heating_insufficient',
   controlMode: 'automatic',
   manualOverrideExpires: null,
 
@@ -108,7 +108,7 @@ The service validates all incoming events:
 
 | Event Field | InfluxDB Type | Format | Example |
 |-------------|---------------|---------|---------|
-| reason | stringField | `"value"` | `"comfort_heating_top_45.2C"` |
+| reason | stringField | `"value"` | `"comfort_heating_insufficient"` |
 | controlMode | stringField | `"value"` | `"automatic"` |
 | manualOverrideExpires | intField/stringField | `123i` or `"null"` | `1726411800000i` |
 | heaterState | booleanField | `T`/`F` | `T` |

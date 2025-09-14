@@ -73,7 +73,7 @@ describe('processAutomationDecisionEvent', () => {
     expect(point.tags.type).toBe('status')
 
     // Verify decision fields
-    expect(point.fields.reason).toBe('"comfort_heating_top_45.2C"')
+    expect(point.fields.reason).toBe('"comfort_heating_insufficient"')
     expect(point.fields.controlMode).toBe('"automatic"')
     expect(point.fields.manualOverrideExpires).toBe('"null"')
 
@@ -119,7 +119,7 @@ describe('processAutomationDecisionEvent', () => {
     expect(points).toHaveLength(1)
     const point = points[0]
 
-    expect(point.fields.reason).toBe('"solar_priority_advantage_8.3C"')
+    expect(point.fields.reason).toBe('"solar_priority_available"')
     expect(point.fields.heaterState).toBe('F')
     expect(point.fields.solarCirculation).toBe('T')
     expect(point.fields.temp_solar_seen).toBe(60.4)
@@ -199,7 +199,7 @@ describe('processAutomationDecisionEvent', () => {
       const points = processAutomationDecisionEvent(SAMPLE_BOILER_DECISION_EVENT)
       const point = points[0]
 
-      expect(point.fields.reason).toBe('"comfort_heating_top_45.2C"')
+      expect(point.fields.reason).toBe('"comfort_heating_insufficient"')
       expect(point.fields.controlMode).toBe('"automatic"')
     })
 

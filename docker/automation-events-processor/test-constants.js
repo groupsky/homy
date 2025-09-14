@@ -10,7 +10,7 @@ const SAMPLE_BOILER_DECISION_EVENT = {
   _tz: 1726325400000, // 2025-09-14T19:30:00Z
 
   // Decision event data (source of truth)
-  reason: 'comfort_heating_top_45.2C',
+  reason: 'comfort_heating_insufficient',
   controlMode: 'automatic',
   manualOverrideExpires: null,
 
@@ -74,7 +74,7 @@ const SAMPLE_SOLAR_PRIORITY_EVENT = {
   },
   _tz: 1726325400000,
 
-  reason: 'solar_priority_advantage_8.3C',
+  reason: 'solar_priority_available',
   controlMode: 'automatic',
   manualOverrideExpires: null,
 

@@ -147,7 +147,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 **Tag Structure**: `service: [controller_name]`, `type: "status"`
 **Key Fields**:
 - **Controller Decisions** (Source of Truth):
-  - `reason` (string): Decision reasoning (e.g., "comfort_heating_top_45.2C", "solar_priority_advantage_8.3C")
+  - `reason` (string): Decision reasoning (e.g., "comfort_heating_insufficient", "solar_priority_available")
   - `controlMode` (string): Current operation mode ("automatic", "manual_on", "manual_off", "vacation_3d", etc.)
   - `manualOverrideExpires` (timestamp): When manual mode expires (null for automatic mode)
 - **Controller View** (For Correlation):
