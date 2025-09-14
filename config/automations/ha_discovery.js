@@ -974,6 +974,7 @@ const config = {
         device: devices.boiler,
         object_id: 'boiler_controller_status',
         unique_id: 'homy_boiler_controller_status',
+        state_topic: `homy/automation/boiler_controller/status`,
         value_template: '{{ value_json.reason }}',
         json_attributes_topic: `homy/automation/boiler_controller/status`
       },
