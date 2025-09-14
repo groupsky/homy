@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "jest": "^30.0.5",
-    "msw": "^2.10.5",
+    "msw": "^2.11.2",
     "testcontainers": "^11.5.1"
   },
   "engines": {
