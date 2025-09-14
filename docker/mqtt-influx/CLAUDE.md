@@ -45,7 +45,7 @@ module.exports = (data) => {
 
 ### Existing Converters
 - **dds024mr**: DDS024MR energy meter data
-- **dds519mr**: DDS519MR energy meter data
+- **dds519mr**: DDS519MR energy meter data  
 - **ex9em**: EX9EM energy meter data
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data
@@ -101,10 +101,6 @@ mqtt-influx-my-service:
 ## Data Types and Measurements
 
 For comprehensive InfluxDB schema documentation including all measurements, fields, and data sources, see **[InfluxDB Schema Documentation](../../docs/influxdb-schema.md)**.
-
-### Automation Events Processing
-
-**Note**: Automation system status and decisions are now handled by the dedicated **automation-events-processor** service, which follows pure event sourcing architecture. This provides better separation of concerns and specialized processing for automation decision events.
 
 ### InfluxDB Point Structure
 - **Measurement**: The InfluxDB table name (e.g., 'command_failure', 'energy_reading')
