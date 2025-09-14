@@ -11,7 +11,7 @@
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
   },
   "dependencies": {
-    "debug": "^4.3.7"
+    "debug": "^4.4.3"
   },
   "devDependencies": {
     "jest": "^30.0.5",
