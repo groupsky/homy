@@ -333,6 +333,11 @@ contactPoints:
 - Use dashboard query inspector for troubleshooting
 - Implement query result caching where appropriate
 
+## System Documentation
+
+### InfluxDB Integration
+- **[Complete InfluxDB Schema](../../docs/influxdb-schema.md)** - Comprehensive documentation of all measurements, fields, tags, and data sources for effective dashboard and alert development
+
 ## Troubleshooting
 
 ### Common Issues

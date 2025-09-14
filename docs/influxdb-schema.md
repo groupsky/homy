@@ -81,9 +81,10 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 **Fields**: 3-phase power system metrics - voltage, current, power, frequency, power factor
 **Use Cases**: Whole-house energy consumption, electrical system monitoring
 
-#### `secondary` Measurement (also bridged as `raw`)
+#### `raw` Measurement (from modbus-serial-secondary)
 **Source**: modbus-serial-secondary → Individual appliance monitoring
-**Tag Structure**: `bus: "secondary"`, `device: [device_name]`
+**Tag Structure**: `bus: "secondary"`, `device.name: [device_name]`
+**Note**: Data appears in `raw` measurement, not `secondary` as originally documented
 **Key Devices and Fields**:
 - **boiler** (DDS519MR, addr 20): `tot` (kWh), `v` (V), `c` (A), `p` (W), `pf`, `freq` (Hz)
 - **water_pump** (EX9EM, addr 1): Pump energy consumption
@@ -99,9 +100,10 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 
 ### Temperature and Environmental Monitoring
 
-#### `monitoring` Measurement (also appears as `xymd1`)
+#### `xymd1` Measurement (from modbus-serial-monitoring)
 **Source**: modbus-serial-monitoring → XYMD1 controller + thermostats
-**Tag Structure**: `bus: "monitoring"`, `device: [device_name]`
+**Tag Structure**: `bus: "monitoring"`, `device.name: [device_name]`
+**Note**: Data appears in `xymd1` measurement, not `monitoring` as originally documented
 **Key Devices and Temperature Fields**:
 - **controlbox** (XYMD1, addr 51):
   - `t1`-`t8` (°C): 8-channel temperature monitoring
@@ -144,6 +146,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 
 #### `automation_status` Measurement
 **Source**: automation-events-processor → `homy/automation/+/status` topics
+**Status**: ⚠️ **Currently not available** - Service experiencing InfluxDB authentication errors
 **Tag Structure**: `service: [controller_name]`, `type: "status"`
 **Key Fields**:
 - **Controller Decisions** (Source of Truth):
