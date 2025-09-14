@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.33.2",
-    "mqtt": "^5.0.0"
+    "mqtt": "^5.14.1"
   },
   "devDependencies": {
     "jest": "^30.0.5",
