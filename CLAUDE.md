@@ -76,6 +76,7 @@ The system integrates with:
 
 ### System Specifications
 - **Infrastructure Documentation**: `docs/CLAUDE.md` - System-level specifications and technical documentation index
+- **InfluxDB Schema**: `docs/influxdb-schema.md` - Comprehensive documentation of time-series database structure and data sources
 
 ### Service Documentation
 - **Automation Bots**: `docker/automations/docs/` - Bot-specific guides and implementation details
@@ -160,6 +161,19 @@ When adding new features that affect architecture:
 4. **Maintain configuration examples**: Provide clear examples for gradual rollout strategies
 5. **Avoid link duplication**: Reference detailed documentation from the most relevant service-specific CLAUDE.md files rather than duplicating links in multiple locations. Use `docs/CLAUDE.md` as the central documentation index.
 6. **Strategic cross-referencing**: Add cross-references to system documentation only in service-specific CLAUDE.md files where developers would actually need that information (e.g., water system specs in automations, grafana, and mqtt-influx CLAUDE.md files, but not in unrelated services).
+
+### InfluxDB Schema Updates
+**CRITICAL**: When modifying any service that writes to InfluxDB:
+
+1. **Update [InfluxDB Schema Documentation](docs/influxdb-schema.md)** - Document all measurement, field, and tag changes
+2. **Test downstream consumers** - Verify Grafana dashboards and Home Assistant entities
+3. **Plan data continuity** - Consider impact on historical data and queries
+4. **Coordinate with team** - InfluxDB changes affect multiple services and dashboards
+
+**Services writing to InfluxDB:**
+- `modbus-serial` - Direct writes (energy, temperature, control data)
+- `mqtt-influx` - MQTT message conversion
+- `sunseeker-monitoring` - Specialized monitoring with own mqtt-influx integration
 
 ### Git Workflow
 When committing changes:

@@ -100,6 +100,8 @@ mqtt-influx-my-service:
 
 ## Data Types and Measurements
 
+For comprehensive InfluxDB schema documentation including all measurements, fields, and data sources, see **[InfluxDB Schema Documentation](../../docs/influxdb-schema.md)**.
+
 ### InfluxDB Point Structure
 - **Measurement**: The InfluxDB table name (e.g., 'command_failure', 'energy_reading')
 - **Tags**: Indexed metadata for filtering (device, controller, reason)
@@ -108,7 +110,7 @@ mqtt-influx-my-service:
 
 ### Field Type Guidelines
 - **intField**: Counters, attempts, discrete values
-- **floatField**: Sensor readings, percentages, calculated values  
+- **floatField**: Sensor readings, percentages, calculated values
 - **booleanField**: On/off states, status flags
 - **stringField**: Avoid for high-cardinality data (use tags instead)
 

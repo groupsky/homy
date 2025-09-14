@@ -18,6 +18,11 @@ This directory contains technical documentation for the home automation system.
 #### Infrastructure
 - **[Wiring](wiring/)** - Electrical load diagrams and wiring specifications
 
+## Data Infrastructure
+
+### InfluxDB Schema
+- **[Complete InfluxDB Schema](influxdb-schema.md)** - Comprehensive documentation of time-series database measurements, fields, and data sources
+
 ## Quick Reference
 
 ### Monitoring Topics
