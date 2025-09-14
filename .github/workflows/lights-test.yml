@@ -45,7 +45,7 @@ jobs:
           docker compose --env-file example.env up --force-recreate -d automations features broker
 
       - name: Setup node
-        uses: actions/setup-node@v4.4.0
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           node-version-file: docker/test/.nvmrc
