@@ -61,7 +61,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB (bridges main bus MQTT to InfluxDB)
 - **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
-- **mqtt-influx-automation-status**: `homy/automation/+/status` → InfluxDB (automation system decisions and status)
+- **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Telegraf Services
 - **telegraf-mqtt-consumer**: MQTT `/modbus/main/+/reading` → `power_meters` measurement
@@ -143,7 +143,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 ### Automation System Monitoring
 
 #### `automation_status` Measurement
-**Source**: mqtt-influx-automation-status → `homy/automation/+/status` topics
+**Source**: automation-events-processor → `homy/automation/+/status` topics
 **Tag Structure**: `service: [controller_name]`, `type: "status"`
 **Key Fields**:
 - **Controller Decisions** (Source of Truth):

@@ -49,7 +49,6 @@ module.exports = (data) => {
 - **ex9em**: EX9EM energy meter data
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data
-- **automation-status**: Automation system status and decisions (comprehensive TDD implementation)
 
 ## Adding New Converters
 
@@ -103,15 +102,9 @@ mqtt-influx-my-service:
 
 For comprehensive InfluxDB schema documentation including all measurements, fields, and data sources, see **[InfluxDB Schema Documentation](../../docs/influxdb-schema.md)**.
 
-### Featured Implementation: Automation Status Converter
+### Automation Events Processing
 
-The **automation-status** converter demonstrates best practices for mqtt-influx development:
-- **TDD Implementation**: Complete test-driven development with 100% coverage
-- **Data Separation**: Clear distinction between source-of-truth and correlation data
-- **Comprehensive Testing**: Unit, integration, and end-to-end test suites
-- **Production Ready**: Full error handling and validation
-
-See **[Automation Status Converter Documentation](./AUTOMATION_STATUS_CONVERTER.md)** for detailed implementation guide.
+**Note**: Automation system status and decisions are now handled by the dedicated **automation-events-processor** service, which follows pure event sourcing architecture. This provides better separation of concerns and specialized processing for automation decision events.
 
 ### InfluxDB Point Structure
 - **Measurement**: The InfluxDB table name (e.g., 'command_failure', 'energy_reading')
