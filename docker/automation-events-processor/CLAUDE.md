@@ -84,6 +84,8 @@ Events are transformed into InfluxDB points with:
 - **Fields**: Decision data, state data, temperature readings
 - **Timestamp**: Event timestamp from `_tz` field
 
+For comprehensive InfluxDB schema documentation including all measurements and data sources, see **[InfluxDB Schema Documentation](../../docs/influxdb-schema.md)**.
+
 ## Development Guidelines
 
 ### Adding Support for New Automation Bots
@@ -250,3 +252,31 @@ Configure Grafana alerts for:
 2. **Single Responsibility**: Process only automation decision events
 3. **Correlation vs Source**: Distinguish between controller decisions (source) and sensor readings (correlation)
 4. **Event Ordering**: Preserve event timestamps for accurate historical analysis
+
+## Documentation Maintenance
+
+### Schema Changes
+**IMPORTANT**: When making changes to the automation_status measurement or adding new automation bots that publish different event schemas:
+
+1. **Update InfluxDB Schema**: Modify `../../docs/influxdb-schema.md` to reflect changes in:
+   - Measurement fields and their types
+   - Tag structures and cardinality
+   - New automation bot types and their event patterns
+   - Query examples and use cases
+
+2. **Update This Documentation**: Update this CLAUDE.md file to reflect:
+   - New event schema structures
+   - Additional field type mappings
+   - New automation bot requirements
+   - Updated query examples
+
+3. **Test Schema Changes**: Verify that:
+   - All existing Grafana dashboards continue to work
+   - InfluxDB queries in documentation remain valid
+   - Event validation covers new schema elements
+
+4. **Cross-Reference Updates**: Ensure consistency between:
+   - This service documentation
+   - InfluxDB schema documentation
+   - Grafana dashboard configurations
+   - Home Assistant integration examples
