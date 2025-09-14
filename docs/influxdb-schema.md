@@ -12,64 +12,149 @@ This document provides comprehensive documentation of all data stored in the Inf
 
 ## Data Sources and Services
 
-### Direct InfluxDB Writers
-- **modbus-serial services**: Write device readings directly to InfluxDB
-- **mqtt-influx services**: Convert MQTT messages to InfluxDB points
-- **sunseeker-monitoring**: Specialized monitoring service with own mqtt-influx integration
+### Direct InfluxDB Writers (modbus-serial services)
+All modbus-serial instances write directly to InfluxDB using environment-configured measurements:
 
-### MQTT Bridge Services
-- **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB
-- **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB
-- **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB
+1. **modbus-serial-main** → `main` measurement
+   - **Device**: SDM630 energy meter (address 1) - "main" power consumption
+   - **Data**: 3-phase power, voltage, current, frequency measurements
+
+2. **modbus-serial-secondary** → `secondary` measurement
+   - **Devices**: Multiple energy meters and appliances
+     - water_pump (EX9EM, addr 1), microwave (OR-WE-514, addr 2)
+     - waste_pump (EX9EM, addr 3), oven (DDS519MR, addr 4)
+     - stove (DDS519MR, addr 5), dishwasher (DDS519MR, addr 6)
+     - kitchen (DDS519MR, addr 7), laundry (DDS519MR, addr 8)
+     - boiler (DDS519MR, addr 20) - **Primary boiler energy monitoring**
+   - **Data**: Power consumption, voltage, current per device
+
+3. **modbus-serial-tetriary** → `tetriary` measurement
+   - **Device**: Heat pump (DDS024MR, addr 1)
+   - **Data**: Heat pump energy consumption and electrical parameters
+
+4. **modbus-serial-monitoring** → `monitoring` measurement (same as `xymd1`)
+   - **Devices**: Multiple monitoring and control devices
+     - charger (OR-WE-526, addr 1), relays32-47 (ASPAR-MOD-16RO, addr 11)
+     - controlbox (XYMD1, addr 51) - **Temperature and relay controller**
+     - thermostat-martin/gergana/boris/bedroom (BAC002, addr 65-68)
+   - **Data**: Temperature readings, relay states, thermostat setpoints
+
+5. **modbus-serial-monitoring2** → `monitoring2` measurement
+   - **Devices**: Additional monitoring equipment
+     - heatpump-ctrl (Autonics TF3, addr 50) - Heat pump temperature controller
+     - stab-em (OR-WE-516, addr 77) - Stabilizer energy meter
+   - **Data**: Temperature control data and additional energy monitoring
+
+6. **modbus-serial-solar** → `solar` measurement
+   - **Device**: Solar heater controller (Microsyst SR04, addr 1)
+   - **Data**: Solar heating system control and monitoring
+
+7. **modbus-serial-inverter** → `inverter` measurement
+   - **Device**: Solar PV inverter (Huawei SUN2000, TCP connection)
+   - **Data**: PV power generation, system status, production metrics
+
+8. **modbus-serial-dry-switches** → `dry_switches` measurement
+   - **Devices**: Digital I/O and switching devices
+   - **Data**: Switch states, digital inputs/outputs
+
+### MQTT Bridge Services (mqtt-influx)
+- **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB (bridges main bus MQTT to InfluxDB)
+- **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
+- **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
+
+### Telegraf Services
+- **telegraf-mqtt-consumer**: MQTT `/modbus/main/+/reading` → `power_meters` measurement
+- **telegraf-ovms**: Vehicle telemetry via OVMS → `ovms` measurement
+- **telegraf-host**: System host metrics → various system measurements
+
+### Specialized Monitoring
+- **sunseeker-monitoring**: Solar tracking and monitoring with integrated mqtt-influx bridge
 
 ## Measurements and Schema
 
-### `raw` Measurement
-**Source**: Secondary Modbus Bus (mqtt-influx-secondary)
-**Tag Structure**:
-- `bus: "secondary"`
-- `device`: Device identifier (e.g., "boiler")
+### Primary Energy Monitoring
 
-**Fields** (from DDS519MR energy meter at address 20):
-- `tot` (float): Total energy consumption (kWh)
-- `v` (float): Voltage
-- `c` (float): Current
-- `p` (float): Power
-- `pf` (float): Power factor
-- `freq` (float): Frequency
+#### `main` Measurement
+**Source**: modbus-serial-main → Main electrical panel (SDM630)
+**Tag Structure**: `bus: "main"`, `device: "main"`
+**Fields**: 3-phase power system metrics - voltage, current, power, frequency, power factor
+**Use Cases**: Whole-house energy consumption, electrical system monitoring
 
-**Use Cases**: Boiler electric heater energy monitoring, consumption analysis
+#### `secondary` Measurement (also bridged as `raw`)
+**Source**: modbus-serial-secondary → Individual appliance monitoring
+**Tag Structure**: `bus: "secondary"`, `device: [device_name]`
+**Key Devices and Fields**:
+- **boiler** (DDS519MR, addr 20): `tot` (kWh), `v` (V), `c` (A), `p` (W), `pf`, `freq` (Hz)
+- **water_pump** (EX9EM, addr 1): Pump energy consumption
+- **kitchen appliances**: oven, stove, dishwasher, microwave - individual energy tracking
+- **laundry** (addr 8): Washing machine energy monitoring
+**Use Cases**: Appliance-level energy analysis, boiler electric heater monitoring
 
-### `xymd1` Measurement
-**Source**: Solar Controller Modbus Bus (monitoring)
-**Tag Structure**:
-- `bus: "monitoring"`
-- `device`: "solar_heater"
+#### `tetriary` Measurement
+**Source**: modbus-serial-tetriary → Heat pump energy monitoring
+**Tag Structure**: `bus: "tetriary"`, `device: "heat_pump"`
+**Fields**: Heat pump electrical consumption (DDS024MR meter)
+**Use Cases**: Heat pump efficiency analysis, HVAC energy tracking
 
-**Temperature Fields** (°C):
-- `t1` (float): Boiler bottom temperature
-- `t2` (float): Boiler top temperature
-- `t3` (float): Solar panel temperature
-- `t4` (float): Heat installation temperature
-- `t5` (float): Additional temperature sensor
-- `t6` (float): Service room ambient temperature
-- `t7`, `t8` (float): Additional temperature sensors
+### Temperature and Environmental Monitoring
 
-**Control State Fields**:
-- `outputs.p1` (boolean): Solar circulation pump status
-- `outputs.p6` (boolean): Electric heater flag (⚠️ misconfigured - ignore)
+#### `monitoring` Measurement (also appears as `xymd1`)
+**Source**: modbus-serial-monitoring → XYMD1 controller + thermostats
+**Tag Structure**: `bus: "monitoring"`, `device: [device_name]`
+**Key Devices and Temperature Fields**:
+- **controlbox** (XYMD1, addr 51):
+  - `t1`-`t8` (°C): 8-channel temperature monitoring
+  - `outputs.p1`-`outputs.p8` (boolean): Relay control states
+  - **Key temperatures**: `t1` (boiler bottom), `t2` (boiler top), `t3` (solar panel), `t6` (service room)
+- **thermostats** (BAC002, addr 65-68): Individual room temperature control
+**Use Cases**: Multi-zone temperature monitoring, solar heating coordination, thermal analysis
 
-**Use Cases**: Temperature monitoring, solar heating coordination, thermal analysis
+#### `monitoring2` Measurement
+**Source**: modbus-serial-monitoring2 → Additional monitoring equipment
+**Tag Structure**: `bus: "monitoring2"`, `device: [device_name]`
+**Key Devices**:
+- **heatpump-ctrl** (Autonics TF3, addr 50): Heat pump temperature controller
+- **stab-em** (OR-WE-516, addr 77): Electrical stabilizer monitoring
+**Use Cases**: Heat pump control monitoring, electrical system stability
 
-### `inverter` Measurement
-**Source**: Inverter TCP Connection
-**Tag Structure**:
-- `bus: "inverter"`
+### Specialized System Monitoring
 
-**Fields**:
-- `total_p` (float): Accumulated solar PV energy production (kWh)
+#### `solar` Measurement
+**Source**: modbus-serial-solar → Solar thermal system controller
+**Tag Structure**: `bus: "solar"`, `device: "solar_heater"`
+**Fields**: Solar thermal controller data (Microsyst SR04)
+**Use Cases**: Solar thermal system optimization, controller status monitoring
 
-**Use Cases**: Solar PV production monitoring (separate from thermal system)
+#### `inverter` Measurement
+**Source**: modbus-serial-inverter → Solar PV inverter (TCP connection)
+**Tag Structure**: `bus: "inverter"`, `device: "main"`
+**Key Fields**:
+- `total_p` (float): Accumulated PV energy production (kWh)
+- Additional inverter metrics: power output, system status
+**Use Cases**: Solar PV production monitoring, grid integration analysis
+
+#### `dry_switches` Measurement
+**Source**: modbus-serial-dry-switches → Digital I/O monitoring
+**Tag Structure**: `bus: "dry_switches"`
+**Fields**: Digital switch states, relay positions
+**Use Cases**: System state monitoring, automation feedback
+
+### MQTT Bridge Data (Telegraf)
+
+#### `power_meters` Measurement
+**Source**: telegraf-mqtt-consumer → MQTT bridge of main bus
+**Tag Structure**: `bus: "main"`, device tags from MQTT topic parsing
+**Fields**: Real-time power meter data from MQTT topics
+**Use Cases**: Real-time power monitoring dashboard
+
+#### `ovms` Measurement
+**Source**: telegraf-ovms → Vehicle telemetry system
+**Tag Structure**: `bus`, `device` from MQTT topic parsing
+**Key Fields**:
+- Vehicle metrics: `12v/voltage`, `trip`, `speed`, `direction`
+- GPS data: `latitude`, `longitude`, `altitude`, `gpsspeed`, `gpshdop`
+- System status: `odometer`, `gpssq`
+**Use Cases**: Vehicle monitoring, trip analysis, location tracking
 
 ## Data Quality Notes
 
@@ -136,10 +221,12 @@ Raw modbus data is also stored in MongoDB collections:
 - **Database size**: Substantial historical dataset requiring proper retention policies
 
 ### Performance Considerations
-- Use appropriate time ranges in queries to avoid large dataset scans
-- Leverage tags for filtering (indexed)
-- Fields are not indexed - avoid WHERE clauses on field values
-- Consider downsampling for long-term trend analysis
+- **Query optimization**: Use appropriate time ranges to avoid large dataset scans
+- **Tag filtering**: Leverage tags (bus, device) for efficient filtering (indexed)
+- **Field queries**: Fields are not indexed - avoid WHERE clauses on field values for performance
+- **Data volume**: High-frequency temperature data (~30s intervals) and energy data (~1min intervals)
+- **Downsampling**: Consider aggregation for long-term trend analysis (>1 month queries)
+- **Concurrent services**: 8+ modbus-serial services + 3 mqtt-influx bridges + telegraf instances writing simultaneously
 
 ## Future Enhancements
 
@@ -149,8 +236,22 @@ Raw modbus data is also stored in MongoDB collections:
 - Enhanced monitoring for new devices and systems
 
 ### Schema Evolution
-When adding new measurements:
-1. Document schema in this file
-2. Update relevant service CLAUDE.md files
-3. Consider tag cardinality and retention policies
-4. Plan Grafana dashboard integration
+When adding new measurements or modifying existing ones:
+1. **Document first**: Update this schema documentation with measurement details
+2. **Service documentation**: Update relevant service CLAUDE.md files with integration details
+3. **Tag cardinality**: Consider tag cardinality impact (device names, bus identifiers)
+4. **Data retention**: Plan retention policies based on data frequency and storage requirements
+5. **Dashboard integration**: Update Grafana dashboards and alert rules
+6. **Cross-service impact**: Consider MQTT bridge services that may duplicate data
+
+### Service Integration Map
+```
+Modbus Devices → modbus-serial-* → Direct InfluxDB Write
+                                 ↓
+Modbus Devices → modbus-serial-* → MQTT Publish → mqtt-influx-* → InfluxDB Write
+External MQTT → telegraf-* → InfluxDB Write
+Vehicle OVMS → telegraf-ovms → InfluxDB Write
+Host System → telegraf-host → InfluxDB Write
+```
+
+**Note**: Some data flows through multiple paths (e.g., modbus-serial writes direct + publishes MQTT → mqtt-influx), creating potential data duplication that should be considered in queries and dashboards.
