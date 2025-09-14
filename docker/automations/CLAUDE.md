@@ -225,6 +225,18 @@ const subscribe = (topic, callback) => {
 - **Monitoring topics**: Publish failure events to `homy/automation/{name}/command_failed`
 - **Water System Topics**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, sensors, and controls
 
+### MQTT Publishing
+- **Important**: The `mqtt.publish()` function expects JavaScript objects, not JSON strings
+- The framework automatically adds metadata (`_bot`, `_tz`) and converts to JSON
+- **Correct**: `mqtt.publish(topic, { state: true, reason: 'heating' })`
+- **Incorrect**: `mqtt.publish(topic, JSON.stringify({ state: true, reason: 'heating' }))`
+
+### MQTT Subscription
+- **Important**: The `mqtt.subscribe()` callback receives parsed JavaScript objects, not JSON strings
+- The framework automatically parses incoming JSON payloads using `JSON.parse(payload.toString())`
+- **Correct**: `mqtt.subscribe(topic, (payload) => { const value = payload.state })`
+- **Incorrect**: `mqtt.subscribe(topic, (payload) => { const data = JSON.parse(payload) })`
+
 ### Feature Integration
 - Use the features service for device abstraction
 - Subscribe to `homy/features/{type}/{name}/status` for device states
