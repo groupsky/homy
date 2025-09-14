@@ -106,9 +106,15 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 **Note**: Data appears in `xymd1` measurement, not `monitoring` as originally documented
 **Key Devices and Temperature Fields**:
 - **controlbox** (XYMD1, addr 51):
-  - `t1`-`t8` (°C): 8-channel temperature monitoring
   - `outputs.p1`-`outputs.p8` (boolean): Relay control states
-  - **Key temperatures**: `t1` (boiler bottom), `t2` (boiler top), `t3` (solar panel), `t6` (service room)
+  - `t6` (°C): Service room temperature
+  - **Note**: This device handles relay outputs only; temperature sensors are on solar_heater device
+- **solar_heater** (Microsyst SR04, addr 1):
+  - `t1` (°C): Boiler bottom temperature
+  - `t2` (°C): Boiler top temperature
+  - `t3` (°C): Solar panel temperature
+  - `t6` (°C): Service room temperature (also available)
+  - **Key temperatures**: Primary source for boiler temperature monitoring
 - **thermostats** (BAC002, addr 65-68): Individual room temperature control
 **Use Cases**: Multi-zone temperature monitoring, solar heating coordination, thermal analysis
 
@@ -209,10 +215,15 @@ SELECT * FROM "power.dishwasher" WHERE time > now() - 1h
 
 ### Temperature Monitoring
 ```sql
--- Multi-point temperature analysis
+-- Boiler temperature analysis (corrected device)
 SELECT t1, t2, t3, t6 FROM xymd1
-WHERE "device.name"='controlbox'
+WHERE "device.name"='solar_heater'
 AND time > now() - 24h
+
+-- Relay control states
+SELECT "outputs.p1", "outputs.p2" FROM xymd1
+WHERE "device.name"='controlbox'
+AND time > now() - 1h
 
 -- Thermostat monitoring
 SELECT currentTemp, targetTemp FROM xymd1
@@ -222,9 +233,9 @@ AND time > now() - 6h
 
 ### Solar and Inverter Monitoring
 ```sql
--- Solar circulation pump coordination
-SELECT t2, t3, "outputs.p1" FROM xymd1
-WHERE "device.name"='controlbox' AND time > now() - 1h
+-- Solar circulation pump coordination (temperature from solar_heater, relay from controlbox)
+SELECT t2, t3 FROM xymd1 WHERE "device.name"='solar_heater' AND time > now() - 1h;
+SELECT "outputs.p1" FROM xymd1 WHERE "device.name"='controlbox' AND time > now() - 1h
 
 -- Solar PV production analysis
 SELECT total_p, daily_p, eff, temp FROM inverter
@@ -258,11 +269,11 @@ AND time > now() - 7d
 
 ### Home Assistant
 Home Assistant entities map to InfluxDB data:
-- `sensor.boiler_energy_used` → `raw.tot`
-- `sensor.temperature_boiler_high` → `xymd1.t2`
-- `sensor.temperature_boiler_low` → `xymd1.t1`
-- `sensor.temperature_solar_panel` → `xymd1.t3`
-- `binary_sensor.solar_heater_circulation` → `xymd1.outputs.p1`
+- `sensor.boiler_energy_used` → `raw.tot` (device.name='boiler')
+- `sensor.temperature_boiler_high` → `xymd1.t2` (device.name='solar_heater')
+- `sensor.temperature_boiler_low` → `xymd1.t1` (device.name='solar_heater')
+- `sensor.temperature_solar_panel` → `xymd1.t3` (device.name='solar_heater')
+- `binary_sensor.solar_heater_circulation` → `xymd1.outputs.p1` (device.name='controlbox')
 
 ### Grafana Dashboards
 - Access through provisioned InfluxDB data source
