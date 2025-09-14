@@ -45,10 +45,11 @@ module.exports = (data) => {
 
 ### Existing Converters
 - **dds024mr**: DDS024MR energy meter data
-- **dds519mr**: DDS519MR energy meter data  
+- **dds519mr**: DDS519MR energy meter data
 - **ex9em**: EX9EM energy meter data
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data
+- **automation-status**: Automation system status and decisions (comprehensive TDD implementation)
 
 ## Adding New Converters
 
@@ -101,6 +102,16 @@ mqtt-influx-my-service:
 ## Data Types and Measurements
 
 For comprehensive InfluxDB schema documentation including all measurements, fields, and data sources, see **[InfluxDB Schema Documentation](../../docs/influxdb-schema.md)**.
+
+### Featured Implementation: Automation Status Converter
+
+The **automation-status** converter demonstrates best practices for mqtt-influx development:
+- **TDD Implementation**: Complete test-driven development with 100% coverage
+- **Data Separation**: Clear distinction between source-of-truth and correlation data
+- **Comprehensive Testing**: Unit, integration, and end-to-end test suites
+- **Production Ready**: Full error handling and validation
+
+See **[Automation Status Converter Documentation](./AUTOMATION_STATUS_CONVERTER.md)** for detailed implementation guide.
 
 ### InfluxDB Point Structure
 - **Measurement**: The InfluxDB table name (e.g., 'command_failure', 'energy_reading')

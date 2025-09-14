@@ -1,12 +1,12 @@
 {
-  "name": "homy-modbus-serial-docker",
+  "name": "automation-events-processor",
   "version": "1.0.0",
-  "description": "Serial modbus reader",
+  "description": "Event processor for home automation decision events",
   "author": "Geno Roupsky",
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "start": "index.js",
+    "start": "node index.js",
     "test": "jest",
     "test:watch": "jest --watch"
   },
@@ -20,7 +20,7 @@
   "jest": {
     "testEnvironment": "node",
     "collectCoverageFrom": [
-      "converters/**/*.js",
+      "*.js",
       "!node_modules/**"
     ]
   }

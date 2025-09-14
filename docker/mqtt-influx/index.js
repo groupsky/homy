@@ -25,6 +25,7 @@ const converters = {
     ex9em: require('./converters/ex9em'),
     'or-we-514': require('./converters/or-we-514'),
     sdm630: require('./converters/sdm630'),
+    'automation-status': require('./converters/automation-status'),
 }
 
 client.on('connect', function () {
@@ -60,12 +61,20 @@ client.on('offline', function () {
 client.on('message', function (topic, message) {
     const data = JSON.parse(message)
 
-    if (!(data._type in converters)) {
-        console.warn('Unhandled type', data._type, data)
+    // Service-specific routing: automation service always uses automation-status converter
+    const converterKey = process.env.CONVERTER_TYPE || data._type
+
+    if (!converterKey) {
+        console.warn('No converter type specified and no _type field found', data)
         return
     }
 
-    const points = converters[data._type](data)
+    if (!(converterKey in converters)) {
+        console.warn('Unhandled converter key', converterKey, data)
+        return
+    }
+
+    const points = converters[converterKey](data)
 
     writeApi.writePoints(points)
 })
