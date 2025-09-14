@@ -17,7 +17,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("t2") FROM "xymd1" WHERE "device.name"=''controlbox'' AND time >= now() - 5m'
+              query: 'SELECT last("t2") FROM "xymd1" WHERE "device.name"=''solar_heater'' AND time >= now() - 5m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -27,19 +27,29 @@ groups:
               to: 0
             datasourceUid: __expr__
             model:
-              type: classic_conditions
               conditions:
                 - evaluator:
-                    params: [70]  # 70°C critical threshold
+                    params:
+                      - 70
                     type: gt
                   operator:
                     type: and
                   query:
-                    params: [temperature]
+                    params:
+                      - temperature
                   reducer:
+                    params: []
                     type: last
                   type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
               expression: temperature
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: classic_conditions
         noDataState: NoData
         execErrState: Alerting
         for: 2m
@@ -197,7 +207,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count("t2") FROM "xymd1" WHERE "device.name"=''controlbox'' AND time >= now() - 30m'
+              query: 'SELECT count("t2") FROM "xymd1" WHERE "device.name"=''solar_heater'' AND time >= now() - 30m'
               rawQuery: true
               resultFormat: time_series
           - refId: A

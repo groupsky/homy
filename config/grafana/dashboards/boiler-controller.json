@@ -531,28 +531,28 @@
       "targets": [
         {
           "alias": "Boiler Top (t2)",
-          "query": "SELECT mean(\"t2\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t2\") FROM \"xymd1\" WHERE \"device.name\"='solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
         },
         {
           "alias": "Boiler Bottom (t1)",
-          "query": "SELECT mean(\"t1\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t1\") FROM \"xymd1\" WHERE \"device.name\"='solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series"
         },
         {
           "alias": "Solar Panel (t3)",
-          "query": "SELECT mean(\"t3\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t3\") FROM \"xymd1\" WHERE \"device.name\"='solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series"
         },
         {
           "alias": "Service Room (t6)",
-          "query": "SELECT mean(\"t6\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t6\") FROM \"xymd1\" WHERE \"device.name\"='solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series"
