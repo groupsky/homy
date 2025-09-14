@@ -370,11 +370,11 @@ module.exports = {
       automationStatusTopic: 'homy/automation/boiler_controller/status',
       manualOverrideExpiry: 24 * 60 * 60 * 1000, // 24 hours
       // Temperature thresholds based on analysis
-      comfortMin: 50,
-      emergencyMin: 45,
+      comfortMin: 47,
+      emergencyMin: 30,
       maxSafe: 70,
       solarAdvantageMin: 5,
-      solarDisadvantageMax: -3,
+      solarDisadvantageMax: -100,
       hysteresis: 3,
       verbose: true
     },
