@@ -76,8 +76,7 @@ module.exports = (name, {
     const publishControlModeStatus = () => {
       mqtt.publish(finalControlModeStatusTopic, {
         mode: currentState.controlMode,
-        manualOverrideExpires: currentState.manualOverrideExpires,
-        timestamp: new Date().toISOString()
+        manualOverrideExpires: currentState.manualOverrideExpires
       })
     }
 
@@ -185,9 +184,7 @@ module.exports = (name, {
 
         mqtt.publish(boilerRelayTopic, {
           state: decision,
-          _src: 'boiler_controller',
           reason,
-          timestamp: new Date().toISOString(),
           temperatures: {
             top: currentState.temperatureTop,
             bottom: currentState.temperatureBottom,
@@ -208,8 +205,7 @@ module.exports = (name, {
             solar: currentState.solarTemperature,
             ambient: currentState.ambientTemperature
           },
-          solarCirculation: currentState.solarCirculation,
-          timestamp: new Date().toISOString()
+          solarCirculation: currentState.solarCirculation
         })
 
         // Publish control mode status
@@ -223,8 +219,7 @@ module.exports = (name, {
     // Subscribe to temperature sensors
     mqtt.subscribe(temperatureTopTopic, (payload) => {
       try {
-        const data = typeof payload === 'string' ? JSON.parse(payload) : payload
-        const temp = typeof data === 'object' ? data.state : data
+        const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureTop = temp
           updateHeaterState()
@@ -238,8 +233,7 @@ module.exports = (name, {
 
     mqtt.subscribe(temperatureBottomTopic, (payload) => {
       try {
-        const data = typeof payload === 'string' ? JSON.parse(payload) : payload
-        const temp = typeof data === 'object' ? data.state : data
+        const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureBottom = temp
           updateHeaterState()
@@ -253,8 +247,7 @@ module.exports = (name, {
 
     mqtt.subscribe(solarTemperatureTopic, (payload) => {
       try {
-        const data = typeof payload === 'string' ? JSON.parse(payload) : payload
-        const temp = typeof data === 'object' ? data.state : data
+        const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.solarTemperature = temp
           updateHeaterState()
@@ -268,8 +261,7 @@ module.exports = (name, {
 
     mqtt.subscribe(ambientTemperatureTopic, (payload) => {
       try {
-        const data = typeof payload === 'string' ? JSON.parse(payload) : payload
-        const temp = typeof data === 'object' ? data.state : data
+        const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.ambientTemperature = temp
         }
@@ -282,8 +274,7 @@ module.exports = (name, {
 
     mqtt.subscribe(solarCirculationTopic, (payload) => {
       try {
-        const data = typeof payload === 'string' ? JSON.parse(payload) : payload
-        const state = typeof data === 'object' ? data.state : data
+        const state = typeof payload === 'object' ? payload.state : payload
         currentState.solarCirculation = state === 'on' || state === true
         updateHeaterState()
       } catch (err) {
@@ -296,19 +287,17 @@ module.exports = (name, {
     // Control mode topic
     mqtt.subscribe(controlModeTopic, (payload) => {
       try {
-        const data = typeof payload === 'string' ? JSON.parse(payload) : payload
-
         let newMode = null
         let duration = manualOverrideExpiry
 
         // Handle different payload formats
-        if (typeof data === 'string') {
+        if (typeof payload === 'string') {
           // Direct mode string from HA select
-          newMode = data
-        } else if (typeof data === 'object' && data.mode) {
+          newMode = payload
+        } else if (typeof payload === 'object' && payload.mode) {
           // Object with mode and optional duration
-          newMode = data.mode
-          duration = data.duration || manualOverrideExpiry
+          newMode = payload.mode
+          duration = payload.duration || manualOverrideExpiry
         }
 
         // Calculate vacation duration with smart timing
