@@ -164,7 +164,7 @@
       },
       "targets": [
         {
-          "query": "SELECT last(\"controlMode\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter GROUP BY time(1m) fill(previous)",
+          "query": "SELECT 'No automation data available' AS controlMode",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -238,7 +238,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(\"heaterState\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter",
+          "query": "SELECT 'No automation data available' AS heaterState",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -312,7 +312,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(\"solarCirculation\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter",
+          "query": "SELECT last(\"outputs.p1\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -366,7 +366,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(\"reason\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter",
+          "query": "SELECT 'No automation data available' AS reason",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -531,28 +531,28 @@
       "targets": [
         {
           "alias": "Boiler Top (t2)",
-          "query": "SELECT mean(\"t2\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t2\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
         },
         {
           "alias": "Boiler Bottom (t1)",
-          "query": "SELECT mean(\"t1\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t1\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series"
         },
         {
           "alias": "Solar Panel (t3)",
-          "query": "SELECT mean(\"t3\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t3\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series"
         },
         {
           "alias": "Service Room (t6)",
-          "query": "SELECT mean(\"t6\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t6\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series"
@@ -648,7 +648,7 @@
       "targets": [
         {
           "alias": "Boiler Power",
-          "query": "SELECT mean(\"p\") FROM \"secondary\" WHERE \"device.name\"='boiler' AND $timeFilter GROUP BY time(5m) fill(linear)",
+          "query": "SELECT mean(\"p\") FROM \"raw\" WHERE \"device.name\"='boiler' AND $timeFilter GROUP BY time(5m) fill(linear)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -729,7 +729,7 @@
       "targets": [
         {
           "alias": "Total Energy",
-          "query": "SELECT last(\"tot\") FROM \"secondary\" WHERE \"device.name\"='boiler' AND $timeFilter GROUP BY time(5m) fill(previous)",
+          "query": "SELECT last(\"tot\") FROM \"raw\" WHERE \"device.name\"='boiler' AND $timeFilter GROUP BY time(5m) fill(previous)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -857,7 +857,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT time, \"reason\", \"controlMode\", \"heaterState\", \"solarCirculation\", \"temp_top_seen\", \"temp_bottom_seen\", \"temp_solar_seen\" FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter ORDER BY time DESC LIMIT 50",
+          "query": "SELECT time, \"t2\" as temp_boiler_top, \"t1\" as temp_boiler_bottom, \"t3\" as temp_solar_panel, \"outputs.p1\" as solar_circulation FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter ORDER BY time DESC LIMIT 50",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -914,7 +914,7 @@
       },
       "targets": [
         {
-          "query": "SELECT count(\"reason\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter GROUP BY \"reason\"",
+          "query": "SELECT 1 as count WHERE false",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -971,7 +971,7 @@
       },
       "targets": [
         {
-          "query": "SELECT count(\"controlMode\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter GROUP BY \"controlMode\"",
+          "query": "SELECT 1 as count WHERE false",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"

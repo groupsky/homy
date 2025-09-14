@@ -17,7 +17,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT last("t2") FROM "monitoring" WHERE "device.name"=''controlbox'' AND time >= now() - 5m'
+              query: 'SELECT last("t2") FROM "xymd1" WHERE "device.name"=''controlbox'' AND time >= now() - 5m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -62,7 +62,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count("reason") FROM "automation_status" WHERE "service"=''boiler_controller'' AND "reason" =~ /emergency_heating/ AND time >= now() - 5m'
+              query: 'SELECT 0'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -107,7 +107,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count("reason") FROM "automation_status" WHERE "service"=''boiler_controller'' AND time >= now() - 30m'
+              query: 'SELECT 0'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -152,7 +152,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count("controlMode") FROM "automation_status" WHERE "service"=''boiler_controller'' AND "controlMode" =~ /manual_/ AND time >= now() - 4h'
+              query: 'SELECT 0'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -197,7 +197,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count("t2") FROM "monitoring" WHERE "device.name"=''controlbox'' AND time >= now() - 30m'
+              query: 'SELECT count("t2") FROM "xymd1" WHERE "device.name"=''controlbox'' AND time >= now() - 30m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -242,7 +242,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT mean("p") FROM "secondary" WHERE "device.name"=''boiler'' AND time >= now() - 15m'
+              query: 'SELECT mean("p") FROM "raw" WHERE "device.name"=''boiler'' AND time >= now() - 15m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -287,7 +287,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(DISTINCT "solarCirculation") FROM "automation_status" WHERE "service"=''boiler_controller'' AND time >= now() - 1h'
+              query: 'SELECT count(DISTINCT "outputs.p1") FROM "xymd1" WHERE "device.name"=''controlbox'' AND time >= now() - 1h'
               rawQuery: true
               resultFormat: time_series
           - refId: A
