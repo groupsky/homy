@@ -107,8 +107,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 **Key Devices and Temperature Fields**:
 - **controlbox** (XYMD1, addr 51):
   - `outputs.p1`-`outputs.p8` (boolean): Irrigation relay control states (relays32-47)
-  - `t6` (°C): Service room temperature (limited data)
-  - **Note**: This device primarily handles irrigation system relays, not boiler controls
+  - **Note**: This device primarily handles irrigation system relays, no temperature sensors
 - **solar_heater** (Microsyst SR04, addr 1):
   - `t1` (°C): Boiler bottom temperature
   - `t2` (°C): Boiler top temperature
