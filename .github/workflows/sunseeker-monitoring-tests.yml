@@ -71,7 +71,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=sunseeker-monitoring,ignore-error=true
 
       - name: Setup Node.js from .nvmrc
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: 'docker/sunseeker-monitoring/.nvmrc'
           cache: 'npm'
