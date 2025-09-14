@@ -1,0 +1,27 @@
+{
+  "name": "automation-events-processor",
+  "version": "1.0.0",
+  "description": "Event processor for home automation decision events",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.35.0",
+    "mqtt": "^5.14.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "*.js",
+      "!node_modules/**"
+    ]
+  }
+}

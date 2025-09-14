@@ -21,6 +21,20 @@ updates:
       - "groupsky"
 
   - package-ecosystem: "docker"
+    directory: "/docker/automation-events-processor"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/automation-events-processor"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  - package-ecosystem: "docker"
     directory: "/docker/dmx-driver"
     schedule:
       interval: "monthly"

@@ -61,6 +61,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB (bridges main bus MQTT to InfluxDB)
 - **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
+- **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Telegraf Services
 - **telegraf-mqtt-consumer**: MQTT `/modbus/main/+/reading` → `power_meters` measurement
@@ -139,6 +140,27 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 **Fields**: Digital switch states, relay positions
 **Use Cases**: System state monitoring, automation feedback
 
+### Automation System Monitoring
+
+#### `automation_status` Measurement
+**Source**: automation-events-processor → `homy/automation/+/status` topics
+**Tag Structure**: `service: [controller_name]`, `type: "status"`
+**Key Fields**:
+- **Controller Decisions** (Source of Truth):
+  - `reason` (string): Decision reasoning (e.g., "comfort_heating_insufficient", "solar_priority_available")
+  - `controlMode` (string): Current operation mode ("automatic", "manual_on", "manual_off", "vacation_3d", etc.)
+  - `manualOverrideExpires` (timestamp): When manual mode expires (null for automatic mode)
+- **Controller View** (For Correlation):
+  - `heaterState` (boolean): Controller's intended relay state
+  - `solarCirculation` (boolean): Solar pump state as seen by controller
+  - `temp_*_seen` (float): Temperature readings as seen by controller when making decision
+**Use Cases**:
+- Automation decision tracking and analysis
+- Controller performance monitoring
+- Decision correlation with actual sensor data
+- Troubleshooting automation logic issues
+- Energy efficiency analysis of heating decisions
+
 ### MQTT Bridge Data (Telegraf)
 
 #### `power_meters` Measurement
@@ -168,27 +190,65 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - ❌ `outputs.p6` (solar_heater_electric_heater flag) - Misconfigured
 - ⚠️ Solar PV data not directly applicable to boiler heating (different electrical network)
 
-## Query Examples
+## Query Examples (Verified)
 
 ### Energy Consumption Analysis
 ```sql
+-- Boiler energy consumption (using device.name tag)
 SELECT tot FROM raw
-WHERE bus='secondary' AND device='boiler'
+WHERE "device.name"='boiler'
 AND time > now() - 7d
+
+-- Individual appliance power monitoring
+SELECT * FROM "power.boiler" WHERE time > now() - 1h
+SELECT * FROM "power.dishwasher" WHERE time > now() - 1h
 ```
 
 ### Temperature Monitoring
 ```sql
+-- Multi-point temperature analysis
 SELECT t1, t2, t3, t6 FROM xymd1
-WHERE bus='monitoring'
+WHERE "device.name"='controlbox'
 AND time > now() - 24h
+
+-- Thermostat monitoring
+SELECT currentTemp, targetTemp FROM xymd1
+WHERE "device.type"='bac002'
+AND time > now() - 6h
 ```
 
-### Solar System Coordination
+### Solar and Inverter Monitoring
 ```sql
+-- Solar circulation pump coordination
 SELECT t2, t3, "outputs.p1" FROM xymd1
-WHERE bus='monitoring'
-AND time > now() - 1h
+WHERE "device.name"='controlbox' AND time > now() - 1h
+
+-- Solar PV production analysis
+SELECT total_p, daily_p, eff, temp FROM inverter
+WHERE time > now() - 24h
+```
+
+### Vehicle and Battery Monitoring
+```sql
+-- Vehicle state of charge tracking
+SELECT * FROM soc WHERE time > now() - 24h
+
+-- Sunseeker battery management
+SELECT battery_percentage FROM sunseeker_power WHERE time > now() - 6h
+```
+
+### Automation System Analysis
+```sql
+-- Boiler controller decision analysis
+SELECT reason, controlMode, heaterState FROM automation_status
+WHERE "service"='boiler_controller'
+AND time > now() - 24h
+
+-- Controller performance correlation
+SELECT reason, heaterState, temp_top_seen FROM automation_status
+WHERE "service"='boiler_controller'
+AND controlMode='automatic'
+AND time > now() - 7d
 ```
 
 ## Integration Points
@@ -231,8 +291,8 @@ Raw modbus data is also stored in MongoDB collections:
 ## Future Enhancements
 
 ### Planned Additions
-- Automation system status data (controller decisions, modes)
-- Feature state tracking (relay states, sensor readings)
+- ✅ **Automation system status data** - Added `automation_status` measurement for controller decisions and modes
+- Feature state tracking (relay states, sensor readings via `homy/features/+/status` topics)
 - Enhanced monitoring for new devices and systems
 
 ### Schema Evolution
@@ -254,4 +314,4 @@ Vehicle OVMS → telegraf-ovms → InfluxDB Write
 Host System → telegraf-host → InfluxDB Write
 ```
 
-**Note**: Some data flows through multiple paths (e.g., modbus-serial writes direct + publishes MQTT → mqtt-influx), creating potential data duplication that should be considered in queries and dashboards.
+**Note**: The actual system is more complex than initially documented, with 60+ distinct measurements including device-specific power monitoring and comprehensive vehicle telemetry.

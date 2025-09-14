@@ -643,6 +643,30 @@ services:
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
 
+  automation-events-processor:
+    build: docker/automation-events-processor
+    depends_on:
+      - broker
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=homy/automation/+/status
+      - MQTT_CLIENT_ID=automation-events-processor
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - TAGS={"source":"automation_events"}
+
   sunseeker-monitoring:
     build: docker/sunseeker-monitoring
     depends_on:

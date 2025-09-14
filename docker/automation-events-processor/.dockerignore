@@ -1,0 +1,29 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test files
+*.test.js
+test-constants.js
+coverage/
+
+# Documentation
+CLAUDE.md
+README.md
+*.md
+
+# Development files
+.nvmrc
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
