@@ -1,0 +1,322 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Boiler Controller Alerts
+    folder: Automation Alerting
+    interval: 1m
+    rules:
+      - uid: boiler-controller-overheating
+        title: Boiler Overheating Critical
+        condition: A
+        data:
+          - refId: temperature
+            queryType: ''
+            relativeTimeRange:
+              from: 300  # 5 minutes lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT last("t2") FROM "monitoring" WHERE "device.name"=''controlbox'' AND time >= now() - 5m'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [70]  # 70°C critical threshold
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [temperature]
+                  reducer:
+                    type: last
+                  type: query
+              expression: temperature
+        noDataState: NoData
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: "🔥 Boiler Temperature Critical"
+          description: "Boiler top temperature is above 70°C for more than 2 minutes. This may indicate safety system failure or excessive heating demand."
+        labels:
+          severity: critical
+          system: boiler
+          component: temperature
+
+      - uid: boiler-controller-emergency-heating
+        title: Boiler Emergency Heating Active
+        condition: A
+        data:
+          - refId: reason
+            queryType: ''
+            relativeTimeRange:
+              from: 300  # 5 minutes lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT count("reason") FROM "automation_status" WHERE "service"=''boiler_controller'' AND "reason" =~ /emergency_heating/ AND time >= now() - 5m'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params: [reason]
+                  reducer:
+                    type: last
+                  type: query
+              expression: reason
+        noDataState: NoData
+        execErrState: OK
+        for: 10m
+        annotations:
+          summary: "❄️ Boiler Emergency Heating Active"
+          description: "Boiler controller is in emergency heating mode for more than 10 minutes. Temperature is critically low and requires immediate attention."
+        labels:
+          severity: high
+          system: boiler
+          component: automation
+
+      - uid: boiler-controller-not-responding
+        title: Boiler Controller Not Responding
+        condition: A
+        data:
+          - refId: decisions
+            queryType: ''
+            relativeTimeRange:
+              from: 1800  # 30 minutes lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT count("reason") FROM "automation_status" WHERE "service"=''boiler_controller'' AND time >= now() - 30m'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [decisions]
+                  reducer:
+                    type: last
+                  type: query
+              expression: decisions
+        noDataState: NoData
+        execErrState: Alerting
+        for: 30m
+        annotations:
+          summary: "🚨 Boiler Controller Offline"
+          description: "No automation decisions received from boiler controller in the last 30 minutes. The automation system may be down or disconnected."
+        labels:
+          severity: critical
+          system: boiler
+          component: automation
+
+      - uid: boiler-controller-manual-mode-stuck
+        title: Boiler Manual Mode Active Too Long
+        condition: A
+        data:
+          - refId: manual_mode
+            queryType: ''
+            relativeTimeRange:
+              from: 14400  # 4 hours lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT count("controlMode") FROM "automation_status" WHERE "service"=''boiler_controller'' AND "controlMode" =~ /manual_/ AND time >= now() - 4h'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [10]  # More than 10 manual decisions in 4 hours
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [manual_mode]
+                  reducer:
+                    type: last
+                  type: query
+              expression: manual_mode
+        noDataState: NoData
+        execErrState: OK
+        for: 2h
+        annotations:
+          summary: "⚠️ Boiler Manual Override Extended"
+          description: "Boiler has been in manual mode for an extended period. Check if manual override should be reset to automatic mode."
+        labels:
+          severity: warning
+          system: boiler
+          component: automation
+
+      - uid: boiler-temperature-sensor-failure
+        title: Boiler Temperature Sensor Failure
+        condition: A
+        data:
+          - refId: temp_readings
+            queryType: ''
+            relativeTimeRange:
+              from: 1800  # 30 minutes lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT count("t2") FROM "monitoring" WHERE "device.name"=''controlbox'' AND time >= now() - 30m'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [temp_readings]
+                  reducer:
+                    type: last
+                  type: query
+              expression: temp_readings
+        noDataState: NoData
+        execErrState: Alerting
+        for: 30m
+        annotations:
+          summary: "🌡️ Boiler Temperature Sensor Offline"
+          description: "No temperature readings from boiler sensors in the last 30 minutes. Temperature monitoring is unavailable."
+        labels:
+          severity: high
+          system: boiler
+          component: sensors
+
+      - uid: boiler-excessive-power-consumption
+        title: Boiler Excessive Power Consumption
+        condition: A
+        data:
+          - refId: power
+            queryType: ''
+            relativeTimeRange:
+              from: 900  # 15 minutes lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT mean("p") FROM "secondary" WHERE "device.name"=''boiler'' AND time >= now() - 15m'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [3000]  # 3kW sustained consumption
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [power]
+                  reducer:
+                    type: avg
+                  type: query
+              expression: power
+        noDataState: NoData
+        execErrState: OK
+        for: 15m
+        annotations:
+          summary: "⚡ Boiler High Power Consumption"
+          description: "Boiler power consumption above 3kW for more than 15 minutes. Check for efficiency issues or excessive heating demand."
+        labels:
+          severity: warning
+          system: boiler
+          component: energy
+
+      - uid: boiler-solar-circulation-stuck
+        title: Solar Circulation Pump Stuck
+        condition: A
+        data:
+          - refId: solar_state
+            queryType: ''
+            relativeTimeRange:
+              from: 3600  # 1 hour lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT count(DISTINCT "solarCirculation") FROM "automation_status" WHERE "service"=''boiler_controller'' AND time >= now() - 1h'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [1]  # Only one distinct state = stuck
+                    type: lte
+                  operator:
+                    type: and
+                  query:
+                    params: [solar_state]
+                  reducer:
+                    type: last
+                  type: query
+              expression: solar_state
+        noDataState: NoData
+        execErrState: OK
+        for: 1h
+        annotations:
+          summary: "☀️ Solar Circulation Pump May Be Stuck"
+          description: "Solar circulation pump has not changed state in the last hour. Check if pump is functioning correctly."
+        labels:
+          severity: warning
+          system: boiler
+          component: solar
