@@ -297,7 +297,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(DISTINCT "outputs.p1") FROM "xymd1" WHERE "device.name"=''controlbox'' AND time >= now() - 1h'
+              query: 'SELECT count(DISTINCT "outputs.p1") FROM "xymd1" WHERE "device.name"=''solar_heater'' AND time >= now() - 1h'
               rawQuery: true
               resultFormat: time_series
           - refId: A

@@ -312,7 +312,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(\"outputs.p1\") FROM \"xymd1\" WHERE \"device.name\"='controlbox' AND $timeFilter",
+          "query": "SELECT last(\"outputs.p1\") FROM \"xymd1\" WHERE \"device.name\"='solar_heater' AND $timeFilter",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"

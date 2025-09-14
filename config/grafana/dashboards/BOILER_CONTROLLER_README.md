@@ -75,7 +75,8 @@ The dashboard integrates with 7 automated alert rules:
 - `automation_status` - Controller decisions and state (automation-events-processor) - **Currently unavailable due to authentication issues**
 - `xymd1` - Temperature sensors and relay controls (modbus-serial-monitoring)
   - Temperature data: `solar_heater` device (t1, t2, t3, t6)
-  - Relay outputs: `controlbox` device (outputs.p1-p8)
+  - Solar circulation pump: `solar_heater` device (outputs.p1)
+  - Irrigation relays: `controlbox` device (outputs.p1-p8, relays32-47)
 - `raw` - Boiler power consumption (modbus-serial-secondary → DDS519MR meter)
 
 ### Query Patterns
@@ -89,8 +90,8 @@ SELECT "t1", "t2", "t3", "t6" FROM "xymd1" WHERE "device.name"='solar_heater'
 -- Energy consumption (corrected)
 SELECT "p", "tot" FROM "raw" WHERE "device.name"='boiler'
 
--- Solar circulation status (relay outputs from controlbox)
-SELECT "outputs.p1" FROM "xymd1" WHERE "device.name"='controlbox'
+-- Solar circulation status (from solar_heater device)
+SELECT "outputs.p1" FROM "xymd1" WHERE "device.name"='solar_heater'
 ```
 
 ## Navigation
@@ -118,7 +119,7 @@ This dashboard is part of the Water System monitoring family:
 
 ### Service Dependencies
 - **automation-events-processor**: Automation decision events
-- **modbus-serial-monitoring**: Temperature sensors (solar_heater) and relay controls (controlbox)
+- **modbus-serial-monitoring**: Temperature sensors and solar circulation (solar_heater), irrigation relays (controlbox)
 - **modbus-serial-secondary**: Boiler energy consumption
 - **boiler-controller bot**: Automation logic and MQTT publishing
 
