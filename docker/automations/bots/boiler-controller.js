@@ -74,11 +74,11 @@ module.exports = (name, {
     const finalAutomationStatusTopic = automationStatusTopic || `homy/automation/${name}/status`
 
     const publishControlModeStatus = () => {
-      mqtt.publish(finalControlModeStatusTopic, JSON.stringify({
+      mqtt.publish(finalControlModeStatusTopic, {
         mode: currentState.controlMode,
         manualOverrideExpires: currentState.manualOverrideExpires,
         timestamp: new Date().toISOString()
-      }))
+      })
     }
 
     const makeDecision = () => {
@@ -183,7 +183,7 @@ module.exports = (name, {
           console.log(`[${name}] temperatures: top=${currentState.temperatureTop}°C, bottom=${currentState.temperatureBottom}°C, solar=${currentState.solarTemperature}°C`)
         }
 
-        mqtt.publish(boilerRelayTopic, JSON.stringify({
+        mqtt.publish(boilerRelayTopic, {
           state: decision,
           _src: 'boiler_controller',
           reason,
@@ -194,10 +194,10 @@ module.exports = (name, {
             solar: currentState.solarTemperature,
             ambient: currentState.ambientTemperature
           }
-        }))
+        })
 
         // Publish status for monitoring
-        mqtt.publish(finalAutomationStatusTopic, JSON.stringify({
+        mqtt.publish(finalAutomationStatusTopic, {
           heaterState: decision,
           reason,
           controlMode: currentState.controlMode,
@@ -210,7 +210,7 @@ module.exports = (name, {
           },
           solarCirculation: currentState.solarCirculation,
           timestamp: new Date().toISOString()
-        }))
+        })
 
         // Publish control mode status
         publishControlModeStatus()
