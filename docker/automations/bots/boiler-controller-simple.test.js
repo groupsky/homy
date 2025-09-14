@@ -64,9 +64,9 @@ describe('boiler-controller basic functionality', () => {
         // Should publish initial decision, status, and control mode status
         // Actually publishes: 1) relay command, 2) automation status, 3) control mode status, 4) control mode status again from updateHeaterState
         expect(mqtt.publish).toHaveBeenCalledTimes(4)
-        expect(mqtt.publish).toHaveBeenCalledWith('relay/boiler', expect.any(String))
-        expect(mqtt.publish).toHaveBeenCalledWith('homy/automation/test/status', expect.any(String))
-        expect(mqtt.publish).toHaveBeenCalledWith('control/mode/status', expect.any(String))
+        expect(mqtt.publish).toHaveBeenCalledWith('relay/boiler', expect.any(Object))
+        expect(mqtt.publish).toHaveBeenCalledWith('homy/automation/test/status', expect.any(Object))
+        expect(mqtt.publish).toHaveBeenCalledWith('control/mode/status', expect.any(Object))
     })
 
     test('should handle three-state control mode selection', () => {
@@ -96,19 +96,19 @@ describe('boiler-controller basic functionality', () => {
         boilerController.start({ mqtt, persistedCache })
 
         // Test manual_on mode
-        mqttSubscriptions['control/mode/set'](JSON.stringify('manual_on'))
+        mqttSubscriptions['control/mode/set']('manual_on')
 
         expect(persistedCache.controlMode).toBe('manual_on')
         expect(persistedCache.manualOverrideExpires).toBeGreaterThan(Date.now())
 
         // Test manual_off mode
-        mqttSubscriptions['control/mode/set'](JSON.stringify('manual_off'))
+        mqttSubscriptions['control/mode/set']('manual_off')
 
         expect(persistedCache.controlMode).toBe('manual_off')
         expect(persistedCache.manualOverrideExpires).toBeGreaterThan(Date.now())
 
         // Test automatic mode
-        mqttSubscriptions['control/mode/set'](JSON.stringify('automatic'))
+        mqttSubscriptions['control/mode/set']('automatic')
 
         expect(persistedCache.controlMode).toBe('automatic')
         expect(persistedCache.manualOverrideExpires).toBeNull()
@@ -118,7 +118,7 @@ describe('boiler-controller basic functionality', () => {
             msg.topic === 'control/mode/status')
         expect(controlModePublishes.length).toBeGreaterThan(0)
 
-        const lastStatus = JSON.parse(controlModePublishes[controlModePublishes.length - 1].payload)
+        const lastStatus = controlModePublishes[controlModePublishes.length - 1].payload
         expect(lastStatus.mode).toBe('automatic')
     })
 
@@ -149,7 +149,7 @@ describe('boiler-controller basic functionality', () => {
         boilerController.start({ mqtt, persistedCache })
 
         // Test vacation_3d mode
-        mqttSubscriptions['control/mode/set'](JSON.stringify('vacation_3d'))
+        mqttSubscriptions['control/mode/set']('vacation_3d')
 
         expect(persistedCache.controlMode).toBe('vacation_3d')
         expect(persistedCache.manualOverrideExpires).toBeGreaterThan(Date.now())
@@ -161,7 +161,7 @@ describe('boiler-controller basic functionality', () => {
         expect(actualDuration).toBeLessThan(expected3dayDuration + 1000)
 
         // Test vacation_7d mode
-        mqttSubscriptions['control/mode/set'](JSON.stringify('vacation_7d'))
+        mqttSubscriptions['control/mode/set']('vacation_7d')
 
         expect(persistedCache.controlMode).toBe('vacation_7d')
 
@@ -174,7 +174,7 @@ describe('boiler-controller basic functionality', () => {
         // Test that vacation mode disables heater by checking boiler commands
         const boilerCommands = publishedMessages.filter(msg => msg.topic === 'relay/boiler')
         const lastBoilerCommand = boilerCommands[boilerCommands.length - 1]
-        const boilerState = JSON.parse(lastBoilerCommand.payload)
+        const boilerState = lastBoilerCommand.payload
         expect(boilerState.state).toBe(false) // Heater should be OFF during vacation
         expect(boilerState.reason).toMatch(/vacation_7d/)
     })
