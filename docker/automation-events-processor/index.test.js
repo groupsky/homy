@@ -167,14 +167,16 @@ describe('Automation Events Processor Integration', () => {
 
   it('should use correct environment configuration', () => {
     // Test with custom configuration
+    const originalTags = process.env.TAGS
     process.env.TOPIC = 'custom/automation/+/status'
     process.env.MQTT_CLIENT_ID = 'custom-client-id'
     process.env.TAGS = '{"environment":"test","instance":"1"}'
 
-    // Clear previous mock calls
+    // Clear previous mock calls and reset require cache
     jest.clearAllMocks()
-
     delete require.cache[require.resolve('./index.js')]
+
+    // Import with new environment
     require('./index.js')
 
     expect(mockInfluxDB.getWriteApi).toHaveBeenCalledWith(
@@ -183,5 +185,8 @@ describe('Automation Events Processor Integration', () => {
       'ms',
       { defaultTags: { environment: 'test', instance: '1' } }
     )
+
+    // Restore original environment
+    process.env.TAGS = originalTags
   })
 })
