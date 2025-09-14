@@ -59,7 +59,9 @@ describe('Automation Events Processor Integration', () => {
       TOPIC: 'homy/automation/+/status',
       MQTT_CLIENT_ID: 'test-automation-events',
       INFLUXDB_URL: 'http://test-influx:8086',
-      INFLUXDB_DATABASE: 'test_homy'
+      INFLUXDB_DATABASE: 'test_homy',
+      INFLUXDB_USERNAME: 'test_user',
+      INFLUXDB_PASSWORD: 'test_password'
     }
 
     // Clear mocks

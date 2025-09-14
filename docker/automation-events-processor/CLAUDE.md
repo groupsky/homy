@@ -152,11 +152,19 @@ npm test -- --coverage
 - **MQTT_CLIENT_ID**: MQTT client identifier (default: `automation-events-processor`)
 - **INFLUXDB_URL**: InfluxDB connection URL
 - **INFLUXDB_DATABASE**: Target database name
+- **INFLUXDB_USERNAME** or **INFLUXDB_USERNAME_FILE**: InfluxDB username (direct or file-based)
+- **INFLUXDB_PASSWORD** or **INFLUXDB_PASSWORD_FILE**: InfluxDB password (direct or file-based)
 - **TAGS**: Additional tags as JSON string (optional)
 
 ### Docker Secrets
-- **influxdb_write_user**: InfluxDB username file
-- **influxdb_write_user_password**: InfluxDB password file
+The service supports the Docker secrets pattern:
+- **influxdb_write_user**: InfluxDB username file (`INFLUXDB_USERNAME_FILE`)
+- **influxdb_write_user_password**: InfluxDB password file (`INFLUXDB_PASSWORD_FILE`)
+
+**Configuration Priority:**
+1. File-based secrets (`*_FILE` environment variables pointing to Docker secret files)
+2. Direct environment variables (for development/testing)
+3. Service will exit with error if credentials are missing
 
 ## Monitoring and Troubleshooting
 
@@ -174,9 +182,11 @@ Monitor service health through:
 - Ensure automation bots are publishing to correct topics
 
 **InfluxDB write failures:**
-- Verify InfluxDB connection and credentials
-- Check database exists and write permissions
-- Monitor InfluxDB logs for detailed error information
+- **401 Authentication errors**: Verify Docker secrets are correctly mounted and contain valid credentials
+- **Service startup failures**: Check that `INFLUXDB_USERNAME_FILE` and `INFLUXDB_PASSWORD_FILE` point to accessible secret files
+- **Connection issues**: Verify InfluxDB connection URL and ensure database exists
+- **Permission errors**: Confirm write user has appropriate permissions on target database
+- **Credential validation**: Service logs will show if credentials are "configured" or "missing" during startup
 
 **Invalid events being rejected:**
 - Review bot event schema - ensure required fields are present
