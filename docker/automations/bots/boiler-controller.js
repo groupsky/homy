@@ -125,21 +125,21 @@ module.exports = (name, {
 
       // Safety checks first
       if (temperatureTop !== null && temperatureTop >= maxSafe) {
-        return { decision: false, reason: `safety_shutoff_temp_${temperatureTop}C` }
+        return { decision: false, reason: 'safety_shutoff_overheated' }
       }
 
       // Emergency heating - temperature too low
       if (temperatureTop !== null && temperatureTop < emergencyMin) {
-        return { decision: true, reason: `emergency_heating_top_${temperatureTop}C` }
+        return { decision: true, reason: 'emergency_heating_top_cold' }
       }
 
       if (temperatureBottom !== null && temperatureBottom < emergencyMin) {
-        return { decision: true, reason: `emergency_heating_bottom_${temperatureBottom}C` }
+        return { decision: true, reason: 'emergency_heating_bottom_cold' }
       }
 
       // Comfort heating
       if (temperatureTop !== null && temperatureTop < comfortMin) {
-        return { decision: true, reason: `comfort_heating_top_${temperatureTop}C` }
+        return { decision: true, reason: 'comfort_heating_insufficient' }
       }
 
       // Solar heating considerations
@@ -148,18 +148,18 @@ module.exports = (name, {
 
         // Solar heating is very effective
         if (solarAdvantage >= solarAdvantageMin && solarCirculation) {
-          return { decision: false, reason: `solar_priority_advantage_${solarAdvantage.toFixed(1)}C` }
+          return { decision: false, reason: 'solar_priority_available' }
         }
 
         // Solar heating is insufficient
         if (solarAdvantage <= solarDisadvantageMax) {
-          return { decision: true, reason: `solar_insufficient_disadvantage_${solarAdvantage.toFixed(1)}C` }
+          return { decision: true, reason: 'solar_insufficient_boost_needed' }
         }
       }
 
       // Temperature is sufficient, check hysteresis
       if (temperatureTop !== null && temperatureTop >= (comfortMin + hysteresis)) {
-        return { decision: false, reason: `sufficient_temp_${temperatureTop}C` }
+        return { decision: false, reason: 'temperature_sufficient' }
       }
 
       // Default to maintaining current state (hysteresis zone)
