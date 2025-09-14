@@ -79,7 +79,7 @@ The dashboard integrates with 7 automated alert rules:
 ### Query Patterns
 ```sql
 -- Controller decisions (currently unavailable)
-SELECT * FROM "automation_status" WHERE "service"='boiler_controller'
+SELECT * FROM "automation_status" WHERE "service"='boilerController'
 
 -- Temperature monitoring (corrected)
 SELECT "t1", "t2", "t3", "t6" FROM "xymd1" WHERE "device.name"='controlbox'

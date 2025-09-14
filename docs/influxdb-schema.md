@@ -244,12 +244,12 @@ SELECT battery_percentage FROM sunseeker_power WHERE time > now() - 6h
 ```sql
 -- Boiler controller decision analysis
 SELECT reason, controlMode, heaterState FROM automation_status
-WHERE "service"='boiler_controller'
+WHERE "service"='boilerController'
 AND time > now() - 24h
 
 -- Controller performance correlation
 SELECT reason, heaterState, temp_top_seen FROM automation_status
-WHERE "service"='boiler_controller'
+WHERE "service"='boilerController'
 AND controlMode='automatic'
 AND time > now() - 7d
 ```
