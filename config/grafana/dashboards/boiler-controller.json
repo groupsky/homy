@@ -881,7 +881,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT time, heaterState, manualOverrideExpires FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 24h GROUP BY reason, controlMode ORDER BY time DESC LIMIT 20",
+          "query": "SELECT time, heaterState, manualOverrideExpires FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason, controlMode ORDER BY time DESC LIMIT 20",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -941,7 +941,7 @@
       },
       "targets": [
         {
-          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 7d GROUP BY reason",
+          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -1001,7 +1001,7 @@
       },
       "targets": [
         {
-          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 7d GROUP BY controlMode",
+          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY controlMode",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
