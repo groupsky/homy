@@ -51,7 +51,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -164,17 +167,20 @@
       },
       "targets": [
         {
-          "query": "SELECT last(controlMode) FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 1h",
+          "query": "SELECT last(controlMode) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY time(1m) fill(previous)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
         }
       ],
       "title": "Control Mode",
-      "type": "timeseries"
+      "type": "state-timeline"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -238,7 +244,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(heaterState) FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 1h",
+          "query": "SELECT last(heaterState) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -248,7 +254,10 @@
       "type": "stat"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -322,7 +331,10 @@
       "type": "stat"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -366,7 +378,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(reason) FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 1h",
+          "query": "SELECT last(reason) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY time(1m) fill(previous)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -390,7 +402,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -576,7 +591,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -658,7 +676,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -753,7 +774,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -867,7 +891,10 @@
       "type": "table"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -924,7 +951,10 @@
       "type": "piechart"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
