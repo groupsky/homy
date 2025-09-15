@@ -29,7 +29,7 @@ function processAutomationDecisionEvent(data) {
     // Add optional fields if present
     if (data.manualOverrideExpires !== undefined) {
         if (data.manualOverrideExpires === null) {
-            point.stringField('manualOverrideExpires', 'null')
+            point.intField('manualOverrideExpires', 0)  // Use 0 for null timestamp
         } else {
             point.intField('manualOverrideExpires', data.manualOverrideExpires)
         }
