@@ -22,8 +22,8 @@ function processAutomationDecisionEvent(data) {
     const point = new Point('automation_status')
         .tag('service', serviceName)
         .tag('type', 'status')
-        .stringField('reason', data.reason)
-        .stringField('controlMode', data.controlMode)
+        .tag('reason', data.reason)
+        .tag('controlMode', data.controlMode)
         .timestamp(new Date(data._tz))
 
     // Add optional fields if present

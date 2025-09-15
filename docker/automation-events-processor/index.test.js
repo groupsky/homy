@@ -116,7 +116,7 @@ describe('Automation Events Processor Integration', () => {
     const point = writtenPoints[0]
     expect(point.name).toBe('automation_status')
     expect(point.tags.service).toBe('boiler_controller')
-    expect(point.fields.reason).toBe('"comfort_heating_insufficient"')
+    expect(point.tags.reason).toBe('comfort_heating_insufficient')
   })
 
   it('should handle events from different automation bots', () => {
@@ -133,7 +133,7 @@ describe('Automation Events Processor Integration', () => {
 
     const point = writtenPoints[0]
     expect(point.tags.service).toBe('irrigation_controller')
-    expect(point.fields.reason).toBe('"scheduled_watering_zone_1"')
+    expect(point.tags.reason).toBe('scheduled_watering_zone_1')
   })
 
   it('should handle malformed JSON gracefully', () => {

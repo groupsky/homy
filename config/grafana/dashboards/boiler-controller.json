@@ -941,7 +941,7 @@
       },
       "targets": [
         {
-          "query": "SELECT reason as \"name\", count(*) as \"value\" FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 7d GROUP BY reason",
+          "query": "SELECT reason, 1 FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 7d",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -1001,7 +1001,7 @@
       },
       "targets": [
         {
-          "query": "SELECT controlMode as \"name\", count(*) as \"value\" FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 7d GROUP BY controlMode",
+          "query": "SELECT controlMode, 1 FROM automation_status WHERE \"service\"='boilerController' AND time >= now() - 7d",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
