@@ -359,6 +359,30 @@ module.exports = (name, {
     updateHeaterState()
     publishControlModeStatus()
 
+    // Periodic heartbeat to ensure service health monitoring
+    const heartbeatInterval = setInterval(() => {
+      mqtt.publish(finalAutomationStatusTopic, {
+        heaterState: currentState.heaterState,
+        reason: currentState.lastDecisionReason || 'heartbeat',
+        controlMode: currentState.controlMode,
+        manualOverrideExpires: currentState.manualOverrideExpires,
+        temperatures: {
+          top: currentState.temperatureTop,
+          bottom: currentState.temperatureBottom,
+          solar: currentState.solarTemperature,
+          ambient: currentState.ambientTemperature
+        },
+        solarCirculation: currentState.solarCirculation,
+        lastDecision: currentState.lastDecision,
+        heartbeat: true,
+        timestamp: Date.now()
+      })
+
+      if (verbose) {
+        console.log(`[${name}] heartbeat: ${currentState.controlMode}, heater=${currentState.heaterState}, temps: top=${currentState.temperatureTop}°C`)
+      }
+    }, 15 * 60 * 1000) // 15 minutes
+
     if (verbose) {
       console.log(`[${name}] boiler controller started with config:`, {
         comfortMin,
@@ -367,7 +391,8 @@ module.exports = (name, {
         solarAdvantageMin,
         solarDisadvantageMax,
         hysteresis,
-        manualOverrideExpiry: manualOverrideExpiry / 60000 + ' minutes'
+        manualOverrideExpiry: manualOverrideExpiry / 60000 + ' minutes',
+        heartbeatInterval: '15 minutes'
       })
     }
   }
