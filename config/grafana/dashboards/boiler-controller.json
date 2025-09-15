@@ -189,12 +189,12 @@
           "mappings": [
             {
               "options": {
-                "0": {
+                "false": {
                   "color": "red",
                   "index": 0,
                   "text": "OFF"
                 },
-                "1": {
+                "true": {
                   "color": "green",
                   "index": 1,
                   "text": "ON"
@@ -266,12 +266,12 @@
           "mappings": [
             {
               "options": {
-                "0": {
+                "false": {
                   "color": "red",
                   "index": 0,
                   "text": "OFF"
                 },
-                "1": {
+                "true": {
                   "color": "blue",
                   "index": 1,
                   "text": "ON"
@@ -807,12 +807,12 @@
                 "value": [
                   {
                     "options": {
-                      "0": {
+                      "false": {
                         "color": "red",
                         "index": 0,
                         "text": "OFF"
                       },
-                      "1": {
+                      "true": {
                         "color": "green",
                         "index": 1,
                         "text": "ON"
@@ -839,12 +839,12 @@
                 "value": [
                   {
                     "options": {
-                      "0": {
+                      "false": {
                         "color": "red",
                         "index": 0,
                         "text": "OFF"
                       },
-                      "1": {
+                      "true": {
                         "color": "blue",
                         "index": 1,
                         "text": "ON"
