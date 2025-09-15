@@ -5,14 +5,57 @@ const mqtt = require('mqtt')
 const {InfluxDB} = require('@influxdata/influxdb-client')
 const {processAutomationDecisionEvent} = require('./processor')
 
+// Utility function to read Docker secrets or environment variables
+function loadSecret(name) {
+    const fileEnvVar = `${name}_FILE`
+    const directEnvVar = name
+
+    if (process.env[fileEnvVar]) {
+        try {
+            const fs = require('fs')
+            return fs.readFileSync(process.env[fileEnvVar], 'utf8').trim()
+        } catch (error) {
+            console.error(`Failed to read secret from file ${process.env[fileEnvVar]}:`, error.message)
+            return null
+        }
+    } else if (process.env[directEnvVar]) {
+        return process.env[directEnvVar]
+    }
+
+    return null
+}
+
 // Environment configuration
 const mqttUrl = process.env.BROKER
 const topic = process.env.TOPIC || 'homy/automation/+/status'
 const influxUrl = process.env.INFLUXDB_URL
-const influxToken = process.env.INFLUXDB_TOKEN || `${process.env.INFLUXDB_USERNAME}:${process.env.INFLUXDB_PASSWORD}`
+const influxUsername = loadSecret('INFLUXDB_USERNAME')
+const influxPassword = loadSecret('INFLUXDB_PASSWORD')
+const influxToken = process.env.INFLUXDB_TOKEN || `${influxUsername}:${influxPassword}`
 const influxOrg = process.env.INFLUXDB_ORG || ''
 const influxBucket = process.env.INFLUXDB_BUCKET || `${process.env.INFLUXDB_DATABASE}/${process.env.INFLUXDB_RP || 'autogen'}`
 const tags = process.env.TAGS ? JSON.parse(process.env.TAGS) : []
+
+// Validate configuration
+if (!mqttUrl) {
+    console.error('ERROR: BROKER is required')
+    process.exit(1)
+}
+
+if (!influxUrl) {
+    console.error('ERROR: INFLUXDB_URL is required')
+    process.exit(1)
+}
+
+if (!influxUsername || !influxPassword) {
+    console.error('ERROR: InfluxDB credentials are required (set via INFLUXDB_USERNAME/INFLUXDB_PASSWORD or INFLUXDB_USERNAME_FILE/INFLUXDB_PASSWORD_FILE)')
+    process.exit(1)
+}
+
+if (!process.env.INFLUXDB_DATABASE) {
+    console.error('ERROR: INFLUXDB_DATABASE is required')
+    process.exit(1)
+}
 
 // Initialize clients
 const client = mqtt.connect(mqttUrl, {
@@ -90,5 +133,10 @@ process.on('SIGINT', () => {
 })
 
 console.log('Automation Events Processor starting...')
+console.log('MQTT Broker:', mqttUrl)
 console.log('MQTT Topic:', topic)
 console.log('InfluxDB URL:', influxUrl)
+console.log('InfluxDB Database:', process.env.INFLUXDB_DATABASE)
+console.log('InfluxDB Username:', influxUsername ? 'configured' : 'missing')
+console.log('InfluxDB Bucket:', influxBucket)
+console.log('Default Tags:', tags)

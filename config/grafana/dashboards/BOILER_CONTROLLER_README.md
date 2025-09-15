@@ -72,20 +72,26 @@ The dashboard integrates with 7 automated alert rules:
 ## Data Sources
 
 ### InfluxDB Measurements
-- `automation_status` - Controller decisions and state (automation-events-processor)
-- `monitoring` - Temperature sensors (modbus-serial-monitoring → XYMD1 controller)
-- `secondary` - Boiler power consumption (modbus-serial-secondary → DDS519MR meter)
+- `automation_status` - Controller decisions and state (automation-events-processor) - **Currently unavailable due to authentication issues**
+- `xymd1` - Temperature sensors and relay controls (modbus-serial-monitoring)
+  - Temperature data: `solar_heater` device (t1, t2, t3, t6)
+  - Solar circulation pump: `solar_heater` device (outputs.p1)
+  - Irrigation relays: `controlbox` device (outputs.p1-p8, relays32-47)
+- `raw` - Boiler power consumption (modbus-serial-secondary → DDS519MR meter)
 
 ### Query Patterns
 ```sql
--- Controller decisions
-SELECT * FROM "automation_status" WHERE "service"='boiler_controller'
+-- Controller decisions (currently unavailable)
+SELECT * FROM "automation_status" WHERE "service"='boilerController'
 
--- Temperature monitoring
-SELECT "t1", "t2", "t3", "t6" FROM "monitoring" WHERE "device.name"='controlbox'
+-- Temperature monitoring (corrected device mapping)
+SELECT "t1", "t2", "t3", "t6" FROM "xymd1" WHERE "device.name"='solar_heater'
 
--- Energy consumption
-SELECT "p", "tot" FROM "secondary" WHERE "device.name"='boiler'
+-- Energy consumption (corrected)
+SELECT "p", "tot" FROM "raw" WHERE "device.name"='boiler'
+
+-- Solar circulation status (from solar_heater device)
+SELECT "outputs.p1" FROM "xymd1" WHERE "device.name"='solar_heater'
 ```
 
 ## Navigation
@@ -107,12 +113,13 @@ This dashboard is part of the Water System monitoring family:
 ### Common Issues
 1. **No Data in Panels**: Check InfluxDB connectivity and service status
 2. **Missing Temperature Data**: Verify modbus-serial-monitoring service
-3. **Missing Decision Data**: Check automation-events-processor service status
-4. **Alert Not Firing**: Verify alert rule queries in provisioning config
+3. **Missing Decision Data**: automation-events-processor has authentication issues with InfluxDB
+4. **Alert Not Firing**: Some alerts disabled due to missing automation_status measurement
+5. **Authorization Failed**: WHERE clauses in queries may have authentication restrictions
 
 ### Service Dependencies
 - **automation-events-processor**: Automation decision events
-- **modbus-serial-monitoring**: Temperature sensor readings
+- **modbus-serial-monitoring**: Temperature sensors and solar circulation (solar_heater), irrigation relays (controlbox)
 - **modbus-serial-secondary**: Boiler energy consumption
 - **boiler-controller bot**: Automation logic and MQTT publishing
 
