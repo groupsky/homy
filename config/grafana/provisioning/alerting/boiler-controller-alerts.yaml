@@ -113,11 +113,11 @@ groups:
           - refId: decisions
             queryType: ''
             relativeTimeRange:
-              from: 1800  # 30 minutes lookback
+              from: 7200  # 2 hours lookback
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(reason) FROM automation_status WHERE "service"=''boilerController'' AND time >= now() - 30m'
+              query: 'SELECT count(reason) FROM automation_status WHERE "service"=''boilerController'' AND time >= now() - 2h'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -140,12 +140,12 @@ groups:
                     type: last
                   type: query
               expression: decisions
-        noDataState: NoData
+        noDataState: OK
         execErrState: Alerting
-        for: 30m
+        for: 2h
         annotations:
           summary: "🚨 Boiler Controller Offline"
-          description: "No automation decisions received from boiler controller in the last 30 minutes. The automation system may be down or disconnected."
+          description: "No automation decisions received from boiler controller in the last 2 hours. The automation system may be down or disconnected. Note: Normal operation may have periods with no decisions when temperature is stable."
         labels:
           severity: critical
           system: boiler
