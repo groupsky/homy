@@ -72,7 +72,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(reason) FROM automation_status WHERE "service"=''boilerController'' AND reason LIKE ''%emergency%'' AND time >= now() - 10m'
+              query: 'SELECT count(*) FROM automation_status WHERE "service"=''boilerController'' AND reason =~ /.*emergency.*/ AND time >= now() - 10m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -117,7 +117,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(reason) FROM automation_status WHERE "service"=''boilerController'' AND time >= now() - 30m'
+              query: 'SELECT count(*) FROM automation_status WHERE "service"=''boilerController'' AND time >= now() - 30m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -162,7 +162,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(controlMode) FROM automation_status WHERE "service"=''boilerController'' AND controlMode LIKE ''%manual%'' AND time >= now() - 4h'
+              query: 'SELECT count(*) FROM automation_status WHERE "service"=''boilerController'' AND controlMode =~ /.*manual.*/ AND time >= now() - 4h'
               rawQuery: true
               resultFormat: time_series
           - refId: A
