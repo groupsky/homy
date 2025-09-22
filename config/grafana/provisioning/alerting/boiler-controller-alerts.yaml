@@ -151,50 +151,6 @@ groups:
           system: boiler
           component: automation
 
-      - uid: boiler-controller-manual-mode-stuck
-        title: Boiler Manual Mode Active Too Long
-        condition: A
-        data:
-          - refId: manual_mode
-            queryType: ''
-            relativeTimeRange:
-              from: 14400  # 4 hours lookback
-              to: 0
-            datasourceUid: P3C6603E967DC8568
-            model:
-              query: 'SELECT count(*) FROM automation_status WHERE "service"=''boilerController'' AND controlMode =~ /.*manual.*/ AND time >= now() - 4h'
-              rawQuery: true
-              resultFormat: time_series
-          - refId: A
-            queryType: ''
-            relativeTimeRange:
-              from: 0
-              to: 0
-            datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              conditions:
-                - evaluator:
-                    params: [10]  # More than 10 manual decisions in 4 hours
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params: [manual_mode]
-                  reducer:
-                    type: last
-                  type: query
-              expression: manual_mode
-        noDataState: NoData
-        execErrState: OK
-        for: 2h
-        annotations:
-          summary: "⚠️ Boiler Manual Override Extended"
-          description: "Boiler has been in manual mode for an extended period. Check if manual override should be reset to automatic mode."
-        labels:
-          severity: warning
-          system: boiler
-          component: automation
 
       - uid: boiler-temperature-sensor-failure
         title: Boiler Temperature Sensor Failure
