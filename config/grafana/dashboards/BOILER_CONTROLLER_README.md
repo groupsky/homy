@@ -18,7 +18,7 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
   - Boiler Bottom (t1) - Secondary temperature monitoring
   - Solar Panel (t3) - Solar heating effectiveness
   - Service Room (t6) - Ambient temperature monitoring
-- **Thresholds**: Visual indicators for critical temperature limits (70°C safety shutoff)
+- **Thresholds**: Visual indicators for critical temperature limits (85°C safety shutoff)
 
 ### 3. Energy Consumption
 - **Boiler Power**: Real-time power consumption monitoring
@@ -33,8 +33,8 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
 ## Key Metrics
 
 ### Temperature Monitoring
-- **Safety Threshold**: 70°C maximum (red threshold line)
-- **Comfort Range**: 50-70°C optimal operation
+- **Safety Threshold**: 85°C maximum (red threshold line)
+- **Comfort Range**: 50-85°C optimal operation
 - **Emergency Heating**: Triggered below 45°C
 
 ### Power Consumption
@@ -57,7 +57,7 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
 The dashboard integrates with 7 automated alert rules:
 
 ### Critical Alerts
-1. **Boiler Overheating** - Temperature >70°C for 2+ minutes
+1. **Boiler Overheating** - Temperature >85°C for 2+ minutes
 2. **Controller Not Responding** - No decisions for 30+ minutes
 3. **Temperature Sensor Failure** - No readings for 30+ minutes
 

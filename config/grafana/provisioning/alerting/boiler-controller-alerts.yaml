@@ -30,7 +30,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 70
+                      - 85
                     type: gt
                   operator:
                     type: and
@@ -55,7 +55,7 @@ groups:
         for: 2m
         annotations:
           summary: "🔥 Boiler Temperature Critical"
-          description: "Boiler top temperature is above 70°C for more than 2 minutes. This may indicate safety system failure or excessive heating demand."
+          description: "Boiler top temperature is above 85°C for more than 2 minutes. This may indicate safety system failure or excessive heating demand."
         labels:
           severity: critical
           system: boiler

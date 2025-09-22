@@ -372,7 +372,7 @@ module.exports = {
       // Temperature thresholds based on analysis
       comfortMin: 47,
       emergencyMin: 30,
-      maxSafe: 70,
+      maxSafe: 85,
       solarAdvantageMin: 5,
       solarDisadvantageMax: -100,
       hysteresis: 3,
