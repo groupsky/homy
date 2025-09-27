@@ -70,7 +70,6 @@ playground.gates.mqtt.on('error', (err) => {
     console.error('MQTT error', err)
 })
 playground.gates.mqtt.on('message', (msgTopic, payload) => {
-  console.log('Received message on', msgTopic)
   if (!mqttSubscriptions[msgTopic]) {
     console.warn('No handler for topic', msgTopic)
     return
