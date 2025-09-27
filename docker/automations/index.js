@@ -51,30 +51,6 @@ const contentProcessors = {
 
 playground.gates.mqtt.setMaxListeners(1000)
 
-// Initialize topic handlers for preventing listener accumulation
-if (!playground.gates.mqtt.topicHandlers) {
-  playground.gates.mqtt.topicHandlers = new Map()
-}
-
-// Add MQTT connection logging
-playground.gates.mqtt.on('connect', () => {
-  console.log('[MQTT] Connected')
-})
-
-playground.gates.mqtt.on('disconnect', () => {
-  console.log('[MQTT] Disconnected')
-})
-
-playground.gates.mqtt.on('error', (err) => {
-  console.log('[MQTT] Error:', err)
-})
-
-// Periodic listener count logging (every 15 minutes)
-setInterval(() => {
-  const listenerCount = playground.gates.mqtt.listenerCount('message')
-  console.log(`[MQTT] Active message listeners: ${listenerCount}`)
-}, 15 * 60 * 1000)
-
 playground.bots.forEach(async bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
 
@@ -90,27 +66,13 @@ playground.bots.forEach(async bot => {
             }
             resolve()
           })
+          playground.gates.mqtt.on('message', (msgTopic, payload) => {
+            if (topic !== msgTopic) {
+              return
+            }
 
-          // Implement one-listener-per-topic pattern to prevent accumulation
-          if (!playground.gates.mqtt.topicHandlers.has(topic)) {
-            playground.gates.mqtt.topicHandlers.set(topic, [])
-
-            // Add single message listener for this topic
-            playground.gates.mqtt.on('message', (msgTopic, payload) => {
-              const handlers = playground.gates.mqtt.topicHandlers.get(msgTopic)
-              if (handlers) {
-                try {
-                  const parsedPayload = JSON.parse(payload.toString())
-                  handlers.forEach(handler => handler(parsedPayload))
-                } catch (err) {
-                  console.error(`[MQTT] Error parsing payload for topic ${msgTopic}:`, err)
-                }
-              }
-            })
-          }
-
-          // Add this callback to the topic's handler list
-          playground.gates.mqtt.topicHandlers.get(topic).push(cb)
+            cb(JSON.parse(payload.toString()))
+          })
         })
       }),
       publish: async (topic, payload, {
