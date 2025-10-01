@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@vue/reactivity": "^3.5.0",
+    "@vue/reactivity": "^3.5.22",
     "cron-parser": "^4.9.0",
     "fast-json-stable-stringify": "^2.1.0",
     "mqtt": "^5.14.0",
