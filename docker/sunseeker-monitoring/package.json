@@ -21,7 +21,7 @@
   "devDependencies": {
     "jest": "^30.0.5",
     "msw": "^2.10.5",
-    "testcontainers": "^11.5.1"
+    "testcontainers": "^11.7.0"
   },
   "engines": {
     "node": "22"
