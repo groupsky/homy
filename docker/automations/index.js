@@ -88,15 +88,70 @@ playground.gates.mqtt.on('message', (msgTopic, payload) => {
 playground.bots.forEach(async bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
 
+  // Track bot enabled state
+  bot.enabled = true
+
+  // Publish bot status
+  const publishBotStatus = () => {
+    const statusTopic = `homy/automation/${bot.name}/status`
+    playground.gates.mqtt.publish(statusTopic, JSON.stringify({
+      enabled: bot.enabled,
+      type: bot.config.type,
+      _tz: Date.now()
+    }), { retain: true }, (err) => {
+      if (err) {
+        console.error(`[${bot.config.type}] failure publishing status to ${statusTopic}`, err)
+      }
+    })
+  }
+
+  // Subscribe to control topic for enable/disable
+  const controlTopic = `homy/automation/${bot.name}/control`
+  playground.gates.mqtt.subscribe(controlTopic, (err) => {
+    if (err) {
+      console.error(`[${bot.config.type}] failure subscribing to control topic ${controlTopic}`, err)
+    } else {
+      console.log(`[${bot.config.type}] subscribed to control topic ${controlTopic}`)
+    }
+  })
+
+  // Add control topic to subscriptions
+  if (!mqttSubscriptions[controlTopic]) {
+    mqttSubscriptions[controlTopic] = []
+  }
+  mqttSubscriptions[controlTopic].push((payload) => {
+    const enabled = payload.enabled
+    if (typeof enabled === 'boolean' && bot.enabled !== enabled) {
+      bot.enabled = enabled
+      console.log(`[${bot.config.type}] ${bot.name} ${enabled ? 'enabled' : 'disabled'}`)
+      publishBotStatus()
+    }
+  })
+
+  // Publish initial status
+  publishBotStatus()
+
   const startParams = {
     mqtt: {
       subscribe: async (topic, cb) => new Promise((resolve, reject) => {
         console.log(`[${bot.config.type}] subscribing to ${topic}`)
         if (mqttSubscriptions[topic]) {
-          mqttSubscriptions[topic].push(cb)
+          // Wrap callback to check enabled state
+          const wrappedCb = (payload) => {
+            if (bot.enabled) {
+              cb(payload)
+            }
+          }
+          mqttSubscriptions[topic].push(wrappedCb)
           resolve()
         } else {
-          mqttSubscriptions[topic] = [cb]
+          // Wrap callback to check enabled state
+          const wrappedCb = (payload) => {
+            if (bot.enabled) {
+              cb(payload)
+            }
+          }
+          mqttSubscriptions[topic] = [wrappedCb]
           playground.gates.mqtt.subscribe(topic, (err) => {
             if (err) {
               console.error(`[${bot.config.type}] failure subscribing to ${topic}`, err)
@@ -112,6 +167,11 @@ playground.bots.forEach(async bot => {
         qos = 0,
         retain = false,
       } = {}) => {
+        // Check if bot is enabled before publishing
+        if (!bot.enabled) {
+          console.log(`[${bot.config.type}] ${bot.name} is disabled, skipping publish to ${topic}`)
+          return
+        }
         if (!contentProcessors[content]?.write) {
           throw new Error(`Missing ${content} write transformation!`)
         }

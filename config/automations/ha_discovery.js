@@ -132,6 +132,35 @@ const haSelect = (
   }
 })
 
+const haAutomationSwitch = (
+  {
+    name,
+    bot_name,
+    config
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          command_topic: `homy/automation/${bot_name}/control`,
+          payload_on: JSON.stringify({ enabled: true }),
+          payload_off: JSON.stringify({ enabled: false }),
+          state_topic: `homy/automation/${bot_name}/status`,
+          state_on: 'on',
+          state_off: 'off',
+          value_template: `{{- 'on' if value_json.enabled else 'off' -}}`,
+          unique_id: `homy_automation_${bot_name}`,
+          ...config
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/switch/automation_${bot_name}/config`, retain: true } }
+  }
+})
+
 /**
  * @param {string} name
  * @param {string} feature
@@ -979,6 +1008,73 @@ const config = {
         value_template: '{{ value_json.reason }}',
         json_attributes_topic: `homy/automation/boiler_controller/status`
       },
+    }),
+
+    // Automation control switches
+    ...haAutomationSwitch({
+      name: 'boilerControllerAutomation',
+      bot_name: 'boilerController',
+      config: {
+        name: 'Автоматизация бойлер',
+        device: devices.boiler,
+        object_id: 'automation_boiler_controller',
+        icon: 'mdi:robot',
+      }
+    }),
+
+    ...haAutomationSwitch({
+      name: 'irrigationFlowerGroundAutomation',
+      bot_name: 'irrigationFlowerGroundSchedule',
+      config: {
+        name: 'Автоматизация растения',
+        device: devices.irrigation,
+        object_id: 'automation_irrigation_flower_ground',
+        icon: 'mdi:robot',
+      }
+    }),
+
+    ...haAutomationSwitch({
+      name: 'irrigationFlowerPotsAutomation',
+      bot_name: 'irrigationFlowerPotsSchedule',
+      config: {
+        name: 'Автоматизация саксии',
+        device: devices.irrigation,
+        object_id: 'automation_irrigation_flower_pots',
+        icon: 'mdi:robot',
+      }
+    }),
+
+    ...haAutomationSwitch({
+      name: 'irrigationGrassPergolaAutomation',
+      bot_name: 'irrigationGrassPergolaSchedule',
+      config: {
+        name: 'Автоматизация трева пергола',
+        device: devices.irrigation,
+        object_id: 'automation_irrigation_grass_pergola',
+        icon: 'mdi:robot',
+      }
+    }),
+
+    ...haAutomationSwitch({
+      name: 'irrigationGrassNorthWestAutomation',
+      bot_name: 'irrigationGrassNorthWestSchedule',
+      config: {
+        name: 'Автоматизация трева северозапад',
+        device: devices.irrigation,
+        object_id: 'automation_irrigation_grass_north_west',
+        icon: 'mdi:robot',
+      }
+    }),
+
+    ...haAutomationSwitch({
+      name: 'irrigationGrassWestCenterAutomation',
+      bot_name: 'irrigationGrassWestCenterSchedule',
+      config: {
+        name: 'Автоматизация трева запад-център',
+        device: devices.irrigation,
+        object_id: 'automation_irrigation_grass_west_center',
+        icon: 'mdi:robot',
+      }
     }),
   },
   gates: {
