@@ -51,7 +51,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -164,17 +167,20 @@
       },
       "targets": [
         {
-          "query": "SELECT last(\"controlMode\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter GROUP BY time(1m) fill(previous)",
+          "query": "SELECT last(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY controlMode",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
         }
       ],
       "title": "Control Mode",
-      "type": "timeseries"
+      "type": "state-timeline"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -183,12 +189,12 @@
           "mappings": [
             {
               "options": {
-                "0": {
+                "false": {
                   "color": "red",
                   "index": 0,
                   "text": "OFF"
                 },
-                "1": {
+                "true": {
                   "color": "green",
                   "index": 1,
                   "text": "ON"
@@ -238,7 +244,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(\"heaterState\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter",
+          "query": "SELECT last(heaterState) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -248,7 +254,10 @@
       "type": "stat"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -257,12 +266,12 @@
           "mappings": [
             {
               "options": {
-                "0": {
+                "false": {
                   "color": "red",
                   "index": 0,
                   "text": "OFF"
                 },
-                "1": {
+                "true": {
                   "color": "blue",
                   "index": 1,
                   "text": "ON"
@@ -312,7 +321,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(\"solarCirculation\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter",
+          "query": "SELECT last(\"outputs.p1\") FROM \"xymd1\" WHERE \"device.name\" = 'solar_heater' AND $timeFilter",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -322,7 +331,10 @@
       "type": "stat"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -366,7 +378,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(\"reason\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter",
+          "query": "SELECT last(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -390,7 +402,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -434,7 +449,7 @@
               },
               {
                 "color": "red",
-                "value": 70
+                "value": 85
               }
             ]
           },
@@ -531,28 +546,28 @@
       "targets": [
         {
           "alias": "Boiler Top (t2)",
-          "query": "SELECT mean(\"t2\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t2\") FROM \"xymd1\" WHERE \"device.name\" = 'solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
         },
         {
           "alias": "Boiler Bottom (t1)",
-          "query": "SELECT mean(\"t1\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t1\") FROM \"xymd1\" WHERE \"device.name\" = 'solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series"
         },
         {
           "alias": "Solar Panel (t3)",
-          "query": "SELECT mean(\"t3\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t3\") FROM \"xymd1\" WHERE \"device.name\" = 'solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series"
         },
         {
           "alias": "Service Room (t6)",
-          "query": "SELECT mean(\"t6\") FROM \"monitoring\" WHERE \"device.name\"='controlbox' AND $timeFilter GROUP BY time(1m) fill(linear)",
+          "query": "SELECT mean(\"t6\") FROM \"xymd1\" WHERE \"device.name\" = 'solar_heater' AND $timeFilter GROUP BY time(1m) fill(linear)",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series"
@@ -576,7 +591,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -648,7 +666,7 @@
       "targets": [
         {
           "alias": "Boiler Power",
-          "query": "SELECT mean(\"p\") FROM \"secondary\" WHERE \"device.name\"='boiler' AND $timeFilter GROUP BY time(5m) fill(linear)",
+          "query": "SELECT mean(\"p\") FROM \"raw\" WHERE \"device.name\" = 'boiler' AND $timeFilter GROUP BY time(5m) fill(linear)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -658,7 +676,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -729,7 +750,7 @@
       "targets": [
         {
           "alias": "Total Energy",
-          "query": "SELECT last(\"tot\") FROM \"secondary\" WHERE \"device.name\"='boiler' AND $timeFilter GROUP BY time(5m) fill(previous)",
+          "query": "SELECT last(\"tot\") FROM \"raw\" WHERE \"device.name\" = 'boiler' AND $timeFilter GROUP BY time(5m) fill(previous)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
@@ -753,7 +774,10 @@
       "type": "row"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -783,12 +807,12 @@
                 "value": [
                   {
                     "options": {
-                      "0": {
+                      "false": {
                         "color": "red",
                         "index": 0,
                         "text": "OFF"
                       },
-                      "1": {
+                      "true": {
                         "color": "green",
                         "index": 1,
                         "text": "ON"
@@ -815,12 +839,12 @@
                 "value": [
                   {
                     "options": {
-                      "0": {
+                      "false": {
                         "color": "red",
                         "index": 0,
                         "text": "OFF"
                       },
-                      "1": {
+                      "true": {
                         "color": "blue",
                         "index": 1,
                         "text": "ON"
@@ -857,7 +881,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT time, \"reason\", \"controlMode\", \"heaterState\", \"solarCirculation\", \"temp_top_seen\", \"temp_bottom_seen\", \"temp_solar_seen\" FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter ORDER BY time DESC LIMIT 50",
+          "query": "SELECT time, heaterState, manualOverrideExpires FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason, controlMode ORDER BY time DESC LIMIT 20",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -867,7 +891,10 @@
       "type": "table"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -914,7 +941,7 @@
       },
       "targets": [
         {
-          "query": "SELECT count(\"reason\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter GROUP BY \"reason\"",
+          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -924,7 +951,10 @@
       "type": "piechart"
     },
     {
-      "datasource": "InfluxDB",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -971,7 +1001,7 @@
       },
       "targets": [
         {
-          "query": "SELECT count(\"controlMode\") FROM \"automation_status\" WHERE \"service\"='boiler_controller' AND $timeFilter GROUP BY \"controlMode\"",
+          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY controlMode",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"

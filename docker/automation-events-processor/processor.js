@@ -22,14 +22,14 @@ function processAutomationDecisionEvent(data) {
     const point = new Point('automation_status')
         .tag('service', serviceName)
         .tag('type', 'status')
-        .stringField('reason', data.reason)
-        .stringField('controlMode', data.controlMode)
+        .tag('reason', data.reason)
+        .tag('controlMode', data.controlMode)
         .timestamp(new Date(data._tz))
 
     // Add optional fields if present
     if (data.manualOverrideExpires !== undefined) {
         if (data.manualOverrideExpires === null) {
-            point.stringField('manualOverrideExpires', 'null')
+            point.intField('manualOverrideExpires', 0)  // Use 0 for null timestamp
         } else {
             point.intField('manualOverrideExpires', data.manualOverrideExpires)
         }

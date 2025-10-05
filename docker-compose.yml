@@ -732,6 +732,28 @@ services:
       - ${DATA_PATH}/automations/state:/app/state
     user: ${PUID}:${PGID}
 
+  boiler-controller:
+    build: docker/automations
+    depends_on:
+      - broker
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - BROKER=mqtt://broker
+      - CONFIG=/etc/boiler-controller-config.js
+      - MQTT_CLIENT_ID=boiler-controller
+      - TZ=${TZ}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+      - ${CONFIG_PATH}/automations/boiler-controller-config.js:/etc/boiler-controller-config.js:ro
+      - ${DATA_PATH}/automations/state:/app/state
+    user: ${PUID}:${PGID}
+
   features:
     build: docker/automations
     depends_on:

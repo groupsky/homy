@@ -50,6 +50,40 @@ const contentProcessors = {
 }
 
 playground.gates.mqtt.setMaxListeners(1000)
+const mqttSubscriptions = {}
+playground.gates.mqtt.on('connect', () => {
+    console.log('Connected to MQTT broker at', mqttUrl)
+})
+playground.gates.mqtt.on('reconnect', () => {
+    console.log('Reconnecting to MQTT broker at', mqttUrl)
+})
+playground.gates.mqtt.on('disconnect', () => {
+    console.log('Disconnected from MQTT broker at', mqttUrl)
+})
+playground.gates.mqtt.on('close', () => {
+    console.log('Connection to MQTT broker closed', mqttUrl)
+})
+playground.gates.mqtt.on('offline', () => {
+    console.log('MQTT broker offline', mqttUrl)
+})
+playground.gates.mqtt.on('error', (err) => {
+    console.error('MQTT error', err)
+})
+playground.gates.mqtt.on('message', (msgTopic, payload) => {
+  if (!mqttSubscriptions[msgTopic]) {
+    console.warn('No handler for topic', msgTopic)
+    return
+  }
+
+  const payloadJson = JSON.parse(payload.toString())
+  for (const subscription of mqttSubscriptions[msgTopic]) {
+    try {
+      subscription(payloadJson)
+    } catch (err) {
+      console.error('Error in subscription handler for topic', msgTopic, err)
+    }
+  }
+})
 
 playground.bots.forEach(async bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
@@ -57,7 +91,12 @@ playground.bots.forEach(async bot => {
   const startParams = {
     mqtt: {
       subscribe: async (topic, cb) => new Promise((resolve, reject) => {
-        playground.gates.mqtt.on('connect', () => {
+        console.log(`[${bot.config.type}] subscribing to ${topic}`)
+        if (mqttSubscriptions[topic]) {
+          mqttSubscriptions[topic].push(cb)
+          resolve()
+        } else {
+          mqttSubscriptions[topic] = [cb]
           playground.gates.mqtt.subscribe(topic, (err) => {
             if (err) {
               console.error(`[${bot.config.type}] failure subscribing to ${topic}`, err)
@@ -66,14 +105,7 @@ playground.bots.forEach(async bot => {
             }
             resolve()
           })
-          playground.gates.mqtt.on('message', (msgTopic, payload) => {
-            if (topic !== msgTopic) {
-              return
-            }
-
-            cb(JSON.parse(payload.toString()))
-          })
-        })
+        }
       }),
       publish: async (topic, payload, {
         content = 'json',

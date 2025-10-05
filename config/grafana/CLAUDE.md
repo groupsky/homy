@@ -204,7 +204,35 @@ deleteRules:
     uid: alert-rule-uid-2
 ```
 
-Deploy this file, wait for Grafana to process the deletions, then remove the temporary file. This is the proper method for cleaning up orphaned alerts in Grafana v9.5+.
+**Step-by-Step Deletion Process:**
+1. **Identify alert UIDs**: Find the `uid` values from the alert YAML files you want to delete
+2. **Create permanent deletion file**: Create a `delete-[name]-alerts.yaml` file in `config/grafana/provisioning/alerting/`
+3. **Commit to git**: Keep the deletion file in version control as permanent record
+4. **Deploy**: Grafana will process the deletions automatically (usually within 30 seconds)
+5. **Verify deletion**: Check Grafana UI to confirm alerts are removed
+
+**Example workflow:**
+```bash
+# 1. Create permanent deletion file
+echo "apiVersion: 1
+
+deleteRules:
+  - orgId: 1
+    uid: problematic-alert-uid" > config/grafana/provisioning/alerting/delete-problematic-alerts.yaml
+
+# 2. Commit the deletion file
+git add config/grafana/provisioning/alerting/delete-problematic-alerts.yaml
+git commit -m "fix: remove problematic alert using proper deletion method"
+
+# 3. Deploy and verify in Grafana UI
+```
+
+**Important Notes:**
+- Keep deletion files in git history as permanent record of what was removed and when
+- Use descriptive filenames (e.g., `delete-boiler-manual-mode-alert.yaml`)
+- This is the proper method for cleaning up orphaned alerts in Grafana v9.5+
+- Simply removing alerts from their original YAML files will NOT delete them from Grafana
+- Deletion files remain active and will delete the alerts if they're ever re-created
 
 ### Dashboard Families
 
@@ -332,6 +360,11 @@ contactPoints:
 - Optimize complex queries with appropriate filtering
 - Use dashboard query inspector for troubleshooting
 - Implement query result caching where appropriate
+
+## System Documentation
+
+### InfluxDB Integration
+- **[Complete InfluxDB Schema](../../docs/influxdb-schema.md)** - Comprehensive documentation of all measurements, fields, tags, and data sources for effective dashboard and alert development
 
 ## Troubleshooting
 

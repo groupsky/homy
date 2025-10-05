@@ -117,6 +117,7 @@ const haSelect = (
       name: 'inputs/static', params: {
         payload: {
           command_topic: `${featuresPrefix}/${feature_type}/${feature}/set`,
+          command_template: `{"mode": "{{ value }}"}`,
           state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
           options,
           value_template: `{{ value_json.mode if value_json.mode is defined else 'automatic' }}`,

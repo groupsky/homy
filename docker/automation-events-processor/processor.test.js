@@ -71,11 +71,11 @@ describe('processAutomationDecisionEvent', () => {
     // Verify tags
     expect(point.tags.service).toBe('boiler_controller')
     expect(point.tags.type).toBe('status')
+    expect(point.tags.reason).toBe('comfort_heating_insufficient')
+    expect(point.tags.controlMode).toBe('automatic')
 
     // Verify decision fields
-    expect(point.fields.reason).toBe('"comfort_heating_insufficient"')
-    expect(point.fields.controlMode).toBe('"automatic"')
-    expect(point.fields.manualOverrideExpires).toBe('"null"')
+    expect(point.fields.manualOverrideExpires).toBe('0i')
 
     // Verify state fields
     expect(point.fields.heaterState).toBe('T')
@@ -97,7 +97,7 @@ describe('processAutomationDecisionEvent', () => {
     expect(points).toHaveLength(1)
     const point = points[0]
 
-    expect(point.fields.controlMode).toBe('"manual_on"')
+    expect(point.tags.controlMode).toBe('manual_on')
     expect(point.fields.manualOverrideExpires).toBe('1726411800000i')
     expect(point.fields.heaterState).toBe('T')
   })
@@ -108,7 +108,7 @@ describe('processAutomationDecisionEvent', () => {
     expect(points).toHaveLength(1)
     const point = points[0]
 
-    expect(point.fields.controlMode).toBe('"vacation_7d"')
+    expect(point.tags.controlMode).toBe('vacation_7d')
     expect(point.fields.manualOverrideExpires).toBe('1726909800000i')
     expect(point.fields.heaterState).toBe('F')
   })
@@ -119,7 +119,7 @@ describe('processAutomationDecisionEvent', () => {
     expect(points).toHaveLength(1)
     const point = points[0]
 
-    expect(point.fields.reason).toBe('"solar_priority_available"')
+    expect(point.tags.reason).toBe('solar_priority_available')
     expect(point.fields.heaterState).toBe('F')
     expect(point.fields.solarCirculation).toBe('T')
     expect(point.fields.temp_solar_seen).toBe(60.4)
@@ -132,7 +132,7 @@ describe('processAutomationDecisionEvent', () => {
     const point = points[0]
 
     expect(point.tags.service).toBe('irrigation_controller')
-    expect(point.fields.reason).toBe('"scheduled_watering_zone_1"')
+    expect(point.tags.reason).toBe('scheduled_watering_zone_1')
   })
 
   describe('event validation', () => {
@@ -164,8 +164,8 @@ describe('processAutomationDecisionEvent', () => {
       expect(points).toHaveLength(1)
 
       const point = points[0]
-      expect(point.fields.reason).toBe('"test_reason"')
-      expect(point.fields.controlMode).toBe('"automatic"')
+      expect(point.tags.reason).toBe('test_reason')
+      expect(point.tags.controlMode).toBe('automatic')
       // Optional fields should not be present
       expect(point.fields.heaterState).toBeUndefined()
       expect(point.fields.temp_top_seen).toBeUndefined()
@@ -195,12 +195,12 @@ describe('processAutomationDecisionEvent', () => {
   })
 
   describe('field type handling', () => {
-    it('should format string fields correctly', () => {
+    it('should format tag fields correctly', () => {
       const points = processAutomationDecisionEvent(SAMPLE_BOILER_DECISION_EVENT)
       const point = points[0]
 
-      expect(point.fields.reason).toBe('"comfort_heating_insufficient"')
-      expect(point.fields.controlMode).toBe('"automatic"')
+      expect(point.tags.reason).toBe('comfort_heating_insufficient')
+      expect(point.tags.controlMode).toBe('automatic')
     })
 
     it('should format boolean fields correctly', () => {
