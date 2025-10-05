@@ -75,7 +75,7 @@ describe('processAutomationDecisionEvent', () => {
     expect(point.tags.controlMode).toBe('automatic')
 
     // Verify decision fields
-    expect(point.fields.manualOverrideExpires).toBe('"null"')
+    expect(point.fields.manualOverrideExpires).toBe('0i')
 
     // Verify state fields
     expect(point.fields.heaterState).toBe('T')
