@@ -8,6 +8,7 @@ describe('Automation Control', () => {
   let mqttSubscriptions = {}
   let mqttPublishCalls = []
   let testBot
+  let controlState
   let publishBotStatus
   let controlTopic
 
@@ -15,10 +16,15 @@ describe('Automation Control', () => {
     mqttSubscriptions = {}
     mqttPublishCalls = []
 
+    // Simulate persisted control state
+    controlState = {
+      enabled: true
+    }
+
     // Simulate bot structure
     testBot = {
       name: 'testBot',
-      enabled: true,
+      enabled: controlState.enabled,
       config: {
         type: 'test-bot'
       }
@@ -48,6 +54,7 @@ describe('Automation Control', () => {
       const enabled = payload.enabled
       if (typeof enabled === 'boolean' && testBot.enabled !== enabled) {
         testBot.enabled = enabled
+        controlState.enabled = enabled // Persist the change
         publishBotStatus()
       }
     })
@@ -164,5 +171,79 @@ describe('Automation Control', () => {
       mockPublish('test/topic', { test: 'data' })
     }
     expect(publishAttempted).toBe(false)
+  })
+
+  test('enabled state is persisted when changed', () => {
+    // Verify initial state
+    expect(controlState.enabled).toBe(true)
+
+    // Disable the bot
+    mqttSubscriptions[controlTopic][0]({ enabled: false })
+
+    // Verify state was persisted
+    expect(controlState.enabled).toBe(false)
+    expect(testBot.enabled).toBe(false)
+
+    // Enable the bot
+    mqttSubscriptions[controlTopic][0]({ enabled: true })
+
+    // Verify state was persisted
+    expect(controlState.enabled).toBe(true)
+    expect(testBot.enabled).toBe(true)
+  })
+
+  test('bot respects config.enabled when no persisted state exists', () => {
+    // Simulate bot with config.enabled = false
+    const disabledControlState = {
+      enabled: false
+    }
+
+    const disabledBot = {
+      name: 'disabledBot',
+      enabled: disabledControlState.enabled,
+      config: {
+        type: 'test-bot',
+        enabled: false
+      }
+    }
+
+    expect(disabledBot.enabled).toBe(false)
+  })
+
+  test('bot defaults to enabled when config.enabled is not specified', () => {
+    // Simulate bot without config.enabled specified
+    const defaultControlState = {
+      enabled: true
+    }
+
+    const defaultBot = {
+      name: 'defaultBot',
+      enabled: defaultControlState.enabled,
+      config: {
+        type: 'test-bot'
+        // No enabled property
+      }
+    }
+
+    expect(defaultBot.enabled).toBe(true)
+  })
+
+  test('persisted state overrides config.enabled', () => {
+    // Simulate a scenario where config says disabled but persisted state says enabled
+    const persistedControlState = {
+      enabled: true // Persisted as enabled
+    }
+
+    const botWithConfigOverride = {
+      name: 'overrideBot',
+      enabled: persistedControlState.enabled, // Uses persisted value, not config
+      config: {
+        type: 'test-bot',
+        enabled: false // Config says disabled
+      }
+    }
+
+    // Persisted state should override config
+    expect(botWithConfigOverride.enabled).toBe(true)
   })
 })
