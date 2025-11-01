@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM node:18.20.8-alpine AS base
+FROM node:25.1.0-alpine AS base
 
 # Install tools, create app dir, add user and set rights
 RUN set -ex && \
