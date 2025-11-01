@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v5.0.0
 
       - name: Setup Node.js from .nvmrc
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: 'docker/automation-events-processor/.nvmrc'
           cache: 'npm'
