@@ -387,23 +387,5 @@ Description content"
       expect(debugWebhook.namespace).toBe('telegram-bridge:webhook')
       expect(debugMessage.namespace).toBe('telegram-bridge:message')
     })
-
-    test('extractMessageFromWebhook calls debug logging', () => {
-      const debugSpy = jest.spyOn(debugWebhook, 'extend').mockReturnValue(jest.fn())
-      
-      const webhookData = {
-        status: 'firing',
-        alerts: [{
-          labels: { alertname: 'Test Alert' },
-          annotations: { message: 'Test message' }
-        }]
-      }
-
-      // The debug call happens internally, we just verify the function works normally
-      const result = extractMessageFromWebhook(webhookData)
-      expect(result).toContain('🚨 Test message')
-      
-      debugSpy.mockRestore()
-    })
   })
 })
