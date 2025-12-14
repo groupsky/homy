@@ -88,8 +88,20 @@ playground.gates.mqtt.on('message', (msgTopic, payload) => {
 playground.bots.forEach(async bot => {
   console.log(`[${bot.config.type}] starting ${bot.name}`)
 
-  // Track bot enabled state
-  bot.enabled = true
+  // Initialize bot control state with persistence
+  const controlStateKey = `${bot.name}__control`
+  const defaultControlState = {
+    enabled: typeof bot.config.enabled === 'boolean' ? bot.config.enabled : true
+  }
+  const controlState = await playground.gates.state.createBotState(
+    controlStateKey,
+    defaultControlState,
+    1, // version
+    null // no migration needed
+  )
+
+  // Use reactive state for enabled
+  bot.enabled = controlState.enabled
 
   // Publish bot status
   const publishBotStatus = () => {
@@ -123,6 +135,7 @@ playground.bots.forEach(async bot => {
     const enabled = payload.enabled
     if (typeof enabled === 'boolean' && bot.enabled !== enabled) {
       bot.enabled = enabled
+      controlState.enabled = enabled // Persist the change
       console.log(`[${bot.config.type}] ${bot.name} ${enabled ? 'enabled' : 'disabled'}`)
       publishBotStatus()
     }
