@@ -1,129 +1,17 @@
 version: 2
 
 updates:
-  # requires dependabot/dependabot-core#390
-  # - package-ecosystem: "docker"
-  #  <<: *shared
-  #   directory: "/"
-
+  # Infrastructure Services - Base system components
   - package-ecosystem: "docker"
-    directory: "/docker/automations"
+    directory: "/docker/nginx"
     schedule:
       interval: "monthly"
     reviewers:
       - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/automations"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/automation-events-processor"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/automation-events-processor"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/dmx-driver"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/dmx-driver"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/dockergen"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/grafana"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/historian"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/historian"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/homeassistant"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/influxdb"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/modbus-serial"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/modbus-serial"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/mongo"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/mongo-express"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/docker/mosquitto"
@@ -131,69 +19,54 @@ updates:
       interval: "monthly"
     reviewers:
       - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
-    directory: "/docker/mqtt-influx"
+    directory: "/docker/influxdb"
     schedule:
       interval: "monthly"
     reviewers:
       - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/mqtt-influx"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
-    directory: "/docker/sunseeker-monitoring"
+    directory: "/docker/grafana"
     schedule:
       interval: "monthly"
     reviewers:
       - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/sunseeker-monitoring"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
-    directory: "/docker/mqtt-mongo"
+    directory: "/docker/mongo"
     schedule:
       interval: "monthly"
     reviewers:
       - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/mqtt-mongo"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
-    directory: "/docker/nginx"
+    directory: "/docker/mongo-express"
     schedule:
       interval: "monthly"
     reviewers:
       - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/nodered"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/nodered"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/docker/telegraf"
@@ -201,41 +74,10 @@ updates:
       interval: "monthly"
     reviewers:
       - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/telegram-bridge"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/telegram-bridge"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/test"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/test"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/volman"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/docker/wireguard"
@@ -243,7 +85,300 @@ updates:
       interval: "monthly"
     reviewers:
       - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
 
+  - package-ecosystem: "docker"
+    directory: "/docker/dockergen"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/volman"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      infrastructure:
+        patterns:
+          - "*"
+
+  # MQTT Services - Message processing and data pipeline
+  - package-ecosystem: "docker"
+    directory: "/docker/automations"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/automations"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/automation-events-processor"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/automation-events-processor"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/mqtt-influx"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/mqtt-influx"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/mqtt-mongo"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/mqtt-mongo"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  # Hardware Integration - Device communication services
+  - package-ecosystem: "docker"
+    directory: "/docker/modbus-serial"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/modbus-serial"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/dmx-driver"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/dmx-driver"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/telegram-bridge"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/telegram-bridge"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  # Monitoring Services - Data collection and analysis
+  - package-ecosystem: "docker"
+    directory: "/docker/historian"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      monitoring:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/historian"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      monitoring:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/sunseeker-monitoring"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      monitoring:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/sunseeker-monitoring"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      monitoring:
+        patterns:
+          - "*"
+
+  # Home Automation - User interface and automation platform
+  - package-ecosystem: "docker"
+    directory: "/docker/homeassistant"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      home-automation:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/nodered"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      home-automation:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/nodered"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      home-automation:
+        patterns:
+          - "*"
+
+  # Development and Testing
+  - package-ecosystem: "docker"
+    directory: "/docker/test"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      development:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/test"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      development:
+        patterns:
+          - "*"
+
+  # GitHub Actions - CI/CD workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+
+  # Git Submodules
   - package-ecosystem: "gitsubmodule"
     directory: "/"
     schedule:
