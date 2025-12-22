@@ -1,17 +1,20 @@
-FROM node:18-alpine
+FROM ghcr.io/groupsky/homy/node:18.20.8-alpine
 
-WORKDIR /app
+RUN set -ex && \
+    apk add --no-cache build-base && \
+    mkdir -p /usr/src/app && \
+    deluser --remove-home node && \
+    adduser -h /usr/src/app -D -H node-app -u 1000 && \
+    chown -R node-app:node-app /usr/src/app
 
-# Copy package files
+WORKDIR /usr/src/app
+
 COPY package*.json ./
 
-# Install dependencies
 RUN npm ci --omit=dev
 
-# Copy application code
 COPY . .
 
-# Run as non-root user
-USER node
+USER node-app
 
 CMD ["npm", "start"]

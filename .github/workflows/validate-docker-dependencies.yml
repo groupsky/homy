@@ -1,0 +1,99 @@
+name: Validate Docker Dependencies
+
+on:
+  push:
+    paths:
+      - 'docker/*/Dockerfile'
+      - 'base-images/**'
+      - '.github/workflows/validate-docker-dependencies.yml'
+  pull_request:
+    paths:
+      - 'docker/*/Dockerfile'
+      - 'base-images/**'
+      - '.github/workflows/validate-docker-dependencies.yml'
+
+jobs:
+  validate-base-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5.0.0
+
+      - name: Validate Docker service dependencies
+        run: |
+          echo "🔍 Validating Docker service dependencies..."
+          echo ""
+
+          # Define allowed base image patterns
+          ALLOWED_PATTERNS=(
+            "ghcr.io/groupsky/homy/"      # Our base images
+            "ghcr.io/home-assistant/"      # Home Assistant (official)
+            "nginx:"                       # Nginx
+            "mongo-express:"               # Mongo Express
+            "linuxserver/wireguard:"       # Wireguard
+            "jwilder/docker-gen:"          # Docker Gen
+            "alpine:"                      # Alpine (for volman)
+            "ubuntu:"                      # Ubuntu (for simple containers)
+          )
+
+          VALIDATION_FAILED=0
+
+          # Check each Dockerfile in docker/
+          for dockerfile in docker/*/Dockerfile; do
+            echo "📄 Checking $dockerfile"
+
+            # Extract FROM lines (skip multi-stage aliases)
+            FROM_LINES=$(grep "^FROM " "$dockerfile" | grep -v " AS " || true)
+
+            if [ -z "$FROM_LINES" ]; then
+              echo "  ⚠️  No FROM lines found"
+              continue
+            fi
+
+            # Check each FROM line
+            while IFS= read -r from_line; do
+              IMAGE=$(echo "$from_line" | awk '{print $2}')
+              echo "    Image: $IMAGE"
+
+              # Check if image matches any allowed pattern
+              MATCHES_PATTERN=false
+              for pattern in "${ALLOWED_PATTERNS[@]}"; do
+                if echo "$IMAGE" | grep -q "^$pattern"; then
+                  MATCHES_PATTERN=true
+                  break
+                fi
+              done
+
+              # Check if it's a multi-stage reference
+              if echo "$IMAGE" | grep -qE "^(base|build|BUILD)$"; then
+                MATCHES_PATTERN=true
+              fi
+
+              if [ "$MATCHES_PATTERN" = false ]; then
+                echo "    ❌ INVALID: Image does not match allowed patterns"
+                echo "       Expected: ghcr.io/groupsky/homy/* or approved external images"
+                echo "       Got: $IMAGE"
+                VALIDATION_FAILED=1
+              else
+                echo "    ✅ Valid"
+              fi
+            done <<< "$FROM_LINES"
+
+            echo ""
+          done
+
+          if [ $VALIDATION_FAILED -eq 1 ]; then
+            echo ""
+            echo "❌ Validation failed!"
+            echo ""
+            echo "Docker services should use:"
+            echo "  • ghcr.io/groupsky/homy/node:* for Node.js services"
+            echo "  • ghcr.io/groupsky/homy/* for other base images"
+            echo "  • Approved external images (nginx, wireguard, etc.)"
+            echo ""
+            echo "If you need to allow a new external image pattern, update"
+            echo "ALLOWED_PATTERNS in .github/workflows/validate-docker-dependencies.yml"
+            exit 1
+          fi
+
+          echo "✅ All Docker service dependencies are valid!"

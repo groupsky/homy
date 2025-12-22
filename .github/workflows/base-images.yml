@@ -1,0 +1,134 @@
+name: Build Base Images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'base-images/**'
+      - '.github/workflows/base-images.yml'
+  pull_request:
+    paths:
+      - 'base-images/**'
+      - '.github/workflows/base-images.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5.0.0
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract versions from Dockerfiles
+        id: versions
+        run: |
+          cd base-images
+
+          # Extract version from each Dockerfile and set as output
+          NODE_18=$(grep "FROM node:" node-18-alpine/Dockerfile | cut -d: -f2)
+          NODE_22=$(grep "FROM node:" node-22-alpine/Dockerfile | cut -d: -f2)
+          NODE_UBUNTU=$(grep "FROM node:" node-ubuntu/Dockerfile | cut -d: -f2)
+          GRAFANA=$(grep "FROM grafana/grafana:" grafana/Dockerfile | cut -d: -f2)
+          INFLUXDB=$(grep "FROM influxdb:" influxdb/Dockerfile | cut -d: -f2)
+          MOSQUITTO=$(grep "FROM eclipse-mosquitto:" mosquitto/Dockerfile | cut -d: -f2)
+          MONGO=$(grep "FROM mongo:" mongo/Dockerfile | cut -d: -f2)
+          NODERED=$(grep "FROM nodered/node-red:" nodered/Dockerfile | cut -d: -f2)
+          TELEGRAF=$(grep "FROM telegraf:" telegraf/Dockerfile | cut -d: -f2)
+
+          # Output versions for use in build step
+          echo "node_18=$NODE_18" >> $GITHUB_OUTPUT
+          echo "node_22=$NODE_22" >> $GITHUB_OUTPUT
+          echo "node_ubuntu=$NODE_UBUNTU" >> $GITHUB_OUTPUT
+          echo "grafana=$GRAFANA" >> $GITHUB_OUTPUT
+          echo "influxdb=$INFLUXDB" >> $GITHUB_OUTPUT
+          echo "mosquitto=$MOSQUITTO" >> $GITHUB_OUTPUT
+          echo "mongo=$MONGO" >> $GITHUB_OUTPUT
+          echo "nodered=$NODERED" >> $GITHUB_OUTPUT
+          echo "telegraf=$TELEGRAF" >> $GITHUB_OUTPUT
+
+          # Log extracted versions
+          echo "Extracted versions:"
+          echo "  node-18-alpine: $NODE_18"
+          echo "  node-22-alpine: $NODE_22"
+          echo "  node-ubuntu: $NODE_UBUNTU"
+          echo "  grafana: $GRAFANA"
+          echo "  influxdb: $INFLUXDB"
+          echo "  mosquitto: $MOSQUITTO"
+          echo "  mongo: $MONGO"
+          echo "  nodered: $NODERED"
+          echo "  telegraf: $TELEGRAF"
+
+      - name: Build base images (PR)
+        if: github.event_name == 'pull_request'
+        uses: docker/bake-action@v5
+        with:
+          workdir: base-images
+          files: docker-bake.hcl
+          push: false
+          set: |
+            node-18-alpine.tags=ghcr.io/groupsky/homy/node:${{ steps.versions.outputs.node_18 }}
+            node-22-alpine.tags=ghcr.io/groupsky/homy/node:${{ steps.versions.outputs.node_22 }}
+            node-ubuntu.tags=ghcr.io/groupsky/homy/node-ubuntu:${{ steps.versions.outputs.node_ubuntu }}
+            grafana.tags=ghcr.io/groupsky/homy/grafana:${{ steps.versions.outputs.grafana }}
+            influxdb.tags=ghcr.io/groupsky/homy/influxdb:${{ steps.versions.outputs.influxdb }}
+            mosquitto.tags=ghcr.io/groupsky/homy/mosquitto:${{ steps.versions.outputs.mosquitto }}
+            mongo.tags=ghcr.io/groupsky/homy/mongo:${{ steps.versions.outputs.mongo }}
+            nodered.tags=ghcr.io/groupsky/homy/nodered:${{ steps.versions.outputs.nodered }}
+            telegraf.tags=ghcr.io/groupsky/homy/telegraf:${{ steps.versions.outputs.telegraf }}
+            *.cache-from=type=gha,scope=base-images
+            *.cache-to=type=gha,mode=max,scope=base-images,ignore-error=true
+
+      - name: Build and push base images (master)
+        if: github.event_name != 'pull_request'
+        uses: docker/bake-action@v5
+        with:
+          workdir: base-images
+          files: docker-bake.hcl
+          push: true
+          set: |
+            node-18-alpine.tags=ghcr.io/groupsky/homy/node:${{ steps.versions.outputs.node_18 }}
+            node-22-alpine.tags=ghcr.io/groupsky/homy/node:${{ steps.versions.outputs.node_22 }}
+            node-ubuntu.tags=ghcr.io/groupsky/homy/node-ubuntu:${{ steps.versions.outputs.node_ubuntu }}
+            grafana.tags=ghcr.io/groupsky/homy/grafana:${{ steps.versions.outputs.grafana }}
+            influxdb.tags=ghcr.io/groupsky/homy/influxdb:${{ steps.versions.outputs.influxdb }}
+            mosquitto.tags=ghcr.io/groupsky/homy/mosquitto:${{ steps.versions.outputs.mosquitto }}
+            mongo.tags=ghcr.io/groupsky/homy/mongo:${{ steps.versions.outputs.mongo }}
+            nodered.tags=ghcr.io/groupsky/homy/nodered:${{ steps.versions.outputs.nodered }}
+            telegraf.tags=ghcr.io/groupsky/homy/telegraf:${{ steps.versions.outputs.telegraf }}
+            *.cache-from=type=gha,scope=base-images
+            *.cache-to=type=gha,mode=max,scope=base-images,ignore-error=true
+
+      - name: Verify images were built
+        run: |
+          echo "✅ Base images build completed successfully"
+          echo ""
+          echo "Images are available at:"
+          echo "  ghcr.io/groupsky/homy/node:18.20.8-alpine"
+          echo "  ghcr.io/groupsky/homy/node:22-alpine"
+          echo "  ghcr.io/groupsky/homy/node-ubuntu:18.12.1"
+          echo "  ghcr.io/groupsky/homy/grafana:9.5.21"
+          echo "  ghcr.io/groupsky/homy/influxdb:1.11.8-alpine"
+          echo "  ghcr.io/groupsky/homy/mosquitto:2.0.22"
+          echo "  ghcr.io/groupsky/homy/mongo:5.0.6"
+          echo "  ghcr.io/groupsky/homy/nodered:3.1.15-18"
+          echo "  ghcr.io/groupsky/homy/telegraf:1.35.4-alpine"

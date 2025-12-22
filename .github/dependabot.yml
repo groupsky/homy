@@ -1,6 +1,106 @@
 version: 2
 
 updates:
+  # Base Images - Container base images published to GHCR
+  - package-ecosystem: "docker"
+    directory: "/base-images/node-18-alpine"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/node-22-alpine"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/grafana"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/influxdb"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/mosquitto"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/mongo"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/telegraf"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/node-ubuntu"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/nodered"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
   # Infrastructure Services - Base system components
   - package-ecosystem: "docker"
     directory: "/docker/nginx"

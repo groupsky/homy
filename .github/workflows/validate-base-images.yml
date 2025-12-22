@@ -1,0 +1,154 @@
+name: Validate Base Images Configuration
+
+on:
+  push:
+    paths:
+      - 'base-images/**'
+      - '.github/dependabot.yml'
+      - '.github/workflows/base-images.yml'
+      - '.github/workflows/validate-base-images.yml'
+  pull_request:
+    paths:
+      - 'base-images/**'
+      - '.github/dependabot.yml'
+      - '.github/workflows/base-images.yml'
+      - '.github/workflows/validate-base-images.yml'
+
+jobs:
+  validate-configuration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5.0.0
+
+      - name: Validate base images are properly configured
+        run: |
+          echo "🔍 Validating base images configuration..."
+          echo ""
+
+          VALIDATION_FAILED=0
+
+          # Get list of base image directories
+          BASE_IMAGE_DIRS=($(find base-images -maxdepth 1 -mindepth 1 -type d | sort))
+
+          if [ ${#BASE_IMAGE_DIRS[@]} -eq 0 ]; then
+            echo "❌ No base image directories found in base-images/"
+            exit 1
+          fi
+
+          echo "Found ${#BASE_IMAGE_DIRS[@]} base image directories:"
+          for dir in "${BASE_IMAGE_DIRS[@]}"; do
+            echo "  • $dir"
+          done
+          echo ""
+
+          # 1. Check each base image has a Dockerfile
+          echo "📋 Checking Dockerfiles..."
+          for dir in "${BASE_IMAGE_DIRS[@]}"; do
+            if [ ! -f "$dir/Dockerfile" ]; then
+              echo "  ❌ Missing Dockerfile in $dir"
+              VALIDATION_FAILED=1
+            else
+              echo "  ✅ $dir/Dockerfile exists"
+            fi
+          done
+          echo ""
+
+          # 2. Check Dependabot configuration
+          echo "📋 Checking Dependabot configuration..."
+          for dir in "${BASE_IMAGE_DIRS[@]}"; do
+            DIR_PATH="/$dir"
+            if ! grep -q "directory: \"$DIR_PATH\"" .github/dependabot.yml; then
+              echo "  ❌ Missing Dependabot entry for $dir"
+              echo "     Add this to .github/dependabot.yml:"
+              echo "     - package-ecosystem: \"docker\""
+              echo "       directory: \"$DIR_PATH\""
+              VALIDATION_FAILED=1
+            else
+              echo "  ✅ $dir configured in Dependabot"
+            fi
+          done
+          echo ""
+
+          # 3. Check docker-bake.hcl configuration
+          echo "📋 Checking docker-bake.hcl configuration..."
+          for dir in "${BASE_IMAGE_DIRS[@]}"; do
+            BASE_NAME=$(basename "$dir")
+            if ! grep -q "\"$BASE_NAME\"" base-images/docker-bake.hcl; then
+              echo "  ❌ Missing target '$BASE_NAME' in docker-bake.hcl"
+              VALIDATION_FAILED=1
+            else
+              echo "  ✅ $BASE_NAME target in docker-bake.hcl"
+            fi
+          done
+          echo ""
+
+          # 4. Check base-images workflow extracts versions
+          echo "📋 Checking base-images workflow version extraction..."
+          for dir in "${BASE_IMAGE_DIRS[@]}"; do
+            BASE_NAME=$(basename "$dir")
+            WORKFLOW_VAR=$(echo "$BASE_NAME" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
+
+            # Check if workflow extracts version for this base image
+            if ! grep -q "$BASE_NAME" .github/workflows/base-images.yml; then
+              echo "  ❌ Workflow missing version extraction for $BASE_NAME"
+              VALIDATION_FAILED=1
+            else
+              echo "  ✅ Workflow extracts version for $BASE_NAME"
+            fi
+          done
+          echo ""
+
+          # 5. Check README documents all base images
+          echo "📋 Checking README documentation..."
+          if [ -f base-images/README.md ]; then
+            for dir in "${BASE_IMAGE_DIRS[@]}"; do
+              BASE_NAME=$(basename "$dir")
+              if ! grep -q "$BASE_NAME" base-images/README.md; then
+                echo "  ⚠️  Base image '$BASE_NAME' not documented in README"
+                # This is a warning, not a failure
+              else
+                echo "  ✅ $BASE_NAME documented in README"
+              fi
+            done
+          else
+            echo "  ⚠️  base-images/README.md not found"
+          fi
+          echo ""
+
+          # 6. Validate Dockerfile FROM lines can be parsed
+          echo "📋 Validating Dockerfile FROM lines..."
+          for dir in "${BASE_IMAGE_DIRS[@]}"; do
+            dockerfile="$dir/Dockerfile"
+            if [ -f "$dockerfile" ]; then
+              FROM_LINE=$(grep "^FROM " "$dockerfile" | head -1)
+              if [ -z "$FROM_LINE" ]; then
+                echo "  ❌ No FROM line in $dockerfile"
+                VALIDATION_FAILED=1
+              else
+                VERSION=$(echo "$FROM_LINE" | awk '{print $2}' | cut -d: -f2)
+                if [ -z "$VERSION" ]; then
+                  echo "  ❌ Cannot extract version from $dockerfile"
+                  echo "     FROM line: $FROM_LINE"
+                  VALIDATION_FAILED=1
+                else
+                  echo "  ✅ $dir extracts version: $VERSION"
+                fi
+              fi
+            fi
+          done
+          echo ""
+
+          if [ $VALIDATION_FAILED -eq 1 ]; then
+            echo "❌ Base images validation failed!"
+            echo ""
+            echo "Please ensure:"
+            echo "  1. Each base-images/* directory has a Dockerfile"
+            echo "  2. Each base image is configured in .github/dependabot.yml"
+            echo "  3. Each base image has a target in base-images/docker-bake.hcl"
+            echo "  4. Each base image has version extraction in .github/workflows/base-images.yml"
+            echo "  5. Each Dockerfile has a valid FROM line with version"
+            exit 1
+          fi
+
+          echo "✅ All base images are properly configured!"
