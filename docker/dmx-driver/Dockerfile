@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM ghcr.io/groupsky/homy/node-ubuntu:18.12.1 AS base
+FROM node:18.12.1 AS base
 
 RUN set -ex && \
     mkdir -p /usr/src/app && \

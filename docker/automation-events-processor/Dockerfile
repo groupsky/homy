@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/node:18.20.8-alpine
+FROM node:18.20.8-alpine
 
 RUN set -ex && \
     apk add --no-cache build-base && \
