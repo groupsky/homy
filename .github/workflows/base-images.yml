@@ -13,42 +13,112 @@ on:
   workflow_dispatch:
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed base images
+        id: set-matrix
+        run: |
+          # Define all base images with their metadata
+          declare -A all_images=(
+            ["node-18-alpine"]="node: ghcr.io/groupsky/homy/node"
+            ["node-22-alpine"]="node: ghcr.io/groupsky/homy/node"
+            ["node-ubuntu"]="node: ghcr.io/groupsky/homy/node-ubuntu"
+            ["grafana"]="grafana/grafana: ghcr.io/groupsky/homy/grafana"
+            ["influxdb"]="influxdb: ghcr.io/groupsky/homy/influxdb"
+            ["mosquitto"]="eclipse-mosquitto: ghcr.io/groupsky/homy/mosquitto"
+            ["mongo"]="mongo: ghcr.io/groupsky/homy/mongo"
+            ["nodered"]="nodered/node-red: ghcr.io/groupsky/homy/nodered"
+            ["telegraf"]="telegraf: ghcr.io/groupsky/homy/telegraf"
+          )
+
+          # Determine which images to build
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual trigger: build all images
+            echo "Manual workflow trigger - building all images"
+            IMAGES_TO_BUILD=("${!all_images[@]}")
+          else
+            # Detect changed files
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              BASE_REF="${{ github.event.pull_request.base.sha }}"
+            else
+              # For push events, compare with previous commit
+              BASE_REF="HEAD^"
+            fi
+
+            # Get changed files in base-images directory
+            CHANGED_FILES=$(git diff --name-only "$BASE_REF" HEAD -- base-images/)
+
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+
+            # Check if workflow file changed - rebuild all if so
+            WORKFLOW_CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- .github/workflows/base-images.yml)
+
+            IMAGES_TO_BUILD=()
+
+            if [ -n "$WORKFLOW_CHANGED" ]; then
+              echo "Workflow file changed - building all images"
+              IMAGES_TO_BUILD=("${!all_images[@]}")
+            else
+              # Find which base image directories have changes
+              for dir in "${!all_images[@]}"; do
+                if echo "$CHANGED_FILES" | grep -q "^base-images/$dir/"; then
+                  echo "Detected changes in $dir"
+                  IMAGES_TO_BUILD+=("$dir")
+                fi
+              done
+            fi
+          fi
+
+          # Build JSON matrix
+          if [ ${#IMAGES_TO_BUILD[@]} -eq 0 ]; then
+            echo "No base images changed"
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Building ${#IMAGES_TO_BUILD[@]} image(s): ${IMAGES_TO_BUILD[*]}"
+
+            MATRIX_JSON="{\"include\":["
+            FIRST=true
+
+            for dir in "${IMAGES_TO_BUILD[@]}"; do
+              IFS=' ' read -r pattern ghcr_name <<< "${all_images[$dir]}"
+
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                MATRIX_JSON="$MATRIX_JSON,"
+              fi
+
+              MATRIX_JSON="$MATRIX_JSON{\"name\":\"$dir\",\"upstream_pattern\":\"$pattern\",\"ghcr_name\":\"$ghcr_name\"}"
+            done
+
+            MATRIX_JSON="$MATRIX_JSON]}"
+
+            echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            echo "Generated matrix: $MATRIX_JSON"
+          fi
+
   build-and-push:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     strategy:
-      matrix:
-        include:
-          - name: node-18-alpine
-            upstream_pattern: "node:"
-            ghcr_name: ghcr.io/groupsky/homy/node
-          - name: node-22-alpine
-            upstream_pattern: "node:"
-            ghcr_name: ghcr.io/groupsky/homy/node
-          - name: node-ubuntu
-            upstream_pattern: "node:"
-            ghcr_name: ghcr.io/groupsky/homy/node-ubuntu
-          - name: grafana
-            upstream_pattern: "grafana/grafana:"
-            ghcr_name: ghcr.io/groupsky/homy/grafana
-          - name: influxdb
-            upstream_pattern: "influxdb:"
-            ghcr_name: ghcr.io/groupsky/homy/influxdb
-          - name: mosquitto
-            upstream_pattern: "eclipse-mosquitto:"
-            ghcr_name: ghcr.io/groupsky/homy/mosquitto
-          - name: mongo
-            upstream_pattern: "mongo:"
-            ghcr_name: ghcr.io/groupsky/homy/mongo
-          - name: nodered
-            upstream_pattern: "nodered/node-red:"
-            ghcr_name: ghcr.io/groupsky/homy/nodered
-          - name: telegraf
-            upstream_pattern: "telegraf:"
-            ghcr_name: ghcr.io/groupsky/homy/telegraf
+      matrix: ${{ fromJSON(needs.detect-changes.outputs.matrix) }}
 
     steps:
       - name: Checkout code
