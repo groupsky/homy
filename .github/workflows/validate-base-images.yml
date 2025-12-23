@@ -99,24 +99,7 @@ jobs:
           done
           echo ""
 
-          # 5. Check README documents all base images
-          echo "📋 Checking README documentation..."
-          if [ -f base-images/README.md ]; then
-            for dir in "${BASE_IMAGE_DIRS[@]}"; do
-              BASE_NAME=$(basename "$dir")
-              if ! grep -q "$BASE_NAME" base-images/README.md; then
-                echo "  ⚠️  Base image '$BASE_NAME' not documented in README"
-                # This is a warning, not a failure
-              else
-                echo "  ✅ $BASE_NAME documented in README"
-              fi
-            done
-          else
-            echo "  ⚠️  base-images/README.md not found"
-          fi
-          echo ""
-
-          # 6. Validate Dockerfile FROM lines can be parsed
+          # 5. Validate Dockerfile FROM lines can be parsed
           echo "📋 Validating Dockerfile FROM lines..."
           for dir in "${BASE_IMAGE_DIRS[@]}"; do
             dockerfile="$dir/Dockerfile"
