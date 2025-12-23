@@ -1,6 +1,7 @@
 #### Stage BASE ########################################################################################################
 FROM node:18.12.1 AS base
 
+# Install tools, create app dir, add user and set rights
 RUN set -ex && \
     mkdir -p /usr/src/app && \
     deluser --remove-home node && \
@@ -11,13 +12,16 @@ RUN set -ex && \
       libftdi1 && \
     rm -rf /var/lib/apt/lists/*
 
+# Set work directory
 WORKDIR /usr/src/app
 
+# copy package.json and lock file
 COPY package*.json ./
 
 #### Stage BUILD #######################################################################################################
 FROM base AS build
 
+# Install Build tools
 RUN apt-get update && apt-get install -y \
     udev python3 \
     libftdi-dev && \

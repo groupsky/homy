@@ -1,20 +1,17 @@
-FROM node:18.20.8-alpine
+FROM node:18-alpine
 
-RUN set -ex && \
-    apk add --no-cache build-base && \
-    mkdir -p /usr/src/app && \
-    deluser --remove-home node && \
-    adduser -h /usr/src/app -D -H node-app -u 1000 && \
-    chown -R node-app:node-app /usr/src/app
+WORKDIR /app
 
-WORKDIR /usr/src/app
-
+# Copy package files
 COPY package*.json ./
 
+# Install dependencies
 RUN npm ci --omit=dev
 
+# Copy application code
 COPY . .
 
-USER node-app
+# Run as non-root user
+USER node
 
 CMD ["npm", "start"]
