@@ -12,150 +12,90 @@ on:
       - '.github/workflows/base-images.yml'
   workflow_dispatch:
 
-env:
-  # Define all base images in one place
-  BASE_IMAGES_MATRIX: |
-    {
-      "include": [
-        {
-          "name": "node-18-alpine",
-          "upstream_pattern": "node:",
-          "ghcr_name": "ghcr.io/groupsky/homy/node"
-        },
-        {
-          "name": "node-22-alpine",
-          "upstream_pattern": "node:",
-          "ghcr_name": "ghcr.io/groupsky/homy/node"
-        },
-        {
-          "name": "node-ubuntu",
-          "upstream_pattern": "node:",
-          "ghcr_name": "ghcr.io/groupsky/homy/node-ubuntu"
-        },
-        {
-          "name": "grafana",
-          "upstream_pattern": "grafana/grafana:",
-          "ghcr_name": "ghcr.io/groupsky/homy/grafana"
-        },
-        {
-          "name": "influxdb",
-          "upstream_pattern": "influxdb:",
-          "ghcr_name": "ghcr.io/groupsky/homy/influxdb"
-        },
-        {
-          "name": "mosquitto",
-          "upstream_pattern": "eclipse-mosquitto:",
-          "ghcr_name": "ghcr.io/groupsky/homy/mosquitto"
-        },
-        {
-          "name": "mongo",
-          "upstream_pattern": "mongo:",
-          "ghcr_name": "ghcr.io/groupsky/homy/mongo"
-        },
-        {
-          "name": "nodered",
-          "upstream_pattern": "nodered/node-red:",
-          "ghcr_name": "ghcr.io/groupsky/homy/nodered"
-        },
-        {
-          "name": "telegraf",
-          "upstream_pattern": "telegraf:",
-          "ghcr_name": "ghcr.io/groupsky/homy/telegraf"
-        }
-      ]
-    }
-
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5.0.0
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed base images
-        id: set-matrix
-        run: |
-          # Parse the matrix definition
-          ALL_IMAGES='${{ env.BASE_IMAGES_MATRIX }}'
-
-          # Determine which images to build
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Manual trigger: build all images
-            echo "Manual workflow trigger - building all images"
-            echo "matrix=$ALL_IMAGES" >> $GITHUB_OUTPUT
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Detect changed files
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE_REF="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE_REF="HEAD^"
-          fi
-
-          # Get changed files
-          CHANGED_FILES=$(git diff --name-only "$BASE_REF" HEAD -- base-images/ .github/workflows/base-images.yml)
-
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-
-          # Check if workflow file changed - rebuild all if so
-          if echo "$CHANGED_FILES" | grep -q "^\.github/workflows/base-images\.yml$"; then
-            echo "Workflow file changed - building all images"
-            echo "matrix=$ALL_IMAGES" >> $GITHUB_OUTPUT
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Filter matrix to only changed images
-          FILTERED_MATRIX=$(echo "$ALL_IMAGES" | jq -c \
-            --arg changed_files "$CHANGED_FILES" \
-            '{include: [.include[] | select($changed_files | contains("base-images/" + .name + "/"))]}')
-
-          # Check if any images need building
-          COUNT=$(echo "$FILTERED_MATRIX" | jq '.include | length')
-
-          if [ "$COUNT" -eq 0 ]; then
-            echo "No base images changed"
-            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "has-changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "Building $COUNT image(s)"
-            echo "$FILTERED_MATRIX" | jq -r '.include[].name' | while read name; do
-              echo "  - $name"
-            done
-            echo "matrix=$FILTERED_MATRIX" >> $GITHUB_OUTPUT
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-          fi
-
   build-and-push:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     strategy:
-      matrix: ${{ fromJSON(needs.detect-changes.outputs.matrix) }}
+      matrix:
+        include:
+          - name: node-18-alpine
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node
+          - name: node-22-alpine
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node
+          - name: node-ubuntu
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node-ubuntu
+          - name: grafana
+            upstream_pattern: "grafana/grafana:"
+            ghcr_name: ghcr.io/groupsky/homy/grafana
+          - name: influxdb
+            upstream_pattern: "influxdb:"
+            ghcr_name: ghcr.io/groupsky/homy/influxdb
+          - name: mosquitto
+            upstream_pattern: "eclipse-mosquitto:"
+            ghcr_name: ghcr.io/groupsky/homy/mosquitto
+          - name: mongo
+            upstream_pattern: "mongo:"
+            ghcr_name: ghcr.io/groupsky/homy/mongo
+          - name: nodered
+            upstream_pattern: "nodered/node-red:"
+            ghcr_name: ghcr.io/groupsky/homy/nodered
+          - name: telegraf
+            upstream_pattern: "telegraf:"
+            ghcr_name: ghcr.io/groupsky/homy/telegraf
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Check if this image changed
+        id: changed
+        run: |
+          # Manual trigger: always build
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Manual workflow trigger - building ${{ matrix.name }}"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Determine base ref for comparison
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF="HEAD^"
+          fi
+
+          # Check if this specific image or the workflow changed
+          CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- \
+            base-images/${{ matrix.name }}/ \
+            .github/workflows/base-images.yml)
+
+          if [ -n "$CHANGED" ]; then
+            echo "Changes detected for ${{ matrix.name }}"
+            echo "$CHANGED"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changes for ${{ matrix.name }} - skipping"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Login to Docker Hub
+        if: steps.changed.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Login to GitHub Container Registry
+        if: steps.changed.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -163,9 +103,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
+        if: steps.changed.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Extract version from Dockerfile
+        if: steps.changed.outputs.changed == 'true'
         id: version
         run: |
           VERSION=$(grep "FROM ${{ matrix.upstream_pattern }}" base-images/${{ matrix.name }}/Dockerfile | cut -d: -f2)
@@ -173,6 +115,7 @@ jobs:
           echo "Building ${{ matrix.name }}: $VERSION → ${{ matrix.ghcr_name }}:$VERSION"
 
       - name: Build and push image
+        if: steps.changed.outputs.changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: base-images/${{ matrix.name }}
