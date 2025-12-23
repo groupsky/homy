@@ -46,10 +46,7 @@ base-images/
 
 ### Finding Available Base Images
 
-**To find current versions:**
-- Check `base-images/*/Dockerfile` for the `FROM` line
-- View published packages: https://github.com/groupsky?tab=packages&repo_name=homy
-- See `base-images/README.md` for the complete list
+See `base-images/README.md` for how to discover available images dynamically.
 
 ## Adding a New Base Image
 

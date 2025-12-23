@@ -11,20 +11,11 @@ By mirroring base images to GHCR, we:
 
 ## Available Images
 
-**To find current versions:**
-- Check the `FROM` line in each `base-images/*/Dockerfile`
-- View published images: https://github.com/groupsky?tab=packages&repo_name=homy
-
-**Available base images:**
-- `node-18-alpine` → `ghcr.io/groupsky/homy/node:*-alpine`
-- `node-22-alpine` → `ghcr.io/groupsky/homy/node:22-alpine`
-- `node-ubuntu` → `ghcr.io/groupsky/homy/node-ubuntu:*`
-- `grafana` → `ghcr.io/groupsky/homy/grafana:*`
-- `influxdb` → `ghcr.io/groupsky/homy/influxdb:*-alpine`
-- `mosquitto` → `ghcr.io/groupsky/homy/mosquitto:*`
-- `mongo` → `ghcr.io/groupsky/homy/mongo:*`
-- `nodered` → `ghcr.io/groupsky/homy/nodered:*`
-- `telegraf` → `ghcr.io/groupsky/homy/telegraf:*-alpine`
+**Finding available base images:**
+- List directories: `ls base-images/` (each directory is a base image)
+- Check versions: `grep "FROM" base-images/*/Dockerfile`
+- View published packages: https://github.com/groupsky?tab=packages&repo_name=homy
+- See workflow configuration: `.github/workflows/base-images.yml`
 
 ## Building Locally
 
