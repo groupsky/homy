@@ -29,7 +29,7 @@ jobs:
       - name: Check Node version consistency
         run: |
           NODE_VERSION=$(cat docker/modbus-serial/.nvmrc)
-          DOCKERFILE_VERSION=$(grep "FROM node:" docker/modbus-serial/Dockerfile | cut -d: -f2 | cut -d- -f1)
+          DOCKERFILE_VERSION=$(grep "^FROM.*node:" docker/modbus-serial/Dockerfile | head -1 | sed 's/.*node://' | cut -d- -f1)
           WORKFLOW_VERSION=$(grep -A 10 "node-version-file:" .github/workflows/modbus-serial-tests.yml | head -1 | grep -o "[0-9]*" || echo "$NODE_VERSION")
           
           echo "Node version in .nvmrc: $NODE_VERSION"

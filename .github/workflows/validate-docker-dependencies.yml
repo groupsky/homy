@@ -48,17 +48,17 @@ jobs:
             echo ""
             echo "Checking $dockerfile..."
 
-            # Get FROM lines (excluding build stage references)
-            FROM_LINES=$(grep "^FROM " "$dockerfile" | grep -v " AS ")
+            # Get FROM lines with registry references (containing : or /)
+            # This excludes multi-stage build stage references like "FROM base AS build"
+            FROM_IMAGES=$(grep "^FROM " "$dockerfile" | awk '{print $2}' | grep -E '[/:]')
 
-            if [ -z "$FROM_LINES" ]; then
-              echo "  ⚠️  No FROM lines found"
+            if [ -z "$FROM_IMAGES" ]; then
+              echo "  ⚠️  No base image references found"
               continue
             fi
 
-            # Check each FROM line
-            while IFS= read -r from_line; do
-              image=$(echo "$from_line" | awk '{print $2}')
+            # Check each base image
+            while IFS= read -r image; do
               echo "  Image: $image"
 
               # Check if image matches any approved pattern
@@ -81,7 +81,7 @@ jobs:
                 echo "       - ubuntu:* (special cases only)"
                 VALIDATION_FAILED=1
               fi
-            done <<< "$FROM_LINES"
+            done <<< "$FROM_IMAGES"
           done
 
           echo ""
