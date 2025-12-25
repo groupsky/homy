@@ -1,0 +1,125 @@
+name: Build Base Images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'base-images/**'
+      - '.github/workflows/base-images.yml'
+  pull_request:
+    paths:
+      - 'base-images/**'
+      - '.github/workflows/base-images.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - name: node-18-alpine
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node
+          - name: node-22-alpine
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node
+          - name: node-ubuntu
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node-ubuntu
+          - name: grafana
+            upstream_pattern: "grafana/grafana:"
+            ghcr_name: ghcr.io/groupsky/homy/grafana
+          - name: influxdb
+            upstream_pattern: "influxdb:"
+            ghcr_name: ghcr.io/groupsky/homy/influxdb
+          - name: mosquitto
+            upstream_pattern: "eclipse-mosquitto:"
+            ghcr_name: ghcr.io/groupsky/homy/mosquitto
+          - name: mongo
+            upstream_pattern: "mongo:"
+            ghcr_name: ghcr.io/groupsky/homy/mongo
+          - name: nodered
+            upstream_pattern: "nodered/node-red:"
+            ghcr_name: ghcr.io/groupsky/homy/nodered
+          - name: telegraf
+            upstream_pattern: "telegraf:"
+            ghcr_name: ghcr.io/groupsky/homy/telegraf
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Check if this image changed
+        id: changed
+        run: |
+          # Manual trigger: always build
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Manual workflow trigger - building ${{ matrix.name }}"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Determine base ref for comparison
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF="HEAD^"
+          fi
+
+          # Check if this specific image or the workflow changed
+          CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- \
+            base-images/${{ matrix.name }}/ \
+            .github/workflows/base-images.yml)
+
+          if [ -n "$CHANGED" ]; then
+            echo "Changes detected for ${{ matrix.name }}"
+            echo "$CHANGED"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changes for ${{ matrix.name }} - skipping"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login to Docker Hub
+        if: steps.changed.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        if: steps.changed.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: steps.changed.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version from Dockerfile
+        if: steps.changed.outputs.changed == 'true'
+        id: version
+        run: |
+          VERSION=$(grep "FROM ${{ matrix.upstream_pattern }}" base-images/${{ matrix.name }}/Dockerfile | cut -d: -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building ${{ matrix.name }}: $VERSION → ${{ matrix.ghcr_name }}:$VERSION"
+
+      - name: Build and push image
+        if: steps.changed.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: base-images/${{ matrix.name }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ matrix.ghcr_name }}:${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }},ignore-error=true

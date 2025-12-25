@@ -99,6 +99,8 @@ Use `docker/build-push-action` with optimized GitHub Actions cache:
     cache-to: type=gha,mode=max,scope=service-name,ignore-error=true
 ```
 
+**Note**: Services use pinned base image versions (e.g., `ghcr.io/groupsky/homy/node:18.20.8-alpine`), so `pull: true` is not needed. Dependabot manages version updates through separate PRs.
+
 #### Docker Compose Builds
 
 For multi-container builds with docker compose, use `docker compose config` to resolve environment variables:

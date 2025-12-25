@@ -37,6 +37,26 @@ When creating a new Docker service:
 
 This ensures that both base image updates and application dependency updates are automatically tracked and can be applied through pull requests, even for test containers or services that only use external images.
 
+### Base Images
+
+**RULE**: ALL services MUST use base images from `ghcr.io/groupsky/homy/*` instead of pulling directly from Docker Hub.
+
+**Why**: Avoids Docker Hub rate limits (200 pulls/6h) in CI/CD and enables two-step upgrade workflow.
+
+**Finding Available Base Images**:
+- See `base-images/README.md` for complete list of available images
+- Check GitHub Container Registry: https://github.com/groupsky?tab=packages&repo_name=homy
+
+**Usage Requirements**:
+- Pin to specific versions (e.g., `node:18.20.8-alpine`, NOT `node:18-alpine` or `latest`)
+- Base images are pure mirrors - all service customizations go in service Dockerfiles
+- For patterns and examples, see `base-images/README.md`
+
+**Documentation**:
+- Detailed base images operations: `base-images/CLAUDE.md`
+- Usage patterns and examples: `base-images/README.md`
+- Two-step upgrade workflow: `base-images/UPGRADE_WORKFLOW.md` (or see base-images/CLAUDE.md)
+
 ### Service Types
 
 **Production Services**: Services that run in the main docker-compose setup
