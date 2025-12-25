@@ -2,12 +2,22 @@
 
 This directory contains base images that mirror official Docker images and are published to GitHub Container Registry (GHCR). These pure mirrors are used across all services in the homy project to avoid Docker Hub rate limits.
 
+## GHCR-Only Policy
+
+**MANDATORY**: All Docker services in this project MUST use base images from `ghcr.io/groupsky/homy/*`. Direct pulls from Docker Hub are **prohibited** and enforced via CI validation.
+
+**Enforcement:**
+- `.github/workflows/validate-docker-dependencies.yml` validates all Dockerfiles
+- Only `ghcr.io/groupsky/homy/*` and `ghcr.io/home-assistant/*` are allowed
+- PR builds will fail if non-GHCR base images are detected
+
 ## Purpose
 
 By mirroring base images to GHCR, we:
-1. **Avoid Docker Hub rate limits** (200 pulls/6h) in CI/CD pipelines
+1. **Eliminate Docker Hub rate limits** (200 pulls/6h) that caused frequent CI failures
 2. **Enable two-step upgrades**: Test base image updates separately from service updates
-3. **Reduce Docker Hub API calls**: Only pull from Docker Hub once per base image update
+3. **Remove external dependencies**: All base layers are controlled and cached in GHCR
+4. **Faster CI/CD**: Pre-built layers from GHCR instead of rebuilding from scratch
 
 ## Available Images
 

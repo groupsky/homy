@@ -1,4 +1,4 @@
-FROM influxdb:1.11.8-alpine
+FROM ghcr.io/groupsky/homy/influxdb:1.11.8-alpine
 
 COPY load-env-files.sh /load-env-files.sh
 COPY secure-entrypoint.sh /secure-entrypoint.sh

@@ -13,6 +13,7 @@ group "default" {
     "node-ubuntu",
     "grafana",
     "influxdb",
+    "influxdb2",
     "mosquitto",
     "mongo",
     "nodered",
@@ -99,4 +100,9 @@ target "wireguard" {
 target "mongo-express" {
   context = "./mongo-express"
   # Tags set via workflow: ghcr.io/groupsky/homy/mongo-express:${VERSION}
+}
+
+target "influxdb2" {
+  context = "./influxdb2"
+  # Tags set via workflow: ghcr.io/groupsky/homy/influxdb2:${VERSION}
 }

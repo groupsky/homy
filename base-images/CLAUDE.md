@@ -6,9 +6,18 @@ This file provides guidance for Claude Code when working with base images in thi
 
 Base images are custom Docker images built on top of official upstream images (Node.js, Grafana, InfluxDB, etc.) and published to GitHub Container Registry (GHCR). These images serve as the foundation for all services in the homy project.
 
+## GHCR-Only Policy
+
+**CRITICAL**: This project enforces a **strict GHCR-only policy** for all Docker base images. Direct pulls from Docker Hub are prohibited.
+
+**Policy Enforcement:**
+- `.github/workflows/validate-docker-dependencies.yml` scans all Dockerfiles on every PR
+- Only `ghcr.io/groupsky/homy/*` and `ghcr.io/home-assistant/*` base images are allowed
+- Violations fail CI and block PR merge
+
 ## Why Base Images?
 
-1. **Avoid Docker Hub Rate Limits**: GitHub Actions has strict Docker Hub rate limits (200 pulls/6h authenticated). By using GHCR, we eliminate these limits entirely.
+1. **Eliminate Docker Hub Rate Limits**: GitHub Actions has strict Docker Hub rate limits (200 pulls/6h authenticated) that caused frequent CI failures. By using GHCR exclusively, we eliminate these limits entirely.
 
 2. **Two-Step Dependency Updates**: Dependabot creates separate PRs:
    - **Step 1**: Update base image Dockerfile → CI pulls from Docker Hub once → publishes to GHCR
@@ -17,6 +26,8 @@ Base images are custom Docker images built on top of official upstream images (N
 3. **Centralized Common Configuration**: User setup, build tools, and common dependencies are defined once in base images, reducing duplication across services.
 
 4. **Faster CI/CD**: Services pull pre-built base layers from GHCR instead of building from scratch.
+
+5. **No External Dependencies**: All base images are mirrored to GHCR, eliminating reliance on external registries.
 
 ## Architecture
 

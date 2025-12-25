@@ -37,25 +37,49 @@ When creating a new Docker service:
 
 This ensures that both base image updates and application dependency updates are automatically tracked and can be applied through pull requests, even for test containers or services that only use external images.
 
-### Base Images
+### Base Images - GHCR-Only Policy
 
-**RULE**: ALL services MUST use base images from `ghcr.io/groupsky/homy/*` instead of pulling directly from Docker Hub.
+**CRITICAL RULE**: ALL services MUST use base images from `ghcr.io/groupsky/homy/*` exclusively. Direct pulls from Docker Hub are **PROHIBITED** and will fail CI validation.
 
-**Why**: Avoids Docker Hub rate limits (200 pulls/6h) in CI/CD and enables two-step upgrade workflow.
+**Why This Policy Exists:**
+- **Eliminates Docker Hub rate limits** (200 pulls/6h) that caused frequent CI failures
+- **Enables two-step dependency upgrades** via Dependabot (base image → service)
+- **Centralized version control** for all base dependencies
+- **Faster CI/CD** through GHCR caching and no external dependencies
 
-**Finding Available Base Images**:
-- See `base-images/README.md` for complete list of available images
-- Check GitHub Container Registry: https://github.com/groupsky?tab=packages&repo_name=homy
+**Policy Enforcement:**
+- `.github/workflows/validate-docker-dependencies.yml` runs on every PR
+- Scans all `docker/*/Dockerfile` files for non-GHCR base images
+- Only approved patterns: `ghcr.io/groupsky/homy/*` and `ghcr.io/home-assistant/*`
+- **Violations block PR merge**
 
-**Usage Requirements**:
-- Pin to specific versions (e.g., `node:18.20.8-alpine`, NOT `node:18-alpine` or `latest`)
-- Base images are pure mirrors - all service customizations go in service Dockerfiles
-- For patterns and examples, see `base-images/README.md`
+**Correct Usage:**
+```dockerfile
+# ✅ CORRECT - GHCR base images with pinned versions
+FROM ghcr.io/groupsky/homy/node:18.20.8-alpine
+FROM ghcr.io/groupsky/homy/grafana:9.5.21
+FROM ghcr.io/groupsky/homy/alpine:3.22.1
 
-**Documentation**:
-- Detailed base images operations: `base-images/CLAUDE.md`
-- Usage patterns and examples: `base-images/README.md`
-- Two-step upgrade workflow: `base-images/UPGRADE_WORKFLOW.md` (or see base-images/CLAUDE.md)
+# ❌ WRONG - Docker Hub pulls are blocked
+FROM node:18.20.8-alpine
+FROM grafana/grafana:9.5.21
+FROM alpine:3.22.1
+```
+
+**Version Pinning Requirements:**
+- ✅ Pin to specific versions: `ghcr.io/groupsky/homy/node:18.20.8-alpine`
+- ❌ Never use floating tags: `ghcr.io/groupsky/homy/node:18-alpine`, `latest`
+- Base images are pure mirrors - service customizations go in service Dockerfiles
+
+**Finding Available Base Images:**
+- **Primary source**: `base-images/README.md` - Complete list of available images
+- **Registry**: https://github.com/groupsky?tab=packages&repo_name=homy
+- **Quick reference**: Common images include node, grafana, influxdb, mosquitto, mongo, alpine, nginx, ubuntu
+
+**Documentation:**
+- **Policy & Operations**: `base-images/CLAUDE.md` - Creating and managing base images
+- **Usage Examples**: `base-images/README.md` - Service Dockerfile patterns
+- **Upgrade Workflow**: `base-images/UPGRADE_WORKFLOW.md` - Two-step dependency updates
 
 ### Service Types
 

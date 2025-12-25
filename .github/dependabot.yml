@@ -47,6 +47,17 @@ updates:
           - "*"
 
   - package-ecosystem: "docker"
+    directory: "/base-images/influxdb2"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
     directory: "/base-images/mosquitto"
     schedule:
       interval: "weekly"
