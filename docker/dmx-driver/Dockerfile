@@ -1,10 +1,16 @@
 #### Stage BASE ########################################################################################################
 FROM ghcr.io/groupsky/homy/node-ubuntu:18.12.1 AS base
 
-# Install service-specific packages
-RUN apt-get update && apt-get install -y \
+# Install service-specific packages and create user
+RUN set -ex && \
+    apt-get update && apt-get install -y \
       libftdi1 && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /usr/src/app && \
+    deluser --remove-home node && \
+    useradd --home-dir /usr/src/app --no-create-home node-app --uid 1000 && \
+    addgroup node-app dialout && \
+    chown -R node-app:node-app /usr/src/app
 
 # Set work directory
 WORKDIR /usr/src/app
