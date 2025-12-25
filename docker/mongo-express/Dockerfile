@@ -1,1 +1,1 @@
-FROM mongo-express:1-18
+FROM ghcr.io/groupsky/homy/mongo-express:1-18

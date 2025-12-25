@@ -39,13 +39,6 @@ jobs:
           APPROVED_PATTERNS=(
             "ghcr.io/groupsky/homy/"
             "ghcr.io/home-assistant/"
-            "ubuntu:"
-            "alpine:"
-            "nginx:"
-            "jwilder/docker-gen:"
-            "linuxserver/wireguard:"
-            "mongo-express:"
-            "node:18.12.1"
           )
 
           # Check each Dockerfile
@@ -82,10 +75,8 @@ jobs:
                 echo "  ❌ INVALID: Must use ghcr.io/groupsky/homy/* base images"
                 echo "     Current: $image"
                 echo "     Expected patterns:"
-                echo "       - ghcr.io/groupsky/homy/* (preferred for all services)"
+                echo "       - ghcr.io/groupsky/homy/* (all services)"
                 echo "       - ghcr.io/home-assistant/* (Home Assistant only)"
-                echo "       - Third-party services: alpine:, nginx:, jwilder/docker-gen:,"
-                echo "         linuxserver/wireguard:, mongo-express:, ubuntu:"
                 VALIDATION_FAILED=1
               fi
             done <<< "$FROM_IMAGES"
