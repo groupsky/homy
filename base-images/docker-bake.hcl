@@ -16,7 +16,13 @@ group "default" {
     "mosquitto",
     "mongo",
     "nodered",
-    "telegraf"
+    "telegraf",
+    "alpine",
+    "nginx",
+    "ubuntu",
+    "dockergen",
+    "wireguard",
+    "mongo-express"
   ]
 }
 
@@ -63,4 +69,34 @@ target "node-ubuntu" {
 target "nodered" {
   context = "./nodered"
   # Tags set via workflow: ghcr.io/groupsky/homy/nodered:${VERSION}
+}
+
+target "alpine" {
+  context = "./alpine"
+  # Tags set via workflow: ghcr.io/groupsky/homy/alpine:${VERSION}
+}
+
+target "nginx" {
+  context = "./nginx"
+  # Tags set via workflow: ghcr.io/groupsky/homy/nginx:${VERSION}
+}
+
+target "ubuntu" {
+  context = "./ubuntu"
+  # Tags set via workflow: ghcr.io/groupsky/homy/ubuntu:${VERSION}
+}
+
+target "dockergen" {
+  context = "./dockergen"
+  # Tags set via workflow: ghcr.io/groupsky/homy/dockergen:${VERSION}
+}
+
+target "wireguard" {
+  context = "./wireguard"
+  # Tags set via workflow: ghcr.io/groupsky/homy/wireguard:${VERSION}
+}
+
+target "mongo-express" {
+  context = "./mongo-express"
+  # Tags set via workflow: ghcr.io/groupsky/homy/mongo-express:${VERSION}
 }

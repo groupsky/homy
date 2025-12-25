@@ -101,6 +101,72 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: "docker"
+    directory: "/base-images/alpine"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/nginx"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/ubuntu"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/dockergen"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/wireguard"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/mongo-express"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
   # Infrastructure Services - Base system components
   - package-ecosystem: "docker"
     directory: "/docker/nginx"
