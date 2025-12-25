@@ -16,12 +16,12 @@
     "@influxdata/influxdb-client": "^1.35.0",
     "async-mutex": "^0.5.0",
     "ieee754": "^1.1.13",
-    "modbus-serial": "^8.0.21",
-    "mongodb": "^4.17.0",
-    "mqtt": "^5.14.0",
-    "yargs": "^17.7.2"
+    "modbus-serial": "^8.0.23",
+    "mongodb": "^7.0.0",
+    "mqtt": "^5.14.1",
+    "yargs": "^18.0.0"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^30.2.0"
   }
 }
