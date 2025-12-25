@@ -37,6 +37,9 @@ jobs:
           - name: influxdb
             upstream_pattern: "influxdb:"
             ghcr_name: ghcr.io/groupsky/homy/influxdb
+          - name: influxdb2
+            upstream_pattern: "influxdb:"
+            ghcr_name: ghcr.io/groupsky/homy/influxdb2
           - name: mosquitto
             upstream_pattern: "eclipse-mosquitto:"
             ghcr_name: ghcr.io/groupsky/homy/mosquitto
