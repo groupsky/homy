@@ -1,0 +1,113 @@
+name: Validate Docker Dependencies
+
+on:
+  push:
+    paths:
+      - 'docker/*/Dockerfile'
+      - '.github/workflows/validate-docker-dependencies.yml'
+  pull_request:
+    paths:
+      - 'docker/*/Dockerfile'
+      - '.github/workflows/validate-docker-dependencies.yml'
+
+jobs:
+  validate-ghcr-usage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5.0.0
+
+      - name: Validate all services use GHCR base images
+        run: |
+          echo "🔍 Validating Docker dependencies..."
+          echo ""
+
+          VALIDATION_FAILED=0
+
+          # Get list of service Dockerfiles
+          SERVICE_DOCKERFILES=($(find docker -name Dockerfile -type f | sort))
+
+          if [ ${#SERVICE_DOCKERFILES[@]} -eq 0 ]; then
+            echo "❌ No Dockerfiles found in docker/"
+            exit 1
+          fi
+
+          echo "Found ${#SERVICE_DOCKERFILES[@]} service Dockerfiles"
+          echo ""
+
+          # Define approved base image patterns
+          APPROVED_PATTERNS=(
+            "ghcr.io/groupsky/homy/"
+            "ghcr.io/home-assistant/"
+            "ubuntu:"
+          )
+
+          # Check each Dockerfile
+          echo "📋 Checking base images..."
+          for dockerfile in "${SERVICE_DOCKERFILES[@]}"; do
+            echo ""
+            echo "Checking $dockerfile..."
+
+            # Get FROM lines (excluding build stage references)
+            FROM_LINES=$(grep "^FROM " "$dockerfile" | grep -v " AS ")
+
+            if [ -z "$FROM_LINES" ]; then
+              echo "  ⚠️  No FROM lines found"
+              continue
+            fi
+
+            # Check each FROM line
+            while IFS= read -r from_line; do
+              image=$(echo "$from_line" | awk '{print $2}')
+              echo "  Image: $image"
+
+              # Check if image matches any approved pattern
+              APPROVED=false
+              for pattern in "${APPROVED_PATTERNS[@]}"; do
+                if [[ "$image" == "$pattern"* ]]; then
+                  APPROVED=true
+                  break
+                fi
+              done
+
+              if [ "$APPROVED" = true ]; then
+                echo "  ✅ Approved base image"
+              else
+                echo "  ❌ INVALID: Must use ghcr.io/groupsky/homy/* base images"
+                echo "     Current: $image"
+                echo "     Expected patterns:"
+                echo "       - ghcr.io/groupsky/homy/* (preferred)"
+                echo "       - ghcr.io/home-assistant/* (Home Assistant only)"
+                echo "       - ubuntu:* (special cases only)"
+                VALIDATION_FAILED=1
+              fi
+            done <<< "$FROM_LINES"
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          if [ $VALIDATION_FAILED -eq 1 ]; then
+            echo "❌ Docker dependencies validation failed!"
+            echo ""
+            echo "All services must use ghcr.io/groupsky/homy/* base images to avoid"
+            echo "Docker Hub rate limits (200 pulls/6h). See base-images/README.md for"
+            echo "available base images."
+            echo ""
+            echo "Available base images:"
+            echo "  - ghcr.io/groupsky/homy/node:18.20.8-alpine"
+            echo "  - ghcr.io/groupsky/homy/node:22-alpine"
+            echo "  - ghcr.io/groupsky/homy/node-ubuntu:18.12.1"
+            echo "  - ghcr.io/groupsky/homy/grafana:9.5.21"
+            echo "  - ghcr.io/groupsky/homy/influxdb:1.11.8-alpine"
+            echo "  - ghcr.io/groupsky/homy/mosquitto:2.0.22"
+            echo "  - ghcr.io/groupsky/homy/mongo:5.0.6"
+            echo "  - ghcr.io/groupsky/homy/telegraf:1.35.4-alpine"
+            echo "  - ghcr.io/groupsky/homy/nodered:3.1.15-18"
+            echo ""
+            echo "For new base images, see base-images/CLAUDE.md"
+            exit 1
+          fi
+
+          echo "✅ All service Dockerfiles use approved base images!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
