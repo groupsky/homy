@@ -92,32 +92,27 @@ jobs:
             echo "Docker Hub rate limits (200 pulls/6h). See base-images/README.md for"
             echo "available base images."
             echo ""
-            echo "Available base images (auto-discovered from base-images/):"
+            echo "Available base images (from base-images/docker-bake.hcl):"
 
-            # Dynamically discover available base images
-            for base_image_dir in base-images/*/; do
-              if [ -f "$base_image_dir/Dockerfile" ]; then
-                # Extract image name from directory
-                image_name=$(basename "$base_image_dir")
+            # Use docker-bake.hcl as source of truth for available base images
+            (cd base-images && docker buildx bake --print 2>/dev/null | jq -r '.target | keys[]' | sort) | while read -r image_name; do
+              # Extract version from Dockerfile's FROM line
+              version=$(grep "^FROM " "base-images/$image_name/Dockerfile" | head -1 | awk '{print $2}' | cut -d: -f2)
 
-                # Extract version from Dockerfile's FROM line
-                version=$(grep "^FROM " "$base_image_dir/Dockerfile" | head -1 | awk '{print $2}' | cut -d: -f2)
+              # Determine GHCR image name based on target name
+              case "$image_name" in
+                node-18-alpine|node-22-alpine)
+                  ghcr_name="ghcr.io/groupsky/homy/node:$version"
+                  ;;
+                node-ubuntu)
+                  ghcr_name="ghcr.io/groupsky/homy/node-ubuntu:$version"
+                  ;;
+                *)
+                  ghcr_name="ghcr.io/groupsky/homy/$image_name:$version"
+                  ;;
+              esac
 
-                # Determine GHCR image name based on directory
-                case "$image_name" in
-                  node-18-alpine|node-22-alpine)
-                    ghcr_name="ghcr.io/groupsky/homy/node:$version"
-                    ;;
-                  node-ubuntu)
-                    ghcr_name="ghcr.io/groupsky/homy/node-ubuntu:$version"
-                    ;;
-                  *)
-                    ghcr_name="ghcr.io/groupsky/homy/$image_name:$version"
-                    ;;
-                esac
-
-                echo "  - $ghcr_name"
-              fi
+              echo "  - $ghcr_name"
             done
 
             echo ""
