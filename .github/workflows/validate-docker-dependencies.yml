@@ -92,16 +92,34 @@ jobs:
             echo "Docker Hub rate limits (200 pulls/6h). See base-images/README.md for"
             echo "available base images."
             echo ""
-            echo "Available base images:"
-            echo "  - ghcr.io/groupsky/homy/node:18.20.8-alpine"
-            echo "  - ghcr.io/groupsky/homy/node:22-alpine"
-            echo "  - ghcr.io/groupsky/homy/node-ubuntu:18.12.1"
-            echo "  - ghcr.io/groupsky/homy/grafana:9.5.21"
-            echo "  - ghcr.io/groupsky/homy/influxdb:1.11.8-alpine"
-            echo "  - ghcr.io/groupsky/homy/mosquitto:2.0.22"
-            echo "  - ghcr.io/groupsky/homy/mongo:5.0.6"
-            echo "  - ghcr.io/groupsky/homy/telegraf:1.35.4-alpine"
-            echo "  - ghcr.io/groupsky/homy/nodered:3.1.15-18"
+            echo "Available base images (auto-discovered from base-images/):"
+
+            # Dynamically discover available base images
+            for base_image_dir in base-images/*/; do
+              if [ -f "$base_image_dir/Dockerfile" ]; then
+                # Extract image name from directory
+                image_name=$(basename "$base_image_dir")
+
+                # Extract version from Dockerfile's FROM line
+                version=$(grep "^FROM " "$base_image_dir/Dockerfile" | head -1 | awk '{print $2}' | cut -d: -f2)
+
+                # Determine GHCR image name based on directory
+                case "$image_name" in
+                  node-18-alpine|node-22-alpine)
+                    ghcr_name="ghcr.io/groupsky/homy/node:$version"
+                    ;;
+                  node-ubuntu)
+                    ghcr_name="ghcr.io/groupsky/homy/node-ubuntu:$version"
+                    ;;
+                  *)
+                    ghcr_name="ghcr.io/groupsky/homy/$image_name:$version"
+                    ;;
+                esac
+
+                echo "  - $ghcr_name"
+              fi
+            done
+
             echo ""
             echo "For new base images, see base-images/CLAUDE.md"
             exit 1
