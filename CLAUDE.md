@@ -33,6 +33,39 @@ docker compose up -d --build automations
 
 **IMPORTANT**: All volume paths in docker-compose.yml should use environment variables: `CONFIG_PATH`, `DATA_PATH`, `SECRETS_PATH`, `BACKUP_PATH`, etc. Avoid hardcoded paths except for system mounts (like `/etc/localtime`, `/dev/bus/usb`, etc.).
 
+### Docker Base Images - GHCR-Only Policy
+
+**CRITICAL RULE**: All Docker services MUST use base images from `ghcr.io/groupsky/homy/*` exclusively. Direct pulls from Docker Hub are **PROHIBITED**.
+
+**Why:**
+- Eliminates Docker Hub rate limits (200 pulls/6h) that cause CI failures
+- Enables two-step dependency upgrade workflow with Dependabot
+- Provides centralized control over base image versions
+
+**Usage:**
+```dockerfile
+# ✅ CORRECT - Use GHCR base images
+FROM ghcr.io/groupsky/homy/node:18.20.8-alpine
+FROM ghcr.io/groupsky/homy/grafana:9.5.21
+
+# ❌ WRONG - Direct Docker Hub pulls are blocked
+FROM node:18.20.8-alpine
+FROM grafana/grafana:9.5.21
+```
+
+**Enforcement:**
+- `.github/workflows/validate-docker-dependencies.yml` enforces this policy on all PRs
+- Any Dockerfile using non-GHCR images (except `ghcr.io/home-assistant/*`) will fail CI
+
+**Available Base Images:**
+See `base-images/README.md` for complete list. Common images:
+- `ghcr.io/groupsky/homy/node:18.20.8-alpine`, `node:22-alpine`
+- `ghcr.io/groupsky/homy/grafana:*`, `influxdb:*`, `mosquitto:*`
+- `ghcr.io/groupsky/homy/alpine:*`, `nginx:*`, `ubuntu:*`
+
+**Adding New Base Images:**
+See `base-images/CLAUDE.md` for detailed instructions on creating new base images.
+
 ## Architecture
 
 ### Service Architecture

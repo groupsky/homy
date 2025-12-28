@@ -33,7 +33,7 @@ describe('Sunseeker Service Integration Tests', () => {
     network = await new Network().start();
 
     // Start Eclipse Mosquitto MQTT broker
-    mosquittoContainer = await new GenericContainer('eclipse-mosquitto:2.0')
+    mosquittoContainer = await new GenericContainer('ghcr.io/groupsky/homy/mosquitto:2.0.22')
       .withNetwork(network)
       .withNetworkAliases('mqtt-broker')
       .withExposedPorts(1883)
@@ -48,7 +48,7 @@ describe('Sunseeker Service Integration Tests', () => {
       .start();
 
     // Start InfluxDB
-    influxContainer = await new GenericContainer('influxdb:2.7')
+    influxContainer = await new GenericContainer('ghcr.io/groupsky/homy/influxdb2:2.7')
       .withNetwork(network)
       .withNetworkAliases('influxdb')
       .withExposedPorts(8086)
