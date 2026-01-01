@@ -1,1 +1,1 @@
-FROM ghcr.io/groupsky/homy/dockergen:0.15.0
+FROM ghcr.io/groupsky/homy/dockergen:0.16.1
