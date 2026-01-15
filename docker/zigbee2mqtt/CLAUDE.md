@@ -79,8 +79,14 @@ All configuration is done via environment variables using the pattern:
 Examples:
 - `ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/house1`
 - `ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://broker`
-- `ZIGBEE2MQTT_CONFIG_HOMEASSISTANT=true`
+- `ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED=true`
 - `ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/z2m_home1_serial_port`
+
+**Important:** Object properties require full path including sub-keys:
+- ❌ Wrong: `ZIGBEE2MQTT_CONFIG_HOMEASSISTANT=true`
+- ✅ Correct: `ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED=true`
+- ❌ Wrong: `ZIGBEE2MQTT_CONFIG_AVAILABILITY=true`
+- ✅ Correct: `ZIGBEE2MQTT_CONFIG_AVAILABILITY_ENABLED=true`
 
 ## User Permissions
 
@@ -90,6 +96,26 @@ The container runs as `user: ${PUID}:${PGID}` (typically `1000:1000`), matching 
 - Security best practice (non-root container)
 
 **Important:** The data directory must be writable by this user for device renaming and configuration updates to work.
+
+## Docker Secrets Support
+
+This service implements a **custom entrypoint wrapper** to support the `_FILE` suffix pattern for Docker secrets. This pattern is common in Docker Official Images (MySQL, PostgreSQL, etc.) but is NOT natively supported by Zigbee2MQTT.
+
+**How it works:**
+1. The `docker-entrypoint-wrapper.sh` script runs before Zigbee2MQTT starts
+2. It scans for environment variables ending in `_FILE`
+3. Reads the content from the file path specified
+4. Exports the value without the `_FILE` suffix
+5. Calls the original Zigbee2MQTT entrypoint
+
+**Example:**
+```bash
+# Environment variable: ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/z2m_home1_serial_port
+# File content: tcp://192.168.1.100:6638
+# Result: ZIGBEE2MQTT_CONFIG_SERIAL_PORT=tcp://192.168.1.100:6638
+```
+
+This allows using Docker secrets (mounted at `/run/secrets/`) while maintaining compatibility with Zigbee2MQTT's environment variable configuration.
 
 ## Secrets Management
 
@@ -239,11 +265,11 @@ The service is connected to three Docker networks:
 
 ## Health Check
 
-The service includes a Docker health check that verifies the web frontend is responding:
+The service includes a Docker health check using Node.js to verify the web frontend is responding:
 
 ```dockerfile
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=5 \
-  CMD wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1
+  CMD node -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 ```
 
 **Health Check Behavior:**
@@ -252,11 +278,18 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=5 \
 - 5 retries before marking unhealthy
 - 10 second timeout per check
 
-**Why Web Interface?**
-- The web interface is served by Zigbee2MQTT's internal HTTP server
-- If the web UI responds, the core service is running
-- Alternative MQTT-based checks would require external dependencies
-- Simple and reliable for Docker health status
+**Why Node.js?**
+- Node.js is already installed in the zigbee2mqtt container
+- No additional dependencies needed (wget/curl not available)
+- Properly verifies HTTP 200 response
+- More reliable than simple TCP port checks
+- Lightweight and fast
+
+**Health Check Details:**
+- Makes HTTP GET request to http://localhost:8080/
+- Exits with code 0 if status code is 200 (healthy)
+- Exits with code 1 on any error or non-200 status (unhealthy)
+- Handles both connection errors and HTTP errors
 
 **Monitoring Health:**
 ```bash
