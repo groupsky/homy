@@ -127,6 +127,42 @@ services:
       - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
       - ./docker/homeassistant/custom_components/sunseeker-lawn-mower/custom_components/sunseeker:/config/custom_components/sunseeker:ro
 
+  z2m-home1:
+    build: docker/zigbee2mqtt
+    depends_on:
+      - broker
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+      - ingress
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - z2m_home1_network_key
+      - z2m_home1_serial_port
+      - z2m_home1_adapter
+    environment:
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${Z2M_HOME1_DOMAIN}
+      - VIRTUAL_PORT=8080
+      - ZIGBEE2MQTT_DATA=/app/data
+      - ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/house1
+      - ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://broker
+      - ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/z2m_home1_serial_port
+      - ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/z2m_home1_network_key
+      - ZIGBEE2MQTT_CONFIG_ADAPTER_FILE=/run/secrets/z2m_home1_adapter
+      - ZIGBEE2MQTT_CONFIG_FRONTEND_PORT=8080
+      - ZIGBEE2MQTT_CONFIG_FRONTEND_HOST=0.0.0.0
+      - ZIGBEE2MQTT_CONFIG_HOMEASSISTANT=true
+      - ZIGBEE2MQTT_CONFIG_PERMIT_JOIN=false
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /run/udev:/run/udev:ro
+      - ${Z2M_HOME1_DATA_PATH}:/app/data
+      - /dev/bus/usb:/dev/bus/usb
+
   mongo:
     build: docker/mongo
     restart: unless-stopped
@@ -951,3 +987,9 @@ secrets:
     file: ${SECRETS_PATH}/telegram_bot_token
   telegram_chat_id:
     file: ${SECRETS_PATH}/telegram_chat_id
+  z2m_home1_network_key:
+    file: ${SECRETS_PATH}/z2m_home1_network_key
+  z2m_home1_serial_port:
+    file: ${SECRETS_PATH}/z2m_home1_serial_port
+  z2m_home1_adapter:
+    file: ${SECRETS_PATH}/z2m_home1_adapter

@@ -1,0 +1,43 @@
+# Zigbee2MQTT Configuration Template
+# Copy this file to your data directory as configuration.yaml
+#
+# Most settings are configured via environment variables (see docker-compose.yml)
+# This file is for reference and manual configuration of device-specific settings
+
+version: 4
+
+# MQTT configuration (overridden by environment variables)
+mqtt:
+  base_topic: z2m/house1
+  server: mqtt://broker
+
+# Serial port configuration (overridden by environment variables)
+serial:
+  port: /dev/zigbee-coordinator
+
+# Adapter type (overridden by environment variables)
+adapter: auto
+
+# Advanced network configuration
+advanced:
+  # Network key, pan_id, and ext_pan_id will be auto-generated on first run
+  # Or can be loaded from secrets via environment variables
+  network_key: GENERATE
+  pan_id: GENERATE
+  ext_pan_id: GENERATE
+  channel: 11
+  log_level: info
+
+# Frontend configuration
+frontend:
+  port: 8080
+  host: 0.0.0.0
+
+# Home Assistant integration
+homeassistant:
+  enabled: true
+  discovery_topic: homeassistant
+  status_topic: homeassistant/status
+
+# Device options can be configured here
+# See https://www.zigbee2mqtt.io/guide/configuration/
