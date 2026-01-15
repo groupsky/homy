@@ -132,7 +132,6 @@ services:
     depends_on:
       - broker
     restart: unless-stopped
-    privileged: true
     networks:
       - automation
       - ingress
@@ -143,6 +142,7 @@ services:
       - z2m_home1_network_key
       - z2m_home1_serial_port
       - z2m_home1_adapter
+      - z2m_home1_frontend_auth_token
     environment:
       - TZ=${TZ}
       - VIRTUAL_HOST=${Z2M_HOME1_DOMAIN}
@@ -151,17 +151,18 @@ services:
       - ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/house1
       - ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://broker
       - ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/z2m_home1_serial_port
+      - ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER_FILE=/run/secrets/z2m_home1_adapter
       - ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/z2m_home1_network_key
-      - ZIGBEE2MQTT_CONFIG_ADAPTER_FILE=/run/secrets/z2m_home1_adapter
       - ZIGBEE2MQTT_CONFIG_FRONTEND_PORT=8080
       - ZIGBEE2MQTT_CONFIG_FRONTEND_HOST=0.0.0.0
-      - ZIGBEE2MQTT_CONFIG_HOMEASSISTANT=true
+      - ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN_FILE=/run/secrets/z2m_home1_frontend_auth_token
+      - ZIGBEE2MQTT_CONFIG_AVAILABILITY_ENABLED=true
+      - ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED=true
       - ZIGBEE2MQTT_CONFIG_PERMIT_JOIN=false
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /run/udev:/run/udev:ro
       - ${Z2M_HOME1_DATA_PATH}:/app/data
-      - /dev/bus/usb:/dev/bus/usb
+    user: ${PUID}:${PGID}
 
   mongo:
     build: docker/mongo
@@ -993,3 +994,5 @@ secrets:
     file: ${SECRETS_PATH}/z2m_home1_serial_port
   z2m_home1_adapter:
     file: ${SECRETS_PATH}/z2m_home1_adapter
+  z2m_home1_frontend_auth_token:
+    file: ${SECRETS_PATH}/z2m_home1_frontend_auth_token

@@ -1,3 +1,6 @@
 FROM ghcr.io/koenkk/zigbee2mqtt:2.7.2
 
-HEALTHCHECK CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+# Healthcheck using Node.js (already available in container)
+# Checks if frontend web interface is responding
+HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=5 \
+  CMD node -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
