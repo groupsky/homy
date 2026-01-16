@@ -23,7 +23,8 @@ group "default" {
     "ubuntu",
     "dockergen",
     "wireguard",
-    "mongo-express"
+    "mongo-express",
+    "zigbee2mqtt"
   ]
 }
 
@@ -105,4 +106,9 @@ target "mongo-express" {
 target "influxdb2" {
   context = "./influxdb2"
   # Tags set via workflow: ghcr.io/groupsky/homy/influxdb2:${VERSION}
+}
+
+target "zigbee2mqtt" {
+  context = "./zigbee2mqtt"
+  # Tags set via workflow: ghcr.io/groupsky/homy/zigbee2mqtt:${VERSION}
 }
