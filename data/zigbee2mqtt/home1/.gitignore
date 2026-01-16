@@ -1,0 +1,5 @@
+# Ignore all files in this directory (data directory should not be committed)
+*
+
+# Except this .gitignore file (ensures directory exists in repository)
+!.gitignore

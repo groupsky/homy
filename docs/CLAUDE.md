@@ -23,6 +23,11 @@ This directory contains technical documentation for the home automation system.
 ### InfluxDB Schema
 - **[Complete InfluxDB Schema](influxdb-schema.md)** - Comprehensive documentation of time-series database measurements, fields, and data sources
 
+## Device Integration
+
+### Wireless Device Integration
+- **[Zigbee2MQTT Service](../docker/zigbee2mqtt/CLAUDE.md)** - Zigbee wireless device integration, multi-instance setup, network coordinator configuration, and Home Assistant discovery
+
 ## Quick Reference
 
 ### Monitoring Topics

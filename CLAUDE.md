@@ -86,6 +86,7 @@ The system is built around multiple Docker services:
 For detailed development guidance, see service-specific CLAUDE.md files:
 - `docker/automations/CLAUDE.md` - Bot development, testing patterns
 - `docker/mqtt-influx/CLAUDE.md` - Converter development, data types, InfluxDB integration
+- `docker/zigbee2mqtt/CLAUDE.md` - Zigbee device integration, multi-instance setup, network coordinator configuration
 
 ### Configuration Structure
 
