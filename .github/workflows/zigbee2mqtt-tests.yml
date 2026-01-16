@@ -169,17 +169,20 @@ jobs:
 
           # Wait for Zigbee2MQTT to start (web frontend should be available)
           echo "Waiting for Zigbee2MQTT web frontend to start..."
-          for i in {1..30}; do
-            if docker exec zigbee2mqtt-healthcheck-test wget -q -O /dev/null http://localhost:8080/ 2>/dev/null; then
+          for i in {1..60}; do
+            # Use the same node-based healthcheck that's in docker-compose.yml
+            if docker exec zigbee2mqtt-healthcheck-test node -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" 2>/dev/null; then
               echo "✅ Web frontend is up (attempt $i)"
               break
             fi
-            if [ $i -eq 30 ]; then
-              echo "❌ Web frontend did not start within 30 seconds"
+            if [ $i -eq 60 ]; then
+              echo "❌ Web frontend did not start within 60 seconds"
               docker logs zigbee2mqtt-healthcheck-test
               exit 1
             fi
-            echo "Waiting for web frontend... (attempt $i/30)"
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Waiting for web frontend... (attempt $i/60)"
+            fi
             sleep 1
           done
 
