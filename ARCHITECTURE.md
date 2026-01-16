@@ -47,16 +47,24 @@ Physical devices communicate via multiple protocols:
 - **Arduino Mega**: Local I/O for buttons, lights, and auxiliary devices (Modbus)
 - **Zigbee Devices**: Wireless sensors, switches, and smart devices via Zigbee2MQTT bridge
 
-### Layer 2: Modbus Services
+### Layer 2: Protocol Bridge Services
 Multiple containerized services read hardware and publish to MQTT:
+
+**Modbus Services** (wired hardware):
 - **main-power**: Primary electrical monitoring bus
-- **secondary-power**: Secondary circuits and boiler monitoring  
+- **secondary-power**: Secondary circuits and boiler monitoring
 - **tetriary-power**: Additional power monitoring points
 - **monitoring/monitoring2**: HVAC and environmental sensors
 - **dry-switches**: Digital I/O for switches, sensors, and relays
 - **solar/inverter**: Solar energy system monitoring
 
-Each service publishes raw data to `/modbus/{bus}/{device}/reading` topics and listens for commands on `/modbus/{bus}/{device}/write` topics.
+Each Modbus service publishes raw data to `/modbus/{bus}/{device}/reading` topics and listens for commands on `/modbus/{bus}/{device}/write` topics.
+
+**Zigbee2MQTT Services** (wireless devices):
+- **z2m-home1**: Zigbee network bridge for first floor/main house
+- Future instances: z2m-home2, z2m-garage, etc. for additional Zigbee networks
+
+Zigbee2MQTT services connect to network coordinators and publish device states to `z2m/{instance}/{device}` topics, accepting commands via `z2m/{instance}/{device}/set`. These services also publish Home Assistant auto-discovery messages directly, bypassing the features layer abstraction.
 
 ### Layer 3: MQTT Message Broker
 Mosquitto broker serves as the central nervous system:
@@ -75,6 +83,8 @@ Transforms raw Modbus data into semantic abstractions:
 - **Relays**: General-purpose relay controls for irrigation, boilers, etc.
 
 Features provide state management and semantic mapping, publishing to `homy/features/{type}/{name}/status` and accepting commands via `homy/features/{type}/{name}/set`.
+
+**Note**: Zigbee devices bypass this layer intentionally. Zigbee2MQTT provides its own semantic abstraction and publishes directly to Home Assistant discovery, as these devices already have standardized capabilities defined by the Zigbee protocol.
 
 ### Layer 5: Automation Engine
 Event-driven automation system with multiple bot types:

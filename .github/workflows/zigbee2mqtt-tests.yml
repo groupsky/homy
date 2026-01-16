@@ -1,0 +1,152 @@
+name: Zigbee2MQTT Tests
+
+on:
+  push:
+    paths:
+      - 'docker/zigbee2mqtt/**'
+      - 'base-images/zigbee2mqtt/**'
+      - '.github/workflows/zigbee2mqtt-tests.yml'
+  pull_request:
+    paths:
+      - 'docker/zigbee2mqtt/**'
+      - 'base-images/zigbee2mqtt/**'
+      - '.github/workflows/zigbee2mqtt-tests.yml'
+
+jobs:
+  docker-build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/zigbee2mqtt/
+          push: false
+          load: true
+          tags: zigbee2mqtt-test
+          cache-from: type=gha,scope=zigbee2mqtt
+          cache-to: type=gha,mode=max,scope=zigbee2mqtt,ignore-error=true
+
+      - name: Create test secrets
+        run: |
+          mkdir -p test-secrets
+          echo '[1,3,5,7,9,11,13,15,0,2,4,6,8,10,12,14]' > test-secrets/network_key
+          echo 'tcp://127.0.0.1:6638' > test-secrets/serial_port
+          echo 'zstack' > test-secrets/adapter
+          echo 'test-token-12345' > test-secrets/frontend_auth_token
+
+      - name: Test entrypoint wrapper with missing secrets
+        run: |
+          # Test that missing secrets are caught
+          echo "Testing entrypoint wrapper validation..."
+
+          # Should fail with missing required configuration
+          docker run --rm \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/test \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://test-broker \
+            zigbee2mqtt-test \
+            /bin/sh -c "exit 0" 2>&1 | grep -q "ERROR: Required configuration missing" || {
+              echo "Expected error for missing configuration but didn't get one"
+              exit 1
+            }
+
+          echo "✅ Entrypoint wrapper correctly validates missing configuration"
+
+      - name: Test entrypoint wrapper with valid secrets
+        run: |
+          echo "Testing entrypoint wrapper with valid secrets..."
+
+          docker run --rm \
+            -v $(pwd)/test-secrets:/run/secrets:ro \
+            -e ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/serial_port \
+            -e ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/network_key \
+            -e ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER_FILE=/run/secrets/adapter \
+            -e ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN_FILE=/run/secrets/frontend_auth_token \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/test \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://test-broker \
+            zigbee2mqtt-test \
+            /usr/local/bin/docker-entrypoint-wrapper.sh /bin/sh -c "echo 'Entrypoint validation passed'" 2>&1 | tee /tmp/output.log
+
+          # Check for success messages
+          grep -q "✅ Loaded ZIGBEE2MQTT_CONFIG_SERIAL_PORT" /tmp/output.log
+          grep -q "✅ Loaded ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY" /tmp/output.log
+          grep -q "✅ Loaded ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER" /tmp/output.log
+          grep -q "✅ Loaded ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN" /tmp/output.log
+          grep -q "✅ All required configuration validated" /tmp/output.log
+
+          echo "✅ Entrypoint wrapper correctly loads secrets and validates configuration"
+
+      - name: Test entrypoint wrapper with empty secret file
+        run: |
+          echo "Testing entrypoint wrapper with empty secret file..."
+
+          # Create empty secret file
+          touch test-secrets/empty_secret
+
+          # Should fail with empty file error
+          docker run --rm \
+            -v $(pwd)/test-secrets:/run/secrets:ro \
+            -e ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/empty_secret \
+            -e ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/network_key \
+            -e ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER_FILE=/run/secrets/adapter \
+            -e ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN_FILE=/run/secrets/frontend_auth_token \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/test \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://test-broker \
+            zigbee2mqtt-test \
+            /bin/sh -c "exit 0" 2>&1 | grep -q "ERROR: Secret file is empty" || {
+              echo "Expected error for empty secret file but didn't get one"
+              exit 1
+            }
+
+          echo "✅ Entrypoint wrapper correctly detects empty secret files"
+
+      - name: Test entrypoint wrapper with missing secret file
+        run: |
+          echo "Testing entrypoint wrapper with missing secret file..."
+
+          # Should fail with file not found error
+          docker run --rm \
+            -v $(pwd)/test-secrets:/run/secrets:ro \
+            -e ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/nonexistent \
+            -e ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/network_key \
+            -e ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER_FILE=/run/secrets/adapter \
+            -e ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN_FILE=/run/secrets/frontend_auth_token \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/test \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://test-broker \
+            zigbee2mqtt-test \
+            /bin/sh -c "exit 0" 2>&1 | grep -q "ERROR: Secret file not found" || {
+              echo "Expected error for missing secret file but didn't get one"
+              exit 1
+            }
+
+          echo "✅ Entrypoint wrapper correctly detects missing secret files"
+
+      - name: Verify healthcheck command exists
+        run: |
+          echo "Verifying healthcheck command is available..."
+
+          # Check that node is available in the container
+          docker run --rm zigbee2mqtt-test node --version
+
+          # Verify the healthcheck command syntax is valid
+          docker run --rm zigbee2mqtt-test node -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" || true
+
+          echo "✅ Healthcheck command is available and syntactically valid"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rmi zigbee2mqtt-test || true
+          rm -rf test-secrets

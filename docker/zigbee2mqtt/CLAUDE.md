@@ -14,6 +14,111 @@ Zigbee2MQTT is a Zigbee to MQTT bridge that allows you to use Zigbee devices wit
 - Support for 5000+ Zigbee devices
 - Device renaming and configuration through the UI
 
+## Quick Start
+
+### Initial Setup
+
+Follow these steps to get Zigbee2MQTT running:
+
+**1. Generate Required Secrets**
+```bash
+# Generate network key (128-bit encryption key for Zigbee network)
+node -e "console.log(JSON.stringify(Array.from({length: 16}, () => Math.floor(Math.random() * 256))))" > secrets/z2m_home1_network_key
+
+# Generate frontend auth token
+openssl rand -base64 32 > secrets/z2m_home1_frontend_auth_token
+
+# Set your network coordinator address (network-based coordinator)
+echo "tcp://192.168.1.100:6638" > secrets/z2m_home1_serial_port
+
+# Set adapter type (use 'auto' for automatic detection)
+echo "auto" > secrets/z2m_home1_adapter
+```
+
+**2. Create Data Directory**
+```bash
+mkdir -p data/zigbee2mqtt/home1
+chown ${PUID}:${PGID} data/zigbee2mqtt/home1
+```
+
+**3. Configure Environment Variables**
+Add to your `.env` file (or verify in `example.env`):
+```bash
+Z2M_HOME1_DOMAIN=home1.z2m.${DOMAIN}
+Z2M_HOME1_DATA_PATH=./data/zigbee2mqtt/home1
+```
+
+**4. Start the Service**
+```bash
+docker compose up -d z2m-home1
+```
+
+**5. Verify Service is Running**
+```bash
+# Check logs for successful startup
+docker compose logs -f z2m-home1
+
+# Look for these success indicators:
+# ✅ Loaded ZIGBEE2MQTT_CONFIG_SERIAL_PORT from /run/secrets/z2m_home1_serial_port
+# ✅ Loaded ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY from /run/secrets/z2m_home1_network_key
+# ✅ All required configuration validated
+# Zigbee2MQTT:info ... Successfully connected to MQTT broker
+# Zigbee2MQTT:info ... Currently 0 devices are joined
+
+# Check health status
+docker inspect --format='{{json .State.Health}}' $(docker compose ps -q z2m-home1) | jq .
+```
+
+**6. Access Web UI**
+```bash
+# Via VPN, access: http://home1.z2m.${DOMAIN}
+# Authenticate with the token from secrets/z2m_home1_frontend_auth_token
+```
+
+**7. Pair Your First Device**
+1. Click "Permit Join" in the web UI (enables pairing for 254 seconds)
+2. Put your Zigbee device in pairing mode (refer to device manual)
+3. Device should appear in the UI within 30-60 seconds
+4. Rename device with a descriptive name (e.g., "living_room_light")
+5. Device automatically appears in Home Assistant
+
+### Verification Checklist
+
+After initial deployment, verify everything is working:
+
+- [ ] Container is running: `docker compose ps z2m-home1`
+- [ ] Secrets loaded successfully (check logs for ✅ messages)
+- [ ] Coordinator connected (no connection errors in logs)
+- [ ] MQTT broker connected: `docker compose exec broker mosquitto_sub -v -t 'z2m/house1/bridge/state' -C 1`
+- [ ] Web UI accessible via VPN
+- [ ] Health check passing: `docker inspect --format='{{.State.Health.Status}}' $(docker compose ps -q z2m-home1)`
+
+### Common First-Time Issues
+
+**Coordinator Not Found:**
+```bash
+# Verify network coordinator is reachable
+telnet 192.168.1.100 6638
+
+# Check secret file has correct address
+cat secrets/z2m_home1_serial_port
+```
+
+**Permission Denied on Data Directory:**
+```bash
+# Fix ownership
+sudo chown -R ${PUID}:${PGID} data/zigbee2mqtt/home1
+```
+
+**Web UI Not Accessible:**
+```bash
+# Verify nginx ingress is running
+docker compose ps ingress
+
+# Check service has VIRTUAL_HOST set
+docker compose exec z2m-home1 env | grep VIRTUAL_HOST
+```
+
 ## Instance Naming Convention
 
 This service is named `z2m-home1` to support multiple Zigbee2MQTT instances in the future. Each instance can manage a separate Zigbee network with its own coordinator.
