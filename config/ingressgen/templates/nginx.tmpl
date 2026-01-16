@@ -1,4 +1,4 @@
-{{ $TargetContainer := where $ "Name" $.Env.TARGET_CONTAINER | first }}
+{{ $TargetContainer := where $ "Name" (printf "/%s" $.Env.TARGET_CONTAINER) | first }}
 
 {{ $external_http_port := coalesce $.Env.HTTP_PORT "80" }}
 {{ $external_https_port := coalesce $.Env.HTTPS_PORT "443" }}
@@ -203,7 +203,10 @@ upstream {{ $upstream_name }} {
 {{ $certName := (first (groupByKeys $containers "Env.CERT_NAME")) }}
 
 {{/* Get the best matching cert  by name for the vhost. */}}
-{{ $vhostCert := (closest (dir "/etc/nginx/certs") (printf "%s.crt" $host))}}
+{{ $vhostCert := "" }}
+{{ if exists "/etc/nginx/certs" }}
+{{ $vhostCert = (closest (dir "/etc/nginx/certs") (printf "%s.crt" $host))}}
+{{ end }}
 
 {{/* vhostCert is actually a filename so remove any suffixes since they are added later */}}
 {{ $vhostCert := trimSuffix ".crt" $vhostCert }}
