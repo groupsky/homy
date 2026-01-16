@@ -70,6 +70,9 @@ jobs:
           - name: mongo-express
             upstream_pattern: "mongo-express:"
             ghcr_name: ghcr.io/groupsky/homy/mongo-express
+          - name: zigbee2mqtt
+            upstream_pattern: "ghcr.io/koenkk/zigbee2mqtt:"
+            ghcr_name: ghcr.io/groupsky/homy/zigbee2mqtt
 
     steps:
       - name: Checkout code

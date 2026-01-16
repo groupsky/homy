@@ -178,6 +178,17 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: "docker"
+    directory: "/base-images/zigbee2mqtt"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
   # Infrastructure Services - Base system components
   - package-ecosystem: "docker"
     directory: "/docker/nginx"
