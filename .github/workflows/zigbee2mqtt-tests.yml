@@ -137,11 +137,11 @@ jobs:
         run: |
           echo "Verifying healthcheck command is available..."
 
-          # Check that node is available in the container
-          docker run --rm zigbee2mqtt-test node --version
+          # Check that node is available in the container (bypass entrypoint)
+          docker run --rm --entrypoint node zigbee2mqtt-test --version
 
-          # Verify the healthcheck command syntax is valid
-          docker run --rm zigbee2mqtt-test node -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" || true
+          # Verify the healthcheck command syntax is valid (bypass entrypoint)
+          docker run --rm --entrypoint node zigbee2mqtt-test -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" || true
 
           echo "✅ Healthcheck command is available and syntactically valid"
 
