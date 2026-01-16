@@ -133,84 +133,86 @@ jobs:
 
           echo "✅ Entrypoint wrapper correctly detects missing secret files"
 
-      - name: Test actual healthcheck command with running service
+      - name: Test Docker healthcheck with running service
         run: |
-          echo "Testing actual healthcheck command with running Zigbee2MQTT..."
+          echo "Testing Docker healthcheck with running Zigbee2MQTT..."
 
-          # Extract the healthcheck command from docker-compose.yml using yq
-          HEALTHCHECK_CMD=$(yq '.services.z2m-home1.healthcheck.test[1]' docker-compose.yml)
-          echo "Healthcheck command from docker-compose.yml:"
-          echo "$HEALTHCHECK_CMD"
+          # Create a test docker-compose.yml that uses the healthcheck from the main file
+          cat > docker-compose.test.yml <<EOF
+          version: '3.8'
+          services:
+            mqtt-broker:
+              image: eclipse-mosquitto:2
+              command: mosquitto -c /mosquitto-no-auth.conf
 
-          if [ -z "$HEALTHCHECK_CMD" ] || [ "$HEALTHCHECK_CMD" = "null" ]; then
-            echo "❌ Failed to extract healthcheck command from docker-compose.yml"
-            exit 1
-          fi
+            zigbee2mqtt-test:
+              image: zigbee2mqtt-test
+              depends_on:
+                - mqtt-broker
+              volumes:
+                - $(pwd)/test-secrets:/run/secrets:ro
+              environment:
+                - ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/serial_port
+                - ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/network_key
+                - ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER_FILE=/run/secrets/adapter
+                - ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN_FILE=/run/secrets/frontend_auth_token
+                - ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/test
+                - ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://mqtt-broker:1883
+                - ZIGBEE2MQTT_CONFIG_FRONTEND_ENABLED=true
+                - ZIGBEE2MQTT_CONFIG_FRONTEND_PORT=8080
+                - ZIGBEE2MQTT_CONFIG_FRONTEND_HOST=0.0.0.0
+              healthcheck:
+          $(yq '.services.z2m-home1.healthcheck' docker-compose.yml | sed 's/^/        /')
+          EOF
 
-          # Start a mock MQTT broker
-          echo "Starting mock MQTT broker..."
-          docker run -d --name test-mqtt-broker -p 1883:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf
+          echo "Test docker-compose.yml created with healthcheck:"
+          cat docker-compose.test.yml
 
-          # Start Zigbee2MQTT with the test configuration
-          echo "Starting Zigbee2MQTT container..."
-          docker run -d --name zigbee2mqtt-healthcheck-test \
-            -v $(pwd)/test-secrets:/run/secrets:ro \
-            -e ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/serial_port \
-            -e ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/network_key \
-            -e ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER_FILE=/run/secrets/adapter \
-            -e ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN_FILE=/run/secrets/frontend_auth_token \
-            -e ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/test \
-            -e ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://host.docker.internal:1883 \
-            -e ZIGBEE2MQTT_CONFIG_FRONTEND_ENABLED=true \
-            -e ZIGBEE2MQTT_CONFIG_FRONTEND_PORT=8080 \
-            -e ZIGBEE2MQTT_CONFIG_FRONTEND_HOST=0.0.0.0 \
-            --add-host=host.docker.internal:host-gateway \
-            zigbee2mqtt-test
+          # Start the services
+          echo "Starting services with docker compose..."
+          docker compose -f docker-compose.test.yml up -d
 
-          # Wait for Zigbee2MQTT to start (web frontend should be available)
-          echo "Waiting for Zigbee2MQTT web frontend to start..."
-          for i in {1..60}; do
-            # Use the same node-based healthcheck that's in docker-compose.yml
-            if docker exec zigbee2mqtt-healthcheck-test node -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" 2>/dev/null; then
-              echo "✅ Web frontend is up (attempt $i)"
+          # Wait for Docker's healthcheck to report status
+          # start_period is 120s, so we wait up to 150s total
+          echo "Waiting for Docker healthcheck to complete (up to 150 seconds)..."
+          for i in {1..150}; do
+            HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' $(docker compose -f docker-compose.test.yml ps -q zigbee2mqtt-test) 2>/dev/null || echo "starting")
+
+            if [ "$HEALTH_STATUS" = "healthy" ]; then
+              echo "✅ Container is healthy (after ${i}s)"
               break
-            fi
-            if [ $i -eq 60 ]; then
-              echo "❌ Web frontend did not start within 60 seconds"
-              docker logs zigbee2mqtt-healthcheck-test
+            elif [ "$HEALTH_STATUS" = "unhealthy" ]; then
+              echo "❌ Container is unhealthy after ${i}s"
+              echo "Health status details:"
+              docker inspect --format='{{json .State.Health}}' $(docker compose -f docker-compose.test.yml ps -q zigbee2mqtt-test) | jq .
+              echo "Container logs:"
+              docker compose -f docker-compose.test.yml logs zigbee2mqtt-test
               exit 1
             fi
-            if [ $((i % 10)) -eq 0 ]; then
-              echo "Waiting for web frontend... (attempt $i/60)"
+
+            if [ $i -eq 150 ]; then
+              echo "❌ Healthcheck did not report healthy within 150 seconds"
+              echo "Final health status: $HEALTH_STATUS"
+              docker inspect --format='{{json .State.Health}}' $(docker compose -f docker-compose.test.yml ps -q zigbee2mqtt-test) | jq .
+              docker compose -f docker-compose.test.yml logs zigbee2mqtt-test
+              exit 1
+            fi
+
+            if [ $((i % 15)) -eq 0 ]; then
+              echo "Waiting for healthcheck... status: $HEALTH_STATUS (${i}s elapsed)"
             fi
             sleep 1
           done
 
-          # Now run the actual healthcheck command from docker-compose.yml
-          echo "Running healthcheck command..."
-          docker exec zigbee2mqtt-healthcheck-test sh -c "$HEALTHCHECK_CMD"
-          HEALTHCHECK_EXIT=$?
+          # Verify health details
+          echo "Health check details:"
+          docker inspect --format='{{json .State.Health}}' $(docker compose -f docker-compose.test.yml ps -q zigbee2mqtt-test) | jq .
 
-          echo "Healthcheck exit code: $HEALTHCHECK_EXIT"
-
-          # The healthcheck should succeed (exit 0) now that the service is running
-          if [ "$HEALTHCHECK_EXIT" -eq 0 ]; then
-            echo "✅ Healthcheck command succeeded as expected with running service"
-          else
-            echo "❌ Healthcheck failed with exit code: $HEALTHCHECK_EXIT"
-            docker logs zigbee2mqtt-healthcheck-test
-            exit 1
-          fi
-
-          # Verify the container is healthy
-          HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' zigbee2mqtt-healthcheck-test || echo "no-health")
-          echo "Docker health status: $HEALTH_STATUS"
-
-          echo "✅ Healthcheck command from docker-compose.yml works correctly with running service"
+          echo "✅ Docker healthcheck works correctly with running service"
 
           # Cleanup
-          docker stop zigbee2mqtt-healthcheck-test test-mqtt-broker || true
-          docker rm zigbee2mqtt-healthcheck-test test-mqtt-broker || true
+          docker compose -f docker-compose.test.yml down -v || true
+          rm docker-compose.test.yml || true
 
       - name: Cleanup
         if: always()
