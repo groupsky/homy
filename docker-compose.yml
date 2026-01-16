@@ -153,6 +153,7 @@ services:
       - ZIGBEE2MQTT_CONFIG_SERIAL_PORT_FILE=/run/secrets/z2m_home1_serial_port
       - ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER_FILE=/run/secrets/z2m_home1_adapter
       - ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY_FILE=/run/secrets/z2m_home1_network_key
+      - ZIGBEE2MQTT_CONFIG_FRONTEND_ENABLED=true
       - ZIGBEE2MQTT_CONFIG_FRONTEND_PORT=8080
       - ZIGBEE2MQTT_CONFIG_FRONTEND_HOST=0.0.0.0
       - ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN_FILE=/run/secrets/z2m_home1_frontend_auth_token

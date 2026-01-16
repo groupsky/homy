@@ -5,4 +5,4 @@ COPY docker-entrypoint-wrapper.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint-wrapper.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint-wrapper.sh"]
-CMD ["npm", "start"]
+CMD ["/sbin/tini", "--", "node", "index.js"]

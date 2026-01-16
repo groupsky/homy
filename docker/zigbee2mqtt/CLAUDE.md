@@ -19,12 +19,13 @@ Zigbee2MQTT is a Zigbee to MQTT bridge that allows you to use Zigbee devices wit
 This service is named `z2m-home1` to support multiple Zigbee2MQTT instances in the future. Each instance can manage a separate Zigbee network with its own coordinator.
 
 **Subdomain Pattern:** Each instance uses a subdomain under `z2m.${DOMAIN}`:
-- `home1.z2m.${DOMAIN}` - First house/building instance
-- `home2.z2m.${DOMAIN}` - Second house/building instance
+- `home1.z2m.${DOMAIN}` - First floor Zigbee network
+- `home2.z2m.${DOMAIN}` - Second floor Zigbee network
+- `home3.z2m.${DOMAIN}` - Third floor Zigbee network
 - `garage.z2m.${DOMAIN}` - Garage/workshop instance
 - etc.
 
-This pattern allows clean organization and DNS-based routing for multiple Zigbee networks.
+This pattern allows clean organization and DNS-based routing for multiple Zigbee networks across different floors or areas.
 
 ## MQTT Topic Prefix
 

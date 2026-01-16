@@ -39,12 +39,13 @@ This is a comprehensive Docker-based home automation system designed around a da
 ## Data Flow Architecture
 
 ### Layer 1: Hardware Integration
-Physical devices communicate via Modbus RTU/TCP protocols:
-- **Energy Meters**: SDM120, SDM630, DTSU666 for power monitoring
-- **I/O Modules**: MBSL32DI1/DI2 for digital inputs (switches, sensors)
-- **Relay Modules**: 32-channel relay banks for device control
-- **HVAC Controllers**: BAC002 thermostats with BACnet communication
-- **Arduino Mega**: Local I/O for buttons, lights, and auxiliary devices
+Physical devices communicate via multiple protocols:
+- **Energy Meters**: SDM120, SDM630, DTSU666 for power monitoring (Modbus)
+- **I/O Modules**: MBSL32DI1/DI2 for digital inputs (switches, sensors) (Modbus)
+- **Relay Modules**: 32-channel relay banks for device control (Modbus)
+- **HVAC Controllers**: BAC002 thermostats with BACnet communication (Modbus)
+- **Arduino Mega**: Local I/O for buttons, lights, and auxiliary devices (Modbus)
+- **Zigbee Devices**: Wireless sensors, switches, and smart devices via Zigbee2MQTT bridge
 
 ### Layer 2: Modbus Services
 Multiple containerized services read hardware and publish to MQTT:
@@ -60,6 +61,7 @@ Each service publishes raw data to `/modbus/{bus}/{device}/reading` topics and l
 ### Layer 3: MQTT Message Broker
 Mosquitto broker serves as the central nervous system:
 - **Raw Data Topics**: `/modbus/{bus}/{device}/{action}`
+- **Zigbee Topics**: `z2m/{instance}/{device}/[state|set|get]` for Zigbee device control
 - **Feature Topics**: `homy/features/{type}/{name}/{action}`
 - **Home Assistant Topics**: `homeassistant/{component}/{device}/config`
 - **Internal Topics**: Various automation and control channels
@@ -98,6 +100,7 @@ Multiple interfaces for monitoring and control:
 - **features**: Feature abstraction and state management
 - **ha_discovery**: Home Assistant auto-discovery configuration
 - **ha**: Home Assistant container for UI and visualization only
+- **z2m-home1**: Zigbee2MQTT service for Zigbee device integration and Home Assistant discovery
 
 ### Data Services  
 - **influxdb**: Time-series database for sensor data
