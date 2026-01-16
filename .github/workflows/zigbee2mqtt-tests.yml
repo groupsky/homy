@@ -133,17 +133,48 @@ jobs:
 
           echo "✅ Entrypoint wrapper correctly detects missing secret files"
 
-      - name: Verify healthcheck command exists
+      - name: Test actual healthcheck command from docker-compose.yml
         run: |
-          echo "Verifying healthcheck command is available..."
+          echo "Testing actual healthcheck command..."
 
-          # Check that node is available in the container (bypass entrypoint)
-          docker run --rm --entrypoint node zigbee2mqtt-test --version
+          # Extract the healthcheck command from docker-compose.yml using yq
+          # The healthcheck test is an array: ["CMD-SHELL", "actual command"]
+          HEALTHCHECK_CMD=$(yq '.services.z2m-home1.healthcheck.test[1]' docker-compose.yml)
+          echo "Healthcheck command from docker-compose.yml:"
+          echo "$HEALTHCHECK_CMD"
 
-          # Verify the healthcheck command syntax is valid (bypass entrypoint)
-          docker run --rm --entrypoint node zigbee2mqtt-test -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" || true
+          if [ -z "$HEALTHCHECK_CMD" ] || [ "$HEALTHCHECK_CMD" = "null" ]; then
+            echo "❌ Failed to extract healthcheck command from docker-compose.yml"
+            exit 1
+          fi
 
-          echo "✅ Healthcheck command is available and syntactically valid"
+          # Run the actual healthcheck command (will fail without web server, but that's expected)
+          # We're testing that the command syntax is valid and runs
+          echo "Running healthcheck command in container..."
+          docker run --rm \
+            -e ZIGBEE2MQTT_CONFIG_SERIAL_PORT=tcp://dummy:6638 \
+            -e ZIGBEE2MQTT_CONFIG_ADVANCED_NETWORK_KEY='[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]' \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/test \
+            -e ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://dummy \
+            -e ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN=dummy-token \
+            --entrypoint /bin/sh \
+            zigbee2mqtt-test \
+            -c "$HEALTHCHECK_CMD" 2>&1 | tee /tmp/healthcheck.log || HEALTHCHECK_EXIT=$?
+
+          # The healthcheck will fail (exit 1) because there's no web server running
+          # But it should exit with 1 (connection error), not other errors (syntax, node not found, etc.)
+          echo "Healthcheck exit code: ${HEALTHCHECK_EXIT:-0}"
+
+          if [ "${HEALTHCHECK_EXIT:-0}" -eq 1 ]; then
+            echo "✅ Healthcheck command runs correctly (failed as expected without web server)"
+          else
+            echo "❌ Healthcheck exited with unexpected code: ${HEALTHCHECK_EXIT:-0}"
+            echo "Expected exit code 1 (connection error), got: ${HEALTHCHECK_EXIT:-0}"
+            cat /tmp/healthcheck.log
+            exit 1
+          fi
+
+          echo "✅ Healthcheck command from docker-compose.yml is valid and executable"
 
       - name: Cleanup
         if: always()
