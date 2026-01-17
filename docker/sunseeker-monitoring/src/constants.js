@@ -46,11 +46,11 @@ export const MQTT = {
 
 // Sunseeker device mode mappings
 export const SUNSEEKER_MODES = {
-  0: 'Standby',
-  1: 'Mowing',
-  2: 'Going Home',
-  3: 'Charging',
-  7: 'Departing'
+  0: 'standby',
+  1: 'mowing',
+  2: 'on_the_way_home',
+  3: 'charging',
+  7: 'mowing_border'
 };
 
 // InfluxDB measurement names
