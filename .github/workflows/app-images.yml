@@ -21,7 +21,10 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.detect.outputs.matrix }}
+      changed: ${{ steps.detect.outputs.changed }}
+      unchanged: ${{ steps.detect.outputs.unchanged }}
+      all_services: ${{ steps.detect.outputs.all_services }}
+      base_sha: ${{ steps.detect.outputs.base_sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.1
@@ -31,44 +34,51 @@ jobs:
       - name: Detect changed services
         id: detect
         run: |
-          # Define all services to build as app images
-          # These are custom services with application code (not just version pins)
-          SERVICES=(
-            "automations"
-            "automation-events-processor"
-            "dmx-driver"
-            "grafana"
-            "historian"
-            "homeassistant"
-            "influxdb"
-            "modbus-serial"
-            "mosquitto"
-            "mqtt-influx"
-            "mqtt-mongo"
-            "nodered"
-            "sunseeker-monitoring"
-            "telegram-bridge"
-            "telegraf"
-            "volman"
-            "zigbee2mqtt"
-          )
+          # Extract services dynamically from docker-compose.yml
+          # Find services that have both image: ghcr.io/groupsky/homy/ AND build: directives
+          echo "Extracting services from docker-compose.yml..."
+
+          # Use yq to parse YAML and extract service names
+          # Services must have both 'image' starting with ghcr.io/groupsky/homy/ and 'build' defined
+          SERVICES=$(docker compose --env-file example.env config --format json | jq -r '
+            .services | to_entries[] |
+            select(.value.image != null and (.value.image | startswith("ghcr.io/groupsky/homy/"))) |
+            select(.value.build != null) |
+            .value.image |
+            sub("ghcr.io/groupsky/homy/"; "") |
+            sub(":.*"; "")
+          ' | sort -u)
+
+          # Convert to array
+          readarray -t SERVICE_ARRAY <<< "$SERVICES"
+          echo "Found ${#SERVICE_ARRAY[@]} services: ${SERVICE_ARRAY[*]}"
+
+          # Output all services as JSON
+          ALL_JSON=$(printf '%s\n' "${SERVICE_ARRAY[@]}" | jq -R . | jq -s .)
+          echo "all_services=$ALL_JSON" >> $GITHUB_OUTPUT
 
           CHANGED_SERVICES=()
+          UNCHANGED_SERVICES=()
+
+          # Determine base ref for comparison
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF="HEAD^"
+          fi
+          echo "base_sha=$BASE_REF" >> $GITHUB_OUTPUT
+          echo "Using base ref: $BASE_REF"
 
           # Manual trigger with force_all: build everything
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ inputs.force_all }}" == "true" ]; then
             echo "Force rebuild all - building all services"
-            CHANGED_SERVICES=("${SERVICES[@]}")
+            CHANGED_SERVICES=("${SERVICE_ARRAY[@]}")
+            UNCHANGED_SERVICES=()
           else
-            # Determine base ref for comparison
-            if [ "${{ github.event_name }}" == "pull_request" ]; then
-              BASE_REF="${{ github.event.pull_request.base.sha }}"
-            else
-              BASE_REF="HEAD^"
-            fi
-
             # Check each service for changes
-            for service in "${SERVICES[@]}"; do
+            for service in "${SERVICE_ARRAY[@]}"; do
+              [ -z "$service" ] && continue
+
               if ! CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- \
                 "docker/$service/" \
                 ".github/workflows/app-images.yml" 2>&1); then
@@ -81,31 +91,35 @@ jobs:
               if [ -n "$CHANGED" ]; then
                 echo "Changes detected for $service"
                 CHANGED_SERVICES+=("$service")
+              else
+                echo "No changes for $service"
+                UNCHANGED_SERVICES+=("$service")
               fi
             done
           fi
 
-          # Convert to JSON array
+          # Convert to JSON arrays
           if [ ${#CHANGED_SERVICES[@]} -eq 0 ]; then
             echo "No services changed"
-            echo "matrix=[]" >> $GITHUB_OUTPUT
+            echo "changed=[]" >> $GITHUB_OUTPUT
           else
-            # Build JSON array
-            JSON="["
-            for i in "${!CHANGED_SERVICES[@]}"; do
-              if [ $i -gt 0 ]; then
-                JSON+=","
-              fi
-              JSON+="\"${CHANGED_SERVICES[$i]}\""
-            done
-            JSON+="]"
-            echo "Services to build: $JSON"
-            echo "matrix=$JSON" >> $GITHUB_OUTPUT
+            CHANGED_JSON=$(printf '%s\n' "${CHANGED_SERVICES[@]}" | jq -R . | jq -s .)
+            echo "Services to build: $CHANGED_JSON"
+            echo "changed=$CHANGED_JSON" >> $GITHUB_OUTPUT
+          fi
+
+          if [ ${#UNCHANGED_SERVICES[@]} -eq 0 ]; then
+            echo "No unchanged services"
+            echo "unchanged=[]" >> $GITHUB_OUTPUT
+          else
+            UNCHANGED_JSON=$(printf '%s\n' "${UNCHANGED_SERVICES[@]}" | jq -R . | jq -s .)
+            echo "Unchanged services: $UNCHANGED_JSON"
+            echo "unchanged=$UNCHANGED_JSON" >> $GITHUB_OUTPUT
           fi
 
   build-and-push:
     needs: detect-changes
-    if: needs.detect-changes.outputs.matrix != '[]'
+    if: needs.detect-changes.outputs.changed != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -113,7 +127,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+        service: ${{ fromJson(needs.detect-changes.outputs.changed) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.1
@@ -163,19 +177,123 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }},ignore-error=true
 
+  # Retag unchanged images with new SHA, or build if base image doesn't exist
+  retag-unchanged:
+    needs: [detect-changes, build-and-push]
+    # Run after build-and-push, only on master (not PRs), only if there are unchanged services
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      needs.detect-changes.outputs.unchanged != '[]' &&
+      needs.detect-changes.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.unchanged) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 ${{ github.sha }})
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+          BASE_SHORT_SHA=$(git rev-parse --short=7 ${{ needs.detect-changes.outputs.base_sha }})
+          echo "base_short_sha=$BASE_SHORT_SHA" >> $GITHUB_OUTPUT
+
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: Retag or build image
+        id: retag
+        run: |
+          SERVICE="${{ matrix.service }}"
+          BASE_SHA="${{ needs.detect-changes.outputs.base_sha }}"
+          NEW_SHA="${{ github.sha }}"
+          SHORT_SHA="${{ steps.meta.outputs.short_sha }}"
+
+          IMAGE_BASE="ghcr.io/groupsky/homy/${SERVICE}"
+
+          echo "Checking if ${IMAGE_BASE}:${BASE_SHA} exists..."
+
+          # Try to inspect the base SHA image
+          if docker buildx imagetools inspect "${IMAGE_BASE}:${BASE_SHA}" > /dev/null 2>&1; then
+            echo "Base image exists, retagging..."
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+
+            # Retag from base SHA to new SHA using buildx imagetools
+            docker buildx imagetools create \
+              --tag "${IMAGE_BASE}:${NEW_SHA}" \
+              --tag "${IMAGE_BASE}:${SHORT_SHA}" \
+              "${IMAGE_BASE}:${BASE_SHA}"
+
+            echo "Successfully retagged ${SERVICE} from ${BASE_SHA} to ${NEW_SHA}"
+          else
+            echo "Base image does not exist, will build"
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build image if needed
+        if: steps.retag.outputs.needs_build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ steps.meta.outputs.short_sha }}
+            ghcr.io/groupsky/homy/${{ matrix.service }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/groupsky/homy
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.timestamp }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},ignore-error=true
+
   # Summary job to report overall status
   summary:
-    needs: [detect-changes, build-and-push]
+    needs: [detect-changes, build-and-push, retag-unchanged]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check build results
         run: |
+          echo "=== Build Summary ==="
+          echo "Changed services: ${{ needs.detect-changes.outputs.changed }}"
+          echo "Unchanged services: ${{ needs.detect-changes.outputs.unchanged }}"
+          echo "Build result: ${{ needs.build-and-push.result }}"
+          echo "Retag result: ${{ needs.retag-unchanged.result }}"
+
           if [ "${{ needs.build-and-push.result }}" == "failure" ]; then
             echo "Some builds failed"
             exit 1
-          elif [ "${{ needs.detect-changes.outputs.matrix }}" == "[]" ]; then
-            echo "No services needed building"
+          elif [ "${{ needs.retag-unchanged.result }}" == "failure" ]; then
+            echo "Some retags/builds failed"
+            exit 1
+          elif [ "${{ needs.detect-changes.outputs.changed }}" == "[]" ] && [ "${{ needs.detect-changes.outputs.unchanged }}" == "[]" ]; then
+            echo "No services found to process"
           else
-            echo "All builds completed successfully"
+            echo "All operations completed successfully"
           fi
