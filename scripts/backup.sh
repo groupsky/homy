@@ -7,6 +7,15 @@
 
 set -euo pipefail
 
+# Prevent concurrent deployments
+LOCK_FILE="/var/lock/homy-deployment.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    echo "ERROR: Another deployment operation is in progress" >&2
+    echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
+    exit 1
+fi
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -128,6 +137,21 @@ if [ "$LIST_BACKUPS" = true ]; then
     exit 0
 fi
 
+# Validate backup name if provided by user
+if [ -n "$BACKUP_NAME" ]; then
+    # Allow only alphanumeric, underscore, dash
+    if ! echo "$BACKUP_NAME" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+        echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
+        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
+        exit 1
+    fi
+    # Prevent path traversal
+    if echo "$BACKUP_NAME" | grep -qE '\.\.|/'; then
+        echo "ERROR: Backup name contains invalid characters (.. or /)" >&2
+        exit 1
+    fi
+fi
+
 # Show backup plan
 if [ "$QUIET" = false ]; then
     echo ""
@@ -184,7 +208,8 @@ if [ -z "$ACTUAL_BACKUP_NAME" ]; then
 fi
 
 # Save backup reference
-echo "$ACTUAL_BACKUP_NAME" > "$BACKUP_REF_FILE"
+echo "$ACTUAL_BACKUP_NAME" > "${BACKUP_REF_FILE}.tmp"
+mv "${BACKUP_REF_FILE}.tmp" "$BACKUP_REF_FILE"
 
 log "Backup created: $ACTUAL_BACKUP_NAME"
 

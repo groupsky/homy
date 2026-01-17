@@ -8,6 +8,15 @@
 
 set -euo pipefail
 
+# Prevent concurrent deployments
+LOCK_FILE="/var/lock/homy-deployment.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    echo "ERROR: Another deployment operation is in progress" >&2
+    echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
+    exit 1
+fi
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -83,6 +92,22 @@ done
 
 # Ensure log directory exists
 mkdir -p "$DEPLOY_LOG_DIR"
+
+# Track if services were stopped
+SERVICES_STOPPED=false
+
+# Cleanup handler for interruption
+cleanup() {
+    local exit_code=$?
+    if [ "$SERVICES_STOPPED" = true ]; then
+        log "Script interrupted! Attempting to restart services..."
+        docker compose up -d || true
+        log "Emergency restart attempted. Check service status!"
+    fi
+    exit $exit_code
+}
+
+trap cleanup EXIT INT TERM
 
 # Load secrets for notifications (optional)
 TELEGRAM_TOKEN=""
@@ -252,16 +277,19 @@ if [ "$SKIP_BACKUP" = false ]; then
         exit 1
     }
     log "Backup created: $BACKUP_NAME"
+    SERVICES_STOPPED=true
 else
     # Skip backup but still stop services for clean deployment
     log "Skipping backup (as requested)..."
     log "Stopping services..."
     docker compose down
+    SERVICES_STOPPED=true
 fi
 
 # Start services with new images
 log "Starting services..."
 docker compose up -d
+SERVICES_STOPPED=false
 
 # Health check loop
 log "Waiting for services to be healthy..."
@@ -299,11 +327,13 @@ if [ "$HEALTHY" = true ]; then
 
     # Save previous version before updating
     if [ "$CURRENT_VERSION" != "unknown" ]; then
-        echo "$CURRENT_VERSION" > "$PREVIOUS_VERSION_FILE"
+        echo "$CURRENT_VERSION" > "${PREVIOUS_VERSION_FILE}.tmp"
+        mv "${PREVIOUS_VERSION_FILE}.tmp" "$PREVIOUS_VERSION_FILE"
         log "Previous version saved: $CURRENT_VERSION"
     fi
 
-    echo "$NEW_VERSION" > "$VERSION_FILE"
+    echo "$NEW_VERSION" > "${VERSION_FILE}.tmp"
+    mv "${VERSION_FILE}.tmp" "$VERSION_FILE"
     notify "Deployment successful: ${NEW_VERSION:0:8}"
     cleanup_old_logs
 else

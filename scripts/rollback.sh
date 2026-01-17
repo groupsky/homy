@@ -8,6 +8,15 @@
 
 set -euo pipefail
 
+# Prevent concurrent deployments
+LOCK_FILE="/var/lock/homy-deployment.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    echo "ERROR: Another deployment operation is in progress" >&2
+    echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
+    exit 1
+fi
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -80,6 +89,22 @@ done
 # Ensure log directory exists
 mkdir -p "$PROJECT_DIR/logs"
 
+# Track if services were stopped
+SERVICES_STOPPED=false
+
+# Cleanup handler for interruption
+cleanup() {
+    local exit_code=$?
+    if [ "$SERVICES_STOPPED" = true ]; then
+        log "Script interrupted! Attempting to restart services..."
+        docker compose up -d || true
+        log "Emergency restart attempted. Check service status!"
+    fi
+    exit $exit_code
+}
+
+trap cleanup EXIT INT TERM
+
 # Load secrets for notifications (optional)
 TELEGRAM_TOKEN=""
 TELEGRAM_CHAT_ID=""
@@ -150,6 +175,21 @@ if [ -z "$BACKUP_NAME" ]; then
     exit 1
 fi
 
+# Validate backup name if provided by user
+if [ -n "$BACKUP_NAME" ]; then
+    # Allow only alphanumeric, underscore, dash
+    if ! echo "$BACKUP_NAME" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+        echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
+        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
+        exit 1
+    fi
+    # Prevent path traversal
+    if echo "$BACKUP_NAME" | grep -qE '\.\.|/'; then
+        echo "ERROR: Backup name contains invalid characters (.. or /)" >&2
+        exit 1
+    fi
+fi
+
 log "Rolling back to backup: $BACKUP_NAME"
 
 # Get current and previous versions
@@ -205,6 +245,7 @@ fi
 # Stop current services
 log "Stopping services..."
 docker compose stop
+SERVICES_STOPPED=true
 
 # Restore database backup using restore.sh (services already stopped, don't start after)
 log "Restoring databases from backup: $BACKUP_NAME"
@@ -220,6 +261,13 @@ log "Database restoration complete"
 
 # Reset code to previous commit if we know the version
 if [ "$PREV_VERSION" != "latest" ]; then
+    # Validate git reference before checkout
+    if ! git rev-parse --verify "${PREV_VERSION}^{commit}" >/dev/null 2>&1; then
+        log "ERROR: Invalid git reference: $PREV_VERSION"
+        log "Cannot proceed with rollback"
+        exit 1
+    fi
+
     log "Resetting code to previous version..."
     log "WARNING: This will put the repository in detached HEAD state"
     if ! git checkout "$PREV_VERSION" 2>&1 | tee -a "$ROLLBACK_LOG"; then
@@ -242,6 +290,7 @@ fi
 # Start services
 log "Starting services with previous version..."
 docker compose up -d
+SERVICES_STOPPED=false
 
 # Health check loop (shorter than deploy since this is recovery)
 log "Verifying rollback health..."
@@ -269,23 +318,26 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
     fi
 done
 
-# Check service status
-log "Service status after rollback:"
-docker compose ps | tee -a "$ROLLBACK_LOG"
+# Check final health status and update version accordingly
+if [ "$HEALTHY" = true ]; then
+    # Update version file
+    echo "$PREV_VERSION" > "${VERSION_FILE}.tmp"
+    mv "${VERSION_FILE}.tmp" "$VERSION_FILE"
 
-# Count running services (NDJSON format)
-RUNNING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0")
-TOTAL=$(docker compose ps --format json 2>/dev/null | jq -rs 'length' || echo "0")
+    log "Rollback complete."
+    log ""
+    log "Services are healthy."
 
-log "Running services: $RUNNING / $TOTAL"
+    notify "Rollback completed successfully to $BACKUP_NAME (version: ${PREV_VERSION:0:8})"
+else
+    log "ERROR: Rollback health check failed after ${MAX_WAIT}s"
+    log "Services status:"
+    docker compose ps | tee -a "$ROLLBACK_LOG"
 
-# Update version file
-echo "$PREV_VERSION" > "$VERSION_FILE"
+    notify "CRITICAL: Rollback to $BACKUP_NAME FAILED - services unhealthy"
 
-log "Rollback complete."
-log ""
-log "IMPORTANT: Review the service status above."
-log "Some data written between the backup and now may have been lost."
-log ""
-
-notify "Rollback completed to $BACKUP_NAME (version: ${PREV_VERSION:0:8})"
+    log ""
+    log "IMPORTANT: System may be in inconsistent state."
+    log "Manual intervention required. Check service logs."
+    exit 1
+fi
