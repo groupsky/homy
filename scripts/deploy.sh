@@ -5,11 +5,6 @@
 # This script handles deployment of the homy home automation system
 # with database-aware rollback capability.
 #
-# Usage:
-#   ./scripts/deploy.sh           # Deploy latest version from master
-#   ./scripts/deploy.sh --force   # Redeploy current version
-#   IMAGE_TAG=abc1234 ./scripts/deploy.sh --force  # Deploy specific version
-#
 
 set -euo pipefail
 
@@ -20,6 +15,63 @@ DEPLOY_LOG_DIR="$PROJECT_DIR/logs"
 DEPLOY_LOG="$DEPLOY_LOG_DIR/deploy-$(date +%Y%m%d-%H%M%S).log"
 VERSION_FILE="$PROJECT_DIR/.deployed-version"
 BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
+
+# Default values
+FORCE_DEPLOY=false
+IMAGE_TAG="${IMAGE_TAG:-}"
+SKIP_CONFIRM=false
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Deploy the homy home automation system with prebuilt images from GHCR.
+
+Options:
+  -h, --help          Show this help message and exit
+  -t, --tag TAG       Deploy specific image tag (git SHA, branch name, or 'latest')
+                      Examples: -t abc1234, -t feature-branch, -t latest
+  -f, --force         Force redeploy even if already at target version
+  -y, --yes           Skip confirmation prompt
+
+Examples:
+  $(basename "$0")                    # Deploy latest from master
+  $(basename "$0") --tag abc1234      # Deploy specific git SHA
+  $(basename "$0") --tag latest -f    # Force redeploy latest
+  $(basename "$0") -t feature-x -y    # Deploy branch without confirmation
+
+Environment Variables:
+  IMAGE_TAG           Alternative way to specify image tag (--tag takes precedence)
+
+EOF
+    exit 0
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            ;;
+        -t|--tag)
+            IMAGE_TAG="$2"
+            shift 2
+            ;;
+        -f|--force)
+            FORCE_DEPLOY=true
+            shift
+            ;;
+        -y|--yes)
+            SKIP_CONFIRM=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
 
 # Ensure log directory exists
 mkdir -p "$DEPLOY_LOG_DIR"
@@ -55,6 +107,24 @@ cleanup_old_logs() {
     fi
 }
 
+confirm() {
+    if [ "$SKIP_CONFIRM" = true ]; then
+        return 0
+    fi
+
+    local prompt="$1"
+    echo ""
+    read -r -p "$prompt [y/N] " response
+    case "$response" in
+        [yY][eE][sS]|[yY])
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # Change to project directory
 cd "$PROJECT_DIR"
 
@@ -72,19 +142,12 @@ fi
 CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
 log "Current version: $CURRENT_VERSION"
 
-# Check for --force flag
-FORCE_DEPLOY=false
-for arg in "$@"; do
-    if [ "$arg" = "--force" ]; then
-        FORCE_DEPLOY=true
-    fi
-done
-
 # Validate IMAGE_TAG if provided (prevent injection)
-if [ -n "${IMAGE_TAG:-}" ]; then
-    if ! echo "$IMAGE_TAG" | grep -qE '^[a-fA-F0-9]{7,40}$|^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$|^latest$'; then
+if [ -n "$IMAGE_TAG" ]; then
+    # Allow: git SHA (7-40 hex), semver, 'latest', or branch names (alphanumeric with .-_)
+    if ! echo "$IMAGE_TAG" | grep -qE '^[a-fA-F0-9]{7,40}$|^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$|^latest$|^[a-zA-Z0-9._-]+$'; then
         log "ERROR: Invalid IMAGE_TAG format: $IMAGE_TAG"
-        log "IMAGE_TAG must be a git SHA (7-40 hex chars), semantic version (v1.2.3), or 'latest'"
+        log "IMAGE_TAG must be a git SHA, semantic version (v1.2.3), branch name, or 'latest'"
         exit 1
     fi
 fi
@@ -98,6 +161,30 @@ log "Target version: $NEW_VERSION"
 
 if [ "$CURRENT_VERSION" = "$NEW_VERSION" ] && [ "$FORCE_DEPLOY" = false ]; then
     log "Already at target version. Use --force to redeploy."
+    exit 0
+fi
+
+# Show deployment plan and ask for confirmation
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "                     DEPLOYMENT PLAN"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+echo "  Current version:  $CURRENT_VERSION"
+echo "  Target version:   $NEW_VERSION"
+echo "  Force deploy:     $FORCE_DEPLOY"
+echo ""
+echo "  This will:"
+echo "    1. Stop all services"
+echo "    2. Create a backup of databases"
+echo "    3. Pull new images from GHCR"
+echo "    4. Start services with new version"
+echo "    5. Verify health (auto-rollback on failure)"
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+
+if ! confirm "Proceed with deployment?"; then
+    log "Deployment cancelled by user"
     exit 0
 fi
 
@@ -125,7 +212,7 @@ echo "$BACKUP_NAME" > "$BACKUP_REF_FILE"
 log "Backup created: $BACKUP_NAME"
 
 # Update code (only if not using IMAGE_TAG override)
-if [ -z "${IMAGE_TAG:-}" ]; then
+if [ -z "$IMAGE_TAG" ]; then
     log "Pulling latest code..."
     git checkout master
     git pull origin master
@@ -191,7 +278,7 @@ else
     notify "Deployment failed: Services unhealthy. Initiating rollback..."
 
     log "Initiating automatic rollback..."
-    if "$SCRIPT_DIR/rollback.sh"; then
+    if "$SCRIPT_DIR/rollback.sh" --yes; then
         notify "Rollback completed successfully"
     else
         notify "CRITICAL: Rollback also failed! Manual intervention required."

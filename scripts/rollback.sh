@@ -5,11 +5,6 @@
 # This script handles rollback to a previous deployment version,
 # including database restoration from backup.
 #
-# Usage:
-#   ./scripts/rollback.sh                    # Use most recent pre-upgrade backup
-#   ./scripts/rollback.sh 2026_01_17_14_30   # Use specific backup
-#   ./scripts/rollback.sh --list             # List available backups
-#
 
 set -euo pipefail
 
@@ -19,6 +14,67 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION_FILE="$PROJECT_DIR/.deployed-version"
 BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
 ROLLBACK_LOG="$PROJECT_DIR/logs/rollback-$(date +%Y%m%d-%H%M%S).log"
+
+# Default values
+BACKUP_NAME=""
+LIST_BACKUPS=false
+SKIP_CONFIRM=false
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS] [BACKUP_NAME]
+
+Rollback the homy home automation system to a previous version.
+
+Arguments:
+  BACKUP_NAME         Name of backup to restore (format: YYYY_MM_DD_HH_MM_SS)
+                      If not specified, uses the most recent pre-upgrade backup
+
+Options:
+  -h, --help          Show this help message and exit
+  -l, --list          List available backups and exit
+  -y, --yes           Skip confirmation prompt
+
+Examples:
+  $(basename "$0")                        # Rollback to most recent backup
+  $(basename "$0") 2026_01_17_14_30_00    # Rollback to specific backup
+  $(basename "$0") --list                 # List available backups
+  $(basename "$0") -y                     # Rollback without confirmation
+
+Warning:
+  Rollback restores databases from backup. Any data written after the backup
+  was created will be LOST. This includes sensor readings, state changes,
+  and configuration modifications.
+
+EOF
+    exit 0
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            ;;
+        -l|--list)
+            LIST_BACKUPS=true
+            shift
+            ;;
+        -y|--yes)
+            SKIP_CONFIRM=true
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+        *)
+            BACKUP_NAME="$1"
+            shift
+            ;;
+    esac
+done
 
 # Ensure log directory exists
 mkdir -p "$PROJECT_DIR/logs"
@@ -45,15 +101,33 @@ notify() {
 }
 
 list_backups() {
-    log "Available backups:"
-    docker compose run --rm volman list | tee -a "$ROLLBACK_LOG"
+    echo "Available backups:"
+    docker compose run --rm volman list
+}
+
+confirm() {
+    if [ "$SKIP_CONFIRM" = true ]; then
+        return 0
+    fi
+
+    local prompt="$1"
+    echo ""
+    read -r -p "$prompt [y/N] " response
+    case "$response" in
+        [yY][eE][sS]|[yY])
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 # Change to project directory
 cd "$PROJECT_DIR"
 
 # Handle --list flag
-if [ "${1:-}" = "--list" ]; then
+if [ "$LIST_BACKUPS" = true ]; then
     list_backups
     exit 0
 fi
@@ -63,19 +137,22 @@ log "Project directory: $PROJECT_DIR"
 log "Rollback log: $ROLLBACK_LOG"
 
 # Determine what to rollback to
-BACKUP_NAME="${1:-$(cat "$BACKUP_REF_FILE" 2>/dev/null || echo "")}"
+if [ -z "$BACKUP_NAME" ]; then
+    BACKUP_NAME=$(cat "$BACKUP_REF_FILE" 2>/dev/null || echo "")
+fi
+
 if [ -z "$BACKUP_NAME" ]; then
     log "ERROR: No backup specified and no recent backup found"
-    log "Usage: $0 [backup_name]"
-    log ""
+    echo ""
+    echo "Please specify a backup name or use --list to see available backups."
+    echo ""
     list_backups
     exit 1
 fi
 
 log "Rolling back to backup: $BACKUP_NAME"
 
-# Get previous version from git history
-# We'll go back one commit from current HEAD
+# Get current and previous versions
 CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
 log "Current version: $CURRENT_VERSION"
 
@@ -87,6 +164,33 @@ else
     PREV_VERSION="latest"
 fi
 log "Previous version: $PREV_VERSION"
+
+# Show rollback plan and ask for confirmation
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "                      ROLLBACK PLAN"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+echo "  Current version:  $CURRENT_VERSION"
+echo "  Target version:   $PREV_VERSION"
+echo "  Backup to restore: $BACKUP_NAME"
+echo ""
+echo "  This will:"
+echo "    1. Stop all services"
+echo "    2. Restore databases from backup"
+echo "    3. Pull previous version images"
+echo "    4. Start services with previous version"
+echo "    5. Verify health"
+echo ""
+echo "  ⚠️  WARNING: Any data written after the backup will be LOST!"
+echo "     This includes sensor readings, state changes, and configs."
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+
+if ! confirm "Proceed with rollback?"; then
+    log "Rollback cancelled by user"
+    exit 0
+fi
 
 # Stop current services
 log "Stopping services..."
