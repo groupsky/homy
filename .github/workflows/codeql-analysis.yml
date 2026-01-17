@@ -37,6 +37,12 @@ on:
     # Run weekly on Monday at 20:29 UTC to catch new vulnerabilities
     - cron: '29 20 * * 1'
 
+concurrency:
+  # Cancel in-progress runs for the same workflow and ref (branch/PR)
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel outdated scans when new commits are pushed to PRs (saves CI minutes)
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   # Required for code scanning to upload results
   security-events: write
