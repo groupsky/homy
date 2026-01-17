@@ -43,6 +43,102 @@ The deployment system uses prebuilt Docker images stored in GitHub Container Reg
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Scripts Reference
+
+All scripts are located in the `scripts/` directory and support `-h/--help` for usage information.
+
+### deploy.sh
+
+Deploy the system with prebuilt images from GHCR.
+
+```
+Usage: deploy.sh [OPTIONS]
+
+Options:
+  -h, --help          Show help message
+  -t, --tag TAG       Deploy specific image tag (git SHA, branch name, or 'latest')
+  -f, --force         Force redeploy even if already at target version
+  -y, --yes           Skip confirmation prompt
+```
+
+**Examples:**
+```bash
+./scripts/deploy.sh                      # Deploy latest from master
+./scripts/deploy.sh --tag abc1234        # Deploy specific git SHA
+./scripts/deploy.sh --tag feature-x      # Deploy from branch
+./scripts/deploy.sh --tag latest -f      # Force redeploy latest
+./scripts/deploy.sh -t abc1234 -y        # Deploy without confirmation
+```
+
+### rollback.sh
+
+Rollback to a previous version with database restoration.
+
+```
+Usage: rollback.sh [OPTIONS] [BACKUP_NAME]
+
+Options:
+  -h, --help          Show help message
+  -l, --list          List available backups
+  -y, --yes           Skip confirmation prompt
+```
+
+**Examples:**
+```bash
+./scripts/rollback.sh                        # Rollback to most recent backup
+./scripts/rollback.sh 2026_01_17_14_30_00    # Rollback to specific backup
+./scripts/rollback.sh --list                 # List available backups
+./scripts/rollback.sh -y                     # Rollback without confirmation
+```
+
+### backup.sh
+
+Create a manual backup of all databases.
+
+```
+Usage: backup.sh [OPTIONS] [BACKUP_NAME]
+
+Options:
+  -h, --help          Show help message
+  -s, --stop          Stop services before backup (recommended for consistency)
+  -y, --yes           Skip confirmation prompt
+  -q, --quiet         Quiet mode - output only backup name (for scripting)
+```
+
+**Examples:**
+```bash
+./scripts/backup.sh                      # Interactive backup with timestamp name
+./scripts/backup.sh pre-upgrade          # Create backup named 'pre-upgrade'
+./scripts/backup.sh -s                   # Stop services for consistent backup
+./scripts/backup.sh -s -y                # Stop services, no confirmation
+./scripts/backup.sh -q                   # Quiet mode for scripts
+```
+
+### restore.sh
+
+Restore databases from a backup.
+
+```
+Usage: restore.sh [OPTIONS] [BACKUP_NAME]
+
+Options:
+  -h, --help          Show help message
+  -l, --list          List available backups
+  -s, --start         Start services after restore
+  -y, --yes           Skip confirmation prompt
+  -q, --quiet         Quiet mode (for scripting)
+```
+
+**Examples:**
+```bash
+./scripts/restore.sh --list                  # List available backups
+./scripts/restore.sh 2026_01_17_14_30_00     # Restore specific backup
+./scripts/restore.sh                         # Restore most recent backup
+./scripts/restore.sh -s -y                   # Restore and start services
+```
+
+**Note:** Services must be stopped before restore. Use `docker compose down` first, or use `rollback.sh` which handles this automatically.
+
 ## Deployment Workflows
 
 ### Standard Deployment
@@ -56,13 +152,23 @@ cd /path/to/homy
 ```
 
 The script will:
-1. Fetch the latest code from origin/master
+1. Show deployment plan and ask for confirmation
 2. Stop all services
 3. Create a backup of databases (InfluxDB, MongoDB, Home Assistant)
 4. Pull prebuilt images from GHCR
 5. Start services with new images
-6. Wait for health checks to pass
-7. If unhealthy after 5 minutes, automatically rollback
+6. Wait for health checks to pass (5 minutes timeout)
+7. If unhealthy, automatically rollback
+
+### Deploy Specific Version
+
+Deploy a specific git SHA or branch:
+
+```bash
+./scripts/deploy.sh --tag abc1234        # Specific SHA
+./scripts/deploy.sh --tag feature-branch # Branch name
+./scripts/deploy.sh --tag latest         # Latest from master
+```
 
 ### Force Redeploy
 
@@ -70,14 +176,7 @@ Redeploy the current version (e.g., after configuration changes):
 
 ```bash
 ./scripts/deploy.sh --force
-```
-
-### Deploy Specific Version
-
-Deploy a specific git SHA or tag:
-
-```bash
-IMAGE_TAG=abc1234 ./scripts/deploy.sh --force
+./scripts/deploy.sh -t abc1234 -f        # Force specific version
 ```
 
 ### Rollback
@@ -97,13 +196,28 @@ Use the most recent pre-upgrade backup:
 Rollback to a specific backup:
 
 ```bash
-./scripts/rollback.sh 2026_01_17_14_30
+./scripts/rollback.sh 2026_01_17_14_30_00
 ```
 
 List available backups:
 
 ```bash
 ./scripts/rollback.sh --list
+```
+
+### Manual Backup and Restore
+
+For maintenance or migration, you can backup and restore independently:
+
+```bash
+# Create a backup before maintenance
+./scripts/backup.sh -s maintenance-backup
+
+# ... perform maintenance ...
+
+# Restore if needed
+docker compose down
+./scripts/restore.sh -s maintenance-backup
 ```
 
 ## Image Management
@@ -257,24 +371,34 @@ If GHCR pull fails:
 
 ### Backup Issues
 
-List and verify backups:
+List available backups:
 
 ```bash
-docker compose run --rm volman list
+./scripts/backup.sh --list
+# or
+./scripts/restore.sh --list
 ```
 
-Manual backup:
+Create a manual backup:
 
 ```bash
-docker compose run --rm volman backup
+./scripts/backup.sh                      # Interactive
+./scripts/backup.sh -s pre-maintenance   # Stop services, named backup
 ```
 
-Manual restore (stops services first):
+Restore from backup:
 
 ```bash
 docker compose down
+./scripts/restore.sh -s BACKUP_NAME      # Restore and start services
+```
+
+Direct volman commands (advanced):
+
+```bash
+docker compose run --rm volman list
+docker compose run --rm volman backup
 docker compose run --rm volman restore BACKUP_NAME
-docker compose up -d
 ```
 
 ## Prerequisites

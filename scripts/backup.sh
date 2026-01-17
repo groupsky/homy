@@ -17,6 +17,7 @@ BACKUP_NAME=""
 STOP_SERVICES=false
 SKIP_CONFIRM=false
 QUIET=false
+LIST_BACKUPS=false
 
 usage() {
     cat <<EOF
@@ -29,6 +30,7 @@ Arguments:
 
 Options:
   -h, --help          Show this help message and exit
+  -l, --list          List available backups and exit
   -s, --stop          Stop services before backup (recommended for consistency)
   -y, --yes           Skip confirmation prompt
   -q, --quiet         Suppress output except errors (for scripting)
@@ -53,6 +55,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
             usage
+            ;;
+        -l|--list)
+            LIST_BACKUPS=true
+            shift
             ;;
         -s|--stop)
             STOP_SERVICES=true
@@ -85,6 +91,11 @@ log() {
     fi
 }
 
+list_backups() {
+    echo "Available backups:"
+    docker compose run --rm volman list
+}
+
 confirm() {
     if [ "$SKIP_CONFIRM" = true ]; then
         return 0
@@ -109,6 +120,12 @@ cd "$PROJECT_DIR"
 if [ ! -f docker-compose.yml ]; then
     echo "ERROR: docker-compose.yml not found. Not in project root?" >&2
     exit 1
+fi
+
+# Handle --list flag
+if [ "$LIST_BACKUPS" = true ]; then
+    list_backups
+    exit 0
 fi
 
 # Show backup plan
