@@ -203,8 +203,18 @@ log "Using IMAGE_TAG: $IMAGE_TAG"
 # Pull prebuilt images from GHCR (while services are still running)
 log "Pulling prebuilt images from GHCR..."
 if ! docker compose pull 2>&1 | tee -a "$DEPLOY_LOG"; then
-    log "WARNING: Some images may not be available in GHCR. Falling back to local build."
-    # If pull fails for some images, they'll be built locally
+    log "ERROR: Failed to pull images from GHCR"
+    log "This usually means:"
+    log "  - Images for tag '$IMAGE_TAG' don't exist in GHCR"
+    log "  - Network connectivity issues"
+    log "  - Authentication problems"
+    log ""
+    log "Please check:"
+    log "  1. CI workflow completed successfully for this version"
+    log "  2. Images exist: docker manifest inspect ghcr.io/groupsky/homy/automations:$IMAGE_TAG"
+    log "  3. GHCR authentication: docker login ghcr.io"
+    notify "Deployment failed: Could not pull images for tag $IMAGE_TAG"
+    exit 1
 fi
 
 # Create pre-upgrade backup (stops services, creates backup, but doesn't restart)
