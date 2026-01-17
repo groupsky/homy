@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/nodered:3.1.15-18
+FROM ghcr.io/groupsky/homy/nodered:4.1.2-18
 
 # Copy package.json to the WORKDIR so npm builds all
 # of your added nodes modules for Node-RED
