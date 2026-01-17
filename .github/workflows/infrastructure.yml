@@ -42,7 +42,7 @@ jobs:
       - name: Validate ingress template generation
         run: |
           echo "Starting test backend services for ingress validation..."
-          docker compose --env-file example.env up -d grafana whoami
+          docker compose --env-file example.env up -d grafana ha
 
           echo "Starting ingressgen to generate nginx config..."
           docker compose --env-file example.env up -d ingressgen
