@@ -96,7 +96,10 @@ docker compose down
 log "Restoring databases from backup: $BACKUP_NAME"
 if ! docker compose run --rm volman restore "$BACKUP_NAME"; then
     log "ERROR: Backup restoration failed"
-    notify "CRITICAL: Rollback failed - backup restoration error"
+    log "Attempting to start services without database restoration..."
+    notify "CRITICAL: Rollback backup restoration failed. Attempting service recovery..."
+    # Try to start services anyway - better than leaving system completely down
+    docker compose up -d || true
     exit 1
 fi
 log "Database restoration complete"
@@ -104,7 +107,13 @@ log "Database restoration complete"
 # Reset code to previous commit if we know the version
 if [ "$PREV_VERSION" != "latest" ]; then
     log "Resetting code to previous version..."
-    git checkout "$PREV_VERSION"
+    log "WARNING: This will put the repository in detached HEAD state"
+    if ! git checkout "$PREV_VERSION" 2>&1 | tee -a "$ROLLBACK_LOG"; then
+        log "WARNING: git checkout failed. Trying with --force..."
+        if ! git checkout --force "$PREV_VERSION" 2>&1 | tee -a "$ROLLBACK_LOG"; then
+            log "WARNING: Could not checkout previous version. Continuing with current code."
+        fi
+    fi
 fi
 
 # Pull previous version images
@@ -120,17 +129,39 @@ fi
 log "Starting services with previous version..."
 docker compose up -d
 
-# Brief health verification
-log "Verifying rollback..."
-sleep 30
+# Health check loop (shorter than deploy since this is recovery)
+log "Verifying rollback health..."
+HEALTHY=false
+MAX_WAIT=120  # 2 minutes for rollback verification
+WAIT_INTERVAL=10
+ELAPSED=0
+
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+    sleep $WAIT_INTERVAL
+    ELAPSED=$((ELAPSED + WAIT_INTERVAL))
+
+    # docker compose ps --format json outputs NDJSON
+    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy" or .State == "exited")] | .[].Name' 2>/dev/null | head -5 || echo "")
+
+    if [ -z "$UNHEALTHY" ]; then
+        STARTING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
+        if [ -z "$STARTING" ]; then
+            HEALTHY=true
+            break
+        fi
+        log "Waiting... still starting: $STARTING (${ELAPSED}s)"
+    else
+        log "Waiting... unhealthy: $UNHEALTHY (${ELAPSED}s)"
+    fi
+done
 
 # Check service status
 log "Service status after rollback:"
 docker compose ps | tee -a "$ROLLBACK_LOG"
 
-# Count running services
-RUNNING=$(docker compose ps --format json 2>/dev/null | jq -r 'select(.State == "running") | .Name' | wc -l || echo "0")
-TOTAL=$(docker compose ps --format json 2>/dev/null | jq -r '.Name' | wc -l || echo "0")
+# Count running services (NDJSON format)
+RUNNING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0")
+TOTAL=$(docker compose ps --format json 2>/dev/null | jq -rs 'length' || echo "0")
 
 log "Running services: $RUNNING / $TOTAL"
 

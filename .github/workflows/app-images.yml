@@ -6,6 +6,10 @@ on:
     paths:
       - 'docker/**'
       - '.github/workflows/app-images.yml'
+  pull_request:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/app-images.yml'
   workflow_dispatch:
     inputs:
       force_all:
@@ -65,9 +69,14 @@ jobs:
 
             # Check each service for changes
             for service in "${SERVICES[@]}"; do
-              CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- \
+              if ! CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- \
                 "docker/$service/" \
-                ".github/workflows/app-images.yml" 2>/dev/null || echo "")
+                ".github/workflows/app-images.yml" 2>&1); then
+                echo "Warning: git diff failed for $service: $CHANGED"
+                # On error, assume changed to be safe
+                CHANGED_SERVICES+=("$service")
+                continue
+              fi
 
               if [ -n "$CHANGED" ]; then
                 echo "Changes detected for $service"
@@ -128,19 +137,21 @@ jobs:
       - name: Extract metadata
         id: meta
         run: |
-          # Generate short SHA
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          # Generate short SHA using git (handles uniqueness automatically)
+          SHORT_SHA=$(git rev-parse --short=7 ${{ github.sha }})
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
 
-          # Generate timestamp
-          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          # Generate RFC 3339 timestamp
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: docker/${{ matrix.service }}
-          push: true
+          # Only push on master branch, not on PRs
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: |
             ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}
             ghcr.io/groupsky/homy/${{ matrix.service }}:${{ steps.meta.outputs.short_sha }}

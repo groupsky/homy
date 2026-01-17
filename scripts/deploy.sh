@@ -80,6 +80,15 @@ for arg in "$@"; do
     fi
 done
 
+# Validate IMAGE_TAG if provided (prevent injection)
+if [ -n "${IMAGE_TAG:-}" ]; then
+    if ! echo "$IMAGE_TAG" | grep -qE '^[a-fA-F0-9]{7,40}$|^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$|^latest$'; then
+        log "ERROR: Invalid IMAGE_TAG format: $IMAGE_TAG"
+        log "IMAGE_TAG must be a git SHA (7-40 hex chars), semantic version (v1.2.3), or 'latest'"
+        exit 1
+    fi
+fi
+
 # Fetch latest and determine new version
 log "Fetching latest changes from origin..."
 git fetch origin master
@@ -94,21 +103,24 @@ fi
 
 # Create pre-upgrade backup
 log "Creating backup before upgrade..."
-BACKUP_NAME=$(date +%Y_%m_%d_%H_%M_%S)
 
 # Stop services first for clean backup
 log "Stopping services for backup..."
 docker compose down
 
-# Run backup
-if ! docker compose run --rm volman backup; then
+# Run backup and capture output to extract actual backup name
+BACKUP_OUTPUT=$(docker compose run --rm volman backup 2>&1) || {
     log "ERROR: Backup failed"
+    log "Backup output: $BACKUP_OUTPUT"
     notify "Deployment failed: Backup error"
     # Try to restart services
     docker compose up -d
     exit 1
-fi
+}
 
+# Extract backup name from volman output (format: "Creating backup YYYY_MM_DD_HH_MM_SS")
+# Fall back to searching for the most recent backup directory
+BACKUP_NAME=$(echo "$BACKUP_OUTPUT" | grep -oP 'Creating backup \K[0-9_]+' || ls -1t /backup/ 2>/dev/null | head -1 || date +%Y_%m_%d_%H_%M_%S)
 echo "$BACKUP_NAME" > "$BACKUP_REF_FILE"
 log "Backup created: $BACKUP_NAME"
 
@@ -146,12 +158,16 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
     sleep $WAIT_INTERVAL
     ELAPSED=$((ELAPSED + WAIT_INTERVAL))
 
-    # Check for unhealthy containers
-    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -r 'select(.Health == "unhealthy") | .Name' 2>/dev/null | head -5 || echo "")
+    # docker compose ps --format json outputs NDJSON (one JSON object per line)
+    # Use jq -s to slurp lines into an array, then filter
+    # Also check State for containers without health checks
+
+    # Check for unhealthy or exited containers
+    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy" or .State == "exited")] | .[].Name' 2>/dev/null | head -5 || echo "")
 
     if [ -z "$UNHEALTHY" ]; then
         # No unhealthy containers - check if any are still starting
-        STARTING=$(docker compose ps --format json 2>/dev/null | jq -r 'select(.Health == "starting") | .Name' 2>/dev/null | head -5 || echo "")
+        STARTING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
         if [ -z "$STARTING" ]; then
             HEALTHY=true
             break

@@ -125,9 +125,12 @@ The following services are built as prebuilt images in CI:
 | mosquitto | MQTT broker |
 | mqtt-influx | MQTT to InfluxDB bridge |
 | mqtt-mongo | MQTT to MongoDB bridge |
+| nodered | Node-RED flow automation |
 | sunseeker-monitoring | Lawn mower monitoring |
+| telegraf | Metrics collection agent |
 | telegram-bridge | Telegram notifications |
 | volman | Volume backup management |
+| zigbee2mqtt | Zigbee device integration |
 
 ### Image Tags
 
@@ -179,12 +182,17 @@ For most home automation use cases, losing a few hours of sensor data is accepta
 Set in your `.env` file:
 
 ```bash
-# Use latest for development
+# Use latest for development (default)
 IMAGE_TAG=latest
 
-# Or pin to specific version for production
-IMAGE_TAG=abc1234567890
+# Or pin to specific git SHA for production
+IMAGE_TAG=abc1234567890123456789012345678901234abcd
+
+# Short SHA also works
+IMAGE_TAG=abc1234
 ```
+
+**Note:** The CI workflow creates SHA-based tags only (full SHA, short SHA, and `latest`). Semantic version tags (v1.2.3) are not automatically created.
 
 ### Docker Compose Dual-Mode
 
@@ -269,6 +277,18 @@ docker compose run --rm volman restore BACKUP_NAME
 docker compose up -d
 ```
 
+## Prerequisites
+
+The following tools must be installed on the production server:
+
+| Tool | Purpose | Installation |
+|------|---------|--------------|
+| docker | Container runtime | https://docs.docker.com/engine/install/ |
+| docker compose | Container orchestration | Included with Docker Desktop or install plugin |
+| git | Version control | `apt install git` |
+| jq | JSON processing for health checks | `apt install jq` |
+| curl | API requests (notifications) | `apt install curl` |
+
 ## Pre-Deployment Checklist
 
 Before deploying to production:
@@ -276,9 +296,10 @@ Before deploying to production:
 1. [ ] All tests pass in CI
 2. [ ] App images built and pushed to GHCR
 3. [ ] GHCR authentication configured on production server
-4. [ ] Sufficient disk space for backup
-5. [ ] Telegram notifications configured (optional)
-6. [ ] No critical processes running that require uninterrupted service
+4. [ ] All prerequisites installed (docker, jq, git, curl)
+5. [ ] Sufficient disk space for backup
+6. [ ] Telegram notifications configured (optional)
+7. [ ] No critical processes running that require uninterrupted service
 
 ## Post-Deployment Verification
 
