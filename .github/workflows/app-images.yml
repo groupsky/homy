@@ -133,14 +133,14 @@ jobs:
           if [ ${#CHANGED_SERVICES[@]} -eq 0 ]; then
             echo "changed=[]" >> $GITHUB_OUTPUT
           else
-            CHANGED_JSON=$(printf '%s\n' "${CHANGED_SERVICES[@]}" | jq -R . | jq -s .)
+            CHANGED_JSON=$(printf '%s\n' "${CHANGED_SERVICES[@]}" | jq -R . | jq -sc .)
             echo "changed=$CHANGED_JSON" >> $GITHUB_OUTPUT
           fi
 
           if [ ${#UNCHANGED_SERVICES[@]} -eq 0 ]; then
             echo "unchanged=[]" >> $GITHUB_OUTPUT
           else
-            UNCHANGED_JSON=$(printf '%s\n' "${UNCHANGED_SERVICES[@]}" | jq -R . | jq -s .)
+            UNCHANGED_JSON=$(printf '%s\n' "${UNCHANGED_SERVICES[@]}" | jq -R . | jq -sc .)
             echo "unchanged=$UNCHANGED_JSON" >> $GITHUB_OUTPUT
           fi
 
