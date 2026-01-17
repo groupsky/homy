@@ -196,14 +196,14 @@ jobs:
           if [ ${#TO_BUILD[@]} -eq 0 ]; then
             echo "to_build=[]" >> $GITHUB_OUTPUT
           else
-            TO_BUILD_JSON=$(printf '%s\n' "${TO_BUILD[@]}" | jq -R . | jq -s .)
+            TO_BUILD_JSON=$(printf '%s\n' "${TO_BUILD[@]}" | jq -R . | jq -sc .)
             echo "to_build=$TO_BUILD_JSON" >> $GITHUB_OUTPUT
           fi
 
           if [ ${#TO_RETAG[@]} -eq 0 ]; then
             echo "to_retag=[]" >> $GITHUB_OUTPUT
           else
-            TO_RETAG_JSON=$(printf '%s\n' "${TO_RETAG[@]}" | jq -R . | jq -s .)
+            TO_RETAG_JSON=$(printf '%s\n' "${TO_RETAG[@]}" | jq -R . | jq -sc .)
             echo "to_retag=$TO_RETAG_JSON" >> $GITHUB_OUTPUT
           fi
 
@@ -227,7 +227,7 @@ jobs:
           fi
 
           # Merge arrays
-          MATRIX=$(jq -s 'add | unique' <<< "$CHANGED $TO_BUILD")
+          MATRIX=$(jq -sc 'add | unique' <<< "$CHANGED $TO_BUILD")
           echo "Build matrix: $MATRIX"
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
