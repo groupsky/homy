@@ -188,27 +188,15 @@ if ! confirm "Proceed with deployment?"; then
     exit 0
 fi
 
-# Create pre-upgrade backup
+# Create pre-upgrade backup (stops services, creates backup, but doesn't restart)
 log "Creating backup before upgrade..."
-
-# Stop services first for clean backup
-log "Stopping services for backup..."
-docker compose down
-
-# Run backup and capture output to extract actual backup name
-BACKUP_OUTPUT=$(docker compose run --rm volman backup 2>&1) || {
+BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet) || {
     log "ERROR: Backup failed"
-    log "Backup output: $BACKUP_OUTPUT"
     notify "Deployment failed: Backup error"
     # Try to restart services
     docker compose up -d
     exit 1
 }
-
-# Extract backup name from volman output (format: "Creating backup YYYY_MM_DD_HH_MM_SS")
-# Fall back to searching for the most recent backup directory
-BACKUP_NAME=$(echo "$BACKUP_OUTPUT" | grep -oP 'Creating backup \K[0-9_]+' || ls -1t /backup/ 2>/dev/null | head -1 || date +%Y_%m_%d_%H_%M_%S)
-echo "$BACKUP_NAME" > "$BACKUP_REF_FILE"
 log "Backup created: $BACKUP_NAME"
 
 # Update code (only if not using IMAGE_TAG override)

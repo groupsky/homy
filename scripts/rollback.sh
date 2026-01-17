@@ -101,8 +101,7 @@ notify() {
 }
 
 list_backups() {
-    echo "Available backups:"
-    docker compose run --rm volman list
+    "$SCRIPT_DIR/restore.sh" --list
 }
 
 confirm() {
@@ -196,9 +195,9 @@ fi
 log "Stopping services..."
 docker compose down
 
-# Restore database backup
+# Restore database backup using restore.sh (services already stopped, don't start after)
 log "Restoring databases from backup: $BACKUP_NAME"
-if ! docker compose run --rm volman restore "$BACKUP_NAME"; then
+if ! "$SCRIPT_DIR/restore.sh" --yes --quiet "$BACKUP_NAME"; then
     log "ERROR: Backup restoration failed"
     log "Attempting to start services without database restoration..."
     notify "CRITICAL: Rollback backup restoration failed. Attempting service recovery..."
