@@ -1,4 +1,4 @@
-const parser = require('cron-parser');
+const { CronExpressionParser } = require('cron-parser');
 
 module.exports = (name, {
     valveControlTopic,
@@ -8,7 +8,7 @@ module.exports = (name, {
     verbose
 }) => ({
     start: ({mqtt}) => {
-        const interval = parser.parseExpression(schedule);
+        const interval = CronExpressionParser.parse(schedule);
 
         const update = () => {
             const computeWantedStatus = () => {
