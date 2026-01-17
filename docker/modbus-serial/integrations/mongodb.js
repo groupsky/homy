@@ -6,7 +6,6 @@ module.exports = ({ url, options, collection }) => {
   MongoClient
     .connect(url, {
       ...options,
-      useUnifiedTopology: true,
     })
     .then((mongoClient) => {
       const db = mongoClient.db()
