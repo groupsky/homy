@@ -17,6 +17,10 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -312,12 +316,10 @@ jobs:
 
   # Retag unchanged images that have base images
   retag-images:
-    needs: [detect-changes, check-base-images, build-and-push]
+    needs: [detect-changes, check-base-images]
     if: |
-      always() &&
       needs.detect-changes.outputs.should_push == 'true' &&
-      needs.check-base-images.outputs.to_retag != '[]' &&
-      needs.check-base-images.result == 'success'
+      needs.check-base-images.outputs.to_retag != '[]'
     runs-on: ubuntu-latest
     permissions:
       packages: write
