@@ -83,7 +83,7 @@ client.on('connect', function () {
             const db = mongoClient.db()
             const col = db.collection(collection)
 
-            client.on('message', function (topic, message) {
+            client.on('message', async function (topic, message) {
                 const payload = JSON.parse(message)
                 if (!payload._tz) {
                     payload._tz = Date.now()
@@ -92,12 +92,12 @@ client.on('connect', function () {
                     topic,
                     payload
                 }
-                col.insertOne(record, function (err) {
-                    if (err) {
-                        console.error('Failure writing to mongo', err)
-                        process.exit(1)
-                    }
-                })
+                try {
+                    await col.insertOne(record)
+                } catch (err) {
+                    console.error('Failure writing to mongo', err)
+                    process.exit(1)
+                }
             })
         })
     })
