@@ -64,6 +64,7 @@ services:
       - net.ipv4.conf.all.src_valid_mark=1
 
   broker:
+    image: ghcr.io/groupsky/homy/mosquitto:${IMAGE_TAG:-latest}
     build: docker/mosquitto
     restart: unless-stopped
     networks:
@@ -77,6 +78,7 @@ services:
       - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
 
   nodered:
+    image: ghcr.io/groupsky/homy/nodered:${IMAGE_TAG:-latest}
     build: docker/nodered
     depends_on:
       - broker
@@ -101,6 +103,7 @@ services:
     user: ${PUID}:${PGID}
 
   ha:
+    image: ghcr.io/groupsky/homy/homeassistant:${IMAGE_TAG:-latest}
     build: docker/homeassistant
     depends_on:
       - broker
@@ -128,6 +131,7 @@ services:
       - ./docker/homeassistant/custom_components/sunseeker-lawn-mower/custom_components/sunseeker:/config/custom_components/sunseeker:ro
 
   z2m-home1:
+    image: ghcr.io/groupsky/homy/zigbee2mqtt:${IMAGE_TAG:-latest}
     build: docker/zigbee2mqtt
     depends_on:
       - broker
@@ -211,6 +215,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   main-power:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -246,6 +251,7 @@ services:
       - ${MAIN_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   secondary-power:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -281,6 +287,7 @@ services:
       - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   tetriary-power:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -317,6 +324,7 @@ services:
       - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
 
   monitoring:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -354,6 +362,7 @@ services:
       - ${CONFIG_PATH}/modbus-serial/monitoring.config.js:/etc/config.js:ro
 
   monitoring2:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -391,6 +400,7 @@ services:
       - ${CONFIG_PATH}/modbus-serial/monitoring2.config.js:/etc/config.js:ro
 
   dry-switches:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -427,6 +437,7 @@ services:
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
 
   solar:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -464,6 +475,7 @@ services:
       - ${CONFIG_PATH}/modbus-serial/solar.config.js:/etc/config.js:ro
 
   inverter:
+    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -500,6 +512,7 @@ services:
       - ${CONFIG_PATH}/modbus-serial/inverter.config.js:/etc/config.js:ro
 
   influxdb:
+    image: ghcr.io/groupsky/homy/influxdb:${IMAGE_TAG:-latest}
     build: docker/influxdb
     restart: unless-stopped
     networks:
@@ -533,6 +546,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   grafana:
+    image: ghcr.io/groupsky/homy/grafana:${IMAGE_TAG:-latest}
     build:
       context: docker/grafana
       args:
@@ -570,6 +584,7 @@ services:
     user: ${PUID}:${PGID}
 
   telegram-bridge:
+    image: ghcr.io/groupsky/homy/telegram-bridge:${IMAGE_TAG:-latest}
     build: docker/telegram-bridge
     restart: unless-stopped
     networks:
@@ -588,6 +603,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   mqtt-mongo-history:
+    image: ghcr.io/groupsky/homy/mqtt-mongo:${IMAGE_TAG:-latest}
     build: docker/mqtt-mongo
     depends_on:
       - broker
@@ -610,6 +626,7 @@ services:
       - MQTT_CLIENT_ID=mqtt-mongo-history
 
   mqtt-influx-primary:
+    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -634,6 +651,7 @@ services:
       - TAGS={"bus":"primary"}
 
   mqtt-influx-secondary:
+    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -658,6 +676,7 @@ services:
       - TAGS={"bus":"secondary"}
 
   mqtt-influx-tetriary:
+    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -682,6 +701,7 @@ services:
       - TAGS={"bus":"tetriary"}
 
   automation-events-processor:
+    image: ghcr.io/groupsky/homy/automation-events-processor:${IMAGE_TAG:-latest}
     build: docker/automation-events-processor
     depends_on:
       - broker
@@ -706,6 +726,7 @@ services:
       - TAGS={"source":"automation_events"}
 
   sunseeker-monitoring:
+    image: ghcr.io/groupsky/homy/sunseeker-monitoring:${IMAGE_TAG:-latest}
     build: docker/sunseeker-monitoring
     depends_on:
       - influxdb
@@ -730,6 +751,7 @@ services:
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
 
   dmx-driver:
+    image: ghcr.io/groupsky/homy/dmx-driver:${IMAGE_TAG:-latest}
     build: docker/dmx-driver
     depends_on:
       - broker
@@ -749,6 +771,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
 
   automations:
+    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
     build: docker/automations
     depends_on:
       - broker
@@ -771,6 +794,7 @@ services:
     user: ${PUID}:${PGID}
 
   boiler-controller:
+    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
     build: docker/automations
     depends_on:
       - broker
@@ -793,6 +817,7 @@ services:
     user: ${PUID}:${PGID}
 
   features:
+    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
     build: docker/automations
     depends_on:
       - broker
@@ -813,6 +838,7 @@ services:
       - ${CONFIG_PATH}/automations/features.js:/etc/config.js:ro
 
   ha_discovery:
+    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
     build: docker/automations
     depends_on:
       - broker
@@ -835,6 +861,7 @@ services:
   # Manualy run with
   # dc run historian-primary node index.js
   historian-primary:
+    image: ghcr.io/groupsky/homy/historian:${IMAGE_TAG:-latest}
     build: docker/historian
     depends_on:
       - broker
@@ -860,6 +887,7 @@ services:
   # Manualy run with
   # dc run historian-secondary node index.js
   historian-secondary:
+    image: ghcr.io/groupsky/homy/historian:${IMAGE_TAG:-latest}
     build: docker/historian
     depends_on:
       - broker
@@ -883,6 +911,7 @@ services:
       - COLLECTION=secondary
 
   telegraf-ovms:
+    image: ghcr.io/groupsky/homy/telegraf:${IMAGE_TAG:-latest}
     build: docker/telegraf
     depends_on:
       - influxdb
@@ -915,6 +944,7 @@ services:
   # Manually run with
   # dc run volman
   volman:
+    image: ghcr.io/groupsky/homy/volman:${IMAGE_TAG:-latest}
     build: docker/volman
     restart: 'no'
     network_mode: none
