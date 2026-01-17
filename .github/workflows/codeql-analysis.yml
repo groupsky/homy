@@ -4,7 +4,6 @@
 #
 # Supported languages in this repository:
 # - JavaScript/TypeScript: Main application code, automations, MQTT services
-# - Python: Home Assistant custom components and analysis scripts
 # - Actions: GitHub Actions workflow files (security scanning for CI/CD pipelines)
 #
 # Query Suites:
@@ -61,8 +60,6 @@ jobs:
       matrix:
         include:
           - language: javascript-typescript
-            build-mode: none
-          - language: python
             build-mode: none
           - language: actions
             build-mode: none
