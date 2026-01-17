@@ -41,8 +41,24 @@ jobs:
 
       - name: Validate ingress template generation
         run: |
+          echo "Creating ingress network and starting ingress container..."
+          docker compose --env-file example.env up -d ingress
+
           echo "Starting test backend services for ingress validation..."
           docker compose --env-file example.env up -d grafana ha
+
+          echo "Waiting for services to be healthy on ingress network..."
+          for i in {1..10}; do
+            if docker network inspect homy_ingress -f '{{range .Containers}}{{.Name}} {{end}}' | grep -q grafana && \
+               docker network inspect homy_ingress -f '{{range .Containers}}{{.Name}} {{end}}' | grep -q ha; then
+              echo "✓ Services connected to ingress network after $i seconds"
+              break
+            fi
+            if [ $i -eq 10 ]; then
+              echo "WARNING: Services may not be fully connected to network"
+            fi
+            sleep 1
+          done
 
           echo "Starting ingressgen to generate nginx config..."
           docker compose --env-file example.env up -d ingressgen
