@@ -59,6 +59,7 @@ Options:
   -t, --tag TAG       Deploy specific image tag (git SHA, branch name, or 'latest')
   -f, --force         Force redeploy even if already at target version
   -y, --yes           Skip confirmation prompt
+  --skip-backup       Skip database backup (DANGEROUS - use only in emergencies)
 ```
 
 **Examples:**
@@ -68,7 +69,22 @@ Options:
 ./scripts/deploy.sh --tag feature-x      # Deploy from branch
 ./scripts/deploy.sh --tag latest -f      # Force redeploy latest
 ./scripts/deploy.sh -t abc1234 -y        # Deploy without confirmation
+./scripts/deploy.sh --skip-backup        # Emergency deploy without backup (requires confirmation)
 ```
+
+**Emergency Deployment (--skip-backup):**
+
+The `--skip-backup` option allows deployment without creating a database backup. This should **only** be used in emergencies where:
+- Backup creation is failing and blocking deployments
+- Immediate deployment is critical and data loss risk is acceptable
+- You have verified backups exist from a previous deployment
+
+When using `--skip-backup`, you must type `yes-skip-backup` to confirm you understand the risks:
+- If deployment fails, automatic rollback will not be possible
+- You may lose data if something goes wrong
+- Manual recovery will be required in case of failure
+
+Services are still stopped cleanly before deployment even when skipping backup.
 
 ### rollback.sh
 
@@ -137,7 +153,7 @@ Options:
 ./scripts/restore.sh -s -y                   # Restore and start services
 ```
 
-**Note:** Services must be stopped before restore. Use `docker compose down` first, or use `rollback.sh` which handles this automatically.
+**Note:** Services must be stopped before restore. Use `docker compose stop` first, or use `rollback.sh` which handles this automatically.
 
 ## Deployment Workflows
 
@@ -154,11 +170,12 @@ cd /path/to/homy
 The script will:
 1. Show deployment plan and ask for confirmation
 2. Pull prebuilt images from GHCR (while services are still running)
-3. Stop all services
+3. Stop all services (using `docker compose stop` to preserve container state)
 4. Create a backup of databases (InfluxDB, MongoDB, Home Assistant)
 5. Start services with new images
 6. Wait for health checks to pass (5 minutes timeout)
-7. If unhealthy, automatically rollback
+7. If successful, save current version to `.previous-version` for easy rollback
+8. If unhealthy, automatically rollback to previous version
 
 ### Deploy Specific Version
 
@@ -193,6 +210,11 @@ Use the most recent pre-upgrade backup:
 ./scripts/rollback.sh
 ```
 
+The rollback script automatically:
+- Restores databases from the most recent backup
+- Rolls back to the previous version (saved in `.previous-version` file during deployment)
+- Falls back to git history calculation if version file doesn't exist
+
 Rollback to a specific backup:
 
 ```bash
@@ -216,9 +238,11 @@ For maintenance or migration, you can backup and restore independently:
 # ... perform maintenance ...
 
 # Restore if needed
-docker compose down
+docker compose stop
 ./scripts/restore.sh -s maintenance-backup
 ```
+
+**Note:** The backup script uses `docker compose stop` instead of `docker compose down` to preserve container state and networks, allowing for faster restart with `docker compose start`.
 
 ## Image Management
 
@@ -389,7 +413,7 @@ Create a manual backup:
 Restore from backup:
 
 ```bash
-docker compose down
+docker compose stop
 ./scripts/restore.sh -s BACKUP_NAME      # Restore and start services
 ```
 
