@@ -34,7 +34,7 @@ describe('SunseekerMessageParser', () => {
       expect(modePoint).toBeDefined();
       expect(modePoint.device_id).toBe(TEST_DEVICE_ID);
       expect(modePoint.fields.mode).toBe(3);
-      expect(modePoint.fields.mode_text).toBe('Charging');
+      expect(modePoint.fields.mode_text).toBe('charging');
 
       // Verify power data point
       const powerPoint = result.find(p => p.measurement === 'sunseeker_power');
@@ -49,11 +49,11 @@ describe('SunseekerMessageParser', () => {
 
     it('should correctly map different operating modes', () => {
       const testCases = [
-        { mode: 0, expected: 'Standby' },
-        { mode: 1, expected: 'Mowing' },
-        { mode: 2, expected: 'Going Home' },
-        { mode: 3, expected: 'Charging' },
-        { mode: 7, expected: 'Departing' }
+        { mode: 0, expected: 'standby' },
+        { mode: 1, expected: 'mowing' },
+        { mode: 2, expected: 'on_the_way_home' },
+        { mode: 3, expected: 'charging' },
+        { mode: 7, expected: 'mowing_border' }
       ];
 
       const topic = TEST_TOPICS.DEVICE_UPDATE;
