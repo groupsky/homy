@@ -2,3 +2,10 @@
 !*.secret
 /.env
 node_modules/
+
+# Deployment state files
+.deployed-version
+.pre-upgrade-backup
+
+# Deployment logs
+logs/deploy-*.log

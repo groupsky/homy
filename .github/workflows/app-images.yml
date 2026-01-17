@@ -1,0 +1,170 @@
+name: Build App Images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docker/**'
+      - '.github/workflows/app-images.yml'
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Force rebuild all images'
+        type: boolean
+        default: false
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: detect
+        run: |
+          # Define all services to build as app images
+          # These are custom services with application code (not just version pins)
+          SERVICES=(
+            "automations"
+            "automation-events-processor"
+            "dmx-driver"
+            "grafana"
+            "historian"
+            "homeassistant"
+            "influxdb"
+            "modbus-serial"
+            "mosquitto"
+            "mqtt-influx"
+            "mqtt-mongo"
+            "nodered"
+            "sunseeker-monitoring"
+            "telegram-bridge"
+            "telegraf"
+            "volman"
+            "zigbee2mqtt"
+          )
+
+          CHANGED_SERVICES=()
+
+          # Manual trigger with force_all: build everything
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ inputs.force_all }}" == "true" ]; then
+            echo "Force rebuild all - building all services"
+            CHANGED_SERVICES=("${SERVICES[@]}")
+          else
+            # Determine base ref for comparison
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              BASE_REF="${{ github.event.pull_request.base.sha }}"
+            else
+              BASE_REF="HEAD^"
+            fi
+
+            # Check each service for changes
+            for service in "${SERVICES[@]}"; do
+              CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- \
+                "docker/$service/" \
+                ".github/workflows/app-images.yml" 2>/dev/null || echo "")
+
+              if [ -n "$CHANGED" ]; then
+                echo "Changes detected for $service"
+                CHANGED_SERVICES+=("$service")
+              fi
+            done
+          fi
+
+          # Convert to JSON array
+          if [ ${#CHANGED_SERVICES[@]} -eq 0 ]; then
+            echo "No services changed"
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+          else
+            # Build JSON array
+            JSON="["
+            for i in "${!CHANGED_SERVICES[@]}"; do
+              if [ $i -gt 0 ]; then
+                JSON+=","
+              fi
+              JSON+="\"${CHANGED_SERVICES[$i]}\""
+            done
+            JSON+="]"
+            echo "Services to build: $JSON"
+            echo "matrix=$JSON" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          # Generate short SHA
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+          # Generate timestamp
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ steps.meta.outputs.short_sha }}
+            ghcr.io/groupsky/homy/${{ matrix.service }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/groupsky/homy
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.timestamp }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},ignore-error=true
+
+  # Summary job to report overall status
+  summary:
+    needs: [detect-changes, build-and-push]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check build results
+        run: |
+          if [ "${{ needs.build-and-push.result }}" == "failure" ]; then
+            echo "Some builds failed"
+            exit 1
+          elif [ "${{ needs.detect-changes.outputs.matrix }}" == "[]" ]; then
+            echo "No services needed building"
+          else
+            echo "All builds completed successfully"
+          fi
