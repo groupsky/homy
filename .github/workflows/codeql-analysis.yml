@@ -25,7 +25,7 @@
 # - Actions security: https://github.blog/security/application-security/how-to-secure-your-github-actions-workflows-with-codeql/
 # - Actions queries: https://docs.github.com/en/code-security/code-scanning/managing-your-code-scanning-configuration/actions-built-in-queries
 #
-name: "CodeQL Advanced Security"
+name: CodeQL
 
 on:
   push:
