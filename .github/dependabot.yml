@@ -8,6 +8,23 @@ updates:
       interval: "weekly"
     reviewers:
       - "groupsky"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/node-20-alpine"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     groups:
       base-images:
         patterns:
@@ -19,6 +36,23 @@ updates:
       interval: "weekly"
     reviewers:
       - "groupsky"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/base-images/node-24-alpine"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "groupsky"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     groups:
       base-images:
         patterns:
@@ -96,6 +130,9 @@ updates:
       interval: "weekly"
     reviewers:
       - "groupsky"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     groups:
       base-images:
         patterns:

@@ -25,7 +25,13 @@ jobs:
           - name: node-18-alpine
             upstream_pattern: "node:"
             ghcr_name: ghcr.io/groupsky/homy/node
+          - name: node-20-alpine
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node
           - name: node-22-alpine
+            upstream_pattern: "node:"
+            ghcr_name: ghcr.io/groupsky/homy/node
+          - name: node-24-alpine
             upstream_pattern: "node:"
             ghcr_name: ghcr.io/groupsky/homy/node
           - name: node-ubuntu
