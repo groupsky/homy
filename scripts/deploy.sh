@@ -175,9 +175,9 @@ echo "  Target version:   $NEW_VERSION"
 echo "  Force deploy:     $FORCE_DEPLOY"
 echo ""
 echo "  This will:"
-echo "    1. Stop all services"
-echo "    2. Create a backup of databases"
-echo "    3. Pull new images from GHCR"
+echo "    1. Pull new images from GHCR"
+echo "    2. Stop all services"
+echo "    3. Create a backup of databases"
 echo "    4. Start services with new version"
 echo "    5. Verify health (auto-rollback on failure)"
 echo ""
@@ -187,17 +187,6 @@ if ! confirm "Proceed with deployment?"; then
     log "Deployment cancelled by user"
     exit 0
 fi
-
-# Create pre-upgrade backup (stops services, creates backup, but doesn't restart)
-log "Creating backup before upgrade..."
-BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet) || {
-    log "ERROR: Backup failed"
-    notify "Deployment failed: Backup error"
-    # Try to restart services
-    docker compose up -d
-    exit 1
-}
-log "Backup created: $BACKUP_NAME"
 
 # Update code (only if not using IMAGE_TAG override)
 if [ -z "$IMAGE_TAG" ]; then
@@ -211,12 +200,23 @@ fi
 export IMAGE_TAG="$NEW_VERSION"
 log "Using IMAGE_TAG: $IMAGE_TAG"
 
-# Pull prebuilt images from GHCR
+# Pull prebuilt images from GHCR (while services are still running)
 log "Pulling prebuilt images from GHCR..."
 if ! docker compose pull 2>&1 | tee -a "$DEPLOY_LOG"; then
     log "WARNING: Some images may not be available in GHCR. Falling back to local build."
     # If pull fails for some images, they'll be built locally
 fi
+
+# Create pre-upgrade backup (stops services, creates backup, but doesn't restart)
+log "Creating backup before upgrade..."
+BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet) || {
+    log "ERROR: Backup failed"
+    notify "Deployment failed: Backup error"
+    # Try to restart services
+    docker compose up -d
+    exit 1
+}
+log "Backup created: $BACKUP_NAME"
 
 # Start services with new images
 log "Starting services..."

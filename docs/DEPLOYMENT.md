@@ -35,8 +35,8 @@ The deployment system uses prebuilt Docker images stored in GitHub Container Reg
 ├─────────────────────────────────────────────────────────────────┤
 │  ./scripts/deploy.sh                                             │
 │    1. Record current version                                     │
-│    2. Stop services and backup databases                         │
-│    3. Pull new images from GHCR                                  │
+│    2. Pull new images from GHCR                                  │
+│    3. Stop services and backup databases                         │
 │    4. Start services                                             │
 │    5. Verify health                                              │
 │    6. On failure → automatic rollback                            │
@@ -153,9 +153,9 @@ cd /path/to/homy
 
 The script will:
 1. Show deployment plan and ask for confirmation
-2. Stop all services
-3. Create a backup of databases (InfluxDB, MongoDB, Home Assistant)
-4. Pull prebuilt images from GHCR
+2. Pull prebuilt images from GHCR (while services are still running)
+3. Stop all services
+4. Create a backup of databases (InfluxDB, MongoDB, Home Assistant)
 5. Start services with new images
 6. Wait for health checks to pass (5 minutes timeout)
 7. If unhealthy, automatically rollback
