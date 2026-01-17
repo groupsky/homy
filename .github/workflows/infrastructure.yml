@@ -38,3 +38,84 @@ jobs:
       - name: Start containers
         run: |
           docker compose --env-file example.env --file docker-compose.yml up --force-recreate --no-start
+
+      - name: Validate ingress template generation
+        run: |
+          echo "Creating ingress network and starting ingress container..."
+          docker compose --env-file example.env up -d ingress
+
+          echo "Starting test backend services for ingress validation..."
+          docker compose --env-file example.env up -d grafana ha
+
+          echo "Waiting for services to be healthy on ingress network..."
+          for i in {1..10}; do
+            if docker network inspect homy_ingress -f '{{range .Containers}}{{.Name}} {{end}}' | grep -q grafana && \
+               docker network inspect homy_ingress -f '{{range .Containers}}{{.Name}} {{end}}' | grep -q ha; then
+              echo "✓ Services connected to ingress network after $i seconds"
+              break
+            fi
+            if [ $i -eq 10 ]; then
+              echo "WARNING: Services may not be fully connected to network"
+            fi
+            sleep 1
+          done
+
+          echo "Starting ingressgen to generate nginx config..."
+          docker compose --env-file example.env up -d ingressgen
+
+          echo "Waiting for config generation..."
+          for i in {1..30}; do
+            if [ -f data/ingress/default.conf ] && [ -s data/ingress/default.conf ]; then
+              echo "✓ Config file generated after $i seconds"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "ERROR: nginx config was not generated after 30 seconds"
+              docker compose --env-file example.env logs ingressgen
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "Checking for upstream blocks..."
+          if ! grep -q "upstream" data/ingress/default.conf; then
+            echo "ERROR: No upstream blocks found in generated config"
+            cat data/ingress/default.conf
+            exit 1
+          fi
+          echo "✓ Upstream blocks found"
+
+          echo "Checking upstream blocks are not empty..."
+          awk '/^upstream /,/^}/' data/ingress/default.conf > upstreams.txt
+          if grep -q "upstream" upstreams.txt && ! grep -q "server" upstreams.txt; then
+            echo "ERROR: Upstream blocks exist but contain no server entries"
+            cat upstreams.txt
+            cat data/ingress/default.conf
+            exit 1
+          fi
+          echo "✓ Upstream blocks contain server entries"
+          cat upstreams.txt
+
+          echo "Starting nginx and validating syntax..."
+          docker compose --env-file example.env up -d ingress
+
+          echo "Waiting for nginx to start..."
+          for i in {1..15}; do
+            if docker compose --env-file example.env ps ingress | grep -q "Up"; then
+              echo "✓ Nginx container started after $i seconds"
+              break
+            fi
+            if [ $i -eq 15 ]; then
+              echo "ERROR: Nginx container failed to start after 15 seconds"
+              docker compose --env-file example.env logs ingress
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker compose --env-file example.env exec -T ingress nginx -t
+          echo "✓ Nginx config syntax is valid"
+
+          echo "Checking ingressgen logs for critical errors..."
+          docker compose --env-file example.env logs ingressgen
+          echo "✓ Ingress template validation complete"
