@@ -5,6 +5,7 @@ node_modules/
 
 # Deployment state files
 .deployed-version
+.previous-version
 .pre-upgrade-backup
 
 # Deployment logs

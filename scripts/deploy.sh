@@ -14,12 +14,14 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEPLOY_LOG_DIR="$PROJECT_DIR/logs"
 DEPLOY_LOG="$DEPLOY_LOG_DIR/deploy-$(date +%Y%m%d-%H%M%S).log"
 VERSION_FILE="$PROJECT_DIR/.deployed-version"
+PREVIOUS_VERSION_FILE="$PROJECT_DIR/.previous-version"
 BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
 
 # Default values
 FORCE_DEPLOY=false
 IMAGE_TAG="${IMAGE_TAG:-}"
 SKIP_CONFIRM=false
+SKIP_BACKUP=false
 
 usage() {
     cat <<EOF
@@ -33,12 +35,14 @@ Options:
                       Examples: -t abc1234, -t feature-branch, -t latest
   -f, --force         Force redeploy even if already at target version
   -y, --yes           Skip confirmation prompt
+  --skip-backup       Skip database backup (DANGEROUS - use only in emergencies)
 
 Examples:
   $(basename "$0")                    # Deploy latest from master
   $(basename "$0") --tag abc1234      # Deploy specific git SHA
   $(basename "$0") --tag latest -f    # Force redeploy latest
   $(basename "$0") -t feature-x -y    # Deploy branch without confirmation
+  $(basename "$0") --skip-backup      # Deploy without backup (requires confirmation)
 
 Environment Variables:
   IMAGE_TAG           Alternative way to specify image tag (--tag takes precedence)
@@ -63,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -y|--yes)
             SKIP_CONFIRM=true
+            shift
+            ;;
+        --skip-backup)
+            SKIP_BACKUP=true
             shift
             ;;
         *)
@@ -188,6 +196,21 @@ if ! confirm "Proceed with deployment?"; then
     exit 0
 fi
 
+# Extra confirmation for --skip-backup
+if [ "$SKIP_BACKUP" = true ]; then
+    log ""
+    log "⚠️  WARNING: You are deploying WITHOUT a backup!"
+    log "⚠️  If deployment fails, rollback will NOT be possible!"
+    log "⚠️  You may lose data if something goes wrong!"
+    log ""
+    read -r -p "Type 'yes-skip-backup' to confirm: " confirmation
+    if [ "$confirmation" != "yes-skip-backup" ]; then
+        log "Deployment cancelled. Use without --skip-backup for safe deployment."
+        exit 1
+    fi
+    log "Proceeding without backup as confirmed..."
+fi
+
 # Update code (only if not using IMAGE_TAG override)
 if [ -z "$IMAGE_TAG" ]; then
     log "Pulling latest code..."
@@ -217,16 +240,24 @@ if ! docker compose pull 2>&1 | tee -a "$DEPLOY_LOG"; then
     exit 1
 fi
 
-# Create pre-upgrade backup (stops services, creates backup, but doesn't restart)
-log "Creating backup before upgrade..."
-BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet) || {
-    log "ERROR: Backup failed"
-    notify "Deployment failed: Backup error"
-    # Try to restart services
-    docker compose up -d
-    exit 1
-}
-log "Backup created: $BACKUP_NAME"
+# Create pre-upgrade backup or just stop services
+if [ "$SKIP_BACKUP" = false ]; then
+    # Create backup (stops services, creates backup, but doesn't restart)
+    log "Creating backup before upgrade..."
+    BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet) || {
+        log "ERROR: Backup failed"
+        notify "Deployment failed: Backup error"
+        # Try to restart services
+        docker compose up -d
+        exit 1
+    }
+    log "Backup created: $BACKUP_NAME"
+else
+    # Skip backup but still stop services for clean deployment
+    log "Skipping backup (as requested)..."
+    log "Stopping services..."
+    docker compose down
+fi
 
 # Start services with new images
 log "Starting services..."
@@ -265,6 +296,13 @@ done
 
 if [ "$HEALTHY" = true ]; then
     log "Deployment successful!"
+
+    # Save previous version before updating
+    if [ "$CURRENT_VERSION" != "unknown" ]; then
+        echo "$CURRENT_VERSION" > "$PREVIOUS_VERSION_FILE"
+        log "Previous version saved: $CURRENT_VERSION"
+    fi
+
     echo "$NEW_VERSION" > "$VERSION_FILE"
     notify "Deployment successful: ${NEW_VERSION:0:8}"
     cleanup_old_logs

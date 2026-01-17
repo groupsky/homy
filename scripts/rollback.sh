@@ -12,6 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION_FILE="$PROJECT_DIR/.deployed-version"
+PREVIOUS_VERSION_FILE="$PROJECT_DIR/.previous-version"
 BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
 ROLLBACK_LOG="$PROJECT_DIR/logs/rollback-$(date +%Y%m%d-%H%M%S).log"
 
@@ -156,12 +157,22 @@ CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
 log "Current version: $CURRENT_VERSION"
 
 # Try to determine previous version
-if [ "$CURRENT_VERSION" != "unknown" ] && [ ${#CURRENT_VERSION} -ge 7 ]; then
-    # Current version is a git SHA, go back one commit
-    PREV_VERSION=$(git rev-parse "$CURRENT_VERSION^" 2>/dev/null || echo "latest")
+# First, check if we have it saved in the previous version file
+PREV_VERSION=$(cat "$PREVIOUS_VERSION_FILE" 2>/dev/null || echo "")
+
+if [ -z "$PREV_VERSION" ]; then
+    # Fall back to git calculation
+    log "No saved previous version, calculating from git history..."
+    if [ "$CURRENT_VERSION" != "unknown" ] && [ ${#CURRENT_VERSION} -ge 7 ]; then
+        # Current version is a git SHA, go back one commit
+        PREV_VERSION=$(git rev-parse "$CURRENT_VERSION^" 2>/dev/null || echo "latest")
+    else
+        PREV_VERSION="latest"
+    fi
 else
-    PREV_VERSION="latest"
+    log "Using saved previous version"
 fi
+
 log "Previous version: $PREV_VERSION"
 
 # Show rollback plan and ask for confirmation
@@ -193,7 +204,7 @@ fi
 
 # Stop current services
 log "Stopping services..."
-docker compose down
+docker compose stop
 
 # Restore database backup using restore.sh (services already stopped, don't start after)
 log "Restoring databases from backup: $BACKUP_NAME"

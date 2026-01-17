@@ -155,7 +155,7 @@ fi
 SERVICES_STOPPED=false
 if [ "$STOP_SERVICES" = true ]; then
     log "Stopping services for consistent backup..."
-    docker compose down
+    docker compose stop
     SERVICES_STOPPED=true
 fi
 
@@ -172,7 +172,7 @@ BACKUP_OUTPUT=$($BACKUP_CMD 2>&1) || {
     # Restart services if we stopped them
     if [ "$SERVICES_STOPPED" = true ]; then
         log "Restarting services..."
-        docker compose up -d
+        docker compose start
     fi
     exit 1
 }
@@ -191,7 +191,7 @@ log "Backup created: $ACTUAL_BACKUP_NAME"
 # Restart services if we stopped them
 if [ "$SERVICES_STOPPED" = true ]; then
     log "Restarting services..."
-    docker compose up -d
+    docker compose start
 fi
 
 # Output backup name for scripting
