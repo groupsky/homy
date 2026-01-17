@@ -1,65 +1,104 @@
-# For most projects, this workflow file will not need changing; you simply need
-# to commit it to your repository.
+# CodeQL Advanced Security Analysis
+# This workflow performs security and quality analysis on the codebase
+# using GitHub's CodeQL engine to detect vulnerabilities and code quality issues.
 #
-# You may wish to alter this file to override the set of languages analyzed,
-# or to provide custom queries or build logic.
+# Supported languages in this repository:
+# - JavaScript/TypeScript: Main application code, automations, MQTT services
+# - Python: Home Assistant custom components and analysis scripts
+# - Actions: GitHub Actions workflow files (security scanning for CI/CD pipelines)
 #
-# ******** NOTE ********
-# We have attempted to detect the languages in your repository. Please check
-# the `language` matrix defined below to confirm you have the correct set of
-# supported CodeQL languages.
+# Query Suites:
+# - security-and-quality: Comprehensive analysis including security vulnerabilities
+#   and code quality issues (unused variables, duplicated code, inefficient logic)
 #
-name: "CodeQL"
+# Actions Security Scanning (Public Preview):
+# Detects workflow vulnerabilities including:
+# - Script injection attacks (untrusted input in run commands)
+# - Secrets exposure and credential leaks
+# - Supply chain attack vectors (malicious actions, dependency confusion)
+# - Insecure use of pull_request_target and other dangerous triggers
+# - Privilege escalation and GITHUB_TOKEN misuse
+#
+# Learn more:
+# - CodeQL overview: https://docs.github.com/en/code-security/code-scanning/introduction-to-code-scanning/about-code-scanning-with-codeql
+# - Query suites: https://docs.github.com/en/code-security/code-scanning/managing-your-code-scanning-configuration/codeql-query-suites
+# - Supported languages: https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/
+# - Actions security: https://github.blog/security/application-security/how-to-secure-your-github-actions-workflows-with-codeql/
+# - Actions queries: https://docs.github.com/en/code-security/code-scanning/managing-your-code-scanning-configuration/actions-built-in-queries
+#
+name: "CodeQL Advanced Security"
 
 on:
+  push:
+    branches: [ master ]
   pull_request:
-    # The branches below must be a subset of the branches above
     branches: [ master ]
   schedule:
+    # Run weekly on Monday at 20:29 UTC to catch new vulnerabilities
     - cron: '29 20 * * 1'
+
+permissions:
+  # Required for code scanning to upload results
+  security-events: write
+  # Required for code scanning in private repositories
+  contents: read
+  # Required for workflow execution
+  actions: read
 
 jobs:
   analyze:
-    name: Analyze
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'javascript' ]
-        # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python' ]
-        # Learn more:
-        # https://docs.github.com/en/free-pro-team@latest/github/finding-security-vulnerabilities-and-errors-in-your-code/configuring-code-scanning#changing-the-languages-that-are-analyzed
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
+          - language: actions
+            build-mode: none
+        # CodeQL supports: C/C++, C#, Go, Java, Kotlin, Rust, Swift,
+        # JavaScript/TypeScript, Python, Ruby, and Actions (workflows)
+        # Build modes:
+        # - none: No build required (interpreted languages, Actions, and some compiled languages)
+        # - autobuild: Automatic build detection
+        # - manual: Custom build steps required
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6.0.1
 
-    # Initializes the CodeQL tools for scanning.
+    # Initializes the CodeQL tools for scanning
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
-        # If you wish to specify custom queries, you can do so here or in a config file.
-        # By default, queries listed here will override any specified in a config file.
-        # Prefix the list here with "+" to use these queries and those in the config file.
-        # queries: ./path/to/local/query, your-org/your-repo/queries@main
+        build-mode: ${{ matrix.build-mode }}
+        # Use security-and-quality suite for comprehensive analysis
+        # This includes both security vulnerabilities and code quality issues
+        queries: security-and-quality
+        # Custom queries can be added here or in a config file
+        # Prefix with "+" to combine with suite queries:
+        # queries: +./path/to/local/query, +your-org/your-repo/queries@main
 
-    # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
-    # If this step fails, then you should remove it and run the build manually (see below)
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
-
-    # ℹ️ Command-line programs to run using the OS shell.
-    # 📚 https://git.io/JvXDl
-
-    # ✏️ If the Autobuild fails above, remove it and uncomment the following three lines
-    #    and modify them (or add more) to build your code if your project
-    #    uses a compiled language
-
-    #- run: |
-    #   make bootstrap
-    #   make release
+    # Build step is not needed for interpreted languages with build-mode: none
+    # For compiled languages with build-mode: autobuild, uncomment:
+    # - name: Autobuild
+    #   uses: github/codeql-action/autobuild@v3
+    #
+    # For manual builds, replace autobuild with custom build commands:
+    # - name: Build
+    #   run: |
+    #     make bootstrap
+    #     make release
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
+      with:
+        # Categorize results by language for better organization in Security tab
+        category: "/language:${{ matrix.language }}"
+        # Upload results even if there are findings
+        upload: always
