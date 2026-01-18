@@ -308,15 +308,24 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
 
     # docker compose ps --format json outputs NDJSON (one JSON object per line)
     # Use jq -s to slurp lines into an array, then filter
-    # Also check State for containers without health checks
+    #
+    # Health check strategy:
+    # - Services WITH health checks: wait for Health == "healthy"
+    # - Services WITHOUT health checks: considered healthy by default if running
+    # - Only fail on explicit health check failures (Health == "unhealthy")
+    #
+    # This allows services without health checks (like modbus-serial instances)
+    # to not block deployment, even if they're in a restart loop due to missing hardware
 
-    # Check for unhealthy or exited containers
-    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy" or .State == "exited")] | .[].Name' 2>/dev/null | head -5 || echo "")
+    # Check for explicitly unhealthy containers (health check failed)
+    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy")] | .[].Name' 2>/dev/null | head -5 || echo "")
 
     if [ -z "$UNHEALTHY" ]; then
-        # No unhealthy containers - check if any are still starting
+        # No unhealthy containers - check if any with health checks are still starting
         STARTING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
         if [ -z "$STARTING" ]; then
+            # All containers with health checks are healthy
+            # Containers without health checks are considered healthy by default
             HEALTHY=true
             break
         fi

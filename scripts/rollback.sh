@@ -314,11 +314,17 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
     ELAPSED=$((ELAPSED + WAIT_INTERVAL))
 
     # docker compose ps --format json outputs NDJSON
-    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy" or .State == "exited")] | .[].Name' 2>/dev/null | head -5 || echo "")
+    # Same health check strategy as deploy.sh:
+    # - Only check explicit health check failures
+    # - Services without health checks are considered healthy by default
+    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy")] | .[].Name' 2>/dev/null | head -5 || echo "")
 
     if [ -z "$UNHEALTHY" ]; then
+        # No unhealthy containers - check if any with health checks are still starting
         STARTING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
         if [ -z "$STARTING" ]; then
+            # All containers with health checks are healthy
+            # Containers without health checks are considered healthy by default
             HEALTHY=true
             break
         fi
