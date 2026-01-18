@@ -1,0 +1,430 @@
+name: Build App Images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docker/**'
+      - '.github/workflows/app-images.yml'
+  pull_request:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/app-images.yml'
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Force rebuild all images'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+      unchanged: ${{ steps.detect.outputs.unchanged }}
+      base_sha: ${{ steps.detect.outputs.base_sha }}
+      is_master: ${{ steps.context.outputs.is_master }}
+      should_push: ${{ steps.context.outputs.should_push }}
+      branch_tag: ${{ steps.context.outputs.branch_tag }}
+      pr_tag: ${{ steps.context.outputs.pr_tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Determine build context
+        id: context
+        run: |
+          # Determine if we're on master
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            IS_MASTER=true
+          else
+            IS_MASTER=false
+          fi
+          echo "is_master=$IS_MASTER" >> $GITHUB_OUTPUT
+
+          # Determine if we should push
+          # Push on: master push, or manual workflow_dispatch (any branch)
+          # Don't push on: automatic PR triggers
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            SHOULD_PUSH=false
+          else
+            SHOULD_PUSH=true
+          fi
+          echo "should_push=$SHOULD_PUSH" >> $GITHUB_OUTPUT
+
+          # Generate branch tag (sanitized for Docker tag format)
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          SANITIZED_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/^-//' | cut -c1-128)
+          echo "branch_tag=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
+
+          # PR tag if available
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          if [ -n "$PR_NUMBER" ]; then
+            echo "pr_tag=pr-$PR_NUMBER" >> $GITHUB_OUTPUT
+          else
+            echo "pr_tag=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect changed services
+        id: detect
+        run: |
+          # Extract services dynamically from docker-compose.yml
+          echo "Extracting services from docker-compose.yml..."
+
+          SERVICES=$(docker compose --env-file example.env config --format json | jq -r '
+            .services | to_entries[] |
+            select(.value.image != null and (.value.image | startswith("ghcr.io/groupsky/homy/"))) |
+            select(.value.build != null) |
+            .value.image |
+            sub("ghcr.io/groupsky/homy/"; "") |
+            sub(":.*"; "")
+          ' | sort -u)
+
+          readarray -t SERVICE_ARRAY <<< "$SERVICES"
+          echo "Found ${#SERVICE_ARRAY[@]} services: ${SERVICE_ARRAY[*]}"
+
+          CHANGED_SERVICES=()
+          UNCHANGED_SERVICES=()
+
+          # Determine base ref for comparison
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          elif [ "${{ steps.context.outputs.is_master }}" == "true" ]; then
+            BASE_REF="HEAD^"
+          else
+            # For non-master branches (manual trigger), use merge-base with master
+            git fetch origin master
+            BASE_REF=$(git merge-base HEAD origin/master)
+            echo "Using merge-base with master: $BASE_REF"
+          fi
+          echo "base_sha=$BASE_REF" >> $GITHUB_OUTPUT
+          echo "Using base ref: $BASE_REF"
+
+          # Manual trigger with force_all: build everything
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ inputs.force_all }}" == "true" ]; then
+            echo "Force rebuild all - building all services"
+            CHANGED_SERVICES=("${SERVICE_ARRAY[@]}")
+          else
+            for service in "${SERVICE_ARRAY[@]}"; do
+              [ -z "$service" ] && continue
+
+              if ! CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- \
+                "docker/$service/" \
+                ".github/workflows/app-images.yml" 2>&1); then
+                echo "Warning: git diff failed for $service: $CHANGED"
+                CHANGED_SERVICES+=("$service")
+                continue
+              fi
+
+              if [ -n "$CHANGED" ]; then
+                echo "Changes detected for $service"
+                CHANGED_SERVICES+=("$service")
+              else
+                echo "No changes for $service"
+                UNCHANGED_SERVICES+=("$service")
+              fi
+            done
+          fi
+
+          # Convert to JSON arrays
+          if [ ${#CHANGED_SERVICES[@]} -eq 0 ]; then
+            echo "changed=[]" >> $GITHUB_OUTPUT
+          else
+            CHANGED_JSON=$(printf '%s\n' "${CHANGED_SERVICES[@]}" | jq -R . | jq -sc .)
+            echo "changed=$CHANGED_JSON" >> $GITHUB_OUTPUT
+          fi
+
+          if [ ${#UNCHANGED_SERVICES[@]} -eq 0 ]; then
+            echo "unchanged=[]" >> $GITHUB_OUTPUT
+          else
+            UNCHANGED_JSON=$(printf '%s\n' "${UNCHANGED_SERVICES[@]}" | jq -R . | jq -sc .)
+            echo "unchanged=$UNCHANGED_JSON" >> $GITHUB_OUTPUT
+          fi
+
+  # Check which unchanged services have base images in GHCR
+  check-base-images:
+    needs: detect-changes
+    # Run if we should push and have unchanged services
+    if: needs.detect-changes.outputs.unchanged != '[]' && needs.detect-changes.outputs.should_push == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    outputs:
+      to_build: ${{ steps.check.outputs.to_build }}
+      to_retag: ${{ steps.check.outputs.to_retag }}
+      has_retag: ${{ steps.check.outputs.has_retag }}
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Check base images exist
+        id: check
+        run: |
+          BASE_SHA="${{ needs.detect-changes.outputs.base_sha }}"
+          UNCHANGED='${{ needs.detect-changes.outputs.unchanged }}'
+
+          TO_BUILD=()
+          TO_RETAG=()
+
+          for service in $(echo "$UNCHANGED" | jq -r '.[]'); do
+            IMAGE="ghcr.io/groupsky/homy/${service}:${BASE_SHA}"
+            echo "Checking $IMAGE..."
+
+            if docker buildx imagetools inspect "$IMAGE" > /dev/null 2>&1; then
+              echo "  ✓ exists - will retag"
+              TO_RETAG+=("$service")
+            else
+              echo "  ✗ missing - will build"
+              TO_BUILD+=("$service")
+            fi
+          done
+
+          # Output JSON arrays
+          if [ ${#TO_BUILD[@]} -eq 0 ]; then
+            echo "to_build=[]" >> $GITHUB_OUTPUT
+          else
+            TO_BUILD_JSON=$(printf '%s\n' "${TO_BUILD[@]}" | jq -R . | jq -sc .)
+            echo "to_build=$TO_BUILD_JSON" >> $GITHUB_OUTPUT
+          fi
+
+          if [ ${#TO_RETAG[@]} -eq 0 ]; then
+            echo "to_retag=[]" >> $GITHUB_OUTPUT
+            echo "has_retag=false" >> $GITHUB_OUTPUT
+          else
+            TO_RETAG_JSON=$(printf '%s\n' "${TO_RETAG[@]}" | jq -R . | jq -sc .)
+            echo "to_retag=$TO_RETAG_JSON" >> $GITHUB_OUTPUT
+            echo "has_retag=true" >> $GITHUB_OUTPUT
+          fi
+
+  # Combine matrices: changed services + unchanged services that need building
+  prepare-build-matrix:
+    needs: [detect-changes, check-base-images]
+    if: always() && needs.detect-changes.result == 'success'
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      matrix: ${{ steps.combine.outputs.matrix }}
+      has_services: ${{ steps.combine.outputs.has_services }}
+    steps:
+      - name: Combine build matrix
+        id: combine
+        run: |
+          CHANGED='${{ needs.detect-changes.outputs.changed }}'
+          TO_BUILD='${{ needs.check-base-images.outputs.to_build }}'
+
+          # Handle case where check-base-images was skipped
+          if [ -z "$TO_BUILD" ] || [ "$TO_BUILD" == "" ]; then
+            TO_BUILD="[]"
+          fi
+
+          # Merge arrays
+          MATRIX=$(jq -sc 'add | unique' <<< "$CHANGED $TO_BUILD")
+          echo "Build matrix: $MATRIX"
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+          # Set boolean flag for has_services
+          if [ "$MATRIX" = "[]" ]; then
+            echo "has_services=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_services=true" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push:
+    needs: [detect-changes, prepare-build-matrix]
+    # Must use always() because prepare-build-matrix uses always() and depends on potentially-skipped check-base-images
+    if: always() && needs.prepare-build-matrix.result == 'success' && needs.prepare-build-matrix.outputs.has_services == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.prepare-build-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 ${{ github.sha }})
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: Generate tags
+        id: tags
+        run: |
+          IMAGE="ghcr.io/groupsky/homy/${{ matrix.service }}"
+          SHORT_SHA="${{ steps.meta.outputs.short_sha }}"
+          IS_MASTER="${{ needs.detect-changes.outputs.is_master }}"
+          BRANCH_TAG="${{ needs.detect-changes.outputs.branch_tag }}"
+          PR_TAG="${{ needs.detect-changes.outputs.pr_tag }}"
+
+          # Always include SHA tags
+          TAGS="${IMAGE}:${{ github.sha }}"
+          TAGS="${TAGS},${IMAGE}:${SHORT_SHA}"
+
+          # Add latest only on master
+          if [ "$IS_MASTER" == "true" ]; then
+            TAGS="${TAGS},${IMAGE}:latest"
+          else
+            # Add branch tag for non-master
+            if [ -n "$BRANCH_TAG" ]; then
+              TAGS="${TAGS},${IMAGE}:${BRANCH_TAG}"
+            fi
+            # Add PR tag if available
+            if [ -n "$PR_TAG" ]; then
+              TAGS="${TAGS},${IMAGE}:${PR_TAG}"
+            fi
+          fi
+
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "Generated tags: $TAGS"
+
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: docker/${{ matrix.service }}
+          push: ${{ needs.detect-changes.outputs.should_push == 'true' }}
+          load: ${{ needs.detect-changes.outputs.should_push != 'true' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/groupsky/homy
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.timestamp }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},ignore-error=true
+
+  # Retag unchanged images that have base images
+  retag-images:
+    needs: [detect-changes, check-base-images]
+    if: |
+      needs.detect-changes.outputs.should_push == 'true' &&
+      needs.check-base-images.result == 'success' &&
+      needs.check-base-images.outputs.has_retag == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.check-base-images.outputs.to_retag) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Retag image
+        run: |
+          SERVICE="${{ matrix.service }}"
+          BASE_SHA="${{ needs.detect-changes.outputs.base_sha }}"
+          NEW_SHA="${{ github.sha }}"
+          SHORT_SHA=$(git rev-parse --short=7 $NEW_SHA)
+          IS_MASTER="${{ needs.detect-changes.outputs.is_master }}"
+          BRANCH_TAG="${{ needs.detect-changes.outputs.branch_tag }}"
+          PR_TAG="${{ needs.detect-changes.outputs.pr_tag }}"
+
+          IMAGE_BASE="ghcr.io/groupsky/homy/${SERVICE}"
+
+          echo "Retagging ${SERVICE} from ${BASE_SHA} to ${NEW_SHA}..."
+
+          # Build tag list
+          TAGS="--tag ${IMAGE_BASE}:${NEW_SHA} --tag ${IMAGE_BASE}:${SHORT_SHA}"
+
+          if [ "$IS_MASTER" == "true" ]; then
+            TAGS="$TAGS --tag ${IMAGE_BASE}:latest"
+          else
+            if [ -n "$BRANCH_TAG" ]; then
+              TAGS="$TAGS --tag ${IMAGE_BASE}:${BRANCH_TAG}"
+            fi
+            if [ -n "$PR_TAG" ]; then
+              TAGS="$TAGS --tag ${IMAGE_BASE}:${PR_TAG}"
+            fi
+          fi
+
+          echo "Creating tags: $TAGS"
+          docker buildx imagetools create $TAGS "${IMAGE_BASE}:${BASE_SHA}"
+
+          echo "Successfully retagged ${SERVICE}"
+
+  summary:
+    needs: [detect-changes, check-base-images, prepare-build-matrix, build-and-push, retag-images]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Check results
+        run: |
+          echo "=== Build Summary ==="
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Is master: ${{ needs.detect-changes.outputs.is_master }}"
+          echo "Should push: ${{ needs.detect-changes.outputs.should_push }}"
+          echo "Branch tag: ${{ needs.detect-changes.outputs.branch_tag }}"
+          echo "PR tag: ${{ needs.detect-changes.outputs.pr_tag }}"
+          echo ""
+          echo "Changed services: ${{ needs.detect-changes.outputs.changed }}"
+          echo "Unchanged services: ${{ needs.detect-changes.outputs.unchanged }}"
+          echo "Services to build (missing base): ${{ needs.check-base-images.outputs.to_build }}"
+          echo "Services to retag: ${{ needs.check-base-images.outputs.to_retag }}"
+          echo "Final build matrix: ${{ needs.prepare-build-matrix.outputs.matrix }}"
+          echo ""
+          echo "Job results:"
+          echo "  detect-changes: ${{ needs.detect-changes.result }}"
+          echo "  check-base-images: ${{ needs.check-base-images.result }}"
+          echo "  prepare-build-matrix: ${{ needs.prepare-build-matrix.result }}"
+          echo "  build-and-push: ${{ needs.build-and-push.result }}"
+          echo "  retag-images: ${{ needs.retag-images.result }}"
+
+          if [ "${{ needs.build-and-push.result }}" == "failure" ]; then
+            echo "::error::Some builds failed"
+            exit 1
+          elif [ "${{ needs.retag-images.result }}" == "failure" ]; then
+            echo "::error::Some retags failed"
+            exit 1
+          else
+            echo "All operations completed successfully"
+          fi
