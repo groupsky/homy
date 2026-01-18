@@ -29,6 +29,32 @@ docker compose logs -f ha
 docker compose up -d --build automations
 ```
 
+### Backup and Restore
+
+**Create Backup:**
+```bash
+./scripts/backup.sh                    # Auto-timestamped backup
+./scripts/backup.sh -s -y              # Stop services first (recommended)
+./scripts/backup.sh my-backup-name     # Named backup
+```
+
+**Restore from Backup:**
+```bash
+./scripts/restore.sh <backup-name>     # Must have services stopped
+```
+
+**Covered Volumes:**
+- Home Assistant (config, entity registry, history)
+- MongoDB (historical device data)
+- InfluxDB (time-series sensor data)
+- Grafana (dashboards, alerts, users)
+- Zigbee2MQTT (device database, network state)
+- WireGuard VPN (peer configurations)
+- Node-RED (flow definitions, credentials)
+- Automation service state (bot memory)
+
+For detailed documentation, see `docker/volman/CLAUDE.md`.
+
 **IMPORTANT**: All containers must be built from the `docker/` directory structure. Each service should have its own subdirectory under `docker/` containing its Dockerfile and related files.
 
 **IMPORTANT**: All volume paths in docker-compose.yml should use environment variables: `CONFIG_PATH`, `DATA_PATH`, `SECRETS_PATH`, `BACKUP_PATH`, etc. Avoid hardcoded paths except for system mounts (like `/etc/localtime`, `/dev/bus/usb`, etc.).

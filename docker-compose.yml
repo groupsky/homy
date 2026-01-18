@@ -959,13 +959,19 @@ services:
       - TZ=${TZ}
       - BACKUP_ROOT=/backup
       - VOLUMES_ROOT=/volumes
-      - VOLUMES=ha mongo influxdb
+      - VOLUMES=ha mongo influxdb grafana z2m-home1 wireguard nodered automations-state
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${BACKUP_PATH}:/backup
       - ${HOMEASSISTANT_DATA_PATH}:/volumes/ha
       - ${MONGO_DATA_PATH}:/volumes/mongo
       - ${DATA_PATH}/influxdb:/volumes/influxdb
+      # Extended backup coverage for critical data
+      - ${GRAFANA_DATA_PATH}:/volumes/grafana
+      - ${Z2M_HOME1_DATA_PATH}:/volumes/z2m-home1
+      - ${VPN_DATA_PATH}:/volumes/wireguard
+      - ${NODERED_DATA}:/volumes/nodered
+      - ${DATA_PATH}/automations/state:/volumes/automations-state
 
 networks:
   # internal for the automation services - mqtt, node red, ah
