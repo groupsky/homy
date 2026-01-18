@@ -233,6 +233,12 @@ jobs:
           # Merge arrays
           MATRIX=$(jq -sc 'add | unique' <<< "$CHANGED $TO_BUILD")
           echo "Build matrix: $MATRIX"
+          echo "Matrix length: ${#MATRIX}"
+          echo "First char: ${MATRIX:0:1}"
+          echo "Last char: ${MATRIX: -1}"
+
+          # Debug: Show the exact string being written
+          echo "Writing to GITHUB_OUTPUT: matrix=$MATRIX"
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
           # Set boolean flag for has_services
@@ -241,6 +247,10 @@ jobs:
           else
             echo "has_services=true" >> $GITHUB_OUTPUT
           fi
+
+          # Debug: Verify what was written
+          echo "Contents of GITHUB_OUTPUT:"
+          cat "$GITHUB_OUTPUT" | grep "matrix=" || echo "matrix= not found in GITHUB_OUTPUT!"
 
   build-and-push:
     needs: [detect-changes, prepare-build-matrix]
