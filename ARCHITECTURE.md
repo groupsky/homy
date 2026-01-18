@@ -176,6 +176,10 @@ The system is actively running in production with:
 **Maintenance**
 - Docker Compose for service lifecycle management
 - Automated backup system (volman) for persistent data
+  - Comprehensive coverage: Home Assistant, MongoDB, InfluxDB, Grafana, Zigbee2MQTT, WireGuard, Node-RED, automation state
+  - Point-in-time recovery capability for all critical volumes
+  - TAR-based backup format with integrity validation
+  - Recovery procedures documented in `docker/volman/CLAUDE.md`
 - Configuration management through mounted config files
 - Log rotation and retention policies
 
