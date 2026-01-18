@@ -228,10 +228,14 @@ if [ "$SKIP_BACKUP" = true ]; then
     log "⚠️  If deployment fails, rollback will NOT be possible!"
     log "⚠️  You may lose data if something goes wrong!"
     log ""
-    read -r -p "Type 'yes-skip-backup' to confirm: " confirmation
-    if [ "$confirmation" != "yes-skip-backup" ]; then
-        log "Deployment cancelled. Use without --skip-backup for safe deployment."
-        exit 1
+
+    # Only require manual confirmation if --yes flag was not provided
+    if [ "$SKIP_CONFIRM" = false ]; then
+        read -r -p "Type 'yes-skip-backup' to confirm: " confirmation
+        if [ "$confirmation" != "yes-skip-backup" ]; then
+            log "Deployment cancelled. Use without --skip-backup for safe deployment."
+            exit 1
+        fi
     fi
     log "Proceeding without backup as confirmed..."
 fi
@@ -269,7 +273,7 @@ fi
 if [ "$SKIP_BACKUP" = false ]; then
     # Create backup (stops services, creates backup, but doesn't restart)
     log "Creating backup before upgrade..."
-    BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet) || {
+    BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet --no-lock) || {
         log "ERROR: Backup failed"
         notify "Deployment failed: Backup error"
         # Try to restart services

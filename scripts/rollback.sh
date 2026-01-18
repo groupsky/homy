@@ -127,7 +127,7 @@ notify() {
 }
 
 list_backups() {
-    "$SCRIPT_DIR/restore.sh" --list
+    "$SCRIPT_DIR/restore.sh" --list --no-lock
 }
 
 confirm() {
@@ -249,7 +249,7 @@ SERVICES_STOPPED=true
 
 # Restore database backup using restore.sh (services already stopped, don't start after)
 log "Restoring databases from backup: $BACKUP_NAME"
-if ! "$SCRIPT_DIR/restore.sh" --yes --quiet "$BACKUP_NAME"; then
+if ! "$SCRIPT_DIR/restore.sh" --yes --quiet --no-lock "$BACKUP_NAME"; then
     log "ERROR: Backup restoration failed"
     log "Attempting to start services without database restoration..."
     notify "CRITICAL: Rollback backup restoration failed. Attempting service recovery..."
