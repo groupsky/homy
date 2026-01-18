@@ -253,6 +253,11 @@ jobs:
       matrix:
         service: ${{ fromJson(needs.prepare-build-matrix.outputs.matrix) }}
     steps:
+      - name: Debug matrix
+        run: |
+          echo "Matrix service: ${{ matrix.service }}"
+          echo "Matrix value: ${{ needs.prepare-build-matrix.outputs.matrix }}"
+
       - name: Checkout code
         uses: actions/checkout@v6.0.1
 
