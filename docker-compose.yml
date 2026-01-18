@@ -2,6 +2,7 @@ version: '3.8'
 services:
 
   ingress:
+    image: ghcr.io/groupsky/homy/nginx:${IMAGE_TAG:-latest}
     build: docker/nginx
     depends_on:
       - ingressgen
@@ -17,6 +18,7 @@ services:
       - ${INGRESS_DATA_PATH}:/etc/nginx/conf.d:ro
 
   ingressgen:
+    image: ghcr.io/groupsky/homy/dockergen:${IMAGE_TAG:-latest}
     build: docker/dockergen
     restart: unless-stopped
     command: -notify-sighup $INGRESS_NAME -watch /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
@@ -31,6 +33,7 @@ services:
       - ${INGRESSGEN_TEMPLATE_NGINX_FILE}:/etc/docker-gen/templates/nginx.tmpl:ro
 
   vpn:
+    image: ghcr.io/groupsky/homy/wireguard:${IMAGE_TAG:-latest}
     build: docker/wireguard
     restart: unless-stopped
     networks:
@@ -170,6 +173,7 @@ services:
     user: ${PUID}:${PGID}
 
   mongo:
+    image: ghcr.io/groupsky/homy/mongo:${IMAGE_TAG:-latest}
     build: docker/mongo
     restart: unless-stopped
     networks:
@@ -187,6 +191,7 @@ services:
       - ${MONGO_DATA_PATH}:/data
 
   mongo-express:
+    image: ghcr.io/groupsky/homy/mongo-express:${IMAGE_TAG:-latest}
     build: docker/mongo-express
     depends_on:
       - mongo
