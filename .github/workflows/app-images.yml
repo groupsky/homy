@@ -244,7 +244,7 @@ jobs:
 
   build-and-push:
     needs: [detect-changes, prepare-build-matrix]
-    if: needs.prepare-build-matrix.outputs.has_services == 'true'
+    if: fromJSON(needs.prepare-build-matrix.outputs.matrix)[0] != null
     runs-on: ubuntu-latest
     permissions:
       contents: read
