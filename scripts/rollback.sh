@@ -8,14 +8,9 @@
 
 set -euo pipefail
 
-# Prevent concurrent deployments
+# Lock file for preventing concurrent deployments
 LOCK_FILE="/var/lock/homy-deployment.lock"
-exec 200>"$LOCK_FILE"
-if ! flock -n 200; then
-    echo "ERROR: Another deployment operation is in progress" >&2
-    echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
-    exit 1
-fi
+SKIP_LOCK=false
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -74,6 +69,11 @@ while [[ $# -gt 0 ]]; do
             SKIP_CONFIRM=true
             shift
             ;;
+        --no-lock)
+            # Internal flag: skip lock acquisition when called from deploy.sh
+            SKIP_LOCK=true
+            shift
+            ;;
         -*)
             echo "Unknown option: $1"
             echo "Use --help for usage information"
@@ -85,6 +85,16 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Acquire lock if not skipped (internal flag for when called from deploy.sh)
+if [ "$SKIP_LOCK" = false ]; then
+    exec 200>"$LOCK_FILE"
+    if ! flock -n 200; then
+        echo "ERROR: Another deployment operation is in progress" >&2
+        echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
+        exit 1
+    fi
+fi
 
 # Ensure log directory exists
 mkdir -p "$PROJECT_DIR/logs"

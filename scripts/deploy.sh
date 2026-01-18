@@ -348,7 +348,7 @@ else
     notify "Deployment failed: Services unhealthy. Initiating rollback..."
 
     log "Initiating automatic rollback..."
-    if "$SCRIPT_DIR/rollback.sh" --yes; then
+    if "$SCRIPT_DIR/rollback.sh" --yes --no-lock; then
         notify "Rollback completed successfully"
     else
         notify "CRITICAL: Rollback also failed! Manual intervention required."
