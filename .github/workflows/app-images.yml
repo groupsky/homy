@@ -24,6 +24,8 @@ permissions:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       changed: ${{ steps.detect.outputs.changed }}
       unchanged: ${{ steps.detect.outputs.unchanged }}
@@ -215,6 +217,7 @@ jobs:
     needs: [detect-changes, check-base-images]
     if: always() && needs.detect-changes.result == 'success'
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       matrix: ${{ steps.combine.outputs.matrix }}
       has_services: ${{ steps.combine.outputs.has_services }}
@@ -391,6 +394,7 @@ jobs:
     needs: [detect-changes, check-base-images, prepare-build-matrix, build-and-push, retag-images]
     if: always()
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Check results
         run: |
