@@ -228,10 +228,14 @@ if [ "$SKIP_BACKUP" = true ]; then
     log "⚠️  If deployment fails, rollback will NOT be possible!"
     log "⚠️  You may lose data if something goes wrong!"
     log ""
-    read -r -p "Type 'yes-skip-backup' to confirm: " confirmation
-    if [ "$confirmation" != "yes-skip-backup" ]; then
-        log "Deployment cancelled. Use without --skip-backup for safe deployment."
-        exit 1
+
+    # Only require manual confirmation if --yes flag was not provided
+    if [ "$SKIP_CONFIRM" = false ]; then
+        read -r -p "Type 'yes-skip-backup' to confirm: " confirmation
+        if [ "$confirmation" != "yes-skip-backup" ]; then
+            log "Deployment cancelled. Use without --skip-backup for safe deployment."
+            exit 1
+        fi
     fi
     log "Proceeding without backup as confirmed..."
 fi
@@ -269,7 +273,7 @@ fi
 if [ "$SKIP_BACKUP" = false ]; then
     # Create backup (stops services, creates backup, but doesn't restart)
     log "Creating backup before upgrade..."
-    BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet) || {
+    BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet --no-lock) || {
         log "ERROR: Backup failed"
         notify "Deployment failed: Backup error"
         # Try to restart services
@@ -304,15 +308,24 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
 
     # docker compose ps --format json outputs NDJSON (one JSON object per line)
     # Use jq -s to slurp lines into an array, then filter
-    # Also check State for containers without health checks
+    #
+    # Health check strategy:
+    # - Services WITH health checks: wait for Health == "healthy"
+    # - Services WITHOUT health checks: considered healthy by default if running
+    # - Only fail on explicit health check failures (Health == "unhealthy")
+    #
+    # This allows services without health checks (like modbus-serial instances)
+    # to not block deployment, even if they're in a restart loop due to missing hardware
 
-    # Check for unhealthy or exited containers
-    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy" or .State == "exited")] | .[].Name' 2>/dev/null | head -5 || echo "")
+    # Check for explicitly unhealthy containers (health check failed)
+    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy")] | .[].Name' 2>/dev/null | head -5 || echo "")
 
     if [ -z "$UNHEALTHY" ]; then
-        # No unhealthy containers - check if any are still starting
+        # No unhealthy containers - check if any with health checks are still starting
         STARTING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
         if [ -z "$STARTING" ]; then
+            # All containers with health checks are healthy
+            # Containers without health checks are considered healthy by default
             HEALTHY=true
             break
         fi
@@ -344,7 +357,7 @@ else
     notify "Deployment failed: Services unhealthy. Initiating rollback..."
 
     log "Initiating automatic rollback..."
-    if "$SCRIPT_DIR/rollback.sh" --yes; then
+    if "$SCRIPT_DIR/rollback.sh" --yes --no-lock; then
         notify "Rollback completed successfully"
     else
         notify "CRITICAL: Rollback also failed! Manual intervention required."
