@@ -252,17 +252,6 @@ jobs:
           echo "Contents of GITHUB_OUTPUT:"
           cat "$GITHUB_OUTPUT" | grep "matrix=" || echo "matrix= not found in GITHUB_OUTPUT!"
 
-  # Test job to verify matrix parsing
-  test-matrix:
-    needs: prepare-build-matrix
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.prepare-build-matrix.outputs.matrix) }}
-    steps:
-      - name: Test
-        run: echo "Service: ${{ matrix.service }}"
-
   build-and-push:
     needs: [detect-changes, prepare-build-matrix]
     runs-on: ubuntu-latest
