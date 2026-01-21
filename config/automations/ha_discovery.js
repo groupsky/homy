@@ -63,7 +63,8 @@ const haLight = (
           state_topic: `${featuresPrefix}/light/${feature}/status`,
           state_template: `{{- 'on' if value_json.state else 'off' -}}`,
           unique_id: `homy_light_${feature}`,
-          ...config
+          ...config,
+          ...(config.object_id && { default_entity_id: `light.${config.object_id}` })
         }
       }
     },
@@ -93,7 +94,8 @@ const haSwitch = (
           state_off: 'off',
           value_template: `{{- 'on' if value_json.state else 'off' -}}`,
           unique_id: `homy_${feature_type}_${feature}`,
-          ...config
+          ...config,
+          ...(config.object_id && { default_entity_id: `switch.${config.object_id}` })
         }
       }
     },
@@ -123,7 +125,8 @@ const haSelect = (
           value_template: `{{ value_json.mode if value_json.mode is defined else 'automatic' }}`,
           optimistic: false,
           unique_id: `homy_${feature_type}_${feature}`,
-          ...config
+          ...config,
+          ...(config.object_id && { default_entity_id: `select.${config.object_id}` })
         }
       }
     },
@@ -152,7 +155,8 @@ const haAutomationSwitch = (
           state_off: 'off',
           value_template: `{{- 'on' if value_json.enabled else 'off' -}}`,
           unique_id: `homy_automation_${bot_name}`,
-          ...config
+          ...config,
+          ...(config.object_id && { default_entity_id: `switch.${config.object_id}` })
         }
       }
     },
@@ -188,7 +192,8 @@ const haBinarySensor = (
           state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
           value_template: device_class === 'lock' ? '{{ \'OFF\' if value_json.state else \'ON\' }}' : '{{ \'ON\' if value_json.state else \'OFF\' }}',
           unique_id: `homy_${device_class}_${feature}`,
-          ...config
+          ...config,
+          ...(config.object_id && { default_entity_id: `binary_sensor.${config.object_id}` })
         }
       }
     },
@@ -224,7 +229,8 @@ const haSensor = (
           state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
           value_template: '{{ value_json.state }}',
           unique_id: `homy_${device_class}_${feature}`,
-          ...config
+          ...config,
+          ...(config.object_id && { default_entity_id: `sensor.${config.object_id}` })
         }
       }
     },
