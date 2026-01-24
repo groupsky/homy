@@ -356,6 +356,23 @@ module.exports = {
       emitTopic: `${featuresPrefix}/relay/irrigation_grass_west_center/set`,
       emitValue: { state: false }
     },
+
+    frontDoorAlarm: {
+      type: 'door-alarm',
+      doorSensor: {
+        statusTopic: `${featuresPrefix}/open/front_main_door_open/status`
+      },
+      alarmDevice: {
+        commandTopic: 'z2m/house1/floor1-alarm/set'
+      },
+      escalationSteps: [
+        { delayMs: 60000, durationSec: 10, volume: 'low' },       // 1 min: 10s low volume
+        { delayMs: 120000, durationSec: 20, volume: 'medium' },   // 2 min: 20s medium volume
+        { delayMs: 180000, durationSec: 60, volume: 'high' }      // 3 min: 60s high volume
+      ],
+      melody: 10,
+      verbose: false
+    },
   },
   gates: {
     mqtt: {
