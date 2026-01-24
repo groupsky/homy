@@ -126,7 +126,7 @@ On service restart with door still open:
 ### Output Topics
 
 - `{alarmDevice.commandTopic}` - Alarm device commands
-  - Payload format: `{ alarm: 'ON', volume: string, duration: number, melody: number }`
+  - Payload format: `{ alarm: boolean, volume: string, duration: number, melody: number }`
   - Example: `z2m/house1/floor1-alarm/set`
 
 ## Device Compatibility
@@ -142,7 +142,7 @@ Commands published to the alarm device topic:
 
 ```javascript
 {
-  alarm: 'ON',         // Trigger alarm
+  alarm: true,         // Trigger alarm (true=ON, false=OFF)
   volume: 'low',       // Volume level
   duration: 10,        // Duration in seconds
   melody: 10           // Melody number

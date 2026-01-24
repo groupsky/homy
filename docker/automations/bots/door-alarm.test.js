@@ -299,7 +299,7 @@ describe('door-alarm bot', () => {
       expect(mockMqtt.publish).toHaveBeenCalledWith(
         'z2m/house1/floor1-alarm/set',
         {
-          alarm: 'ON',
+          alarm: true,
           volume: 'low',
           duration: 10,
           melody: 10
@@ -318,7 +318,7 @@ describe('door-alarm bot', () => {
         2,
         'z2m/house1/floor1-alarm/set',
         {
-          alarm: 'ON',
+          alarm: true,
           volume: 'medium',
           duration: 20,
           melody: 10
@@ -337,7 +337,7 @@ describe('door-alarm bot', () => {
         3,
         'z2m/house1/floor1-alarm/set',
         {
-          alarm: 'ON',
+          alarm: true,
           volume: 'high',
           duration: 60,
           melody: 10
@@ -383,7 +383,7 @@ describe('door-alarm bot', () => {
       expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
       expect(mockMqtt.publish).toHaveBeenCalledWith(
         'z2m/house1/floor1-alarm/set',
-        { alarm: 'OFF' }
+        { alarm: false }
       )
     })
 
@@ -407,7 +407,7 @@ describe('door-alarm bot', () => {
       expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
       expect(mockMqtt.publish).toHaveBeenCalledWith(
         'z2m/house1/floor1-alarm/set',
-        { alarm: 'OFF' }
+        { alarm: false }
       )
     })
 
@@ -463,7 +463,7 @@ describe('door-alarm bot', () => {
       // First alarm should have triggered
       expect(mockMqtt.publish).toHaveBeenCalledWith(
         'z2m/house1/floor1-alarm/set',
-        expect.objectContaining({ alarm: 'ON' })
+        expect.objectContaining({ alarm: true })
       )
 
       mockMqtt.publish.mockClear()
@@ -477,7 +477,7 @@ describe('door-alarm bot', () => {
       // Should send alarm OFF command
       expect(mockMqtt.publish).toHaveBeenCalledWith(
         'z2m/house1/floor1-alarm/set',
-        { alarm: 'OFF' }
+        { alarm: false }
       )
     })
 
@@ -691,7 +691,7 @@ describe('door-alarm bot', () => {
       // Should send alarm OFF command for each close (no alarm ON commands since timers never reached)
       expect(mockMqtt.publish).toHaveBeenCalledTimes(5)
       mockMqtt.publish.mock.calls.forEach(call => {
-        expect(call[1]).toEqual({ alarm: 'OFF' })
+        expect(call[1]).toEqual({ alarm: false })
       })
     })
 
