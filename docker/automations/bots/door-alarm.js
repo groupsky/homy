@@ -85,7 +85,7 @@ module.exports = (name, config) => {
 
           const timer = setTimeout(async () => {
             const alarmPayload = {
-              alarm: 'ON',
+              alarm: true,
               volume: step.volume,
               duration: step.durationSec,
               melody
@@ -110,10 +110,18 @@ module.exports = (name, config) => {
         })
       }
 
-      const cancelAlarms = () => {
+      const cancelAlarms = async () => {
         clearAllTimers()
         persistedCache.doorOpenTime = null
         persistedCache.pendingAlarms = []
+
+        // Stop any currently sounding alarm
+        try {
+          await mqtt.publish(alarmDevice.commandTopic, { alarm: false })
+          log('stopped alarm on door close')
+        } catch (error) {
+          log('failed to stop alarm on door close:', error.message)
+        }
       }
 
       // Restore timers if door was left open during restart
@@ -137,7 +145,7 @@ module.exports = (name, config) => {
 
             const timer = setTimeout(async () => {
               const alarmPayload = {
-                alarm: 'ON',
+                alarm: true,
                 volume: step.volume,
                 duration: step.durationSec,
                 melody
@@ -159,7 +167,7 @@ module.exports = (name, config) => {
             log(`alarm step ${alarm.stepIndex + 1} expired during downtime, triggering immediately`)
 
             const alarmPayload = {
-              alarm: 'ON',
+              alarm: true,
               volume: step.volume,
               duration: step.durationSec,
               melody
@@ -178,7 +186,7 @@ module.exports = (name, config) => {
         doorState = true
       }
 
-      await mqtt.subscribe(doorSensor.statusTopic, (payload) => {
+      await mqtt.subscribe(doorSensor.statusTopic, async (payload) => {
         // Payload validation
         if (!payload) {
           log('received null/undefined payload, ignoring')
@@ -206,10 +214,10 @@ module.exports = (name, config) => {
           scheduleAlarms()
         } else if (!newDoorState && doorState) {
           // Door closed
-          log('door closed, cancelling alarms')
+          log('door closed, cancelling alarms and stopping alarm')
           doorState = false
           persistedCache.doorState = false
-          cancelAlarms()
+          await cancelAlarms()
         }
       })
     }
