@@ -370,7 +370,7 @@ module.exports = {
         { delayMs: 120000, durationSec: 20, volume: 'medium' },   // 2 min: 20s medium volume
         { delayMs: 180000, durationSec: 60, volume: 'high' }      // 3 min: 60s high volume
       ],
-      melody: 10,
+      melody: 8,
       verbose: false
     },
   },
