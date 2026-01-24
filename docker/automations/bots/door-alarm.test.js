@@ -373,9 +373,18 @@ describe('door-alarm bot', () => {
       jest.advanceTimersByTime(30000) // 30 seconds
 
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+      // Wait for async cancelAlarms to complete
+      await Promise.resolve()
+
       jest.advanceTimersByTime(180000) // Fast forward past all timers
 
-      expect(mockMqtt.publish).not.toHaveBeenCalled()
+      // Should publish alarm OFF command when door closes
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        { alarm: 'OFF' }
+      )
     })
 
     it('should cancel timers even after first alarm has triggered', async () => {
@@ -388,9 +397,18 @@ describe('door-alarm bot', () => {
       mockMqtt.publish.mockClear()
 
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+      // Wait for async cancelAlarms to complete
+      await Promise.resolve()
+
       jest.advanceTimersByTime(180000) // Fast forward
 
-      expect(mockMqtt.publish).not.toHaveBeenCalled()
+      // Should publish alarm OFF command
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        { alarm: 'OFF' }
+      )
     })
 
     it('should restart escalation if door opens again after closing', async () => {
@@ -400,6 +418,10 @@ describe('door-alarm bot', () => {
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
       jest.advanceTimersByTime(30000)
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+      // Wait for async cancelAlarms to complete
+      await Promise.resolve()
+
       mockMqtt.publish.mockClear()
 
       // Second open
@@ -423,9 +445,64 @@ describe('door-alarm bot', () => {
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
 
+      // Wait for async cancelAlarms to complete
+      await Promise.resolve()
+
       expect(persistedCache.doorState).toBe(false)
       expect(persistedCache.doorOpenTime).toBeNull()
       expect(persistedCache.pendingAlarms).toHaveLength(0)
+    })
+
+    it('should stop currently sounding alarm when door closes', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // Open door and let first alarm trigger
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      jest.advanceTimersByTime(60000)
+
+      // First alarm should have triggered
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        expect.objectContaining({ alarm: 'ON' })
+      )
+
+      mockMqtt.publish.mockClear()
+
+      // Close door while alarm is sounding
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+      // Wait for async cancelAlarms to complete
+      await Promise.resolve()
+
+      // Should send alarm OFF command
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        { alarm: 'OFF' }
+      )
+    })
+
+    it('should handle alarm stop failure gracefully', async () => {
+      const verboseConfig = { ...defaultConfig, verbose: true }
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
+
+      mockMqtt.publish = jest.fn().mockRejectedValue(new Error('Device offline'))
+
+      bot = doorAlarm('testDoorAlarm', verboseConfig)
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+      // Wait for async cancelAlarms to complete
+      await Promise.resolve()
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[testDoorAlarm]'),
+        expect.stringContaining('failed to stop alarm'),
+        expect.stringContaining('Device offline')
+      )
+
+      consoleSpy.mockRestore()
     })
   })
 
@@ -604,10 +681,18 @@ describe('door-alarm bot', () => {
         await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
         jest.advanceTimersByTime(5000)
         await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+        // Wait for async cancelAlarms to complete
+        await Promise.resolve()
+
         jest.advanceTimersByTime(5000)
       }
 
-      expect(mockMqtt.publish).not.toHaveBeenCalled()
+      // Should send alarm OFF command for each close (no alarm ON commands since timers never reached)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(5)
+      mockMqtt.publish.mock.calls.forEach(call => {
+        expect(call[1]).toEqual({ alarm: 'OFF' })
+      })
     })
 
     it('should handle door already open on startup', async () => {
