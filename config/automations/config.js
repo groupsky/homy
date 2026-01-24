@@ -272,6 +272,20 @@ module.exports = {
       },
       verbose: false
     },
+    nightExternalLightsZ2M: {
+      type: 'solar-emitter',
+      statusTopic: 'z2m/house1/P5-night-ext-lights',
+      commandTopic: 'z2m/house1/P5-night-ext-lights/set',
+      stateParser: (payload) => payload.state === 'ON',
+      commandTemplate: (state) => ({ state: state ? 'ON' : 'OFF' }),
+      lat: 42.1354,
+      lon: 24.7453,
+      solarTimeStates: {
+        sunset: true,
+        sunrise: false
+      },
+      verbose: false
+    },
     haBoilerEnergyMeter: {
       type: 'mqtt-publish',
       topic: 'homeassistant/sensor/boiler-energy-meter/config',
