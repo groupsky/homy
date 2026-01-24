@@ -97,8 +97,37 @@ Using the default configuration:
 ### Edge Cases
 
 - **Rapid open/close cycles**: Timers reset on each door state change
-- **Door already open on startup**: Starts monitoring immediately
-- **Door closes after some alarms**: Only cancels pending alarms, doesn't stop current alarm
+- **Duplicate messages**: Duplicate door state messages are ignored to prevent multiple timer sets
+- **Service restart with door open**: Timers are restored from persisted state, expired alarms trigger immediately
+- **Door already open on startup**: Starts monitoring from first state message received
+- **Door closes after some alarms**: Only cancels pending alarms, doesn't stop currently sounding alarm
+
+### State Persistence
+
+The bot persists door state and pending alarms to survive service restarts:
+
+- **Door state**: Whether door is currently open or closed
+- **Door open time**: Timestamp when door was opened
+- **Pending alarms**: Array of scheduled alarms with trigger status
+
+On service restart with door still open:
+- Alarms that haven't triggered yet are restored with remaining time
+- Alarms that should have triggered during downtime fire immediately
+- Already-triggered alarms are not repeated
+
+## MQTT Topics
+
+### Input Topics
+
+- `{doorSensor.statusTopic}` - Door sensor status messages
+  - Expected payload: `{ state: true }` (open) or `{ state: false }` (closed)
+  - Example: `homy/features/open/front_main_door_open/status`
+
+### Output Topics
+
+- `{alarmDevice.commandTopic}` - Alarm device commands
+  - Payload format: `{ alarm: 'ON', volume: string, duration: number, melody: number }`
+  - Example: `z2m/house1/floor1-alarm/set`
 
 ## Device Compatibility
 
@@ -137,6 +166,66 @@ Run tests:
 ```bash
 npm test -- door-alarm.test.js
 ```
+
+## Troubleshooting
+
+### Common Issues
+
+**Alarms don't trigger when door left open**
+- Verify door sensor is publishing state changes to correct MQTT topic
+- Enable `verbose: true` to see door state transitions in logs
+- Check that `doorSensor.statusTopic` matches your door sensor configuration
+- Verify payload format is `{ state: boolean }`
+
+**Alarms trigger but no sound from device**
+- Check Zigbee device is online and paired to Zigbee2MQTT
+- Verify `alarmDevice.commandTopic` matches your Z2M device friendly name
+- Test alarm manually via Z2M web interface or MQTT publish
+- Check device battery level (NAS-AB02B0 requires power for alarm)
+
+**Alarms continue after door closes**
+- This is expected - closing door only cancels pending alarms, not currently sounding alarm
+- Current alarm will stop after its configured `durationSec` expires
+- If alarms keep retriggering, check for sensor false positives or duplicate messages
+
+**Alarms lost after service restart**
+- With state persistence (implemented), alarms should restore automatically
+- Check logs for "restoring timers" messages
+- Verify `/app/state/` directory is writable and persisted across restarts
+- If state file is corrupt, bot will start fresh with default state
+
+**Duplicate alarm triggers**
+- Enable `verbose: true` to check for duplicate door state messages
+- Bot automatically ignores duplicate messages with same state
+- Check sensor for rapid state flickering (faulty sensor or mounting)
+
+### Debug Information
+
+Enable `verbose: true` in bot configuration to see detailed logging:
+
+```javascript
+{
+  type: 'door-alarm',
+  // ... other config
+  verbose: true
+}
+```
+
+Debug logs include:
+- Door state changes (open/closed)
+- Duplicate message detection
+- Alarm scheduling and triggering
+- Timer restoration after restart
+- MQTT publish failures
+- Payload validation errors
+
+### Health Monitoring
+
+Monitor bot health through:
+- **Door state**: Check `persistedCache.doorState` in state file
+- **Active alarms**: Check `persistedCache.pendingAlarms` array
+- **MQTT connectivity**: Check automations service logs for subscription confirmations
+- **Alarm device**: Check Z2M device status and battery level
 
 ## Example Configurations
 
@@ -205,3 +294,12 @@ npm test -- door-alarm.test.js
 
 - MQTT client for pub/sub
 - No external dependencies beyond automation framework
+
+## Related Documentation
+
+- [Door Alarm Bot Implementation](door-alarm.js)
+- [Door Alarm Test Suite](door-alarm.test.js)
+- [Automation Service CLAUDE.md](../CLAUDE.md)
+- [Configuration Examples](../../../config/automations/config.js)
+- [Zigbee2MQTT NAS-AB02B0 Device](https://www.zigbee2mqtt.io/devices/NAS-AB02B0.html)
+- [State Manager Documentation](../lib/state-manager.js)
