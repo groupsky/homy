@@ -134,9 +134,27 @@ Key patterns:
   }
   ```
 
-#### `feature-toggle-on-feature-change` - Input/output mapping
-- **Purpose**: Direct mapping of input changes to output toggles with debouncing
-- **Use Cases**: Light switches, relay controls, button mappings
+#### `door-alarm` - Escalating door left open alerts
+- **Purpose**: Escalating alarms when doors are left open too long
+- **Features**: Configurable escalation steps, volume control, timer restoration after restart
+- **State**: Uses persistent cache for timer restoration and alarm tracking
+- **Use Cases**: Entry doors, security areas, garage doors
+- **Documentation**: See `bots/door-alarm.md` for complete configuration guide
+- **Configuration**:
+  ```javascript
+  {
+    type: 'door-alarm',
+    doorSensor: {statusTopic: 'homy/features/open/front_main_door_open/status'},
+    alarmDevice: {commandTopic: 'z2m/house1/floor1-alarm/set'},
+    escalationSteps: [
+      { delayMs: 60000, durationSec: 10, volume: 'low' },
+      { delayMs: 120000, durationSec: 20, volume: 'medium' },
+      { delayMs: 180000, durationSec: 60, volume: 'high' }
+    ],
+    melody: 8,
+    verbose: false
+  }
+  ```
 
 #### `irrigation` - Scheduled watering systems
 - **Purpose**: Cron-based irrigation with safety timeouts
