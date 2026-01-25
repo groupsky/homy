@@ -1,6 +1,6 @@
 # Docker Build Change Detection
 
-This directory contains scripts for detecting which Docker images need to be rebuilt based on file changes in the repository.
+This directory contains TypeScript tooling (migrated from Python) for detecting which Docker images need to be rebuilt based on file changes in the repository.
 
 ## Purpose
 
@@ -36,6 +36,18 @@ The change detection system:
 
 ## Installation
 
+### TypeScript (Current)
+
+```bash
+# Install dependencies
+npm install
+
+# Type checking
+npm run typecheck
+```
+
+### Python (Legacy - being migrated)
+
 ```bash
 # Install production dependencies
 pip install -r requirements.txt
@@ -45,6 +57,18 @@ pip install -r requirements-dev.txt
 ```
 
 ## Usage
+
+### TypeScript (Current)
+
+```bash
+# Detect changes
+npm run detect-changes -- detect --base-ref origin/master --sha abc123
+
+# Or with tsx directly
+npx tsx src/index.ts detect --base-ref origin/master --sha abc123
+```
+
+### Python (Legacy)
 
 ```bash
 # Detect changes based on git diff
@@ -61,6 +85,21 @@ python detect_changes.py --changed-files file1.txt --dry-run
 ```
 
 ## Testing
+
+### TypeScript (Current)
+
+```bash
+# Run all tests
+npm test
+
+# Watch mode (re-run on changes)
+npm run test:watch
+
+# With coverage report
+npm run test:coverage
+```
+
+### Python (Legacy)
 
 ```bash
 # Run all tests
@@ -138,7 +177,51 @@ This matrix is consumed by the build workflow to parallelize image builds.
 - Normalizes for consistent comparison
 - Used for image tag generation
 
+## Migration Status
+
+This project is being incrementally migrated from Python to TypeScript.
+
+### Completed
+- ✅ Project structure setup
+- ✅ TypeScript type definitions
+- ✅ Error classes
+- ✅ Jest test configuration
+
+### In Progress
+- 🔄 Module migration (Python → TypeScript)
+
+### Pending
+- ⏳ Full test suite migration
+- ⏳ CLI implementation
+- ⏳ GitHub Actions integration
+
 ## File Structure
+
+### TypeScript (Current)
+
+```
+.github/scripts/detect-changes/
+├── src/
+│   ├── lib/              # Core libraries
+│   │   ├── types.ts      # Shared TypeScript interfaces
+│   │   └── ...           # Module implementations (to be migrated)
+│   ├── utils/
+│   │   ├── errors.ts     # Custom error classes
+│   │   └── ...           # Utility functions
+│   └── index.ts          # Main CLI entry point
+├── tests/
+│   ├── lib/              # Unit tests
+│   └── fixtures/         # Test fixtures
+│       ├── dockerfiles/  # Sample Dockerfiles
+│       ├── docker-compose/ # Sample compose files
+│       └── base-images/  # Sample base image configs
+├── package.json          # Node.js package configuration
+├── tsconfig.json         # TypeScript configuration
+├── jest.config.js        # Jest test configuration
+└── .nvmrc                # Node version specification
+```
+
+### Python (Legacy - being phased out)
 
 ```
 .github/scripts/detect-changes/
