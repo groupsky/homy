@@ -24,7 +24,6 @@ docker compose up -d
 ```
 
 * All is up and running
-Node-red is available at http://localhost:1880
 Home-assistant is available at http://localhost:8123
 MQTT broker uses standard port mqtt://localhost:1883 with websocker ws://localhost:9001
 OpenVPN listens on udp://localhost:1194

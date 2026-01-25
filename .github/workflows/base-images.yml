@@ -52,9 +52,6 @@ jobs:
           - name: mongo
             upstream_pattern: "mongo:"
             ghcr_name: ghcr.io/groupsky/homy/mongo
-          - name: nodered
-            upstream_pattern: "nodered/node-red:"
-            ghcr_name: ghcr.io/groupsky/homy/nodered
           - name: telegraf
             upstream_pattern: "telegraf:"
             ghcr_name: ghcr.io/groupsky/homy/telegraf

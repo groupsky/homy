@@ -139,17 +139,6 @@ updates:
           - "*"
 
   - package-ecosystem: "docker"
-    directory: "/base-images/nodered"
-    schedule:
-      interval: "weekly"
-    reviewers:
-      - "groupsky"
-    groups:
-      base-images:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
     directory: "/base-images/alpine"
     schedule:
       interval: "weekly"
@@ -552,28 +541,6 @@ updates:
   # Home Automation - User interface and automation platform
   - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-    groups:
-      home-automation:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/nodered"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-    groups:
-      home-automation:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/nodered"
     schedule:
       interval: "monthly"
     reviewers:

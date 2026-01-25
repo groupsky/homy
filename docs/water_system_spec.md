@@ -376,4 +376,4 @@ This structure supports future additions for:
 - **HVAC:** `hvac_system:` for air ducts, thermostats, dampers  
 - **Irrigation:** `irrigation_system:` for zones, schedules, sensors
 - **Sensors:** Cross-system sensor registry with unified monitoring
-- **Automation:** Links to MQTT topics, Node-RED flows, HA entities
+- **Automation:** Links to MQTT topics and HA entities
