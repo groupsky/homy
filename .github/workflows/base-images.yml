@@ -52,9 +52,6 @@ jobs:
           - name: mongo
             upstream_pattern: "mongo:"
             ghcr_name: ghcr.io/groupsky/homy/mongo
-          - name: telegraf
-            upstream_pattern: "telegraf:"
-            ghcr_name: ghcr.io/groupsky/homy/telegraf
           - name: alpine
             upstream_pattern: "alpine:"
             ghcr_name: ghcr.io/groupsky/homy/alpine

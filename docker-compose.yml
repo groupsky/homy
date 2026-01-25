@@ -890,37 +890,6 @@ services:
       - MQTT_CLIENT_ID=historian-secondary
       - COLLECTION=secondary
 
-  telegraf-ovms:
-    image: ghcr.io/groupsky/homy/telegraf:${IMAGE_TAG:-latest}
-    build: docker/telegraf
-    depends_on:
-      - influxdb
-    restart: unless-stopped
-    networks:
-      - automation
-      - egress
-    security_opt:
-      - no-new-privileges:true
-    secrets:
-      - influxdb_write_user
-      - influxdb_write_user_password
-      - ovms_mqtt_user
-      - ovms_mqtt_password
-    ulimits:
-      memlock: 835584
-    environment:
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
-      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
-      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
-      - MQTT_USERNAME_FILE=/run/secrets/ovms_mqtt_user
-      - MQTT_PASSWORD_FILE=/run/secrets/ovms_mqtt_password
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
-      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
-      - ${CONFIG_PATH}/telegraf/ovms.conf:/etc/telegraf/telegraf.conf:ro
-
   # Manually run with
   # dc run volman
   volman:

@@ -114,17 +114,6 @@ updates:
           - "*"
 
   - package-ecosystem: "docker"
-    directory: "/base-images/telegraf"
-    schedule:
-      interval: "weekly"
-    reviewers:
-      - "groupsky"
-    groups:
-      base-images:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
     directory: "/base-images/node-ubuntu"
     schedule:
       interval: "weekly"
@@ -273,17 +262,6 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/mongo-express"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-    groups:
-      infrastructure:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/telegraf"
     schedule:
       interval: "monthly"
     reviewers:

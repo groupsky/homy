@@ -126,7 +126,6 @@ Multiple interfaces for monitoring and control:
 - **mqtt-influx-***: Multiple services bridging MQTT to InfluxDB
   - **mqtt-influx-primary/secondary/tetriary**: Modbus sensor data
 - **mqtt-mongo-history**: MQTT message logging to MongoDB
-- **telegraf-ovms**: Vehicle telemetry integration
 - **historian-***: Manual data migration utilities
 
 ## Current State & Architectural Challenges

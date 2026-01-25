@@ -63,11 +63,6 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
-### Telegraf Services
-- **telegraf-mqtt-consumer**: MQTT `/modbus/main/+/reading` → `power_meters` measurement
-- **telegraf-ovms**: Vehicle telemetry via OVMS → `ovms` measurement
-- **telegraf-host**: System host metrics → various system measurements
-
 ### Specialized Monitoring
 - **sunseeker-monitoring**: Solar tracking and monitoring with integrated mqtt-influx bridge
 
@@ -169,23 +164,6 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - Decision correlation with actual sensor data
 - Troubleshooting automation logic issues
 - Energy efficiency analysis of heating decisions
-
-### MQTT Bridge Data (Telegraf)
-
-#### `power_meters` Measurement
-**Source**: telegraf-mqtt-consumer → MQTT bridge of main bus
-**Tag Structure**: `bus: "main"`, device tags from MQTT topic parsing
-**Fields**: Real-time power meter data from MQTT topics
-**Use Cases**: Real-time power monitoring dashboard
-
-#### `ovms` Measurement
-**Source**: telegraf-ovms → Vehicle telemetry system
-**Tag Structure**: `bus`, `device` from MQTT topic parsing
-**Key Fields**:
-- Vehicle metrics: `12v/voltage`, `trip`, `speed`, `direction`
-- GPS data: `latitude`, `longitude`, `altitude`, `gpsspeed`, `gpshdop`
-- System status: `odometer`, `gpssq`
-**Use Cases**: Vehicle monitoring, trip analysis, location tracking
 
 ## Data Quality Notes
 
@@ -305,7 +283,7 @@ Raw modbus data is also stored in MongoDB collections:
 - **Field queries**: Fields are not indexed - avoid WHERE clauses on field values for performance
 - **Data volume**: High-frequency temperature data (~30s intervals) and energy data (~1min intervals)
 - **Downsampling**: Consider aggregation for long-term trend analysis (>1 month queries)
-- **Concurrent services**: 8+ modbus-serial services + 3 mqtt-influx bridges + telegraf instances writing simultaneously
+- **Concurrent services**: 8+ modbus-serial services + 3 mqtt-influx bridges writing simultaneously
 
 ## Future Enhancements
 
@@ -328,9 +306,6 @@ When adding new measurements or modifying existing ones:
 Modbus Devices → modbus-serial-* → Direct InfluxDB Write
                                  ↓
 Modbus Devices → modbus-serial-* → MQTT Publish → mqtt-influx-* → InfluxDB Write
-External MQTT → telegraf-* → InfluxDB Write
-Vehicle OVMS → telegraf-ovms → InfluxDB Write
-Host System → telegraf-host → InfluxDB Write
 ```
 
 **Note**: The actual system is more complex than initially documented, with 60+ distinct measurements including device-specific power monitoring and comprehensive vehicle telemetry.
