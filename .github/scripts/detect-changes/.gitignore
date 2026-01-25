@@ -30,6 +30,8 @@ ENV/
 .coverage
 htmlcov/
 .tox/
+coverage/
+*.lcov
 
 # IDE
 .vscode/
