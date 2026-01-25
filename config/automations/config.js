@@ -404,6 +404,18 @@ module.exports = {
       },
       verbose: false
     },
+
+    // Safety backup: Turn ON device if it stays OFF for more than 30 seconds
+    // Complements the power-based monitoring above
+    circulationHeatpumpOffTimeout: {
+      type: 'timeout-emit',
+      listenTopic: 'z2m/house1/circulation-heatpump',
+      listenFilter: (payload) => payload.state === 'OFF',
+      timeout: 30000,           // 30 seconds
+      emitTopic: 'z2m/house1/circulation-heatpump/set',
+      emitValue: { state: 'ON' },
+      verbose: false
+    },
   },
   gates: {
     mqtt: {
