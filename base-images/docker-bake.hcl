@@ -18,7 +18,6 @@ group "default" {
     "influxdb2",
     "mosquitto",
     "mongo",
-    "telegraf",
     "alpine",
     "nginx",
     "ubuntu",
@@ -67,11 +66,6 @@ target "mosquitto" {
 target "mongo" {
   context = "./mongo"
   # Tags set via workflow: ghcr.io/groupsky/homy/mongo:${VERSION}
-}
-
-target "telegraf" {
-  context = "./telegraf"
-  # Tags set via workflow: ghcr.io/groupsky/homy/telegraf:${VERSION}
 }
 
 target "node-ubuntu" {
