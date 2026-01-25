@@ -1179,5 +1179,86 @@ jobs:
   # ============================================================================
   # Stage 6: Workflow Summary
   # ============================================================================
-  # TODO: Implement summary with success/failure reporting
+  # Final job that always runs to provide comprehensive workflow status.
+  # Depends on ALL previous jobs to aggregate their results.
+  # Creates GitHub Actions summary with detection results and stage status.
+  # Fails if any critical stage failed, ensuring workflow status is correct.
   # ============================================================================
+  workflow-summary:
+    name: Workflow Summary
+    needs: [detect-changes, prepare-base-images, build-app-images, version-consistency-check, unit-tests, healthcheck-tests, push-built-images, retag-unchanged-images]
+    if: always()  # Always run to provide summary even on failure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Determine workflow status
+        id: status
+        run: |
+          # Check if any previous job failed
+          DETECT_STATUS="${{ needs.detect-changes.result }}"
+          PREPARE_STATUS="${{ needs.prepare-base-images.result }}"
+          BUILD_STATUS="${{ needs.build-app-images.result }}"
+          VERSION_STATUS="${{ needs.version-consistency-check.result }}"
+          TEST_STATUS="${{ needs.unit-tests.result }}"
+          HEALTH_STATUS="${{ needs.healthcheck-tests.result }}"
+          PUSH_STATUS="${{ needs.push-built-images.result }}"
+          RETAG_STATUS="${{ needs.retag-unchanged-images.result }}"
+
+          echo "detect=$DETECT_STATUS" >> $GITHUB_OUTPUT
+          echo "prepare=$PREPARE_STATUS" >> $GITHUB_OUTPUT
+          echo "build=$BUILD_STATUS" >> $GITHUB_OUTPUT
+          echo "version=$VERSION_STATUS" >> $GITHUB_OUTPUT
+          echo "test=$TEST_STATUS" >> $GITHUB_OUTPUT
+          echo "health=$HEALTH_STATUS" >> $GITHUB_OUTPUT
+          echo "push=$PUSH_STATUS" >> $GITHUB_OUTPUT
+          echo "retag=$RETAG_STATUS" >> $GITHUB_OUTPUT
+
+          # Determine overall status
+          if [[ "$DETECT_STATUS" == "failure" || "$PREPARE_STATUS" == "failure" || \
+                "$BUILD_STATUS" == "failure" || "$VERSION_STATUS" == "failure" || \
+                "$TEST_STATUS" == "failure" || "$HEALTH_STATUS" == "failure" || \
+                "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
+            echo "overall=failure" >> $GITHUB_OUTPUT
+            exit 1
+          elif [[ "$DETECT_STATUS" == "cancelled" || "$PREPARE_STATUS" == "cancelled" || \
+                  "$BUILD_STATUS" == "cancelled" || "$VERSION_STATUS" == "cancelled" || \
+                  "$TEST_STATUS" == "cancelled" || "$HEALTH_STATUS" == "cancelled" || \
+                  "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" ]]; then
+            echo "overall=cancelled" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "overall=success" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # CI Workflow Summary
+
+          ## Stage Results
+
+          | Stage | Status |
+          |-------|--------|
+          | 1️⃣ Detect Changes | ${{ steps.status.outputs.detect }} |
+          | 2️⃣ Prepare Base Images | ${{ steps.status.outputs.prepare }} |
+          | 3️⃣ Build App Images | ${{ steps.status.outputs.build }} |
+          | 4️⃣A Version Checks | ${{ steps.status.outputs.version }} |
+          | 4️⃣B Unit Tests | ${{ steps.status.outputs.test }} |
+          | 4️⃣C Healthcheck Tests | ${{ steps.status.outputs.health }} |
+          | 5️⃣A Push Images | ${{ steps.status.outputs.push }} |
+          | 5️⃣B Retag Images | ${{ steps.status.outputs.retag }} |
+
+          ## Detection Results
+
+          - **Base Images Changed**: ${{ needs.detect-changes.outputs.changed_base_images }}
+          - **Services Changed**: ${{ needs.detect-changes.outputs.changed_services }}
+          - **Services Affected**: ${{ needs.detect-changes.outputs.affected_services }}
+          - **Services to Build**: ${{ needs.detect-changes.outputs.to_build }}
+          - **Services to Retag**: ${{ needs.detect-changes.outputs.to_retag }}
+          - **Testable Services**: ${{ needs.detect-changes.outputs.testable_services }}
+          - **Healthcheck Services**: ${{ needs.detect-changes.outputs.healthcheck_services }}
+
+          ## Overall Status: ${{ steps.status.outputs.overall }}
+          EOF
