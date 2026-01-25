@@ -985,8 +985,196 @@ jobs:
   # ============================================================================
   # Stage 5: Push and Tag Images
   # ============================================================================
-  # TODO: Implement image pushing with proper tagging strategy
+  # Two jobs that ONLY run after Stage 3 AND all Stage 4 tests succeed:
+  # A) Push Built Images - Tags and pushes newly built images to GHCR
+  # B) Retag Unchanged Images - Adds branch/latest tags to existing images
+  # Critical rule: :latest tag ONLY applied after ALL tests pass
   # ============================================================================
+
+  # Stage 5A: Push Built Images
+  push-built-images:
+    name: Push Built Images
+    needs: [detect-changes, build-app-images, version-consistency-check, unit-tests, healthcheck-tests]
+    # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
+    if: |
+      (github.event_name == 'push' ||
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository)) &&
+      needs.detect-changes.outputs.to_build != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.to_build) }}
+      fail-fast: false
+
+    steps:
+      - name: Download service artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
+        with:
+          name: service-${{ matrix.service }}
+          path: /tmp
+
+      - name: Verify and load image
+        run: |
+          echo "=== Verifying artifact for ${{ matrix.service }} ==="
+          cd /tmp
+
+          # Verify checksum
+          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
+            echo "::error::Checksum verification failed for ${{ matrix.service }}"
+            exit 1
+          fi
+          echo "✅ Checksum verified"
+
+          # Load Docker image
+          echo "Loading Docker image..."
+          if ! docker load -i ${{ matrix.service }}.tar; then
+            echo "::error::Failed to load Docker image"
+            exit 1
+          fi
+
+          # Verify image is available
+          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          echo "=== Determining tags for ${{ matrix.service }} ==="
+
+          # Base tags: full SHA and short SHA
+          TAGS="ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}"
+          SHORT_SHA="${{ github.sha }}"
+          TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:${SHORT_SHA:0:12}"
+
+          # Add branch or latest tag
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:latest"
+            echo "Adding :latest tag (master branch)"
+          else
+            # Sanitize branch name for tag
+            BRANCH=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///' | sed 's/[^a-zA-Z0-9_.-]/-/g' | cut -c1-100)
+            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:$BRANCH"
+            echo "Adding :$BRANCH tag"
+          fi
+
+          # Add PR tag if applicable
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:pr-${{ github.event.pull_request.number }}"
+            echo "Adding :pr-${{ github.event.pull_request.number }} tag"
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.pr_number }}" ]; then
+            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:pr-${{ github.event.inputs.pr_number }}"
+            echo "Adding :pr-${{ github.event.inputs.pr_number }} tag (manual trigger)"
+          fi
+
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo ""
+          echo "Final tags:"
+          for TAG in $TAGS; do
+            echo "  - $TAG"
+          done
+
+      - name: Tag and push images
+        run: |
+          echo "=== Tagging and pushing images ==="
+
+          for TAG in ${{ steps.tags.outputs.tags }}; do
+            echo "Tagging: $TAG"
+            docker tag ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} $TAG
+
+            echo "Pushing: $TAG"
+            docker push $TAG
+          done
+
+          echo "✅ All tags pushed successfully"
+
+  # Stage 5B: Retag Unchanged Images
+  retag-unchanged-images:
+    name: Retag Unchanged Images
+    needs: [detect-changes, push-built-images]
+    if: |
+      needs.detect-changes.outputs.to_retag != '[]' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: retag-${{ github.repository }}
+      cancel-in-progress: false
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.to_retag) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine base ref SHA
+        id: base-sha
+        run: |
+          echo "=== Determining base SHA for retagging ==="
+
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            echo "Using PR base SHA: $BASE_SHA"
+          else
+            # For push events, use previous commit
+            BASE_SHA=$(git rev-parse HEAD^)
+            echo "Using previous commit SHA: $BASE_SHA"
+          fi
+
+          echo "sha=$BASE_SHA" >> $GITHUB_OUTPUT
+
+      - name: Retag existing image
+        run: |
+          echo "=== Retagging existing image for ${{ matrix.service }} ==="
+
+          BASE_IMAGE="ghcr.io/groupsky/homy/${{ matrix.service }}:${{ steps.base-sha.outputs.sha }}"
+          echo "Base image: $BASE_IMAGE"
+
+          # Determine new tag
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            NEW_TAG="latest"
+          else
+            # Sanitize branch name for tag
+            BRANCH=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///' | sed 's/[^a-zA-Z0-9_.-]/-/g' | cut -c1-100)
+            NEW_TAG="$BRANCH"
+          fi
+
+          NEW_IMAGE="ghcr.io/groupsky/homy/${{ matrix.service }}:$NEW_TAG"
+          echo "New tag: $NEW_IMAGE"
+
+          # Use imagetools create for manifest-only retag (no egress)
+          echo "Retagging (manifest-only, no download)..."
+          docker buildx imagetools create \
+            --tag "$NEW_IMAGE" \
+            "$BASE_IMAGE"
+
+          echo "✅ Retag successful"
 
   # ============================================================================
   # Stage 6: Workflow Summary
