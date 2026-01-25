@@ -50,7 +50,6 @@ docker compose up -d --build automations
 - Grafana (dashboards, alerts, users)
 - Zigbee2MQTT (device database, network state)
 - WireGuard VPN (peer configurations)
-- Node-RED (flow definitions, credentials)
 - Automation service state (bot memory)
 
 For detailed documentation, see `docker/volman/CLAUDE.md`.

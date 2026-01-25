@@ -47,8 +47,6 @@ base-images/
 │   └── Dockerfile
 ├── mongo/                   # MongoDB database
 │   └── Dockerfile
-├── telegraf/                # Telegraf metrics collector
-│   └── Dockerfile
 ├── docker-bake.hcl          # Multi-image build configuration
 ├── README.md                # User-facing documentation
 ├── UPGRADE_WORKFLOW.md      # Detailed upgrade workflow guide

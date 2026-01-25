@@ -18,8 +18,6 @@ group "default" {
     "influxdb2",
     "mosquitto",
     "mongo",
-    "nodered",
-    "telegraf",
     "alpine",
     "nginx",
     "ubuntu",
@@ -70,19 +68,9 @@ target "mongo" {
   # Tags set via workflow: ghcr.io/groupsky/homy/mongo:${VERSION}
 }
 
-target "telegraf" {
-  context = "./telegraf"
-  # Tags set via workflow: ghcr.io/groupsky/homy/telegraf:${VERSION}
-}
-
 target "node-ubuntu" {
   context = "./node-ubuntu"
   # Tags set via workflow: ghcr.io/groupsky/homy/node-ubuntu:${VERSION}
-}
-
-target "nodered" {
-  context = "./nodered"
-  # Tags set via workflow: ghcr.io/groupsky/homy/nodered:${VERSION}
 }
 
 target "alpine" {

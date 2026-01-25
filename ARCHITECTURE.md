@@ -126,7 +126,6 @@ Multiple interfaces for monitoring and control:
 - **mqtt-influx-***: Multiple services bridging MQTT to InfluxDB
   - **mqtt-influx-primary/secondary/tetriary**: Modbus sensor data
 - **mqtt-mongo-history**: MQTT message logging to MongoDB
-- **telegraf-ovms**: Vehicle telemetry integration
 - **historian-***: Manual data migration utilities
 
 ## Current State & Architectural Challenges
@@ -176,7 +175,7 @@ The system is actively running in production with:
 **Maintenance**
 - Docker Compose for service lifecycle management
 - Automated backup system (volman) for persistent data
-  - Comprehensive coverage: Home Assistant, MongoDB, InfluxDB, Grafana, Zigbee2MQTT, WireGuard, Node-RED, automation state
+  - Comprehensive coverage: Home Assistant, MongoDB, InfluxDB, Grafana, Zigbee2MQTT, WireGuard, automation state
   - Point-in-time recovery capability for all critical volumes
   - TAR-based backup format with integrity validation
   - Recovery procedures documented in `docker/volman/CLAUDE.md`

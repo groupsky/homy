@@ -263,9 +263,7 @@ The following services are built as prebuilt images in CI:
 | mosquitto | MQTT broker |
 | mqtt-influx | MQTT to InfluxDB bridge |
 | mqtt-mongo | MQTT to MongoDB bridge |
-| nodered | Node-RED flow automation |
 | sunseeker-monitoring | Lawn mower monitoring |
-| telegraf | Metrics collection agent |
 | telegram-bridge | Telegram notifications |
 | volman | Volume backup management |
 | zigbee2mqtt | Zigbee device integration |

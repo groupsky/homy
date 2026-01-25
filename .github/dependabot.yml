@@ -114,17 +114,6 @@ updates:
           - "*"
 
   - package-ecosystem: "docker"
-    directory: "/base-images/telegraf"
-    schedule:
-      interval: "weekly"
-    reviewers:
-      - "groupsky"
-    groups:
-      base-images:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
     directory: "/base-images/node-ubuntu"
     schedule:
       interval: "weekly"
@@ -133,17 +122,6 @@ updates:
     ignore:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
-    groups:
-      base-images:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
-    directory: "/base-images/nodered"
-    schedule:
-      interval: "weekly"
-    reviewers:
-      - "groupsky"
     groups:
       base-images:
         patterns:
@@ -284,17 +262,6 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/docker/mongo-express"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-    groups:
-      infrastructure:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/telegraf"
     schedule:
       interval: "monthly"
     reviewers:
@@ -552,28 +519,6 @@ updates:
   # Home Automation - User interface and automation platform
   - package-ecosystem: "docker"
     directory: "/docker/homeassistant"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-    groups:
-      home-automation:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "docker"
-    directory: "/docker/nodered"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-    groups:
-      home-automation:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/docker/nodered"
     schedule:
       interval: "monthly"
     reviewers:
