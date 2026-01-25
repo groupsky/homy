@@ -12,7 +12,7 @@ Volman is a lightweight backup and restore service for Docker volumes. It create
 - **Isolated**: Uses `network_mode: none` and `restart: 'no'` for security
 - **Flexible**: Supports arbitrary volume lists without code changes
 
-### Current Backup Coverage (8 volumes)
+### Current Backup Coverage (7 volumes)
 
 | Volume | Source | Priority | Contents | Recovery Impact |
 |--------|--------|----------|----------|-----------------|
@@ -22,7 +22,6 @@ Volman is a lightweight backup and restore service for Docker volumes. It create
 | `grafana` | Grafana | HIGH | Dashboards, alerts, users | Must recreate all dashboards |
 | `z2m-home1` | Zigbee2MQTT | HIGH | Device database, network state | Must re-pair all Zigbee devices |
 | `wireguard` | WireGuard VPN | HIGH | Peer configurations | Must regenerate all VPN keys |
-| `nodered` | Node-RED | MEDIUM | Flow definitions, credentials | Loss of custom flows |
 | `automations-state` | Automation bots | MEDIUM | Bot memory/state | Auto-rebuilds from MQTT |
 
 ## Implementation
@@ -52,7 +51,6 @@ ${BACKUP_PATH}/
 │   ├── grafana.tar          # Grafana dashboards
 │   ├── z2m-home1.tar        # Zigbee2MQTT devices
 │   ├── wireguard.tar        # VPN configs
-│   ├── nodered.tar          # Node-RED flows
 │   └── automations-state.tar # Bot state
 └── 2026_01_18_10_00_00/
     └── ...
@@ -68,7 +66,6 @@ ${BACKUP_PATH}/
   - `grafana`: ~5-20 MB (dashboards, alerts, users)
   - `z2m-home1`: ~1-5 MB (device database, network state)
   - `wireguard`: <1 MB (peer configs)
-  - `nodered`: ~5-20 MB (flows, credentials)
   - `automations-state`: ~1-10 MB (bot state files)
 
 ## Usage

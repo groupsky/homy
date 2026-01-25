@@ -270,7 +270,7 @@ RUN apk add --no-cache imagemagick
 
 ## All Services Use GHCR Base Images
 
-All services now use base images from GHCR to avoid Docker Hub rate limits. Even third-party platforms like Node-RED are republished to GHCR for consistency and rate limit avoidance.
+All services now use base images from GHCR to avoid Docker Hub rate limits. Even third-party platforms like Grafana and Mosquitto are republished to GHCR for consistency and rate limit avoidance.
 
 ## Automated Workflow Explained
 

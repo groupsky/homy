@@ -80,31 +80,6 @@ services:
     volumes:
       - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
 
-  nodered:
-    image: ghcr.io/groupsky/homy/nodered:${IMAGE_TAG:-latest}
-    build: docker/nodered
-    depends_on:
-      - broker
-    restart: unless-stopped
-    networks:
-      - automation
-      - ingress
-      # needed to connect to broadcom rm+ pro ir remote
-      - egress
-    security_opt:
-      - no-new-privileges:true
-    secrets:
-      - nodered_credentials_key
-    environment:
-      - CREDENTIALS_KEY_FILE=/run/secrets/nodered_credentials_key
-      - VIRTUAL_HOST=${NODERED_DOMAIN}
-      - VIRTUAL_PORT=1880
-    volumes:
-      - ${NODERED_DATA}:/data
-      - ${NODERED_CONFIG_FLOWS_FILE}:/data/flows.json:ro
-      - ${NODERED_CONFIG_SETTINGS_FILE}:/data/settings.js:ro
-    user: ${PUID}:${PGID}
-
   ha:
     image: ghcr.io/groupsky/homy/homeassistant:${IMAGE_TAG:-latest}
     build: docker/homeassistant
@@ -959,7 +934,7 @@ services:
       - TZ=${TZ}
       - BACKUP_ROOT=/backup
       - VOLUMES_ROOT=/volumes
-      - VOLUMES=ha mongo influxdb grafana z2m-home1 wireguard nodered automations-state
+      - VOLUMES=ha mongo influxdb grafana z2m-home1 wireguard automations-state
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${BACKUP_PATH}:/backup
@@ -970,7 +945,6 @@ services:
       - ${GRAFANA_DATA_PATH}:/volumes/grafana
       - ${Z2M_HOME1_DATA_PATH}:/volumes/z2m-home1
       - ${VPN_DATA_PATH}:/volumes/wireguard
-      - ${NODERED_DATA}:/volumes/nodered
       - ${DATA_PATH}/automations/state:/volumes/automations-state
 
 networks:
@@ -1018,8 +992,6 @@ secrets:
     file: ${MONGO_SECRET_ROOT_PASSWORD_FILE}
   mongo_root_username:
     file: ${MONGO_SECRET_ROOT_USERNAME_FILE}
-  nodered_credentials_key:
-    file: ${NODERED_SECRET_CREDENTIALS_KEY_FILE}
   ovms_mqtt_password:
     file: ${SECRETS_PATH}/ovms_mqtt_password
   ovms_mqtt_user:
