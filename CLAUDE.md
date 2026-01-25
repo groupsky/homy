@@ -172,6 +172,29 @@ When developing new features:
 4. **Testing**: Write comprehensive tests for all automation logic using minimal mocking to ensure tests verify real system behavior
 5. **Documentation standards**: Comments must explain what the code does and why for future maintainers. Avoid preserving development discussions, decision processes, or temporary implementation notes in production code.
 
+### Language Preference Policy
+
+**CRITICAL**: When creating new code, follow this priority order:
+
+1. **JavaScript/TypeScript** - For complex logic, API integrations, parsing, data transformations
+2. **Bash** - For simple scripts, file operations, basic automation
+3. **Go** - For performance-critical services, system-level tools
+4. **Other languages** - Only when specific library/ecosystem requirements mandate it
+
+**Rationale:**
+- JavaScript/TypeScript aligns with the majority of services (automations, mqtt-influx, etc.)
+- Enables code reuse and shared utilities across services
+- Better tooling and IDE support for the existing codebase
+- Bash keeps simple tasks simple without unnecessary complexity
+- Go for when performance truly matters
+
+**Examples:**
+- ✅ CI/CD orchestration scripts → **TypeScript**
+- ✅ Dockerfile parsing and validation → **TypeScript**
+- ✅ Git hooks and simple file operations → **Bash**
+- ✅ High-throughput data processing → **Go**
+- ⚠️ Python/other → Only when required library unavailable in preferred languages
+
 ### Test-Driven Development (TDD)
 
 **Project-wide TDD Guidelines:**
