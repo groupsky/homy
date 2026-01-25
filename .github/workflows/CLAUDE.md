@@ -273,3 +273,433 @@ For services with Docker HEALTHCHECK in Dockerfile, validate the container healt
     file: docker/service-name/coverage/lcov.info
     flags: service-name
 ```
+
+## Unified CI/CD Pipeline
+
+The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements a 6-stage architecture for building, testing, and deploying Docker images.
+
+### Architecture Overview
+
+The pipeline consists of 6 sequential stages with parallel execution within stages:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 1: Detect Changes                                         │
+│ - Analyze git diff to detect changed files                      │
+│ - Parse Dockerfiles to extract base image dependencies          │
+│ - Check GHCR for existing images                                │
+│ - Generate build matrix and retag lists                         │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 2: Prepare Base Images (Sequential)                       │
+│ - Pull from Docker Hub → GHCR (or build if Dockerfile exists)   │
+│ - Process one at a time to avoid rate limits                    │
+│ - Create artifacts with checksums for downstream stages         │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 3: Build App Images (Parallel, max 10)                    │
+│ - Load base images from Stage 2 artifacts                       │
+│ - Build app images using matrix strategy                        │
+│ - Save images as tar archives with SHA-256 checksums            │
+│ - NO packages:write permission (artifact-only)                  │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 4: Tests (3 parallel jobs)                                │
+│ 4A: Version Consistency  4B: Unit Tests  4C: Health Checks      │
+│ - Dockerfile vs package   - npm test     - Container health     │
+│ - All jobs must pass for promotion to succeed                   │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 5: Push and Tag (Test-Gated)                              │
+│ 5A: Push Built Images    5B: Retag Unchanged Images             │
+│ - Load from artifacts    - Retag existing :latest               │
+│ - Push :sha tag          - Only if all tests pass               │
+│ - Push :latest (master)  - Parallel processing                  │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 6: Workflow Summary                                       │
+│ - Aggregate all stage results                                   │
+│ - Send Telegram notifications                                   │
+│ - Fail workflow if any critical stage failed                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Security Model: Artifact-Based Isolation
+
+**Key Security Principles:**
+
+1. **Minimal Registry Access**: Only Stage 2 and Stage 5 have `packages:write` permission
+2. **Artifact-Based Flow**: Stages 2→3→4→5 pass images via artifacts with SHA-256 checksums
+3. **No Build-Time Registry Access**: Stage 3 (build) and Stage 4 (tests) cannot pull/push to GHCR
+4. **Fork PR Isolation**: Fork PRs cannot access secrets or push to GHCR
+5. **Checksum Verification**: Every artifact transfer validated with SHA-256
+
+**Why This Matters:**
+
+- **Supply Chain Security**: Prevents malicious Dockerfiles from pulling/pushing arbitrary images
+- **Audit Trail**: All image transfers logged and checksummed
+- **Rate Limit Protection**: Single point of registry interaction reduces API calls
+- **Cost Control**: Prevents accidental image proliferation
+
+### Test-Gated Promotion
+
+The `:latest` tag promotion is **test-gated**, meaning it only occurs after ALL Stage 4 tests pass:
+
+```yaml
+# Stage 5A: Push Built Images
+push-built-images:
+  needs: [detect-changes, build-app-images, version-tests, unit-tests, healthcheck-tests]
+  # ↑ Depends on ALL test jobs
+
+# Stage 5B: Retag Unchanged Images
+retag-unchanged-images:
+  needs: [detect-changes, version-tests, unit-tests, healthcheck-tests]
+  # ↑ Also depends on ALL test jobs
+```
+
+**What This Prevents:**
+
+- ❌ Broken builds being tagged as `:latest`
+- ❌ Version inconsistencies in production
+- ❌ Failed health checks reaching deployment
+- ❌ Untested code being promoted
+
+**What This Allows:**
+
+- ✅ `:sha` tags pushed immediately (for debugging)
+- ✅ Test failures block promotion but preserve artifacts
+- ✅ Retag operations respect test results
+- ✅ Rollback to last known-good `:latest`
+
+### Fork PR Handling
+
+Fork PRs have restricted capabilities for security:
+
+| Feature | Main Repo PR | Fork PR |
+|---------|-------------|---------|
+| Build images | ✅ Yes | ✅ Yes |
+| Run tests | ✅ Yes | ✅ Yes |
+| Access secrets | ✅ Yes | ❌ No |
+| Push to GHCR | ✅ Yes | ❌ No |
+| Base image preparation | ✅ Yes | ❌ No* |
+
+\* Fork PRs must have all base images already in GHCR
+
+**Fork PR Workflow:**
+
+1. Fork PR opens → Stage 1 detects changes
+2. Stage 2 skipped (no `packages:write` permission)
+3. Stage 3 builds using existing GHCR base images
+4. Stage 4 runs all tests
+5. Stage 5 skipped (no push permission)
+6. Stage 6 reports results
+
+**Manual Fork PR Image Publishing:**
+
+Use `workflow_dispatch` with `publish_pr_images=true` to manually publish fork PR images:
+
+```yaml
+inputs:
+  publish_pr_images: true
+  pr_number: "123"
+```
+
+This requires repository write access and validates fork PR status.
+
+### Change Detection Logic
+
+Stage 1 uses TypeScript-based detection (`.github/scripts/detect-changes/`) with sophisticated logic:
+
+**Inputs:**
+- Git diff between base and head commits
+- Dockerfile parsing for base image dependencies
+- GHCR existence checks via `docker buildx imagetools`
+
+**Outputs:**
+- `changed_services`: Services with Dockerfile/code changes (JSON array)
+- `changed_base_images`: Base images with Dockerfile changes (JSON array)
+- `base_images_needed`: Dependencies for changed services (JSON array)
+- `to_build`: Services requiring build (JSON array)
+- `to_retag`: Unchanged services to retag :latest (JSON array)
+- `testable_services`: Services with test suites (JSON array)
+- `healthcheck_services`: Services with HEALTHCHECK (JSON array)
+
+**Detection Strategy:**
+
+```typescript
+// Simplified logic flow
+if (serviceDockerfileChanged || serviceCodeChanged) {
+  if (!imageExistsInGHCR(sha)) {
+    to_build.push(service);
+  }
+
+  // Extract base image from Dockerfile
+  baseImage = parseDockerfile(service);
+  if (!imageExistsInGHCR(baseImage)) {
+    base_images_needed.push(baseImage);
+  }
+} else {
+  // Service unchanged, but may need retagging on master
+  if (isMasterBranch && imageExistsInGHCR(sha)) {
+    to_retag.push(service);
+  }
+}
+```
+
+### Environment Variables
+
+**Required Secrets:**
+
+| Secret | Used In | Purpose |
+|--------|---------|---------|
+| `GITHUB_TOKEN` | All stages | GHCR authentication (auto-provided) |
+| `DOCKER_HUB_USERNAME` | Stage 2 | Docker Hub authentication |
+| `DOCKER_HUB_ACCESS_TOKEN` | Stage 2 | Docker Hub authentication |
+| `TELEGRAM_BOT_TOKEN` | Stage 2, 6 | Build notifications |
+| `TELEGRAM_CHAT_ID` | Stage 2, 6 | Notification recipient |
+
+**Optional Inputs (workflow_dispatch):**
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `force_rebuild` | boolean | false | Bypass change detection, rebuild all |
+| `publish_pr_images` | boolean | false | Publish fork PR images (requires write access) |
+| `pr_number` | string | '' | PR number for fork PR publishing |
+
+### Troubleshooting Guide
+
+#### Build Failures
+
+**Problem: "Base image not found in GHCR"**
+
+```
+Error: ghcr.io/groupsky/homy/node:18.20.8-alpine not found
+```
+
+**Solution:**
+1. Check if base image exists in `base-images/` directory
+2. If yes, Stage 2 should have built it - check Stage 2 logs
+3. If no, add to `base-images/` and commit
+4. For fork PRs: Maintainer must run workflow_dispatch to prepare base images
+
+**Problem: "Artifact checksum mismatch"**
+
+```
+Expected: abc123...
+Got: def456...
+```
+
+**Solution:**
+1. Indicates artifact corruption or tampering
+2. Re-run workflow - likely transient failure
+3. If persistent, check GitHub Actions status
+
+**Problem: "Stage 3 trying to pull from registry"**
+
+```
+ERROR: pull access denied for xyz
+```
+
+**Solution:**
+1. Dockerfile should only reference base images in `base-images/`
+2. Check Dockerfile FROM statements
+3. Ensure all base images in GHCR via Stage 2
+
+#### Test Failures
+
+**Problem: "Version consistency check failed"**
+
+```
+Version mismatch: Dockerfile=1.2.3, package.json=1.2.4
+```
+
+**Solution:**
+1. Update Dockerfile LABEL version to match package.json
+2. Or update package.json to match Dockerfile
+3. Versions must be identical
+
+**Problem: "Healthcheck timeout"**
+
+```
+Container still in 'starting' state after 35s
+```
+
+**Solution:**
+1. Check service logs: `docker logs <container>`
+2. Verify HEALTHCHECK command in Dockerfile
+3. Increase timeout if service has slow startup
+4. Ensure service exposes health endpoint
+
+#### Promotion Issues
+
+**Problem: ":latest not updated despite passing tests"**
+
+**Checklist:**
+1. Is this a master branch push? (PRs don't get :latest)
+2. Did ALL test jobs pass? (Check Stage 4A, 4B, 4C)
+3. Check Stage 5 logs for push errors
+4. Verify `packages:write` permission granted
+
+**Problem: "Retag failed for unchanged service"**
+
+**Solution:**
+1. Check if :sha image exists in GHCR
+2. Service may have been changed in previous commits
+3. Re-run workflow to rebuild missing images
+
+#### Performance Issues
+
+**Problem: "Workflow taking >30 minutes"**
+
+**Typical Duration:**
+- Clean build (all services): ~25 minutes
+- Incremental (1-2 services): ~8-12 minutes
+- No changes: ~2 minutes (detection only)
+
+**Optimization:**
+1. Check Docker layer cache hit rate (should be >80%)
+2. Review base image count (Stage 2 is sequential)
+3. Consider splitting large services
+4. Check for excessive test execution time
+
+### Monitoring and Metrics
+
+**Key Performance Indicators:**
+
+| Metric | Target | Red Flag |
+|--------|--------|----------|
+| Workflow duration (incremental) | <12 min | >20 min |
+| Workflow duration (full rebuild) | <30 min | >45 min |
+| Docker cache hit rate | >80% | <50% |
+| Test execution time | <5 min | >10 min |
+| Base image preparation | <3 min | >10 min |
+
+**GitHub Actions Quotas:**
+
+- Free tier: 2,000 min/month for private repos
+- Estimated usage: ~1,640 min/month (82% of quota)
+- Cache limit: 10GB (currently at ~10GB)
+
+**Cost Optimization:**
+- Enable Docker layer caching (saves 8 min/build)
+- Prune old cache entries regularly
+- Use `ignore-error=true` on cache exports
+- Consider composite actions for repeated patterns
+
+### Development Workflow Examples
+
+**Scenario 1: Add new service**
+
+1. Create `docker/new-service/Dockerfile`
+2. Add service to `docker-compose.yml`
+3. Commit and push
+4. Workflow auto-detects:
+   - New base image dependency → Stage 2 prepares
+   - New service → Stage 3 builds
+   - Tests → Stage 4 runs (if applicable)
+   - Master push → Stage 5 tags :latest
+
+**Scenario 2: Update existing service**
+
+1. Modify `docker/existing-service/index.js`
+2. Commit and push
+3. Workflow:
+   - Detects code change → rebuilds only that service
+   - Other services → retagged (no rebuild)
+   - Tests run → promotion gated on success
+
+**Scenario 3: Update base image**
+
+1. Modify `base-images/node/Dockerfile` (18.20.8 → 18.20.9)
+2. Commit and push
+3. Workflow:
+   - Stage 2 builds new base image
+   - Stage 3 rebuilds ALL services using that base
+   - Cascading update ensures consistency
+
+**Scenario 4: Fork PR contribution**
+
+1. Fork repository
+2. Make changes
+3. Open PR
+4. Workflow:
+   - Builds images (if base images exist in GHCR)
+   - Runs tests
+   - No GHCR push (security boundary)
+5. Maintainer reviews and merges
+6. Master build publishes images
+
+### Best Practices
+
+**When Adding New Services:**
+
+1. ✅ Use base images from `ghcr.io/groupsky/homy/*`
+2. ✅ Add HEALTHCHECK to Dockerfile if service has health endpoint
+3. ✅ Include version LABEL in Dockerfile
+4. ✅ Add npm test script if Node.js service
+5. ✅ Update documentation
+
+**When Updating Dependencies:**
+
+1. ✅ Let Dependabot handle base image updates
+2. ✅ Test locally before pushing
+3. ✅ Monitor workflow for cascading rebuild impact
+4. ✅ Review test results before merging
+
+**When Debugging Build Failures:**
+
+1. ✅ Check Stage 1 outputs for detection logic
+2. ✅ Verify base images exist in GHCR
+3. ✅ Review artifact checksums
+4. ✅ Inspect Dockerfile FROM statements
+5. ✅ Run locally with `docker compose build`
+
+### Advanced Features
+
+**Force Rebuild All Images:**
+
+Use `workflow_dispatch` with `force_rebuild=true`:
+
+```bash
+gh workflow run ci-unified.yml \
+  --ref master \
+  -f force_rebuild=true
+```
+
+**Publish Fork PR Images:**
+
+Requires repository write access:
+
+```bash
+gh workflow run ci-unified.yml \
+  --ref master \
+  -f publish_pr_images=true \
+  -f pr_number=123
+```
+
+**Manual Retag Operation:**
+
+Stage 5B handles automatic retagging, but for manual operations:
+
+```bash
+# Retag existing :sha to :latest
+docker buildx imagetools create \
+  --tag ghcr.io/groupsky/homy/service:latest \
+  ghcr.io/groupsky/homy/service:abc123def
+```
+
+### Related Documentation
+
+- **Base Images**: `base-images/CLAUDE.md` - Base image management and Dependabot workflow
+- **Project Root**: `CLAUDE.md` - Docker base image policy and GHCR-only requirement
+- **Architecture**: `ARCHITECTURE.md` - System architecture and data flow

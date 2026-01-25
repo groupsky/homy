@@ -354,6 +354,53 @@ All services now use base images from GHCR to avoid Docker Hub rate limits. Even
 2. Ensure FROM line format is: `FROM registry/image:version`
 3. Test locally: `grep "^FROM " Dockerfile | awk '{print $2}' | cut -d: -f2`
 
+### GHCR 503 Service Unavailable Errors
+
+**Problem**: Workflow fails with "503 Service Unavailable" when pulling/pushing to GHCR.
+
+**Background**:
+GHCR occasionally returns 503 errors during high load, especially for large images or during GitHub platform incidents. These are typically transient and resolve within seconds to minutes.
+
+**Automatic Retry Logic**:
+The unified CI workflow (Stage 2) automatically handles GHCR 503 errors with exponential backoff:
+
+```bash
+# Retry logic with exponential backoff
+max_attempts=5
+for attempt in 1 2 3 4 5; do
+  if docker buildx imagetools inspect "$image" 2>&1; then
+    success=true
+    break
+  fi
+
+  error_output=$(docker buildx imagetools inspect "$image" 2>&1)
+  if echo "$error_output" | grep -q "503"; then
+    wait_time=$((2 ** attempt))  # 2s, 4s, 8s, 16s, 32s
+    echo "⚠️  GHCR returned 503, retrying in ${wait_time}s (attempt $attempt/$max_attempts)"
+    sleep $wait_time
+  else
+    break  # Non-503 error, fail immediately
+  fi
+done
+```
+
+**Manual Resolution**:
+1. **Re-run workflow**: GitHub Actions allows workflow re-run, which usually succeeds
+2. **Check GitHub status**: Visit https://www.githubstatus.com/ for platform incidents
+3. **Wait and retry**: If persistent, wait 15-30 minutes and retry
+4. **Local testing**: Pull/push manually to verify GHCR accessibility
+
+**When to Escalate**:
+- 503 errors persist for >2 hours
+- GitHub status page shows ongoing incidents
+- Manual docker pull/push also fails with 503
+- Pattern of failures across multiple workflows
+
+**Prevention**:
+- The retry logic is automatic - no manual intervention needed for transient failures
+- Monitor GitHub Actions logs for retry patterns
+- If retries are frequent, check GHCR quota and image sizes
+
 ## Best Practices
 
 ### Base Image Design

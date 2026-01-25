@@ -141,6 +141,10 @@ The system integrates with:
 - **Automation Bots**: `docker/automations/docs/` - Bot-specific guides and implementation details
 - **Service Development**: Service-specific CLAUDE.md files provide development patterns and best practices
 
+### CI/CD and Infrastructure
+- **Unified CI Pipeline**: `.github/workflows/CLAUDE.md` - Complete guide to the 6-stage Docker build pipeline with artifact-based security, test-gated promotion, and troubleshooting
+- **Base Images**: `base-images/CLAUDE.md` - Base image management, Dependabot workflow, and GHCR 503 handling
+
 ### Configuration References
 - **Main Configuration**: `config/automations/config.js` - Primary system configuration
 - **Architecture Overview**: `ARCHITECTURE.md` - Comprehensive system architecture documentation
