@@ -9,7 +9,7 @@
  * - Error handling for rate limits and network issues
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { GHCRError, GHCRRateLimitError, ValidationError } from '../utils/errors.js';
 import type { Service } from './types.js';
 
@@ -59,13 +59,12 @@ function sleep(ms: number): Promise<void> {
  * ```
  */
 export async function checkImageExists(imageTag: string, retries: number = 0): Promise<boolean> {
-  const command = `docker buildx imagetools inspect ${imageTag}`;
   const maxAttempts = retries === 0 ? 1 : retries; // retries=0 means 1 attempt, retries=2 means 2 attempts
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       // Execute docker buildx imagetools inspect
-      execSync(command, {
+      execFileSync('docker', ['buildx', 'imagetools', 'inspect', imageTag], {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
       });

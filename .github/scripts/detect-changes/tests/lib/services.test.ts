@@ -17,10 +17,10 @@ import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 import type { Service } from '../../src/lib/types.js';
 
 // Mock child_process module
-const mockedExecSync = jest.fn<typeof import('child_process').execSync>();
+const mockedExecFileSync = jest.fn<typeof import('child_process').execFileSync>();
 
 jest.unstable_mockModule('child_process', () => ({
-  execSync: mockedExecSync,
+  execFileSync: mockedExecFileSync,
 }));
 
 // Import after mocking
@@ -47,12 +47,13 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'docker compose --env-file .env --file docker-compose.yml config --format json',
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['compose', '--env-file', '.env', '--file', 'docker-compose.yml', 'config', '--format', 'json'],
         { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
       );
 
@@ -95,7 +96,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -122,7 +123,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -148,7 +149,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -178,7 +179,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -204,7 +205,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -224,7 +225,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -245,7 +246,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -258,7 +259,7 @@ describe('TestDiscoverServicesFromCompose', () => {
 
   describe('test_execsync_command_failure', () => {
     test('Should throw error when docker compose config fails', () => {
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw new Error('docker compose not found');
       });
 
@@ -270,7 +271,7 @@ describe('TestDiscoverServicesFromCompose', () => {
 
   describe('test_invalid_json_output', () => {
     test('Should throw error when docker compose config returns invalid JSON', () => {
-      mockedExecSync.mockReturnValue(Buffer.from('invalid json {'));
+      mockedExecFileSync.mockReturnValue(Buffer.from('invalid json {'));
 
       expect(() => {
         discoverServicesFromCompose('docker-compose.yml', '.env');
@@ -284,7 +285,7 @@ describe('TestDiscoverServicesFromCompose', () => {
         services: {},
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -303,12 +304,13 @@ describe('TestDiscoverServicesFromCompose', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       discoverServicesFromCompose('custom/docker-compose.yml', 'custom.env');
 
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'docker compose --env-file custom.env --file custom/docker-compose.yml config --format json',
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['compose', '--env-file', 'custom.env', '--file', 'custom/docker-compose.yml', 'config', '--format', 'json'],
         { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
       );
     });
@@ -605,7 +607,7 @@ describe('TestServicesIntegration', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const allServices = discoverServicesFromCompose('docker-compose.yml', '.env');
       const ghcrServices = filterGhcrServices(allServices);
@@ -652,7 +654,7 @@ describe('TestServicesIntegration', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -687,7 +689,7 @@ describe('TestServicesEdgeCases', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -708,7 +710,7 @@ describe('TestServicesEdgeCases', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -727,7 +729,7 @@ describe('TestServicesEdgeCases', () => {
         },
       };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const services = discoverServicesFromCompose('docker-compose.yml', '.env');
 
@@ -749,7 +751,7 @@ describe('TestServicesEdgeCases', () => {
 
       const composeConfig = { services };
 
-      mockedExecSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
+      mockedExecFileSync.mockReturnValue(Buffer.from(JSON.stringify(composeConfig)));
 
       const discoveredServices = discoverServicesFromCompose('docker-compose.yml', '.env');
 

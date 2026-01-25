@@ -164,13 +164,13 @@ jobs:
           BASE_SHA=$(git rev-parse "$BASE_REF")
           echo "Base SHA for image tags: $BASE_SHA"
 
-          # Run detection
+          # Run detection using absolute paths
           npm run detect-changes -- \
             --base-ref "$BASE_REF" \
-            --base-images-dir ../../base-images \
-            --compose-file ../../docker-compose.yml \
-            --env-file ../../example.env \
-            --docker-dir ../../docker \
+            --base-images-dir "$GITHUB_WORKSPACE/base-images" \
+            --compose-file "$GITHUB_WORKSPACE/docker-compose.yml" \
+            --env-file "$GITHUB_WORKSPACE/example.env" \
+            --docker-dir "$GITHUB_WORKSPACE/docker" \
             ${{ steps.fork.outputs.is_fork == 'true' && '--is-fork' || '' }} \
             --output-file "$GITHUB_OUTPUT" \
             --base-sha "$BASE_SHA"

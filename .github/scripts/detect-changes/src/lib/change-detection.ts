@@ -7,7 +7,7 @@
  * 3. Validate base images are exact copies (FROM+LABEL only)
  */
 
-import { execSync as defaultExecSync } from 'child_process';
+import { execFileSync as defaultExecFileSync } from 'child_process';
 import { readFileSync as defaultReadFileSync } from 'fs';
 import { DockerfileParser } from 'dockerfile-ast';
 import type { BaseImage, Service } from './types.js';
@@ -18,7 +18,7 @@ import { ValidationError } from '../utils/errors.js';
  * @internal
  */
 export interface ChangeDetectionDeps {
-  execSync?: typeof defaultExecSync;
+  execFileSync?: typeof defaultExecFileSync;
   readFileSync?: typeof defaultReadFileSync;
 }
 
@@ -46,7 +46,7 @@ export function detectChangedBaseImages(
   baseImages: BaseImage[],
   deps: ChangeDetectionDeps = {}
 ): string[] {
-  const { execSync = defaultExecSync } = deps;
+  const { execFileSync = defaultExecFileSync } = deps;
 
   if (baseImages.length === 0) {
     return [];
@@ -56,11 +56,12 @@ export function detectChangedBaseImages(
   const knownDirs = new Set(baseImages.map((img) => img.directory));
 
   // Run git diff to get changed files in base-images/
-  const gitCommand = `git diff --name-only ${baseRef} HEAD -- base-images/`;
   let output: string;
 
   try {
-    output = execSync(gitCommand, { encoding: 'utf-8' }) as string;
+    output = execFileSync('git', ['diff', '--name-only', baseRef, 'HEAD', '--', 'base-images/'], {
+      encoding: 'utf-8',
+    }) as string;
   } catch (error) {
     // Re-throw git errors (e.g., bad revision)
     throw error;
@@ -118,7 +119,7 @@ export function detectChangedServices(
   services: Service[],
   deps: ChangeDetectionDeps = {}
 ): string[] {
-  const { execSync = defaultExecSync } = deps;
+  const { execFileSync = defaultExecFileSync } = deps;
 
   if (services.length === 0) {
     return [];
@@ -137,11 +138,12 @@ export function detectChangedServices(
   }
 
   // Run git diff to get changed files in docker/*/
-  const gitCommand = `git diff --name-only ${baseRef} HEAD -- docker/*/\n`;
   let output: string;
 
   try {
-    output = execSync(gitCommand, { encoding: 'utf-8' }) as string;
+    output = execFileSync('git', ['diff', '--name-only', baseRef, 'HEAD', '--', 'docker/*/'], {
+      encoding: 'utf-8',
+    }) as string;
   } catch (error) {
     // Re-throw git errors (e.g., bad revision)
     throw error;

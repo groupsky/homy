@@ -7,7 +7,7 @@
  * information including build context, dockerfile paths, and build arguments.
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { Service } from './types.js';
 
 /**
@@ -54,14 +54,16 @@ interface BuildConfig {
  * ```
  */
 export function discoverServicesFromCompose(composeFile: string, envFile: string): Service[] {
-  const command = `docker compose --env-file ${envFile} --file ${composeFile} config --format json`;
-
   try {
     // Execute docker compose config and capture JSON output
-    const output = execSync(command, {
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large compose files
-    });
+    const output = execFileSync(
+      'docker',
+      ['compose', '--env-file', envFile, '--file', composeFile, 'config', '--format', 'json'],
+      {
+        encoding: 'utf-8',
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large compose files
+      }
+    );
 
     // Parse JSON output
     const config: ComposeConfig = JSON.parse(output);

@@ -18,10 +18,10 @@ import { GHCRError, GHCRRateLimitError, ValidationError } from '../../src/utils/
 import type { Service } from '../../src/lib/types.js';
 
 // Mock child_process module
-const mockedExecSync = jest.fn<typeof import('child_process').execSync>();
+const mockedExecFileSync = jest.fn<typeof import('child_process').execFileSync>();
 
 jest.unstable_mockModule('child_process', () => ({
-  execSync: mockedExecSync,
+  execFileSync: mockedExecFileSync,
 }));
 
 // Import after mocking
@@ -37,13 +37,14 @@ describe('TestCheckImageExists', () => {
   describe('test_image_exists_returns_true', () => {
     test('Should return true when docker buildx imagetools inspect succeeds', async () => {
       // Mock successful docker command
-      mockedExecSync.mockReturnValue('Manifest: sha256:abc123...');
+      mockedExecFileSync.mockReturnValue('Manifest: sha256:abc123...');
 
       const result = await checkImageExists('ghcr.io/groupsky/homy/node:18.20.8-alpine');
 
       expect(result).toBe(true);
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'docker buildx imagetools inspect ghcr.io/groupsky/homy/node:18.20.8-alpine',
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['buildx', 'imagetools', 'inspect', 'ghcr.io/groupsky/homy/node:18.20.8-alpine'],
         { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
       );
     });
@@ -54,7 +55,7 @@ describe('TestCheckImageExists', () => {
       // Mock manifest unknown error
       const error = new Error('manifest unknown') as Error & { status?: number };
       error.status = 1;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -69,7 +70,7 @@ describe('TestCheckImageExists', () => {
       // Mock 503 rate limit error
       const error = new Error('503 Service Unavailable') as Error & { status?: number };
       error.status = 1;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -83,7 +84,7 @@ describe('TestCheckImageExists', () => {
     test('Should retry 3 times with exponential backoff on transient errors', async () => {
       // Mock transient error that eventually succeeds
       let callCount = 0;
-      mockedExecSync.mockImplementation((() => {
+      mockedExecFileSync.mockImplementation((() => {
         callCount++;
         if (callCount < 3) {
           const error = new Error('temporary failure') as Error & { status?: number };
@@ -96,7 +97,7 @@ describe('TestCheckImageExists', () => {
       const result = await checkImageExists('ghcr.io/groupsky/homy/node:18.20.8-alpine', 3);
 
       expect(result).toBe(true);
-      expect(mockedExecSync).toHaveBeenCalledTimes(3);
+      expect(mockedExecFileSync).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -105,7 +106,7 @@ describe('TestCheckImageExists', () => {
       // Mock persistent error
       const error = new Error('persistent error') as Error & { status?: number };
       error.status = 1;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -114,7 +115,7 @@ describe('TestCheckImageExists', () => {
       ).rejects.toThrow(GHCRError);
 
       // Should have tried 2 times
-      expect(mockedExecSync).toHaveBeenCalledTimes(2);
+      expect(mockedExecFileSync).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -123,7 +124,7 @@ describe('TestCheckImageExists', () => {
       // Mock manifest unknown error
       const error = new Error('manifest unknown: manifest unknown') as Error & { status?: number };
       error.status = 1;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -131,7 +132,7 @@ describe('TestCheckImageExists', () => {
 
       expect(result).toBe(false);
       // Should only try once, not retry
-      expect(mockedExecSync).toHaveBeenCalledTimes(1);
+      expect(mockedExecFileSync).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -140,7 +141,7 @@ describe('TestCheckImageExists', () => {
       jest.useFakeTimers();
 
       let callCount = 0;
-      mockedExecSync.mockImplementation((() => {
+      mockedExecFileSync.mockImplementation((() => {
         callCount++;
         if (callCount < 4) {
           const error = new Error('temporary failure') as Error & { status?: number };
@@ -168,7 +169,7 @@ describe('TestCheckImageExists', () => {
     test('Should not retry by default (retries=0)', async () => {
       const error = new Error('temporary failure') as Error & { status?: number };
       error.status = 1;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -177,7 +178,7 @@ describe('TestCheckImageExists', () => {
       ).rejects.toThrow(GHCRError);
 
       // Should only try once
-      expect(mockedExecSync).toHaveBeenCalledTimes(1);
+      expect(mockedExecFileSync).toHaveBeenCalledTimes(1);
     });
   });
 });
@@ -190,7 +191,7 @@ describe('TestCheckAllServices', () => {
   describe('test_all_services_exist_returns_empty_to_build', () => {
     test('Should return empty to_build when all services exist in GHCR', async () => {
       // Mock all images exist
-      mockedExecSync.mockReturnValue('Manifest: sha256:abc123...');
+      mockedExecFileSync.mockReturnValue('Manifest: sha256:abc123...');
 
       const services: Service[] = [
         {
@@ -218,9 +219,11 @@ describe('TestCheckAllServices', () => {
     test('Should return services to build when images do not exist', async () => {
       // Mock first service exists, second does not
       let callCount = 0;
-      mockedExecSync.mockImplementation(((cmd: any) => {
+      mockedExecFileSync.mockImplementation(((_cmd: any, args: any) => {
         callCount++;
-        if (cmd.toString().includes('automations')) {
+        // args is the array ['buildx', 'imagetools', 'inspect', '<image-tag>']
+        const imageTag = args[args.length - 1];
+        if (imageTag.includes('automations')) {
           return 'Manifest: sha256:abc123...';
         } else {
           const error = new Error('manifest unknown') as Error & { status?: number };
@@ -270,7 +273,7 @@ describe('TestCheckAllServices', () => {
 
   describe('test_custom_registry_prefix', () => {
     test('Should use custom registry prefix when provided', async () => {
-      mockedExecSync.mockReturnValue('Manifest: sha256:abc123...');
+      mockedExecFileSync.mockReturnValue('Manifest: sha256:abc123...');
 
       const services: Service[] = [
         {
@@ -282,8 +285,9 @@ describe('TestCheckAllServices', () => {
 
       await checkAllServices(services, 'abc123', 'custom.registry.io/org/homy');
 
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'docker buildx imagetools inspect custom.registry.io/org/homy/automations:abc123',
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['buildx', 'imagetools', 'inspect', 'custom.registry.io/org/homy/automations:abc123'],
         expect.any(Object)
       );
     });
@@ -291,7 +295,7 @@ describe('TestCheckAllServices', () => {
 
   describe('test_default_registry_is_ghcr', () => {
     test('Should use ghcr.io/groupsky/homy as default registry', async () => {
-      mockedExecSync.mockReturnValue('Manifest: sha256:abc123...');
+      mockedExecFileSync.mockReturnValue('Manifest: sha256:abc123...');
 
       const services: Service[] = [
         {
@@ -303,8 +307,9 @@ describe('TestCheckAllServices', () => {
 
       await checkAllServices(services, 'abc123');
 
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'docker buildx imagetools inspect ghcr.io/groupsky/homy/automations:abc123',
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['buildx', 'imagetools', 'inspect', 'ghcr.io/groupsky/homy/automations:abc123'],
         expect.any(Object)
       );
     });
@@ -313,7 +318,7 @@ describe('TestCheckAllServices', () => {
   describe('test_batch_checking_with_retries', () => {
     test('Should check all services with retry logic', async () => {
       let callCount = 0;
-      mockedExecSync.mockImplementation((() => {
+      mockedExecFileSync.mockImplementation((() => {
         callCount++;
         // Fail first two attempts, then succeed
         if (callCount <= 2) {
@@ -351,14 +356,14 @@ describe('TestValidateForkPrBaseImages', () => {
       await validateForkPrBaseImages(false, ['node:18.20.8-alpine', 'alpine:3.22.1']);
 
       // Should not call docker at all
-      expect(mockedExecSync).not.toHaveBeenCalled();
+      expect(mockedExecFileSync).not.toHaveBeenCalled();
     });
   });
 
   describe('test_fork_pr_with_all_base_images_passes', () => {
     test('Should pass validation when all base images exist', async () => {
       // Mock all images exist
-      mockedExecSync.mockReturnValue('Manifest: sha256:abc123...');
+      mockedExecFileSync.mockReturnValue('Manifest: sha256:abc123...');
 
       await expect(
         validateForkPrBaseImages(true, [
@@ -367,7 +372,7 @@ describe('TestValidateForkPrBaseImages', () => {
         ])
       ).resolves.toBeUndefined();
 
-      expect(mockedExecSync).toHaveBeenCalledTimes(2);
+      expect(mockedExecFileSync).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -375,9 +380,11 @@ describe('TestValidateForkPrBaseImages', () => {
     test('Should raise ValidationError when base images are missing', async () => {
       // Mock first image exists, second does not
       let callCount = 0;
-      mockedExecSync.mockImplementation(((cmd: any) => {
+      mockedExecFileSync.mockImplementation(((_cmd: any, args: any) => {
         callCount++;
-        if (cmd.toString().includes('node')) {
+        // args is the array ['buildx', 'imagetools', 'inspect', '<image-tag>']
+        const imageTag = args[args.length - 1];
+        if (imageTag.includes('node')) {
           return 'Manifest: sha256:abc123...';
         } else {
           const error = new Error('manifest unknown') as Error & { status?: number };
@@ -400,7 +407,7 @@ describe('TestValidateForkPrBaseImages', () => {
       // Mock all images missing
       const error = new Error('manifest unknown') as Error & { status?: number };
       error.status = 1;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -426,18 +433,19 @@ describe('TestValidateForkPrBaseImages', () => {
         validateForkPrBaseImages(true, [])
       ).resolves.toBeUndefined();
 
-      expect(mockedExecSync).not.toHaveBeenCalled();
+      expect(mockedExecFileSync).not.toHaveBeenCalled();
     });
   });
 
   describe('test_fork_pr_prepends_ghcr_prefix', () => {
     test('Should prepend ghcr.io/groupsky/homy to base image names', async () => {
-      mockedExecSync.mockReturnValue('Manifest: sha256:abc123...');
+      mockedExecFileSync.mockReturnValue('Manifest: sha256:abc123...');
 
       await validateForkPrBaseImages(true, ['node:18.20.8-alpine']);
 
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'docker buildx imagetools inspect ghcr.io/groupsky/homy/node:18.20.8-alpine',
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['buildx', 'imagetools', 'inspect', 'ghcr.io/groupsky/homy/node:18.20.8-alpine'],
         expect.any(Object)
       );
     });
@@ -455,7 +463,7 @@ describe('TestGHCRClientEdgeCases', () => {
 
       expect(result.toBuild).toEqual([]);
       expect(result.toRetag).toEqual([]);
-      expect(mockedExecSync).not.toHaveBeenCalled();
+      expect(mockedExecFileSync).not.toHaveBeenCalled();
     });
   });
 
@@ -464,7 +472,7 @@ describe('TestGHCRClientEdgeCases', () => {
       const error = new Error('ETIMEDOUT') as Error & { status?: number; code?: string };
       error.status = 1;
       error.code = 'ETIMEDOUT';
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -473,7 +481,7 @@ describe('TestGHCRClientEdgeCases', () => {
       ).rejects.toThrow(GHCRError);
 
       // Should retry on timeout
-      expect(mockedExecSync).toHaveBeenCalledTimes(2);
+      expect(mockedExecFileSync).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -481,7 +489,7 @@ describe('TestGHCRClientEdgeCases', () => {
     test('Should raise GHCRError when docker is not installed', async () => {
       const error = new Error('docker: command not found') as Error & { status?: number };
       error.status = 127;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -495,7 +503,7 @@ describe('TestGHCRClientEdgeCases', () => {
     test('Should handle malformed image tags gracefully', async () => {
       const error = new Error('invalid reference format') as Error & { status?: number };
       error.status = 1;
-      mockedExecSync.mockImplementation(() => {
+      mockedExecFileSync.mockImplementation(() => {
         throw error;
       });
 
@@ -507,7 +515,7 @@ describe('TestGHCRClientEdgeCases', () => {
 
   describe('test_concurrent_service_checks', () => {
     test('Should handle concurrent checks efficiently', async () => {
-      mockedExecSync.mockReturnValue('Manifest: sha256:abc123...');
+      mockedExecFileSync.mockReturnValue('Manifest: sha256:abc123...');
 
       const services: Service[] = Array.from({ length: 10 }, (_, i) => ({
         service_name: `service-${i}`,
@@ -519,7 +527,7 @@ describe('TestGHCRClientEdgeCases', () => {
       const result = await checkAllServices(services, 'abc123');
 
       expect(result.toRetag).toHaveLength(10);
-      expect(mockedExecSync).toHaveBeenCalledTimes(10);
+      expect(mockedExecFileSync).toHaveBeenCalledTimes(10);
     });
   });
 });
@@ -532,9 +540,10 @@ describe('TestGHCRClientIntegration', () => {
   describe('test_real_world_service_check_scenario', () => {
     test('Should handle realistic service checking scenario', async () => {
       // Simulate: automations exists, features doesn't, ha-discovery has no image
-      mockedExecSync.mockImplementation(((cmd: any) => {
-        const cmdStr = cmd.toString();
-        if (cmdStr.includes('automations')) {
+      mockedExecFileSync.mockImplementation(((_cmd: any, args: any) => {
+        // args is the array ['buildx', 'imagetools', 'inspect', '<image-tag>']
+        const imageTag = args[args.length - 1];
+        if (imageTag.includes('automations')) {
           return 'Manifest: sha256:abc123...';
         } else {
           const error = new Error('manifest unknown') as Error & { status?: number };
@@ -573,9 +582,10 @@ describe('TestGHCRClientIntegration', () => {
   describe('test_fork_pr_complete_validation_flow', () => {
     test('Should validate fork PR with mixed base image availability', async () => {
       // Simulate some base images exist, others don't
-      mockedExecSync.mockImplementation(((cmd: any) => {
-        const cmdStr = cmd.toString();
-        if (cmdStr.includes('node:18.20.8-alpine')) {
+      mockedExecFileSync.mockImplementation(((_cmd: any, args: any) => {
+        // args is the array ['buildx', 'imagetools', 'inspect', '<image-tag>']
+        const imageTag = args[args.length - 1];
+        if (imageTag.includes('node:18.20.8-alpine')) {
           return 'Manifest: sha256:abc123...';
         } else {
           const error = new Error('manifest unknown') as Error & { status?: number };
