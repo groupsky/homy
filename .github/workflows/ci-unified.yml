@@ -1,0 +1,232 @@
+name: CI - Unified Docker Build Pipeline
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'base-images/**'
+      - 'docker/**'
+      - '.github/workflows/ci-unified.yml'
+      - '.github/scripts/detect-changes/**'
+  pull_request:
+    paths:
+      - 'base-images/**'
+      - 'docker/**'
+      - '.github/workflows/ci-unified.yml'
+      - '.github/scripts/detect-changes/**'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild all images (bypass change detection)'
+        type: boolean
+        default: false
+      publish_pr_images:
+        description: 'Publish PR images to GHCR (fork PRs only)'
+        type: boolean
+        default: false
+      pr_number:
+        description: 'PR number (required when publish_pr_images=true)'
+        type: string
+        default: ''
+
+# Concurrency control
+concurrency:
+  # Master builds: serialize to prevent race conditions on latest tag
+  # PR builds: cancel in-progress to save resources
+  group: ${{ github.ref == 'refs/heads/master' && format('ci-master-{0}', github.sha) || format('ci-pr-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # ============================================================================
+  # Stage 1: Detect Changes
+  # ============================================================================
+  # Analyzes file changes and determines:
+  # - Which base images changed
+  # - Which services changed or are affected by base image changes
+  # - Which images need building vs can be retagged
+  # - Which services have tests/healthchecks
+  # ============================================================================
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      # All base images in the repository
+      base_images: ${{ steps.detect.outputs.base_images }}
+      # Base images that changed in this commit/PR
+      changed_base_images: ${{ steps.detect.outputs.changed_base_images }}
+      # Base images needed for fork PRs (subset of changed_base_images)
+      base_images_needed: ${{ steps.detect.outputs.base_images_needed }}
+      # Services with direct file changes
+      changed_services: ${{ steps.detect.outputs.changed_services }}
+      # Services affected by base image changes (no direct file changes)
+      affected_services: ${{ steps.detect.outputs.affected_services }}
+      # Services that need building (no existing image in GHCR)
+      to_build: ${{ steps.detect.outputs.to_build }}
+      # Services that can be retagged (existing image in GHCR)
+      to_retag: ${{ steps.detect.outputs.to_retag }}
+      # Services with real test scripts in package.json
+      testable_services: ${{ steps.detect.outputs.testable_services }}
+      # Services with HEALTHCHECK in Dockerfile
+      healthcheck_services: ${{ steps.detect.outputs.healthcheck_services }}
+      # Services with .nvmrc + node base (need version consistency check)
+      version_check_services: ${{ steps.detect.outputs.version_check_services }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          # Need full history for git diff
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: '.github/scripts/detect-changes/requirements.txt'
+
+      - name: Install dependencies
+        working-directory: .github/scripts/detect-changes
+        run: |
+          pip install -r requirements.txt
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine base ref for comparison
+        id: base-ref
+        run: |
+          # Determine the git reference to compare against
+          # PR: compare to base SHA
+          # Master push: compare to previous commit (HEAD^)
+          # Other branches: compare to merge-base with master
+
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+            echo "Using PR base SHA: $BASE_REF"
+          elif [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            BASE_REF="HEAD^"
+            echo "Using previous commit on master: $BASE_REF"
+          else
+            # For non-master branches (manual trigger), use merge-base with master
+            git fetch origin master
+            BASE_REF=$(git merge-base HEAD origin/master)
+            echo "Using merge-base with master: $BASE_REF"
+          fi
+
+          echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
+
+      - name: Determine fork status
+        id: fork
+        run: |
+          # Check if this is a fork PR
+          # Fork PRs cannot push to GHCR, so they need different handling
+          IS_FORK=false
+
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Check if PR is from a fork
+            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+              IS_FORK=true
+              echo "Fork PR detected from ${{ github.event.pull_request.head.repo.full_name }}"
+            fi
+          fi
+
+          echo "is_fork=$IS_FORK" >> $GITHUB_OUTPUT
+
+      - name: Run change detection
+        id: detect
+        working-directory: .github/scripts/detect-changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Run the detection script
+          # If force_rebuild is enabled, use HEAD as base (everything changed)
+          BASE_REF="${{ steps.base-ref.outputs.base_ref }}"
+          if [ "${{ inputs.force_rebuild }}" == "true" ]; then
+            echo "Force rebuild enabled - using HEAD as base ref"
+            BASE_REF="HEAD"
+          fi
+
+          # Get the actual SHA for base ref
+          BASE_SHA=$(git rev-parse "$BASE_REF")
+          echo "Base SHA for image tags: $BASE_SHA"
+
+          # Run detection
+          python detect_changes.py \
+            --base-ref "$BASE_REF" \
+            --base-images-dir ../../base-images \
+            --compose-file ../../docker-compose.yml \
+            --env-file ../../example.env \
+            --docker-dir ../../docker \
+            ${{ steps.fork.outputs.is_fork == 'true' && '--is-fork' || '' }} \
+            --output-file "$GITHUB_OUTPUT" \
+            --base-sha "$BASE_SHA"
+
+      - name: Display detection results
+        run: |
+          echo "=== Change Detection Results ==="
+          echo ""
+          echo "Base images: ${{ steps.detect.outputs.base_images }}"
+          echo "Changed base images: ${{ steps.detect.outputs.changed_base_images }}"
+          echo "Base images needed (fork): ${{ steps.detect.outputs.base_images_needed }}"
+          echo ""
+          echo "Changed services: ${{ steps.detect.outputs.changed_services }}"
+          echo "Affected services: ${{ steps.detect.outputs.affected_services }}"
+          echo ""
+          echo "To build: ${{ steps.detect.outputs.to_build }}"
+          echo "To retag: ${{ steps.detect.outputs.to_retag }}"
+          echo ""
+          echo "Testable services: ${{ steps.detect.outputs.testable_services }}"
+          echo "Healthcheck services: ${{ steps.detect.outputs.healthcheck_services }}"
+          echo "Version check services: ${{ steps.detect.outputs.version_check_services }}"
+          echo ""
+          echo "=== Build Context ==="
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Is fork: ${{ steps.fork.outputs.is_fork }}"
+          echo "Force rebuild: ${{ inputs.force_rebuild }}"
+          echo "Base ref: ${{ steps.base-ref.outputs.base_ref }}"
+
+  # ============================================================================
+  # Stage 2: Prepare Base Images (Sequential)
+  # ============================================================================
+  # TODO: Implement base image building in dependency order
+  # ============================================================================
+
+  # ============================================================================
+  # Stage 3: Build App Images (Parallel)
+  # ============================================================================
+  # TODO: Implement app image building with matrix parallelization
+  # ============================================================================
+
+  # ============================================================================
+  # Stage 4: Run Tests (Parallel)
+  # ============================================================================
+  # TODO: Implement test execution (unit tests, healthchecks, version checks)
+  # ============================================================================
+
+  # ============================================================================
+  # Stage 5: Push and Tag Images
+  # ============================================================================
+  # TODO: Implement image pushing with proper tagging strategy
+  # ============================================================================
+
+  # ============================================================================
+  # Stage 6: Workflow Summary
+  # ============================================================================
+  # TODO: Implement summary with success/failure reporting
+  # ============================================================================
