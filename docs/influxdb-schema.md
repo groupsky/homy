@@ -225,15 +225,6 @@ SELECT total_p, daily_p, eff, temp FROM inverter
 WHERE time > now() - 24h
 ```
 
-### Vehicle and Battery Monitoring
-```sql
--- Vehicle state of charge tracking
-SELECT * FROM soc WHERE time > now() - 24h
-
--- Sunseeker battery management
-SELECT battery_percentage FROM sunseeker_power WHERE time > now() - 6h
-```
-
 ### Automation System Analysis
 ```sql
 -- Boiler controller decision analysis
@@ -308,4 +299,4 @@ Modbus Devices → modbus-serial-* → Direct InfluxDB Write
 Modbus Devices → modbus-serial-* → MQTT Publish → mqtt-influx-* → InfluxDB Write
 ```
 
-**Note**: The actual system is more complex than initially documented, with 60+ distinct measurements including device-specific power monitoring and comprehensive vehicle telemetry.
+**Note**: The actual system is more complex than initially documented, with 60+ distinct measurements including device-specific power monitoring.
