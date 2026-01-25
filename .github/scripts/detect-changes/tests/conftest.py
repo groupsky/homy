@@ -8,8 +8,14 @@ Provides common test fixtures:
 - Temporary directory setup
 """
 
-import pytest
+import sys
 from pathlib import Path
+
+# Add lib directory to Python path for imports
+lib_path = Path(__file__).parent.parent / "lib"
+sys.path.insert(0, str(lib_path))
+
+import pytest
 
 
 @pytest.fixture
@@ -83,6 +89,28 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/groupsky/homy/mqtt-influx:latest
 """
+
+
+@pytest.fixture
+def base_images_dir(temp_repo):
+    """Create base-images directory structure for testing."""
+    base_dir = temp_repo / "base-images"
+    base_dir.mkdir(exist_ok=True)
+    return base_dir
+
+
+@pytest.fixture
+def sample_base_dockerfiles():
+    """Sample base image Dockerfiles for testing."""
+    return {
+        'node-18-alpine': 'FROM node:18.20.8-alpine3.21\n',
+        'node-22-alpine': 'FROM node:22.13.1-alpine3.21\n',
+        'grafana': 'FROM grafana/grafana:9.5.21\n',
+        'influxdb': 'FROM influxdb:1.8.10\n',
+        'mosquitto': 'FROM eclipse-mosquitto:2.0.20\n',
+        'alpine': 'FROM alpine:3.22.1\n',
+        'node-ubuntu': 'FROM node:18.20.5-bullseye\n',
+    }
 
 
 # TODO: Add more shared fixtures as needed
