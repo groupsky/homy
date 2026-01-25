@@ -86,7 +86,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4.1.0
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version-file: '.github/scripts/detect-changes/.nvmrc'
           cache: 'npm'
@@ -214,11 +214,13 @@ jobs:
     runs-on: ubuntu-latest
     # Only run for non-fork PRs or master pushes
     # Skip if both changed_base_images and base_images_needed are empty
+    # For workflow_dispatch: require non-fork PR when publish_pr_images=true
     if: |
       (github.event_name == 'push' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository) ||
-       github.event_name == 'workflow_dispatch') &&
+       (github.event_name == 'workflow_dispatch' &&
+        (inputs.publish_pr_images != true || github.event.pull_request.head.repo.full_name == github.repository))) &&
       (needs.detect-changes.outputs.changed_base_images != '[]' ||
        needs.detect-changes.outputs.base_images_needed != '[]')
     permissions:
@@ -823,7 +825,7 @@ jobs:
             ${{ steps.test-cmd.outputs.command }}
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
         continue-on-error: true
         with:
           directory: docker/${{ matrix.service }}/coverage
@@ -1101,7 +1103,7 @@ jobs:
   # Stage 5B: Retag Unchanged Images
   retag-unchanged-images:
     name: Retag Unchanged Images
-    needs: [detect-changes, push-built-images]
+    needs: [detect-changes, version-tests, unit-tests, healthcheck-tests]
     if: |
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
