@@ -521,10 +521,156 @@ jobs:
           fi
 
   # ============================================================================
-  # Stage 3: Build App Images (Parallel)
+  # Stage 3: Build App Images (Parallel Matrix)
   # ============================================================================
-  # TODO: Implement app image building with matrix parallelization
+  # Builds service images in parallel using base images from Stage 2 artifacts.
+  # NO registry access (enforced by permissions) - must use artifacts only.
+  # If a Dockerfile tries to pull, the build will FAIL (desired behavior).
+  # This enforces the critical security requirement: artifacts flow Stage 2 → 3 → 4.
   # ============================================================================
+  build-app-images:
+    name: Build App Images
+    needs: [detect-changes, prepare-base-images]
+    # Only run if we have services to build
+    # Check JSON array != '[]' before matrix evaluation (prevents workflow crash)
+    if: needs.detect-changes.outputs.to_build != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # NO packages permissions - cannot pull from registries
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.to_build) }}
+      fail-fast: false
+      max-parallel: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # CRITICAL: Download base images from Stage 2 artifacts
+      # NO fallback to registry pull - artifact MUST exist
+      - name: Download base images
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
+        with:
+          name: base-images
+          path: /tmp/base-images
+
+      - name: Download checksums
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
+        with:
+          name: base-images-checksums
+          path: /tmp/checksums
+
+      # Verify integrity and load base images
+      - name: Verify and load base images
+        run: |
+          echo "=== Verifying base image artifacts ==="
+
+          # Verify checksums exist
+          if [ ! -f /tmp/checksums/checksums.txt ]; then
+            echo "::error::Checksum manifest not found"
+            exit 1
+          fi
+
+          # Verify checksums
+          cd /tmp/base-images
+          if ! sha256sum -c /tmp/checksums/checksums.txt; then
+            echo "::error::Checksum verification failed - artifacts may be corrupted"
+            exit 1
+          fi
+          echo "✅ All checksums verified"
+
+          # Count and validate artifacts
+          TARBALL_COUNT=$(ls -1 *.tar 2>/dev/null | wc -l)
+          if [ $TARBALL_COUNT -eq 0 ]; then
+            echo "::error::No base image artifacts found"
+            exit 1
+          fi
+          echo "Found $TARBALL_COUNT base image(s)"
+
+          # Load all base images
+          for tarfile in *.tar; do
+            echo "Loading $tarfile..."
+            if ! docker load -i "$tarfile"; then
+              echo "::error::Failed to load $tarfile"
+              exit 1
+            fi
+          done
+
+          # Verify images are available
+          echo ""
+          echo "=== Loaded base images ==="
+          docker images 'ghcr.io/groupsky/homy/*'
+
+      # NO GHCR LOGIN - enforces artifact-only builds
+      # Build will FAIL if Dockerfile tries to pull (desired behavior)
+
+      - name: Build service image
+        env:
+          SERVICE: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
+        run: |
+          SHORT_SHA=${SHA:0:12}
+
+          echo "=== Building service: $SERVICE ==="
+          echo "SHA: $SHA"
+          echo "Short SHA: $SHORT_SHA"
+
+          # Verify Dockerfile exists
+          if [ ! -f "docker/$SERVICE/Dockerfile" ]; then
+            echo "::error::Dockerfile not found for service: $SERVICE"
+            exit 1
+          fi
+
+          # Build with artifact-loaded base images
+          # NO --pull flag - prevents accidental registry pulls
+          # NO registry auth - enforces artifact-only builds
+          docker buildx build \
+            --file "docker/$SERVICE/Dockerfile" \
+            --tag "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
+            --tag "ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA" \
+            --load \
+            "docker/$SERVICE"
+
+          echo "✅ Build successful"
+
+      - name: Generate checksum
+        env:
+          SERVICE: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
+        run: |
+          echo "=== Generating artifact ==="
+
+          # Save image to tarball
+          docker save "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
+            -o "/tmp/$SERVICE.tar"
+
+          # Generate SHA-256 checksum
+          CHECKSUM=$(sha256sum "/tmp/$SERVICE.tar" | cut -d' ' -f1)
+          echo "$CHECKSUM  $SERVICE.tar" > "/tmp/$SERVICE.tar.sha256"
+          echo "Checksum: $CHECKSUM"
+
+          # Check artifact size
+          SIZE_MB=$(du -m "/tmp/$SERVICE.tar" | cut -f1)
+          echo "Artifact size: ${SIZE_MB}MB"
+
+          if [ $SIZE_MB -gt 500 ]; then
+            echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
+            exit 1
+          fi
+
+      - name: Upload service artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607270d # v4.6.2
+        with:
+          name: service-${{ matrix.service }}
+          path: |
+            /tmp/${{ matrix.service }}.tar
+            /tmp/${{ matrix.service }}.tar.sha256
+          retention-days: 2
+          if-no-files-found: error
 
   # ============================================================================
   # Stage 4: Run Tests (Parallel)
