@@ -387,6 +387,35 @@ module.exports = {
       melody: 8,
       verbose: false
     },
+
+    heatPumpCirculationPowerCycle: {
+      type: 'power-cycle-on-low-power',
+      powerMonitor: {
+        statusTopic: '/modbus/tetriary/heat_pump/reading',
+        powerField: 'b_ap',      // Phase B apparent power
+        threshold: 30,           // Watts - maximum power for "low power" condition
+        durationMs: 180000       // 3 minutes
+      },
+      controlDevice: {
+        commandTopic: 'z2m/house1/circulation-heatpump/set'
+      },
+      powerCycle: {
+        offDurationMs: 5000      // 5 seconds
+      },
+      verbose: false
+    },
+
+    // Safety backup: Turn ON device if it stays OFF for more than 30 seconds
+    // Complements the power-based monitoring above
+    circulationHeatpumpOffTimeout: {
+      type: 'timeout-emit',
+      listenTopic: 'z2m/house1/circulation-heatpump',
+      listenFilter: (payload) => payload.state === 'OFF',
+      timeout: 30000,           // 30 seconds
+      emitTopic: 'z2m/house1/circulation-heatpump/set',
+      emitValue: { state: 'ON' },
+      verbose: false
+    },
   },
   gates: {
     mqtt: {
