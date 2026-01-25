@@ -948,7 +948,7 @@ services:
       - ${DATA_PATH}/automations/state:/volumes/automations-state
 
 networks:
-  # internal for the automation services - mqtt, node red, ah
+  # internal for the automation services - mqtt, automations, features, ha
   automation:
     internal: true
   # ingress proxy and exposed services
