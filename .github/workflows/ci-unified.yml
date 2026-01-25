@@ -203,8 +203,322 @@ jobs:
   # ============================================================================
   # Stage 2: Prepare Base Images (Sequential)
   # ============================================================================
-  # TODO: Implement base image building in dependency order
+  # Prepares base images needed by services that will build in Stage 3.
+  # Processes: changed_base_images + base_images_needed (deduplicated).
+  # Sequential processing to avoid Docker Hub rate limits and cache conflicts.
+  # This is the ONLY stage with packages:write permission for registry access.
   # ============================================================================
+  prepare-base-images:
+    name: Prepare Base Images
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    # Only run for non-fork PRs or master pushes
+    # Skip if both changed_base_images and base_images_needed are empty
+    if: |
+      (github.event_name == 'push' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+       github.event_name == 'workflow_dispatch') &&
+      (needs.detect-changes.outputs.changed_base_images != '[]' ||
+       needs.detect-changes.outputs.base_images_needed != '[]')
+    permissions:
+      contents: read
+      packages: write  # CRITICAL: Only this stage can push to GHCR
+    env:
+      BASE_IMAGES: ${{ needs.detect-changes.outputs.changed_base_images }}
+      BASE_IMAGES_NEEDED: ${{ needs.detect-changes.outputs.base_images_needed }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Merge and deduplicate base image lists
+        id: merge
+        run: |
+          # Merge changed_base_images and base_images_needed into a single deduplicated list
+          # This ensures we build/prepare each base image exactly once
+
+          echo "Changed base images: $BASE_IMAGES"
+          echo "Base images needed: $BASE_IMAGES_NEEDED"
+
+          # Convert JSON arrays to bash arrays
+          CHANGED=($(echo "$BASE_IMAGES" | jq -r '.[]'))
+          NEEDED=($(echo "$BASE_IMAGES_NEEDED" | jq -r '.[]'))
+
+          # Merge and deduplicate using associative array
+          declare -A seen
+          ALL_IMAGES=()
+
+          for img in "${CHANGED[@]}" "${NEEDED[@]}"; do
+            if [ -n "$img" ] && [ -z "${seen[$img]}" ]; then
+              seen[$img]=1
+              ALL_IMAGES+=("$img")
+            fi
+          done
+
+          # Output results
+          echo "Total unique base images to prepare: ${#ALL_IMAGES[@]}"
+          printf '  - %s\n' "${ALL_IMAGES[@]}"
+
+          # Save as JSON array for iteration
+          IMAGES_JSON=$(printf '%s\n' "${ALL_IMAGES[@]}" | jq -R . | jq -s .)
+          echo "images=$IMAGES_JSON" >> $GITHUB_OUTPUT
+          echo "count=${#ALL_IMAGES[@]}" >> $GITHUB_OUTPUT
+
+      - name: Restore Docker Hub upstream cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: /tmp/docker-cache
+          # Cache key includes runner OS, base image directory, and version
+          # This prevents cache collisions between different images
+          key: docker-upstream-${{ runner.os }}-base-images-${{ hashFiles('base-images/**/Dockerfile') }}
+          restore-keys: |
+            docker-upstream-${{ runner.os }}-base-images-
+
+      - name: Process base images sequentially
+        id: process
+        run: |
+          # Process each base image one at a time to:
+          # - Avoid Docker Hub rate limits (sequential pulls)
+          # - Prevent cache write conflicts
+          # - Enable clear progress tracking
+          # - Simplify error handling
+
+          set -e
+
+          IMAGES=($(echo '${{ steps.merge.outputs.images }}' | jq -r '.[]'))
+          TOTAL_COUNT=${#IMAGES[@]}
+          CURRENT=0
+
+          # Track built images for output
+          BUILT_IMAGES=()
+          TOTAL_SIZE=0
+          ARTIFACT_LIMIT_MB=500
+          QUOTA_WARN_MB=1536  # Warn at 1.5GB (75% of 2GB quota)
+
+          for IMAGE in "${IMAGES[@]}"; do
+            CURRENT=$((CURRENT + 1))
+
+            echo "::group::[$CURRENT/$TOTAL_COUNT] Processing base image: $IMAGE"
+
+            # Determine image type (CHANGED or NEEDED)
+            IS_CHANGED=false
+            if echo "$BASE_IMAGES" | jq -e --arg img "$IMAGE" 'map(select(. == $img)) | length > 0' > /dev/null; then
+              IS_CHANGED=true
+              echo "Type: CHANGED (will build from Docker Hub and push to GHCR)"
+            else
+              echo "Type: NEEDED (will try GHCR first, fallback to Docker Hub)"
+            fi
+
+            # Extract version from Dockerfile for cache key
+            IMAGE_DIR="base-images/$IMAGE"
+            VERSION=$(grep "^FROM " "$IMAGE_DIR/Dockerfile" | head -1 | awk '{print $2}' | cut -d: -f2)
+            echo "Version: $VERSION"
+
+            # Construct GHCR image name
+            GHCR_IMAGE="ghcr.io/${{ github.repository_owner }}/homy/$IMAGE:$VERSION"
+            echo "GHCR image: $GHCR_IMAGE"
+
+            # Process based on type
+            IMAGE_LOADED=false
+
+            if [ "$IS_CHANGED" = "true" ]; then
+              # CHANGED: Build from Docker Hub upstream
+              echo "Building from source..."
+              docker buildx build \
+                --file "$IMAGE_DIR/Dockerfile" \
+                --tag "$GHCR_IMAGE" \
+                --cache-from type=local,src=/tmp/docker-cache \
+                --cache-to type=local,dest=/tmp/docker-cache,mode=max \
+                --load \
+                "$IMAGE_DIR"
+
+              # Push to GHCR (master only)
+              if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+                echo "Pushing to GHCR..."
+                docker push "$GHCR_IMAGE"
+              else
+                echo "Skipping GHCR push (not on master branch)"
+              fi
+
+              IMAGE_LOADED=true
+
+            else
+              # NEEDED: Try GHCR first, fallback to build
+              echo "Checking GHCR..."
+
+              # Try to inspect image in GHCR (with retry)
+              GHCR_EXISTS=false
+              for attempt in 1 2 3; do
+                if docker buildx imagetools inspect "$GHCR_IMAGE" > /dev/null 2>&1; then
+                  GHCR_EXISTS=true
+                  echo "Image exists in GHCR"
+                  break
+                else
+                  EXIT_CODE=$?
+                  if [ $attempt -lt 3 ]; then
+                    echo "Attempt $attempt failed, retrying..."
+                    sleep $((attempt * 2))
+                  fi
+                fi
+              done
+
+              if [ "$GHCR_EXISTS" = "true" ]; then
+                # Pull from GHCR
+                echo "Pulling from GHCR..."
+                if docker pull "$GHCR_IMAGE"; then
+                  IMAGE_LOADED=true
+                else
+                  # Check for 503 (service unavailable)
+                  if [ $? -eq 1 ]; then
+                    echo "::warning::GHCR pull failed, falling back to Docker Hub build"
+
+                    # Send Telegram notification if configured
+                    if [ -n "$TELEGRAM_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+                      MESSAGE="⚠️ GHCR 503 Error Detected\n\nWorkflow: ${{ github.workflow }}\nImage: $IMAGE\nFalling back to Docker Hub build"
+                      curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+                        -d chat_id="$TELEGRAM_CHAT_ID" \
+                        -d text="$MESSAGE" \
+                        -d parse_mode="HTML" || true
+                    fi
+                  fi
+                fi
+              fi
+
+              # If not loaded from GHCR, build from Docker Hub
+              if [ "$IMAGE_LOADED" = "false" ]; then
+                echo "Building from Docker Hub upstream..."
+                docker buildx build \
+                  --file "$IMAGE_DIR/Dockerfile" \
+                  --tag "$GHCR_IMAGE" \
+                  --cache-from type=local,src=/tmp/docker-cache \
+                  --cache-to type=local,dest=/tmp/docker-cache,mode=max \
+                  --load \
+                  "$IMAGE_DIR"
+                IMAGE_LOADED=true
+              fi
+            fi
+
+            # Validate image was loaded
+            if [ "$IMAGE_LOADED" = "false" ]; then
+              echo "::error::Failed to load image: $IMAGE"
+              exit 1
+            fi
+
+            echo "Validating loaded image..."
+            docker inspect "$GHCR_IMAGE" > /dev/null
+
+            # Save image to tarball
+            ARTIFACT_NAME="base-image-${IMAGE}-${VERSION//[:\/ ]/-}"
+            TARBALL_PATH="/tmp/${ARTIFACT_NAME}.tar"
+
+            echo "Saving image to tarball..."
+            docker save "$GHCR_IMAGE" -o "$TARBALL_PATH"
+
+            # Check artifact size
+            SIZE_MB=$(du -m "$TARBALL_PATH" | cut -f1)
+            echo "Artifact size: ${SIZE_MB}MB"
+
+            if [ $SIZE_MB -gt $ARTIFACT_LIMIT_MB ]; then
+              echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
+              exit 1
+            fi
+
+            TOTAL_SIZE=$((TOTAL_SIZE + SIZE_MB))
+            if [ $TOTAL_SIZE -gt $QUOTA_WARN_MB ]; then
+              echo "::warning::Total artifact size ${TOTAL_SIZE}MB exceeds recommended limit of ${QUOTA_WARN_MB}MB"
+            fi
+
+            # Generate SHA-256 checksum
+            echo "Generating checksum..."
+            CHECKSUM=$(sha256sum "$TARBALL_PATH" | cut -d' ' -f1)
+            echo "$CHECKSUM  ${ARTIFACT_NAME}.tar" >> /tmp/checksums.txt
+            echo "Checksum: $CHECKSUM"
+
+            # Upload artifact
+            echo "Uploading artifact..."
+            # Note: Using actions/upload-artifact@v4 here
+            # The actual upload happens in a separate step to use the action
+
+            BUILT_IMAGES+=("$IMAGE")
+
+            echo "::endgroup::"
+          done
+
+          # Save built images list as JSON
+          BUILT_JSON=$(printf '%s\n' "${BUILT_IMAGES[@]}" | jq -R . | jq -s .)
+          echo "built_images=$BUILT_JSON" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "=== Summary ==="
+          echo "Total images processed: ${#BUILT_IMAGES[@]}"
+          echo "Total artifact size: ${TOTAL_SIZE}MB"
+          echo "Images: ${BUILT_IMAGES[*]}"
+
+      - name: Upload base image artifacts
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607270d # v4.6.2
+        with:
+          name: base-images
+          path: /tmp/base-image-*.tar
+          retention-days: 2
+          if-no-files-found: error
+
+      - name: Upload checksum manifest
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607270d # v4.6.2
+        with:
+          name: base-images-checksums
+          path: /tmp/checksums.txt
+          retention-days: 2
+          if-no-files-found: error
+
+      - name: Save Docker Hub cache
+        if: success()
+        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: /tmp/docker-cache
+          key: docker-upstream-${{ runner.os }}-base-images-${{ hashFiles('base-images/**/Dockerfile') }}
+
+      - name: Cleanup on failure
+        if: failure()
+        run: |
+          # Clean up partial artifacts to save quota
+          echo "Cleaning up partial artifacts..."
+          rm -f /tmp/base-image-*.tar
+          rm -f /tmp/checksums.txt
+
+          # Attempt to delete any uploaded artifacts (best effort)
+          # Note: This requires GitHub CLI and may not work in all scenarios
+          if command -v gh &> /dev/null; then
+            echo "Attempting to delete partial artifacts from GitHub..."
+            gh api \
+              --method DELETE \
+              "/repos/${{ github.repository }}/actions/artifacts" \
+              -f name="base-images" || true
+            gh api \
+              --method DELETE \
+              "/repos/${{ github.repository }}/actions/artifacts" \
+              -f name="base-images-checksums" || true
+          fi
 
   # ============================================================================
   # Stage 3: Build App Images (Parallel)
