@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM ghcr.io/groupsky/homy/node-ubuntu:18.12.1 AS base
+FROM ghcr.io/groupsky/homy/node-ubuntu:18.20.8 AS base
 
 # Install service-specific packages and create user
 RUN set -ex && \
