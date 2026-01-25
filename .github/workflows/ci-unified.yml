@@ -675,8 +675,312 @@ jobs:
   # ============================================================================
   # Stage 4: Run Tests (Parallel)
   # ============================================================================
-  # TODO: Implement test execution (unit tests, healthchecks, version checks)
+  # Three independent test jobs run in parallel using artifacts from Stage 3:
+  # A) Version Consistency Check - Validates .nvmrc matches Dockerfile node version
+  # B) Unit Tests - Runs test suite and uploads coverage
+  # C) Healthcheck Tests - Starts container and validates healthcheck passes
+  # All jobs have NO packages permissions (artifact-only testing).
   # ============================================================================
+
+  # Stage 4A: Version Consistency Check (Parallel Matrix)
+  version-consistency-check:
+    name: Version Consistency Check
+    needs: [detect-changes, build-app-images]
+    if: needs.detect-changes.outputs.version_check_services != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.version_check_services) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Check .nvmrc and Dockerfile versions match
+        working-directory: docker/${{ matrix.service }}
+        run: |
+          echo "=== Version Consistency Check for ${{ matrix.service }} ==="
+
+          # Validate .nvmrc exists and has valid format
+          if [ ! -f .nvmrc ]; then
+            echo "::error::.nvmrc not found for ${{ matrix.service }}"
+            exit 1
+          fi
+
+          NVMRC_VERSION=$(cat .nvmrc | tr -d '[:space:]')
+          echo ".nvmrc version: $NVMRC_VERSION"
+
+          # Reject lts/* format
+          if [[ "$NVMRC_VERSION" == lts/* ]]; then
+            echo "::error::.nvmrc contains 'lts/*' which is not allowed. Use explicit version (e.g., '18.20.8')"
+            exit 1
+          fi
+
+          # Extract version from FINAL Dockerfile stage
+          # Look for the last FROM line with node: to get the final stage base
+          DOCKERFILE_VERSION=$(grep -E "^FROM.*node:" Dockerfile | tail -1 | sed 's/.*node:\([0-9.]*\).*/\1/')
+          echo "Dockerfile version: $DOCKERFILE_VERSION"
+
+          if [ -z "$DOCKERFILE_VERSION" ]; then
+            echo "::error::Could not extract Node.js version from Dockerfile"
+            exit 1
+          fi
+
+          if [ "$NVMRC_VERSION" != "$DOCKERFILE_VERSION" ]; then
+            echo "::error::Version mismatch detected!"
+            echo "  .nvmrc:     $NVMRC_VERSION"
+            echo "  Dockerfile: $DOCKERFILE_VERSION"
+            echo ""
+            echo "To fix this issue:"
+            echo "  1. Update .nvmrc to match Dockerfile version, OR"
+            echo "  2. Update Dockerfile FROM line to match .nvmrc version"
+            exit 1
+          fi
+
+          echo "✅ Versions match: $NVMRC_VERSION"
+
+  # Stage 4B: Unit Tests (Parallel Matrix)
+  unit-tests:
+    name: Unit Tests
+    needs: [detect-changes, build-app-images]
+    if: needs.detect-changes.outputs.testable_services != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.testable_services) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Download service artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
+        with:
+          name: service-${{ matrix.service }}
+          path: /tmp
+
+      - name: Verify and load image
+        run: |
+          echo "=== Verifying artifact for ${{ matrix.service }} ==="
+          cd /tmp
+
+          # Verify checksum
+          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
+            echo "::error::Checksum verification failed for ${{ matrix.service }}"
+            exit 1
+          fi
+          echo "✅ Checksum verified"
+
+          # Load Docker image
+          echo "Loading Docker image..."
+          if ! docker load -i ${{ matrix.service }}.tar; then
+            echo "::error::Failed to load Docker image"
+            exit 1
+          fi
+
+          # Verify image is available
+          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
+
+      - name: Detect test command
+        id: test-cmd
+        working-directory: docker/${{ matrix.service }}
+        run: |
+          echo "=== Detecting test command ==="
+
+          # Check if package.json exists
+          if [ ! -f package.json ]; then
+            echo "::error::package.json not found"
+            exit 1
+          fi
+
+          # Check for test:coverage script (preferred)
+          if jq -e '.scripts["test:coverage"]' package.json > /dev/null 2>&1; then
+            echo "command=npm run test:coverage" >> $GITHUB_OUTPUT
+            echo "Using: npm run test:coverage"
+          else
+            # Fallback to npm test with coverage flag
+            echo "command=npm test -- --coverage" >> $GITHUB_OUTPUT
+            echo "Using: npm test -- --coverage"
+          fi
+
+      - name: Run tests
+        working-directory: docker/${{ matrix.service }}
+        run: |
+          echo "=== Running tests for ${{ matrix.service }} ==="
+
+          # Run tests inside the built Docker image
+          # This ensures tests run in the exact same environment as production
+          docker run --rm \
+            -v "$(pwd):/app" \
+            -w /app \
+            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} \
+            ${{ steps.test-cmd.outputs.command }}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        continue-on-error: true
+        with:
+          directory: docker/${{ matrix.service }}/coverage
+          flags: ${{ matrix.service }}
+          fail_ci_if_error: false
+
+  # Stage 4C: Healthcheck Tests (Parallel Matrix)
+  healthcheck-tests:
+    name: Healthcheck Tests
+    needs: [detect-changes, build-app-images]
+    if: needs.detect-changes.outputs.healthcheck_services != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.healthcheck_services) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Download service artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
+        with:
+          name: service-${{ matrix.service }}
+          path: /tmp
+
+      - name: Verify and load image
+        run: |
+          echo "=== Verifying artifact for ${{ matrix.service }} ==="
+          cd /tmp
+
+          # Verify checksum
+          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
+            echo "::error::Checksum verification failed for ${{ matrix.service }}"
+            exit 1
+          fi
+          echo "✅ Checksum verified"
+
+          # Load Docker image
+          echo "Loading Docker image..."
+          if ! docker load -i ${{ matrix.service }}.tar; then
+            echo "::error::Failed to load Docker image"
+            exit 1
+          fi
+
+          # Verify image is available
+          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
+
+      - name: Parse healthcheck parameters from image
+        id: healthcheck
+        run: |
+          echo "=== Extracting healthcheck configuration ==="
+
+          # Use docker inspect to get healthcheck params (robust method)
+          HEALTHCHECK=$(docker inspect --format='{{json .Config.Healthcheck}}' \
+            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
+
+          if [ -z "$HEALTHCHECK" ] || [ "$HEALTHCHECK" = "null" ]; then
+            echo "::error::No HEALTHCHECK found in Dockerfile"
+            exit 1
+          fi
+
+          # Extract parameters (times in nanoseconds, convert to seconds)
+          INTERVAL=$(echo "$HEALTHCHECK" | jq -r '.Interval // 30000000000' | awk '{print int($1/1000000000)}')
+          TIMEOUT=$(echo "$HEALTHCHECK" | jq -r '.Timeout // 3000000000' | awk '{print int($1/1000000000)}')
+          START_PERIOD=$(echo "$HEALTHCHECK" | jq -r '.StartPeriod // 0' | awk '{print int($1/1000000000)}')
+          RETRIES=$(echo "$HEALTHCHECK" | jq -r '.Retries // 3')
+
+          # Calculate max wait: start-period + (interval × retries) + timeout + 20% buffer
+          MAX_WAIT=$((START_PERIOD + (INTERVAL * RETRIES) + TIMEOUT))
+          MAX_WAIT=$((MAX_WAIT + (MAX_WAIT / 5)))  # Add 20% buffer
+
+          echo "interval=$INTERVAL" >> $GITHUB_OUTPUT
+          echo "timeout=$TIMEOUT" >> $GITHUB_OUTPUT
+          echo "start_period=$START_PERIOD" >> $GITHUB_OUTPUT
+          echo "retries=$RETRIES" >> $GITHUB_OUTPUT
+          echo "max_wait=$MAX_WAIT" >> $GITHUB_OUTPUT
+
+          echo "Healthcheck parameters:"
+          echo "  Interval: ${INTERVAL}s"
+          echo "  Timeout: ${TIMEOUT}s"
+          echo "  Start Period: ${START_PERIOD}s"
+          echo "  Retries: $RETRIES"
+          echo "  Max Wait: ${MAX_WAIT}s"
+
+      - name: Start container and wait for healthy
+        id: container
+        run: |
+          echo "=== Starting container and monitoring health ==="
+
+          # Prepare test environment (use test.env if exists, or minimal config)
+          ENV_FILE="docker/${{ matrix.service }}/test.env"
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "No test.env found, creating minimal config"
+            touch /tmp/test.env
+            ENV_FILE="/tmp/test.env"
+          fi
+
+          # Start container with healthcheck
+          CONTAINER_ID=$(docker run -d \
+            --env-file "$ENV_FILE" \
+            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
+
+          echo "container_id=$CONTAINER_ID" >> $GITHUB_OUTPUT
+          echo "Container started: $CONTAINER_ID"
+
+          # Wait for healthy status
+          echo "Waiting up to ${{ steps.healthcheck.outputs.max_wait }}s for healthy status..."
+
+          for i in $(seq 1 ${{ steps.healthcheck.outputs.max_wait }}); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_ID)
+            echo "[$i/${{ steps.healthcheck.outputs.max_wait }}] Status: $STATUS"
+
+            if [ "$STATUS" == "healthy" ]; then
+              echo "✅ Container is healthy"
+
+              # Show health check details
+              echo ""
+              echo "=== Final Health Status ==="
+              docker inspect --format='{{json .State.Health}}' $CONTAINER_ID | jq .
+              exit 0
+            fi
+
+            if [ "$STATUS" == "unhealthy" ]; then
+              echo "::error::Container became unhealthy"
+              echo ""
+              echo "=== Health Check Details ==="
+              docker inspect --format='{{json .State.Health}}' $CONTAINER_ID | jq .
+              echo ""
+              echo "=== Container Logs ==="
+              docker logs $CONTAINER_ID
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          echo "::error::Healthcheck timeout after ${{ steps.healthcheck.outputs.max_wait }}s"
+          echo ""
+          echo "=== Final Health Status ==="
+          docker inspect --format='{{json .State.Health}}' $CONTAINER_ID | jq .
+          echo ""
+          echo "=== Container Logs ==="
+          docker logs $CONTAINER_ID
+          exit 1
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          if [ -n "${{ steps.container.outputs.container_id }}" ]; then
+            echo "Cleaning up container..."
+            docker stop ${{ steps.container.outputs.container_id }} || true
+            docker rm ${{ steps.container.outputs.container_id }} || true
+          fi
 
   # ============================================================================
   # Stage 5: Push and Tag Images
