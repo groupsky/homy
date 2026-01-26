@@ -1,6 +1,33 @@
 name: infrastructure
 
-on: [ push, pull_request ]
+# Infrastructure validation workflow - tests nginx config generation and service orchestration
+# Runs on path-filtered triggers (infrastructure changes) + weekly schedule for validation
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docker/nginx/**'
+      - 'docker/dockergen/**'
+      - 'docker/ingressgen/**'
+      - 'config/ingressgen/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/infrastructure.yml'
+
+  pull_request:
+    paths:
+      - 'docker/nginx/**'
+      - 'docker/dockergen/**'
+      - 'docker/ingressgen/**'
+      - 'config/ingressgen/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/infrastructure.yml'
+
+  # Weekly validation (catch indirect failures from base image updates)
+  schedule:
+    - cron: '0 2 * * 1'  # Every Monday at 2 AM UTC
+
+  # Manual debugging/validation
+  workflow_dispatch:
 
 jobs:
   build:
