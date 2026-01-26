@@ -52,6 +52,7 @@ jobs:
   # ============================================================================
   detect-changes:
     name: Detect Changes
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -210,6 +211,7 @@ jobs:
   # ============================================================================
   prepare-base-images:
     name: Prepare Base Images
+    timeout-minutes: 30
     needs: detect-changes
     runs-on: ubuntu-latest
     # Only run for non-fork PRs or master pushes
@@ -532,6 +534,7 @@ jobs:
   # ============================================================================
   build-app-images:
     name: Build App Images
+    timeout-minutes: 20
     needs: [detect-changes, prepare-base-images]
     # Only run if we have services to build
     # Check JSON array != '[]' before matrix evaluation (prevents workflow crash)
@@ -645,12 +648,16 @@ jobs:
           fi
 
           # Build with artifact-loaded base images
-          # NO --pull flag - prevents accidental registry pulls
-          # NO registry auth - enforces artifact-only builds
+          # --pull=false prevents checking for newer versions (optimization)
+          # Security boundary: NO packages:write permission blocks registry auth
+          # If Dockerfile references wrong image -> auth failure (not explicit error)
           docker buildx build \
+            --pull=false \
             --file "docker/$SERVICE/Dockerfile" \
             --tag "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
             --tag "ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA" \
+            --cache-from type=gha,scope=$SERVICE \
+            --cache-to type=gha,mode=max,scope=$SERVICE,ignore-error=true,ghtoken=${{ github.token }} \
             --load \
             "docker/$SERVICE"
 
@@ -704,6 +711,7 @@ jobs:
   # Stage 4A: Version Consistency Check (Parallel Matrix)
   version-consistency-check:
     name: Version Consistency Check
+    timeout-minutes: 3
     needs: [detect-changes, build-app-images]
     if: needs.detect-changes.outputs.version_check_services != '[]'
     runs-on: ubuntu-latest
@@ -764,6 +772,7 @@ jobs:
   # Stage 4B: Unit Tests (Parallel Matrix)
   unit-tests:
     name: Unit Tests
+    timeout-minutes: 10
     needs: [detect-changes, build-app-images]
     if: needs.detect-changes.outputs.testable_services != '[]'
     runs-on: ubuntu-latest
@@ -852,6 +861,7 @@ jobs:
   # Stage 4C: Healthcheck Tests (Parallel Matrix)
   healthcheck-tests:
     name: Healthcheck Tests
+    timeout-minutes: 10
     needs: [detect-changes, build-app-images]
     if: needs.detect-changes.outputs.healthcheck_services != '[]'
     runs-on: ubuntu-latest
@@ -1004,6 +1014,7 @@ jobs:
   # Stage 4D: Lights Integration Test
   lights-integration-test:
     name: Lights Integration Test
+    timeout-minutes: 10
     needs: [detect-changes, build-app-images]
     # Only run if automations, broker, or features were built (or changed)
     if: |
@@ -1016,49 +1027,117 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read  # CRITICAL: Required for GHCR fallback when artifacts don't exist
 
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f2c02f327b1e0da89e3d94ce0ca5927c6e0ca7 # v4.0.1
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download automations artifact
+        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'automations')
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
         with:
           name: service-automations
           path: /tmp
 
       - name: Download broker artifact
+        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'broker')
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
         with:
           name: service-broker
           path: /tmp
 
       - name: Download features artifact
+        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'features')
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
         with:
           name: service-features
           path: /tmp
 
-      - name: Verify checksums and load images
+      - name: Load or pull images
+        env:
+          TO_BUILD: ${{ needs.detect-changes.outputs.to_build }}
+          SHA: ${{ github.sha }}
         run: |
           set -e
-          echo "=== Verifying and loading artifacts ==="
+          echo "=== Loading or pulling required images ==="
+          echo "Services in to_build: $TO_BUILD"
+
+          # Parse to_build JSON array
+          TO_BUILD_ARRAY=($(echo "$TO_BUILD" | jq -r '.[]'))
+          echo "Parsed to_build: ${TO_BUILD_ARRAY[*]}"
 
           for SERVICE in automations broker features; do
+            echo ""
             echo "Processing $SERVICE..."
-            cd /tmp
 
-            if ! sha256sum -c $SERVICE.tar.sha256; then
-              echo "::error::Checksum verification failed for $SERVICE"
-              exit 1
-            fi
+            # Check if service is in to_build (artifact exists)
+            if echo "$TO_BUILD" | jq -e --arg svc "$SERVICE" 'index($svc) != null' > /dev/null; then
+              echo "  → Service in to_build, loading from artifact"
+              cd /tmp
 
-            if ! docker load -i $SERVICE.tar; then
-              echo "::error::Failed to load Docker image for $SERVICE"
-              exit 1
+              # Validate artifact files exist
+              if [ ! -f "$SERVICE.tar" ]; then
+                echo "::error::Artifact tarball not found: $SERVICE.tar"
+                echo "Artifact download may have failed silently or disk is full"
+                exit 1
+              fi
+              if [ ! -f "$SERVICE.tar.sha256" ]; then
+                echo "::error::Checksum file not found: $SERVICE.tar.sha256"
+                exit 1
+              fi
+
+              # Verify checksum
+              if ! sha256sum -c $SERVICE.tar.sha256; then
+                echo "::error::Checksum verification failed for $SERVICE"
+                exit 1
+              fi
+              echo "  ✅ Checksum verified"
+
+              # Load Docker image
+              if ! docker load -i $SERVICE.tar; then
+                echo "::error::Failed to load Docker image for $SERVICE"
+                exit 1
+              fi
+              echo "  ✅ Image loaded from artifact"
+
+            else
+              echo "  → Service NOT in to_build, pulling from GHCR"
+              IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
+
+              # Pull from GHCR with retry
+              PULLED=false
+              for attempt in 1 2 3; do
+                echo "  Pulling $IMAGE (attempt $attempt/3)..."
+                if docker pull "$IMAGE"; then
+                  PULLED=true
+                  echo "  ✅ Successfully pulled from GHCR"
+                  break
+                fi
+                if [ $attempt -lt 3 ]; then
+                  echo "  ⚠️ Pull failed, retrying in $((attempt * 2))s..."
+                  sleep $((attempt * 2))
+                fi
+              done
+
+              if [ "$PULLED" = "false" ]; then
+                echo "::error::Failed to pull $SERVICE from GHCR after 3 attempts"
+                echo "Possible causes:"
+                echo "  - Image doesn't exist for SHA $SHA"
+                echo "  - GHCR service unavailable (503)"
+                echo "  - Network connectivity issue"
+                exit 1
+              fi
             fi
           done
 
@@ -1134,7 +1213,6 @@ jobs:
         run: |
           echo "Cleaning up..."
           docker compose down -v || true
-
   # ============================================================================
   # Stage 5: Push and Tag Images
   # ============================================================================
@@ -1147,6 +1225,7 @@ jobs:
   # Stage 5A: Push Built Images
   push-built-images:
     name: Push Built Images
+    timeout-minutes: 15
     needs: [detect-changes, build-app-images, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
     if: |
@@ -1241,12 +1320,32 @@ jobs:
         run: |
           echo "=== Tagging and pushing images ==="
 
+          # Retry function for GHCR push operations
+          push_with_retry() {
+            local TAG=$1
+            for attempt in 1 2 3; do
+              echo "Pushing $TAG (attempt $attempt/3)..."
+              if docker push "$TAG"; then
+                echo "✅ Successfully pushed $TAG"
+                return 0
+              fi
+              if [ $attempt -lt 3 ]; then
+                echo "⚠️ Push failed, retrying in $((attempt * 2))s..."
+                sleep $((attempt * 2))
+              fi
+            done
+            echo "❌ Failed to push $TAG after 3 attempts"
+            return 1
+          }
+
           for TAG in ${{ steps.tags.outputs.tags }}; do
             echo "Tagging: $TAG"
             docker tag ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} $TAG
 
             echo "Pushing: $TAG"
-            docker push $TAG
+            if ! push_with_retry "$TAG"; then
+              exit 1
+            fi
           done
 
           echo "✅ All tags pushed successfully"
@@ -1254,6 +1353,7 @@ jobs:
   # Stage 5B: Retag Unchanged Images
   retag-unchanged-images:
     name: Retag Unchanged Images
+    timeout-minutes: 5
     needs: [detect-changes, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
     if: |
       needs.detect-changes.outputs.to_retag != '[]' &&
@@ -1262,9 +1362,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    concurrency:
-      group: retag-${{ github.repository }}
-      cancel-in-progress: false
     strategy:
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.to_retag) }}
@@ -1339,6 +1436,7 @@ jobs:
   # ============================================================================
   workflow-summary:
     name: Workflow Summary
+    timeout-minutes: 5
     # Always run at the end to summarize all stages
     # Depend on all final-stage jobs to ensure proper sequencing
     needs:
@@ -1367,6 +1465,7 @@ jobs:
           VERSION_STATUS="${{ needs.version-consistency-check.result }}"
           TEST_STATUS="${{ needs.unit-tests.result }}"
           HEALTH_STATUS="${{ needs.healthcheck-tests.result }}"
+          LIGHTS_STATUS="${{ needs.lights-integration-test.result }}"
           PUSH_STATUS="${{ needs.push-built-images.result }}"
           RETAG_STATUS="${{ needs.retag-unchanged-images.result }}"
 
@@ -1376,6 +1475,7 @@ jobs:
           echo "version=$VERSION_STATUS" >> $GITHUB_OUTPUT
           echo "test=$TEST_STATUS" >> $GITHUB_OUTPUT
           echo "health=$HEALTH_STATUS" >> $GITHUB_OUTPUT
+          echo "lights=$LIGHTS_STATUS" >> $GITHUB_OUTPUT
           echo "push=$PUSH_STATUS" >> $GITHUB_OUTPUT
           echo "retag=$RETAG_STATUS" >> $GITHUB_OUTPUT
 
@@ -1383,13 +1483,15 @@ jobs:
           if [[ "$DETECT_STATUS" == "failure" || "$PREPARE_STATUS" == "failure" || \
                 "$BUILD_STATUS" == "failure" || "$VERSION_STATUS" == "failure" || \
                 "$TEST_STATUS" == "failure" || "$HEALTH_STATUS" == "failure" || \
-                "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
+                "$LIGHTS_STATUS" == "failure" || "$PUSH_STATUS" == "failure" || \
+                "$RETAG_STATUS" == "failure" ]]; then
             echo "overall=failure" >> $GITHUB_OUTPUT
             exit 1
           elif [[ "$DETECT_STATUS" == "cancelled" || "$PREPARE_STATUS" == "cancelled" || \
                   "$BUILD_STATUS" == "cancelled" || "$VERSION_STATUS" == "cancelled" || \
                   "$TEST_STATUS" == "cancelled" || "$HEALTH_STATUS" == "cancelled" || \
-                  "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" ]]; then
+                  "$LIGHTS_STATUS" == "cancelled" || "$PUSH_STATUS" == "cancelled" || \
+                  "$RETAG_STATUS" == "cancelled" ]]; then
             echo "overall=cancelled" >> $GITHUB_OUTPUT
             exit 1
           else
@@ -1411,6 +1513,7 @@ jobs:
           | 4️⃣A Version Checks | ${{ steps.status.outputs.version }} |
           | 4️⃣B Unit Tests | ${{ steps.status.outputs.test }} |
           | 4️⃣C Healthcheck Tests | ${{ steps.status.outputs.health }} |
+          | 4️⃣D Lights Integration Test | ${{ steps.status.outputs.lights }} |
           | 5️⃣A Push Images | ${{ steps.status.outputs.push }} |
           | 5️⃣B Retag Images | ${{ steps.status.outputs.retag }} |
 
