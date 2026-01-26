@@ -7,21 +7,18 @@
 
 set -euo pipefail
 
-# Lock file for preventing concurrent deployments
-LOCK_FILE="/var/lock/homy-deployment.lock"
-SKIP_LOCK=false
+# Source helper functions
+source "$(dirname "$0")/docker-helper.sh"
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
+# Lock file for preventing concurrent deployments
+SKIP_LOCK=0
 
 # Default values
 BACKUP_NAME=""
-LIST_BACKUPS=false
-SKIP_CONFIRM=false
-QUIET=false
-START_SERVICES=false
+LIST_BACKUPS=0
+YES_FLAG=0
+QUIET=0
+START_SERVICES=0
 
 usage() {
     cat <<EOF
@@ -62,25 +59,25 @@ while [[ $# -gt 0 ]]; do
             usage
             ;;
         -l|--list)
-            LIST_BACKUPS=true
+            LIST_BACKUPS=1
             shift
             ;;
         -s|--start)
-            START_SERVICES=true
+            START_SERVICES=1
             shift
             ;;
         -y|--yes)
-            SKIP_CONFIRM=true
+            YES_FLAG=1
             shift
             ;;
         -q|--quiet)
-            QUIET=true
-            SKIP_CONFIRM=true
+            QUIET=1
+            YES_FLAG=1
             shift
             ;;
         --no-lock)
             # Internal flag: skip lock acquisition when called from deploy.sh/rollback.sh
-            SKIP_LOCK=true
+            SKIP_LOCK=1
             shift
             ;;
         -*)
@@ -96,61 +93,23 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Acquire lock if not skipped (internal flag for when called from deploy.sh/rollback.sh)
-if [ "$SKIP_LOCK" = false ]; then
-    exec 200>"$LOCK_FILE"
-    if ! flock -n 200; then
-        echo "ERROR: Another deployment operation is in progress" >&2
-        echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
-        exit 1
-    fi
-fi
-
-log() {
-    if [ "$QUIET" = false ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-    fi
-}
-
-list_backups() {
-    echo "Available backups:"
-    docker compose run --rm volman list
-}
-
-confirm() {
-    if [ "$SKIP_CONFIRM" = true ]; then
-        return 0
-    fi
-
-    local prompt="$1"
-    echo ""
-    read -r -p "$prompt [y/N] " response
-    case "$response" in
-        [yY][eE][sS]|[yY])
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
+acquire_lock "$SKIP_LOCK"
 
 # Change to project directory
 cd "$PROJECT_DIR"
 
-if [ ! -f docker-compose.yml ]; then
-    echo "ERROR: docker-compose.yml not found. Not in project root?" >&2
-    exit 1
-fi
+# Validate docker-compose.yml exists
+validate_compose_file
 
 # Handle --list flag
-if [ "$LIST_BACKUPS" = true ]; then
+if [ "$LIST_BACKUPS" -eq 1 ]; then
     list_backups
     exit 0
 fi
 
 # Determine backup name
 if [ -z "$BACKUP_NAME" ]; then
-    BACKUP_NAME=$(cat "$BACKUP_REF_FILE" 2>/dev/null || echo "")
+    BACKUP_NAME=$(get_backup_reference)
 fi
 
 if [ -z "$BACKUP_NAME" ]; then
@@ -164,28 +123,18 @@ fi
 
 # Validate backup name if provided by user
 if [ -n "$BACKUP_NAME" ]; then
-    # Allow only alphanumeric, underscore, dash
-    if ! echo "$BACKUP_NAME" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+    if ! validate_backup_name "$BACKUP_NAME"; then
         echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
         echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
-        exit 1
-    fi
-    # Prevent path traversal
-    if echo "$BACKUP_NAME" | grep -qE '\.\.|/'; then
-        echo "ERROR: Backup name contains invalid characters (.. or /)" >&2
         exit 1
     fi
 fi
 
 # Validate jq is installed
-if ! command -v jq >/dev/null 2>&1; then
-    echo "ERROR: jq is required but not installed" >&2
-    echo "Install with: apt-get install jq or brew install jq" >&2
-    exit 1
-fi
+require_jq
 
 # Check if services are running
-RUNNING_SERVICES=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0")
+RUNNING_SERVICES=$(dc_run ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0")
 if [ "$RUNNING_SERVICES" -gt 0 ]; then
     echo "ERROR: Services are still running. Stop them first:" >&2
     echo "  docker compose down" >&2
@@ -195,7 +144,7 @@ if [ "$RUNNING_SERVICES" -gt 0 ]; then
 fi
 
 # Show restore plan
-if [ "$QUIET" = false ]; then
+if [ "$QUIET" -eq 0 ]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════════"
     echo "                       RESTORE PLAN"
@@ -222,7 +171,7 @@ fi
 
 # Run restore
 log "Restoring from backup: $BACKUP_NAME"
-if ! docker compose run --rm volman restore "$BACKUP_NAME"; then
+if ! dc_run run --rm volman restore "$BACKUP_NAME"; then
     echo "ERROR: Restore failed" >&2
     exit 1
 fi
@@ -230,8 +179,8 @@ fi
 log "Restore complete."
 
 # Start services if requested
-if [ "$START_SERVICES" = true ]; then
+if [ "$START_SERVICES" -eq 1 ]; then
     log "Starting services..."
-    docker compose up -d
+    dc_run up -d
     log "Services started."
 fi

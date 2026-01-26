@@ -8,22 +8,20 @@
 
 set -euo pipefail
 
-# Lock file for preventing concurrent deployments
-LOCK_FILE="/var/lock/homy-deployment.lock"
-SKIP_LOCK=false
+# Source the docker-helper.sh for common functions
+source "$(dirname "$0")/docker-helper.sh"
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-VERSION_FILE="$PROJECT_DIR/.deployed-version"
-PREVIOUS_VERSION_FILE="$PROJECT_DIR/.previous-version"
-BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
+# Lock file control
+SKIP_LOCK=0
+
+# Log file configuration
 ROLLBACK_LOG="$PROJECT_DIR/logs/rollback-$(date +%Y%m%d-%H%M%S).log"
+LOG_FILE="$ROLLBACK_LOG"
 
 # Default values
 BACKUP_NAME=""
-LIST_BACKUPS=false
-SKIP_CONFIRM=false
+LIST_BACKUPS=0
+YES_FLAG=0
 
 usage() {
     cat <<EOF
@@ -62,16 +60,16 @@ while [[ $# -gt 0 ]]; do
             usage
             ;;
         -l|--list)
-            LIST_BACKUPS=true
+            LIST_BACKUPS=1
             shift
             ;;
         -y|--yes)
-            SKIP_CONFIRM=true
+            YES_FLAG=1
             shift
             ;;
         --no-lock)
             # Internal flag: skip lock acquisition when called from deploy.sh
-            SKIP_LOCK=true
+            SKIP_LOCK=1
             shift
             ;;
         -*)
@@ -87,82 +85,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Acquire lock if not skipped (internal flag for when called from deploy.sh)
-if [ "$SKIP_LOCK" = false ]; then
-    exec 200>"$LOCK_FILE"
-    if ! flock -n 200; then
-        echo "ERROR: Another deployment operation is in progress" >&2
-        echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
-        exit 1
-    fi
-fi
+acquire_lock "$SKIP_LOCK"
 
 # Ensure log directory exists
 mkdir -p "$PROJECT_DIR/logs"
 
-# Track if services were stopped
-SERVICES_STOPPED=false
-
-# Cleanup handler for interruption
-cleanup() {
-    local exit_code=$?
-    if [ "$SERVICES_STOPPED" = true ]; then
-        log "Script interrupted! Attempting to restart services..."
-        docker compose up -d || true
-        log "Emergency restart attempted. Check service status!"
-    fi
-    exit $exit_code
-}
-
-trap cleanup EXIT INT TERM
+# Setup emergency restart trap
+setup_emergency_restart
 
 # Load secrets for notifications (optional)
-TELEGRAM_TOKEN=""
-TELEGRAM_CHAT_ID=""
-[ -f "$PROJECT_DIR/secrets/telegram_bot_token" ] && TELEGRAM_TOKEN=$(cat "$PROJECT_DIR/secrets/telegram_bot_token")
-[ -f "$PROJECT_DIR/secrets/telegram_chat_id" ] && TELEGRAM_CHAT_ID=$(cat "$PROJECT_DIR/secrets/telegram_chat_id")
-
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$ROLLBACK_LOG"
-}
-
-notify() {
-    local message="$1"
-    if [ -n "$TELEGRAM_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-        curl -s -X POST \
-            "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="$message" \
-            -d parse_mode="HTML" > /dev/null 2>&1 || true
-    fi
-}
-
-list_backups() {
-    "$SCRIPT_DIR/restore.sh" --list --no-lock
-}
-
-confirm() {
-    if [ "$SKIP_CONFIRM" = true ]; then
-        return 0
-    fi
-
-    local prompt="$1"
-    echo ""
-    read -r -p "$prompt [y/N] " response
-    case "$response" in
-        [yY][eE][sS]|[yY])
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
+load_notification_secrets
 
 # Change to project directory
 cd "$PROJECT_DIR"
 
 # Handle --list flag
-if [ "$LIST_BACKUPS" = true ]; then
+if [ "$LIST_BACKUPS" -eq 1 ]; then
     list_backups
     exit 0
 fi
@@ -173,7 +111,7 @@ log "Rollback log: $ROLLBACK_LOG"
 
 # Determine what to rollback to
 if [ -z "$BACKUP_NAME" ]; then
-    BACKUP_NAME=$(cat "$BACKUP_REF_FILE" 2>/dev/null || echo "")
+    BACKUP_NAME=$(get_backup_reference)
 fi
 
 if [ -z "$BACKUP_NAME" ]; then
@@ -187,15 +125,9 @@ fi
 
 # Validate backup name if provided by user
 if [ -n "$BACKUP_NAME" ]; then
-    # Allow only alphanumeric, underscore, dash
-    if ! echo "$BACKUP_NAME" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+    if ! validate_backup_name "$BACKUP_NAME"; then
         echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
         echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
-        exit 1
-    fi
-    # Prevent path traversal
-    if echo "$BACKUP_NAME" | grep -qE '\.\.|/'; then
-        echo "ERROR: Backup name contains invalid characters (.. or /)" >&2
         exit 1
     fi
 fi
@@ -203,12 +135,12 @@ fi
 log "Rolling back to backup: $BACKUP_NAME"
 
 # Get current and previous versions
-CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
+CURRENT_VERSION=$(get_deployed_version)
 log "Current version: $CURRENT_VERSION"
 
 # Try to determine previous version
 # First, check if we have it saved in the previous version file
-PREV_VERSION=$(cat "$PREVIOUS_VERSION_FILE" 2>/dev/null || echo "")
+PREV_VERSION=$(get_previous_version)
 
 if [ -z "$PREV_VERSION" ]; then
     # Fall back to git calculation
@@ -254,8 +186,8 @@ fi
 
 # Stop current services
 log "Stopping services..."
-docker compose stop
-SERVICES_STOPPED=true
+dc_run stop
+mark_services_stopped
 
 # Restore database backup using restore.sh (services already stopped, don't start after)
 log "Restoring databases from backup: $BACKUP_NAME"
@@ -264,7 +196,7 @@ if ! "$SCRIPT_DIR/restore.sh" --yes --quiet --no-lock "$BACKUP_NAME"; then
     log "Attempting to start services without database restoration..."
     notify "CRITICAL: Rollback backup restoration failed. Attempting service recovery..."
     # Try to start services anyway - better than leaving system completely down
-    docker compose up -d || true
+    dc_run up -d || true
     exit 1
 fi
 log "Database restoration complete"
@@ -293,52 +225,20 @@ export IMAGE_TAG="$PREV_VERSION"
 log "Using IMAGE_TAG: $IMAGE_TAG"
 
 log "Pulling previous version images..."
-if ! docker compose pull 2>&1 | tee -a "$ROLLBACK_LOG"; then
+if ! dc_run pull 2>&1 | tee -a "$ROLLBACK_LOG"; then
     log "WARNING: Some images may not be available. Will use local build."
 fi
 
 # Start services
 log "Starting services with previous version..."
-docker compose up -d
-SERVICES_STOPPED=false
+dc_run up -d
+mark_services_running
 
-# Health check loop (shorter than deploy since this is recovery)
+# Health check with shorter timeout (2 minutes for rollback verification)
 log "Verifying rollback health..."
-HEALTHY=false
-MAX_WAIT=120  # 2 minutes for rollback verification
-WAIT_INTERVAL=10
-ELAPSED=0
-
-while [ $ELAPSED -lt $MAX_WAIT ]; do
-    sleep $WAIT_INTERVAL
-    ELAPSED=$((ELAPSED + WAIT_INTERVAL))
-
-    # docker compose ps --format json outputs NDJSON
-    # Same health check strategy as deploy.sh:
-    # - Only check explicit health check failures
-    # - Services without health checks are considered healthy by default
-    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy")] | .[].Name' 2>/dev/null | head -5 || echo "")
-
-    if [ -z "$UNHEALTHY" ]; then
-        # No unhealthy containers - check if any with health checks are still starting
-        STARTING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
-        if [ -z "$STARTING" ]; then
-            # All containers with health checks are healthy
-            # Containers without health checks are considered healthy by default
-            HEALTHY=true
-            break
-        fi
-        log "Waiting... still starting: $STARTING (${ELAPSED}s)"
-    else
-        log "Waiting... unhealthy: $UNHEALTHY (${ELAPSED}s)"
-    fi
-done
-
-# Check final health status and update version accordingly
-if [ "$HEALTHY" = true ]; then
+if wait_for_health 120; then
     # Update version file
-    echo "$PREV_VERSION" > "${VERSION_FILE}.tmp"
-    mv "${VERSION_FILE}.tmp" "$VERSION_FILE"
+    save_deployed_version "$PREV_VERSION"
 
     log "Rollback complete."
     log ""
@@ -346,9 +246,9 @@ if [ "$HEALTHY" = true ]; then
 
     notify "Rollback completed successfully to $BACKUP_NAME (version: ${PREV_VERSION:0:8})"
 else
-    log "ERROR: Rollback health check failed after ${MAX_WAIT}s"
+    log "ERROR: Rollback health check failed after 120s"
     log "Services status:"
-    docker compose ps | tee -a "$ROLLBACK_LOG"
+    dc_run ps | tee -a "$ROLLBACK_LOG"
 
     notify "CRITICAL: Rollback to $BACKUP_NAME FAILED - services unhealthy"
 
