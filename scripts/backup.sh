@@ -8,7 +8,16 @@
 set -euo pipefail
 
 # Source docker helper functions
-source "$(dirname "$0")/docker-helper.sh"
+HELPER_SCRIPT="$(dirname "$0")/docker-helper.sh"
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    echo "FATAL: Required helper library not found: $HELPER_SCRIPT" >&2
+    exit 1
+fi
+# shellcheck source=scripts/docker-helper.sh
+source "$HELPER_SCRIPT" || {
+    echo "FATAL: Failed to load helper library: $HELPER_SCRIPT" >&2
+    exit 1
+}
 
 # Lock file for preventing concurrent deployments
 SKIP_LOCK=0

@@ -9,7 +9,16 @@
 set -euo pipefail
 
 # Load common helper functions
-source "$(dirname "$0")/docker-helper.sh"
+HELPER_SCRIPT="$(dirname "$0")/docker-helper.sh"
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    echo "FATAL: Required helper library not found: $HELPER_SCRIPT" >&2
+    exit 1
+fi
+# shellcheck source=scripts/docker-helper.sh
+source "$HELPER_SCRIPT" || {
+    echo "FATAL: Failed to load helper library: $HELPER_SCRIPT" >&2
+    exit 1
+}
 
 # Configuration
 DEPLOY_LOG_DIR="$PROJECT_DIR/logs"
@@ -242,6 +251,9 @@ else
     dc_run ps | tee -a "$LOG_FILE"
 
     notify "Deployment failed: Services unhealthy. Initiating rollback..."
+
+    # Disarm emergency restart trap - rollback will handle service management
+    mark_services_running
 
     log "Initiating automatic rollback..."
     if "$SCRIPT_DIR/rollback.sh" --yes --no-lock; then

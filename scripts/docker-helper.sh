@@ -84,7 +84,11 @@ get_running_services_count() {
     else
         # v1.27.4 and earlier - parse text output
         # Count lines with "Up" status, excluding header
-        dc_run ps 2>/dev/null | grep -c " Up " || echo "0"
+        # Match " Up" (with space before, no space after) to catch:
+        # - "Up" (simple running)
+        # - "Up (health: starting)" (with health check)
+        # - "Up 5 seconds" (with uptime)
+        dc_run ps 2>/dev/null | grep -c " Up" || echo "0"
     fi
 }
 
@@ -133,6 +137,17 @@ log() {
         else
             echo "$message"
         fi
+    fi
+}
+
+# Error logging function - never suppressed by QUIET mode
+# Usage: error "message"
+# Always outputs to stderr and log file (if set)
+error() {
+    local message="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*"
+    echo "$message" >&2
+    if [ -n "${LOG_FILE:-}" ]; then
+        echo "$message" >> "$LOG_FILE"
     fi
 }
 
@@ -222,13 +237,13 @@ validate_backup_name() {
 
     # Check for invalid characters (only alphanumeric, underscore, dash allowed)
     if ! [[ "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-        log "ERROR: Invalid backup name format. Only alphanumeric characters, underscores, and dashes are allowed."
+        error "Invalid backup name format. Only alphanumeric characters, underscores, and dashes are allowed."
         return 1
     fi
 
     # Prevent path traversal
     if [[ "$name" == *".."* ]] || [[ "$name" == *"/"* ]]; then
-        log "ERROR: Invalid backup name. Path traversal characters are not allowed."
+        error "Invalid backup name. Path traversal characters are not allowed."
         return 1
     fi
 
@@ -249,25 +264,26 @@ validate_image_tag() {
         return 0
     fi
 
-    log "ERROR: Invalid image tag format: $tag"
-    log "Allowed formats: git SHA, semantic version (v1.2.3), branch name, or 'latest'"
+    error "Invalid image tag format: $tag"
+    echo "Allowed formats: git SHA, semantic version (v1.2.3), branch name, or 'latest'" >&2
     return 1
 }
 
 # Check if services are running
 # Usage: services_running
-# Returns 0 if any services are running, 1 if all stopped
-# Requires jq to be installed
+# Returns 0 if any services are running, 1 if all stopped, 2 on error
+# Works with both v1.x (text parsing) and v2.x (JSON)
 services_running() {
-    if ! command -v jq &> /dev/null; then
-        log "ERROR: jq is required but not installed."
-        return 2
-    fi
-
     local running_count
-    running_count=$(dc_run ps --format json | jq -s 'length')
+    running_count=$(get_running_services_count)
 
-    [ "$running_count" -gt 0 ]
+    if [ "$running_count" = "0" ]; then
+        return 1  # No services running
+    elif [ "$running_count" -gt 0 ]; then
+        return 0  # Services are running
+    else
+        return 2  # Error occurred
+    fi
 }
 
 # Wait for services to be healthy
@@ -292,7 +308,7 @@ wait_for_health() {
     fi
 
     if ! command -v jq &> /dev/null; then
-        log "ERROR: jq is required but not installed."
+        error "jq is required but not installed."
         return 1
     fi
 
@@ -325,19 +341,34 @@ wait_for_health() {
         log "All services are healthy"
         return 0
     else
-        log "ERROR: Health check timeout after ${timeout}s"
+        error "Health check timeout after ${timeout}s"
         return 1
     fi
 }
 
 # Atomic file write (write to temp then move)
 # Usage: atomic_write "filename" "content"
+# Returns 0 on success, 1 on failure
 atomic_write() {
     local filename="$1"
     local content="$2"
+    local temp_file="${filename}.tmp.$$"  # Include PID for uniqueness
 
-    echo "$content" > "${filename}.tmp"
-    mv "${filename}.tmp" "$filename"
+    # Write to temp file with error handling
+    if ! echo "$content" > "$temp_file" 2>/dev/null; then
+        rm -f "$temp_file" 2>/dev/null || true
+        echo "ERROR: Failed to write to $filename (disk full? permissions?)" >&2
+        return 1
+    fi
+
+    # Move temp file to final location with error handling
+    if ! mv "$temp_file" "$filename" 2>/dev/null; then
+        rm -f "$temp_file" 2>/dev/null || true
+        echo "ERROR: Failed to update $filename (permissions? directory missing?)" >&2
+        return 1
+    fi
+
+    return 0
 }
 
 # Cleanup old log files, keeping only the most recent N
@@ -584,7 +615,7 @@ checkout_git_version() {
 
     # Validate git reference
     if ! git rev-parse --verify "${version}^{commit}" >/dev/null 2>&1; then
-        log "ERROR: Invalid git reference: $version"
+        error "Invalid git reference: $version"
         return 1
     fi
 
@@ -609,6 +640,7 @@ export -f get_running_services_count
 export -f get_unhealthy_services
 export -f get_starting_services
 export -f log
+export -f error
 export -f confirm
 export -f notify
 export -f load_notification_secrets
