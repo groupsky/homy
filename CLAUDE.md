@@ -161,7 +161,7 @@ All Docker image builds and tests now use the unified CI/CD pipeline (`ci-unifie
 - **Network Security**: `routing.yml` runs on weekly schedule only (Monday 3 AM UTC)
   - VPN/routing layer validation, infrastructure focus
 
-**Disabled Workflows**: The following workflows have been renamed to `.disabled` and replaced by ci-unified.yml:
+**Disabled Workflows (8 total)**: The following workflows have been renamed to `.disabled` and replaced by ci-unified.yml:
 - `base-images.yml`, `app-images.yml` (image building)
 - `automations-tests.yml`, `modbus-serial-tests.yml`, `telegram-bridge-tests.yml`, `automation-events-processor-tests.yml`, `sunseeker-monitoring-tests.yml` (service tests)
 - `lights-test.yml` (integration testing)

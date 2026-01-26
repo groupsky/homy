@@ -282,7 +282,7 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 
 **Migration Complete**: The unified CI/CD pipeline has replaced all previous fragmented workflows with feature parity. The following workflows have been disabled (renamed to `.disabled`) as their functionality is now fully integrated into `ci-unified.yml`:
 
-**Disabled Workflows and Replacements:**
+**Disabled Workflows and Replacements (8/8):**
 
 | Disabled Workflow | Replacement | Migration Date |
 |-------------------|-------------|----------------|
