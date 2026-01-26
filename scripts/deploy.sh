@@ -224,7 +224,7 @@ mark_services_running
 
 # Health check
 log "Waiting for services to be healthy..."
-if wait_for_health 300; then
+if wait_for_health "$HEALTH_CHECK_TIMEOUT_DEPLOY"; then
     log "Deployment successful!"
 
     # Save previous version before updating
@@ -234,7 +234,7 @@ if wait_for_health 300; then
     fi
 
     save_deployed_version "$NEW_VERSION"
-    notify "Deployment successful: ${NEW_VERSION:0:8}"
+    notify "Deployment successful: $(format_version_short "$NEW_VERSION")"
     cleanup_old_logs "$DEPLOY_LOG_DIR" "deploy-*.log" 30
 else
     log "ERROR: Services unhealthy after timeout"

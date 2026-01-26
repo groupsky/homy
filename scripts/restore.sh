@@ -108,40 +108,14 @@ if [ "$LIST_BACKUPS" -eq 1 ]; then
 fi
 
 # Determine backup name
-if [ -z "$BACKUP_NAME" ]; then
-    BACKUP_NAME=$(get_backup_reference)
-fi
-
-if [ -z "$BACKUP_NAME" ]; then
-    echo "ERROR: No backup specified and no recent backup found" >&2
-    echo ""
-    echo "Please specify a backup name or use --list to see available backups."
-    echo ""
-    list_backups
-    exit 1
-fi
+BACKUP_NAME=$(determine_backup_name "$BACKUP_NAME") || exit 1
 
 # Validate backup name if provided by user
-if [ -n "$BACKUP_NAME" ]; then
-    if ! validate_backup_name "$BACKUP_NAME"; then
-        echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
-        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
-        exit 1
-    fi
-fi
+validate_and_check_backup "$BACKUP_NAME"
 
-# Validate jq is installed
+# Validate jq is installed and check if services are running
 require_jq
-
-# Check if services are running
-RUNNING_SERVICES=$(dc_run ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0")
-if [ "$RUNNING_SERVICES" -gt 0 ]; then
-    echo "ERROR: Services are still running. Stop them first:" >&2
-    echo "  docker compose down" >&2
-    echo ""
-    echo "Or use deploy.sh/rollback.sh which handle this automatically." >&2
-    exit 1
-fi
+require_services_stopped || exit 1
 
 # Show restore plan
 if [ "$QUIET" -eq 0 ]; then

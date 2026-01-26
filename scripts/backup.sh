@@ -107,13 +107,7 @@ if [ "$LIST_BACKUPS" -eq 1 ]; then
 fi
 
 # Validate backup name if provided by user
-if [ -n "$BACKUP_NAME" ]; then
-    if ! validate_backup_name "$BACKUP_NAME"; then
-        echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
-        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
-        exit 1
-    fi
-fi
+validate_and_check_backup "$BACKUP_NAME"
 
 # Show backup plan
 if [ "$QUIET" -eq 0 ]; then
@@ -139,6 +133,8 @@ if ! confirm "Proceed with backup?"; then
 fi
 
 # Stop services if requested
+# Note: Use local variable instead of global SERVICES_STOPPED to avoid
+# interfering with emergency restart trap when called from deploy.sh with --no-lock
 SERVICES_STOPPED_LOCAL=0
 if [ "$STOP_SERVICES" -eq 1 ]; then
     log "Stopping services for consistent backup..."
@@ -148,21 +144,29 @@ fi
 
 # Run backup
 log "Creating backup..."
-BACKUP_CMD="dc_run run --rm volman backup"
 if [ -n "$BACKUP_NAME" ]; then
-    BACKUP_CMD="$BACKUP_CMD $BACKUP_NAME"
+    BACKUP_OUTPUT=$(dc_run run --rm volman backup "$BACKUP_NAME" 2>&1) || {
+        echo "ERROR: Backup failed" >&2
+        echo "$BACKUP_OUTPUT" >&2
+        # Restart services if we stopped them
+        if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+            log "Restarting services..."
+            dc_run start
+        fi
+        exit 1
+    }
+else
+    BACKUP_OUTPUT=$(dc_run run --rm volman backup 2>&1) || {
+        echo "ERROR: Backup failed" >&2
+        echo "$BACKUP_OUTPUT" >&2
+        # Restart services if we stopped them
+        if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+            log "Restarting services..."
+            dc_run start
+        fi
+        exit 1
+    }
 fi
-
-BACKUP_OUTPUT=$(eval "$BACKUP_CMD" 2>&1) || {
-    echo "ERROR: Backup failed" >&2
-    echo "$BACKUP_OUTPUT" >&2
-    # Restart services if we stopped them
-    if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
-        log "Restarting services..."
-        dc_run start
-    fi
-    exit 1
-}
 
 # Extract actual backup name from output
 ACTUAL_BACKUP_NAME=$(echo "$BACKUP_OUTPUT" | grep -oP 'Creating backup \K[0-9_]+' || echo "$BACKUP_NAME")

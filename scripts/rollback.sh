@@ -110,27 +110,10 @@ log "Project directory: $PROJECT_DIR"
 log "Rollback log: $ROLLBACK_LOG"
 
 # Determine what to rollback to
-if [ -z "$BACKUP_NAME" ]; then
-    BACKUP_NAME=$(get_backup_reference)
-fi
-
-if [ -z "$BACKUP_NAME" ]; then
-    log "ERROR: No backup specified and no recent backup found"
-    echo ""
-    echo "Please specify a backup name or use --list to see available backups."
-    echo ""
-    list_backups
-    exit 1
-fi
+BACKUP_NAME=$(determine_backup_name "$BACKUP_NAME") || exit 1
 
 # Validate backup name if provided by user
-if [ -n "$BACKUP_NAME" ]; then
-    if ! validate_backup_name "$BACKUP_NAME"; then
-        echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
-        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
-        exit 1
-    fi
-fi
+validate_and_check_backup "$BACKUP_NAME"
 
 log "Rolling back to backup: $BACKUP_NAME"
 
@@ -138,23 +121,8 @@ log "Rolling back to backup: $BACKUP_NAME"
 CURRENT_VERSION=$(get_deployed_version)
 log "Current version: $CURRENT_VERSION"
 
-# Try to determine previous version
-# First, check if we have it saved in the previous version file
-PREV_VERSION=$(get_previous_version)
-
-if [ -z "$PREV_VERSION" ]; then
-    # Fall back to git calculation
-    log "No saved previous version, calculating from git history..."
-    if [ "$CURRENT_VERSION" != "unknown" ] && [ ${#CURRENT_VERSION} -ge 7 ]; then
-        # Current version is a git SHA, go back one commit
-        PREV_VERSION=$(git rev-parse "$CURRENT_VERSION^" 2>/dev/null || echo "latest")
-    else
-        PREV_VERSION="latest"
-    fi
-else
-    log "Using saved previous version"
-fi
-
+# Determine previous version
+PREV_VERSION=$(determine_previous_version "$CURRENT_VERSION")
 log "Previous version: $PREV_VERSION"
 
 # Show rollback plan and ask for confirmation
@@ -203,21 +171,8 @@ log "Database restoration complete"
 
 # Reset code to previous commit if we know the version
 if [ "$PREV_VERSION" != "latest" ]; then
-    # Validate git reference before checkout
-    if ! git rev-parse --verify "${PREV_VERSION}^{commit}" >/dev/null 2>&1; then
-        log "ERROR: Invalid git reference: $PREV_VERSION"
-        log "Cannot proceed with rollback"
-        exit 1
-    fi
-
     log "Resetting code to previous version..."
-    log "WARNING: This will put the repository in detached HEAD state"
-    if ! git checkout "$PREV_VERSION" 2>&1 | tee -a "$ROLLBACK_LOG"; then
-        log "WARNING: git checkout failed. Trying with --force..."
-        if ! git checkout --force "$PREV_VERSION" 2>&1 | tee -a "$ROLLBACK_LOG"; then
-            log "WARNING: Could not checkout previous version. Continuing with current code."
-        fi
-    fi
+    checkout_git_version "$PREV_VERSION" "$ROLLBACK_LOG" || true
 fi
 
 # Pull previous version images
@@ -236,7 +191,7 @@ mark_services_running
 
 # Health check with shorter timeout (2 minutes for rollback verification)
 log "Verifying rollback health..."
-if wait_for_health 120; then
+if wait_for_health "$HEALTH_CHECK_TIMEOUT_ROLLBACK"; then
     # Update version file
     save_deployed_version "$PREV_VERSION"
 
@@ -244,9 +199,9 @@ if wait_for_health 120; then
     log ""
     log "Services are healthy."
 
-    notify "Rollback completed successfully to $BACKUP_NAME (version: ${PREV_VERSION:0:8})"
+    notify "Rollback completed successfully to $BACKUP_NAME (version: $(format_version_short "$PREV_VERSION"))"
 else
-    log "ERROR: Rollback health check failed after 120s"
+    log "ERROR: Rollback health check failed after ${HEALTH_CHECK_TIMEOUT_ROLLBACK}s"
     log "Services status:"
     dc_run ps | tee -a "$ROLLBACK_LOG"
 

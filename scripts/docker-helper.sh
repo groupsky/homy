@@ -33,6 +33,11 @@ BACKUP_REF_FILE="${BACKUP_REF_FILE:-$PROJECT_DIR/.pre-upgrade-backup}"
 # Service state tracking for emergency restart
 SERVICES_STOPPED="${SERVICES_STOPPED:-0}"
 
+# Health check timeout constants (in seconds)
+readonly HEALTH_CHECK_TIMEOUT_DEPLOY=300     # 5 minutes for deploy
+readonly HEALTH_CHECK_TIMEOUT_ROLLBACK=120   # 2 minutes for rollback (faster recovery)
+readonly HEALTH_CHECK_TIMEOUT_DEFAULT=300    # Default timeout
+
 # Detect docker-compose command (with or without dash)
 detect_docker_compose() {
     if command -v docker-compose &> /dev/null; then
@@ -413,6 +418,123 @@ is_detached_head() {
     [ "$branch" = "HEAD" ]
 }
 
+# Format version string for display (truncate long git SHAs)
+# Usage: short_version=$(format_version_short "$version")
+format_version_short() {
+    local version="$1"
+    if [ ${#version} -ge 40 ]; then
+        # Full git SHA, truncate to 8 chars
+        echo "${version:0:8}"
+    else
+        echo "$version"
+    fi
+}
+
+# Determine backup name from argument or reference file
+# Usage: backup_name=$(determine_backup_name "$backup_name")
+# Returns backup name or exits with error if none found
+determine_backup_name() {
+    local backup_name="${1:-}"
+
+    if [ -z "$backup_name" ]; then
+        backup_name=$(get_backup_reference)
+    fi
+
+    if [ -z "$backup_name" ]; then
+        echo "ERROR: No backup specified and no recent backup found" >&2
+        echo ""
+        echo "Please specify a backup name or use --list to see available backups."
+        echo ""
+        list_backups
+        return 1
+    fi
+
+    echo "$backup_name"
+}
+
+# Validate backup name and exit on error
+# Usage: validate_and_check_backup "$backup_name"
+validate_and_check_backup() {
+    local backup_name="$1"
+
+    if [ -z "$backup_name" ]; then
+        return 0  # Empty name is ok, will be handled elsewhere
+    fi
+
+    if ! validate_backup_name "$backup_name"; then
+        echo "ERROR: Invalid backup name format: $backup_name" >&2
+        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
+        exit 1
+    fi
+}
+
+# Check if services are running and exit with error if they are
+# Usage: require_services_stopped
+require_services_stopped() {
+    require_jq
+
+    local running_count
+    running_count=$(dc_run ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0")
+
+    if [ "$running_count" -gt 0 ]; then
+        echo "ERROR: Services are still running. Stop them first:" >&2
+        echo "  $DOCKER_COMPOSE_CMD down" >&2
+        echo ""
+        echo "Or use deploy.sh/rollback.sh which handle this automatically." >&2
+        return 1
+    fi
+    return 0
+}
+
+# Determine previous version from saved file or git history
+# Usage: prev_version=$(determine_previous_version "$current_version")
+determine_previous_version() {
+    local current_version="$1"
+    local prev_version
+
+    prev_version=$(get_previous_version)
+
+    if [ -z "$prev_version" ]; then
+        log "No saved previous version, calculating from git history..."
+        if [ "$current_version" != "unknown" ] && [ ${#current_version} -ge 7 ]; then
+            prev_version=$(git rev-parse "$current_version^" 2>/dev/null || echo "latest")
+        else
+            prev_version="latest"
+        fi
+    else
+        log "Using saved previous version"
+    fi
+
+    echo "$prev_version"
+}
+
+# Checkout specific git version with validation and error handling
+# Usage: checkout_git_version "version" [log_file]
+# Returns 0 on success, 1 on failure
+checkout_git_version() {
+    local version="$1"
+    local log_file="${2:-${LOG_FILE:-/dev/null}}"
+
+    # Validate git reference
+    if ! git rev-parse --verify "${version}^{commit}" >/dev/null 2>&1; then
+        log "ERROR: Invalid git reference: $version"
+        return 1
+    fi
+
+    log "Checking out version: $version"
+    log "WARNING: This will put the repository in detached HEAD state"
+
+    if ! git checkout "$version" 2>&1 | tee -a "$log_file"; then
+        log "WARNING: git checkout failed. Trying with --force..."
+        if ! git checkout --force "$version" 2>&1 | tee -a "$log_file"; then
+            log "WARNING: Could not checkout version. Continuing with current code."
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
 # Export functions and variables for use in scripts
 export -f dc_run
 export -f log
@@ -442,6 +564,12 @@ export -f save_backup_reference
 export -f get_git_commit
 export -f get_git_branch
 export -f is_detached_head
+export -f format_version_short
+export -f determine_backup_name
+export -f validate_and_check_backup
+export -f require_services_stopped
+export -f determine_previous_version
+export -f checkout_git_version
 
 export DOCKER_COMPOSE_CMD
 export SCRIPT_DIR
