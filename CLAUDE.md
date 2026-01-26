@@ -145,6 +145,29 @@ The system integrates with:
 - **Unified CI Pipeline**: `.github/workflows/CLAUDE.md` - Complete guide to the 6-stage Docker build pipeline with artifact-based security, test-gated promotion, and troubleshooting
 - **Base Images**: `base-images/CLAUDE.md` - Base image management, Dependabot workflow, and GHCR 503 handling
 
+**Workflow Execution Strategy** (Migration Complete):
+
+All Docker image builds and tests now use the unified CI/CD pipeline (`ci-unified.yml`). Previous fragmented workflows have been disabled or converted to scheduled execution:
+
+- **Application CI/CD**: Use `ci-unified.yml` for all service builds, tests, and deployments
+  - Automatically triggered on push/PR when Docker-related files change
+  - 6-stage pipeline: detect → prepare bases → build apps → test (4 parallel jobs) → push → summary
+  - Test-gated promotion ensures only passing builds get `:latest` tag
+
+- **Infrastructure Validation**: `infrastructure.yml` runs on path-filtered changes + weekly schedule
+  - Validates nginx config generation, proxy routing, ingress configuration
+  - 86% CI quota savings compared to running on every commit
+
+- **Network Security**: `routing.yml` runs on weekly schedule only (Monday 3 AM UTC)
+  - VPN/routing layer validation, infrastructure focus
+
+**Disabled Workflows**: The following workflows have been renamed to `.disabled` and replaced by ci-unified.yml:
+- `base-images.yml`, `app-images.yml` (image building)
+- `automations-tests.yml`, `modbus-serial-tests.yml`, `telegram-bridge-tests.yml`, `automation-events-processor-tests.yml`, `sunseeker-monitoring-tests.yml` (service tests)
+- `lights-test.yml` (integration testing)
+
+See `.github/workflows/CLAUDE.md` for complete migration details and troubleshooting guide.
+
 ### Configuration References
 - **Main Configuration**: `config/automations/config.js` - Primary system configuration
 - **Architecture Overview**: `ARCHITECTURE.md` - Comprehensive system architecture documentation
