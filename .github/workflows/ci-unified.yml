@@ -1120,7 +1120,7 @@ jobs:
   # Stage 5B: Retag Unchanged Images
   retag-unchanged-images:
     name: Retag Unchanged Images
-    needs: [detect-changes, version-tests, unit-tests, healthcheck-tests]
+    needs: [detect-changes, version-consistency-check, unit-tests, healthcheck-tests]
     if: |
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -1205,7 +1205,17 @@ jobs:
   # ============================================================================
   workflow-summary:
     name: Workflow Summary
-    needs: [detect-changes, prepare-base-images, build-app-images, version-consistency-check, unit-tests, healthcheck-tests, push-built-images, retag-unchanged-images]
+    # Always run at the end to summarize all stages
+    # Depend on all final-stage jobs to ensure proper sequencing
+    needs:
+      - detect-changes
+      - prepare-base-images
+      - build-app-images
+      - version-consistency-check
+      - unit-tests
+      - healthcheck-tests
+      - push-built-images
+      - retag-unchanged-images
     if: always()  # Always run to provide summary even on failure
     runs-on: ubuntu-latest
     permissions:
