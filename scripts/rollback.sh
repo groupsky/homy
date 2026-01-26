@@ -169,7 +169,7 @@ mark_services_stopped
 # Restore database backup using restore.sh (services already stopped, don't start after)
 log "Restoring databases from backup: $BACKUP_NAME"
 if ! "$SCRIPT_DIR/restore.sh" --yes --quiet --no-lock "$BACKUP_NAME"; then
-    log "ERROR: Backup restoration failed"
+    error "Backup restoration failed"
     log "Attempting to start services without database restoration..."
     notify "CRITICAL: Rollback backup restoration failed. Attempting service recovery..."
     # Try to start services anyway - better than leaving system completely down
@@ -210,7 +210,7 @@ if wait_for_health "$HEALTH_CHECK_TIMEOUT_ROLLBACK"; then
 
     notify "Rollback completed successfully to $BACKUP_NAME (version: $(format_version_short "$PREV_VERSION"))"
 else
-    log "ERROR: Rollback health check failed after ${HEALTH_CHECK_TIMEOUT_ROLLBACK}s"
+    error "Rollback health check failed after ${HEALTH_CHECK_TIMEOUT_ROLLBACK}s"
     log "Services status:"
     dc_run ps | tee -a "$ROLLBACK_LOG"
 

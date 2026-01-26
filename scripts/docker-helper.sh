@@ -84,11 +84,13 @@ get_running_services_count() {
     else
         # v1.27.4 and earlier - parse text output
         # Count lines with "Up" status, excluding header
-        # Match " Up" (with space before, no space after) to catch:
-        # - "Up" (simple running)
+        # Use word boundary (\b) to match " Up" followed by non-word char:
+        # - "Up" (simple running, end of line)
         # - "Up (health: starting)" (with health check)
         # - "Up 5 seconds" (with uptime)
-        dc_run ps 2>/dev/null | grep -c " Up" || echo "0"
+        # - "Up       0.0.0.0:..." (with port mappings)
+        # Prevents false positives like "UpgradeDB" in command column
+        dc_run ps 2>/dev/null | grep -cE " Up\b" || echo "0"
     fi
 }
 
@@ -213,7 +215,7 @@ acquire_lock() {
     local lock_name="${LOCK_NAME:-deployment}"
 
     if ! command -v flock &> /dev/null; then
-        echo "ERROR: flock is required but not installed." >&2
+        error "flock is required but not installed."
         echo "Install with: apt-get install util-linux" >&2
         exit 1
     fi
@@ -222,7 +224,7 @@ acquire_lock() {
         exec 200>"$LOCK_FILE"
 
         if ! flock -n 200; then
-            echo "ERROR: Another $lock_name operation is in progress" >&2
+            error "Another $lock_name operation is in progress"
             echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
             exit 1
         fi
@@ -395,7 +397,7 @@ cleanup_old_logs() {
 # Usage: require_jq
 require_jq() {
     if ! command -v jq &> /dev/null; then
-        echo "ERROR: jq is required but not installed" >&2
+        error "jq is required but not installed"
         echo "Install with: apt-get install jq or brew install jq" >&2
         exit 1
     fi
@@ -405,7 +407,7 @@ require_jq() {
 # Usage: require_curl
 require_curl() {
     if ! command -v curl &> /dev/null; then
-        echo "ERROR: curl is required but not installed" >&2
+        error "curl is required but not installed"
         echo "Install with: apt-get install curl or brew install curl" >&2
         exit 1
     fi
@@ -415,7 +417,7 @@ require_curl() {
 # Usage: validate_compose_file
 validate_compose_file() {
     if [ ! -f "$PROJECT_DIR/docker-compose.yml" ]; then
-        echo "ERROR: docker-compose.yml not found. Not in project root?" >&2
+        error "docker-compose.yml not found. Not in project root?"
         exit 1
     fi
 }
@@ -540,10 +542,10 @@ determine_backup_name() {
     fi
 
     if [ -z "$backup_name" ]; then
-        echo "ERROR: No backup specified and no recent backup found" >&2
+        error "No backup specified and no recent backup found"
         echo ""
-        echo "Please specify a backup name or use --list to see available backups."
-        echo ""
+        echo "Please specify a backup name or use --list to see available backups." >&2
+        echo "" >&2
         list_backups
         return 1
     fi
@@ -561,8 +563,7 @@ validate_and_check_backup() {
     fi
 
     if ! validate_backup_name "$backup_name"; then
-        echo "ERROR: Invalid backup name format: $backup_name" >&2
-        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
+        # validate_backup_name already printed the error
         exit 1
     fi
 }
@@ -575,9 +576,9 @@ require_services_stopped() {
     running_count=$(get_running_services_count)
 
     if [ "$running_count" -gt 0 ]; then
-        echo "ERROR: Services are still running. Stop them first:" >&2
+        error "Services are still running. Stop them first:"
         echo "  $DOCKER_COMPOSE_CMD down" >&2
-        echo ""
+        echo "" >&2
         echo "Or use deploy.sh/rollback.sh which handle this automatically." >&2
         return 1
     fi

@@ -191,7 +191,7 @@ log "Using IMAGE_TAG: $IMAGE_TAG"
 # Pull prebuilt images from GHCR (while services are still running)
 log "Pulling prebuilt images from GHCR..."
 if ! dc_run pull 2>&1 | tee -a "$LOG_FILE"; then
-    log "ERROR: Failed to pull images from GHCR"
+    error "Failed to pull images from GHCR"
     log "This usually means:"
     log "  - Images for tag '$IMAGE_TAG' don't exist in GHCR"
     log "  - Network connectivity issues"
@@ -210,7 +210,7 @@ if [ "$SKIP_BACKUP" -eq 0 ]; then
     # Create backup (stops services, creates backup, but doesn't restart)
     log "Creating backup before upgrade..."
     BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet --no-lock) || {
-        log "ERROR: Backup failed"
+        error "Backup failed"
         notify "Deployment failed: Backup error"
         # Try to restart services
         dc_run up -d
@@ -246,7 +246,7 @@ if wait_for_health "$HEALTH_CHECK_TIMEOUT_DEPLOY"; then
     notify "Deployment successful: $(format_version_short "$NEW_VERSION")"
     cleanup_old_logs "$DEPLOY_LOG_DIR" "deploy-*.log" 30
 else
-    log "ERROR: Services unhealthy after timeout"
+    error "Services unhealthy after timeout"
     log "Unhealthy services:"
     dc_run ps | tee -a "$LOG_FILE"
 
