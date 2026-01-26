@@ -39,15 +39,16 @@ readonly HEALTH_CHECK_TIMEOUT_ROLLBACK=120   # 2 minutes for rollback (faster re
 readonly HEALTH_CHECK_TIMEOUT_DEFAULT=300    # Default timeout
 
 # Detect docker-compose command (with or without dash)
+# Prefers docker compose 2.x (plugin) over docker-compose 1.x (standalone)
 detect_docker_compose() {
-    if command -v docker-compose &> /dev/null; then
+    if docker compose version &> /dev/null; then
+        # New version as plugin (docker compose 2.x) - preferred
+        echo "docker compose"
+    elif command -v docker-compose &> /dev/null; then
         # Old version with dash (docker-compose 1.x)
         echo "docker-compose"
-    elif docker compose version &> /dev/null; then
-        # New version as plugin (docker compose 2.x)
-        echo "docker compose"
     else
-        echo "ERROR: Neither 'docker-compose' nor 'docker compose' command is available" >&2
+        echo "ERROR: Neither 'docker compose' nor 'docker-compose' command is available" >&2
         exit 1
     fi
 }
@@ -55,11 +56,70 @@ detect_docker_compose() {
 # Global variable to store the docker-compose command
 DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-$(detect_docker_compose)}"
 
+# Check if docker-compose supports JSON format output
+# Returns 0 if supported, 1 if not
+supports_json_format() {
+    # Try the command and check if it accepts --format flag
+    $DOCKER_COMPOSE_CMD ps --format json &> /dev/null
+    local result=$?
+    # If exit code is 0 or the command doesn't error on the flag, it's supported
+    return $result
+}
+
 # Wrapper function for docker-compose commands
 # Usage: dc_run [docker-compose args...]
 # Example: dc_run ps --format json
 dc_run() {
     $DOCKER_COMPOSE_CMD "$@"
+}
+
+# Get running service count (version-aware)
+# Returns count of running services
+# Works with both v1.x (text parsing) and v2.x (JSON)
+get_running_services_count() {
+    if supports_json_format; then
+        # v2.x or v1.28+ with JSON support
+        require_jq
+        dc_run ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0"
+    else
+        # v1.27.4 and earlier - parse text output
+        # Count lines with "Up" status, excluding header
+        dc_run ps 2>/dev/null | grep -c " Up " || echo "0"
+    fi
+}
+
+# Get unhealthy service names (version-aware)
+# Returns space-separated list of unhealthy service names
+get_unhealthy_services() {
+    if supports_json_format; then
+        # v2.x or v1.28+ with JSON support
+        require_jq
+        dc_run ps --format json 2>/dev/null | \
+            jq -rs '[.[] | select(.Health == "unhealthy")] | .[].Name' 2>/dev/null | \
+            head -5 || echo ""
+    else
+        # v1.27.4 and earlier - parse text output
+        # This is a best-effort approach as v1.x doesn't expose health status in ps output
+        # We'll return empty string as we can't reliably detect health without JSON
+        echo ""
+    fi
+}
+
+# Get starting service names (version-aware)
+# Returns space-separated list of starting service names
+get_starting_services() {
+    if supports_json_format; then
+        # v2.x or v1.28+ with JSON support
+        require_jq
+        dc_run ps --format json 2>/dev/null | \
+            jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | \
+            head -5 || echo ""
+    else
+        # v1.27.4 and earlier - parse text output
+        # Look for services that are "Up" but may still be starting
+        # This is approximate as v1.x doesn't expose health status clearly
+        echo ""
+    fi
 }
 
 # Logging function with timestamp
@@ -214,17 +274,27 @@ services_running() {
 # Usage: wait_for_health [TIMEOUT_SECONDS]
 # Returns 0 if all services are healthy, 1 if timeout or failure
 # Checks both unhealthy and starting states
+# Works with both docker-compose 1.x and 2.x
 wait_for_health() {
     local timeout="${1:-300}"  # Default 5 minutes
     local elapsed=0
     local check_interval=10
 
+    log "Checking service health (timeout: ${timeout}s)..."
+
+    # For docker-compose 1.x without JSON support, we skip health checks
+    # as there's no reliable way to check health status
+    if ! supports_json_format; then
+        log "WARNING: docker-compose version does not support JSON format"
+        log "Skipping detailed health checks - assuming services are healthy"
+        log "Verify service health manually with: $DOCKER_COMPOSE_CMD ps"
+        return 0
+    fi
+
     if ! command -v jq &> /dev/null; then
         log "ERROR: jq is required but not installed."
         return 1
     fi
-
-    log "Checking service health (timeout: ${timeout}s)..."
 
     local healthy=0
 
@@ -232,16 +302,14 @@ wait_for_health() {
         sleep $check_interval
         elapsed=$((elapsed + check_interval))
 
-        # Check for unhealthy services using NDJSON parsing
+        # Check for unhealthy services using version-aware helper
         local unhealthy
-        unhealthy=$(dc_run ps --format json 2>/dev/null | \
-            jq -rs '[.[] | select(.Health == "unhealthy")] | .[].Name' 2>/dev/null | head -5 || echo "")
+        unhealthy=$(get_unhealthy_services)
 
         if [ -z "$unhealthy" ]; then
             # No unhealthy services, check for starting services
             local starting
-            starting=$(dc_run ps --format json 2>/dev/null | \
-                jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
+            starting=$(get_starting_services)
 
             if [ -z "$starting" ]; then
                 healthy=1
@@ -470,11 +538,10 @@ validate_and_check_backup() {
 
 # Check if services are running and exit with error if they are
 # Usage: require_services_stopped
+# Works with both docker-compose 1.x and 2.x
 require_services_stopped() {
-    require_jq
-
     local running_count
-    running_count=$(dc_run ps --format json 2>/dev/null | jq -rs '[.[] | select(.State == "running")] | length' || echo "0")
+    running_count=$(get_running_services_count)
 
     if [ "$running_count" -gt 0 ]; then
         echo "ERROR: Services are still running. Stop them first:" >&2
@@ -537,6 +604,10 @@ checkout_git_version() {
 
 # Export functions and variables for use in scripts
 export -f dc_run
+export -f supports_json_format
+export -f get_running_services_count
+export -f get_unhealthy_services
+export -f get_starting_services
 export -f log
 export -f confirm
 export -f notify
