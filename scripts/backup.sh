@@ -7,21 +7,27 @@
 
 set -euo pipefail
 
-# Lock file for preventing concurrent deployments
-LOCK_FILE="/var/lock/homy-deployment.lock"
-SKIP_LOCK=false
+# Source docker helper functions
+HELPER_SCRIPT="$(dirname "$0")/docker-helper.sh"
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    echo "FATAL: Required helper library not found: $HELPER_SCRIPT" >&2
+    exit 1
+fi
+# shellcheck source=scripts/docker-helper.sh
+source "$HELPER_SCRIPT" || {
+    echo "FATAL: Failed to load helper library: $HELPER_SCRIPT" >&2
+    exit 1
+}
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
+# Lock file for preventing concurrent deployments
+SKIP_LOCK=0
 
 # Default values
 BACKUP_NAME=""
-STOP_SERVICES=false
-SKIP_CONFIRM=false
-QUIET=false
-LIST_BACKUPS=false
+STOP_SERVICES=0
+YES_FLAG=0
+QUIET=0
+LIST_BACKUPS=0
 
 usage() {
     cat <<EOF
@@ -61,25 +67,25 @@ while [[ $# -gt 0 ]]; do
             usage
             ;;
         -l|--list)
-            LIST_BACKUPS=true
+            LIST_BACKUPS=1
             shift
             ;;
         -s|--stop)
-            STOP_SERVICES=true
+            STOP_SERVICES=1
             shift
             ;;
         -y|--yes)
-            SKIP_CONFIRM=true
+            YES_FLAG=1
             shift
             ;;
         -q|--quiet)
-            QUIET=true
-            SKIP_CONFIRM=true
+            QUIET=1
+            YES_FLAG=1
             shift
             ;;
         --no-lock)
             # Internal flag: skip lock acquisition when called from deploy.sh/rollback.sh
-            SKIP_LOCK=true
+            SKIP_LOCK=1
             shift
             ;;
         -*)
@@ -95,75 +101,25 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Acquire lock if not skipped (internal flag for when called from deploy.sh/rollback.sh)
-if [ "$SKIP_LOCK" = false ]; then
-    exec 200>"$LOCK_FILE"
-    if ! flock -n 200; then
-        echo "ERROR: Another deployment operation is in progress" >&2
-        echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
-        exit 1
-    fi
-fi
-
-log() {
-    if [ "$QUIET" = false ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-    fi
-}
-
-list_backups() {
-    echo "Available backups:"
-    docker compose run --rm volman list
-}
-
-confirm() {
-    if [ "$SKIP_CONFIRM" = true ]; then
-        return 0
-    fi
-
-    local prompt="$1"
-    echo ""
-    read -r -p "$prompt [y/N] " response
-    case "$response" in
-        [yY][eE][sS]|[yY])
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
+acquire_lock "$SKIP_LOCK"
 
 # Change to project directory
 cd "$PROJECT_DIR"
 
-if [ ! -f docker-compose.yml ]; then
-    echo "ERROR: docker-compose.yml not found. Not in project root?" >&2
-    exit 1
-fi
+# Validate compose file exists
+validate_compose_file
 
 # Handle --list flag
-if [ "$LIST_BACKUPS" = true ]; then
+if [ "$LIST_BACKUPS" -eq 1 ]; then
     list_backups
     exit 0
 fi
 
 # Validate backup name if provided by user
-if [ -n "$BACKUP_NAME" ]; then
-    # Allow only alphanumeric, underscore, dash
-    if ! echo "$BACKUP_NAME" | grep -qE '^[a-zA-Z0-9_-]+$'; then
-        echo "ERROR: Invalid backup name format: $BACKUP_NAME" >&2
-        echo "Backup names must contain only: letters, numbers, dash (-), underscore (_)" >&2
-        exit 1
-    fi
-    # Prevent path traversal
-    if echo "$BACKUP_NAME" | grep -qE '\.\.|/'; then
-        echo "ERROR: Backup name contains invalid characters (.. or /)" >&2
-        exit 1
-    fi
-fi
+validate_backup_or_exit "$BACKUP_NAME"
 
 # Show backup plan
-if [ "$QUIET" = false ]; then
+if [ "$QUIET" -eq 0 ]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════════"
     echo "                       BACKUP PLAN"
@@ -186,51 +142,52 @@ if ! confirm "Proceed with backup?"; then
 fi
 
 # Stop services if requested
-SERVICES_STOPPED=false
-if [ "$STOP_SERVICES" = true ]; then
+# Note: Use local variable instead of global SERVICES_STOPPED to avoid
+# interfering with emergency restart trap when called from deploy.sh with --no-lock
+SERVICES_STOPPED_LOCAL=0
+if [ "$STOP_SERVICES" -eq 1 ]; then
     log "Stopping services for consistent backup..."
-    docker compose stop
-    SERVICES_STOPPED=true
+    dc_run stop
+    SERVICES_STOPPED_LOCAL=1
 fi
 
 # Run backup
 log "Creating backup..."
-BACKUP_CMD="docker compose run --rm volman backup"
-if [ -n "$BACKUP_NAME" ]; then
-    BACKUP_CMD="$BACKUP_CMD $BACKUP_NAME"
-fi
+BACKUP_ARGS=()
+[ -n "$BACKUP_NAME" ] && BACKUP_ARGS=("$BACKUP_NAME")
 
-BACKUP_OUTPUT=$($BACKUP_CMD 2>&1) || {
-    echo "ERROR: Backup failed" >&2
+if ! BACKUP_OUTPUT=$(dc_run run --rm volman backup "${BACKUP_ARGS[@]}" 2>&1); then
+    error "Backup failed"
     echo "$BACKUP_OUTPUT" >&2
     # Restart services if we stopped them
-    if [ "$SERVICES_STOPPED" = true ]; then
-        log "Restarting services..."
-        docker compose start
+    if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+        log "Restarting services after backup failure..."
+        if ! dc_run start; then
+            error "Failed to restart services - manual intervention required"
+        fi
     fi
     exit 1
-}
+fi
 
-# Extract actual backup name from output
-ACTUAL_BACKUP_NAME=$(echo "$BACKUP_OUTPUT" | grep -oP 'Creating backup \K[0-9_]+' || echo "$BACKUP_NAME")
+# Extract actual backup name from output using portable grep
+ACTUAL_BACKUP_NAME=$(echo "$BACKUP_OUTPUT" | grep -o 'Creating backup [0-9_]*' | sed 's/Creating backup //' || echo "$BACKUP_NAME")
 if [ -z "$ACTUAL_BACKUP_NAME" ]; then
     ACTUAL_BACKUP_NAME=$(date +%Y_%m_%d_%H_%M_%S)
 fi
 
 # Save backup reference
-echo "$ACTUAL_BACKUP_NAME" > "${BACKUP_REF_FILE}.tmp"
-mv "${BACKUP_REF_FILE}.tmp" "$BACKUP_REF_FILE"
+save_backup_reference "$ACTUAL_BACKUP_NAME"
 
 log "Backup created: $ACTUAL_BACKUP_NAME"
 
 # Restart services if we stopped them
-if [ "$SERVICES_STOPPED" = true ]; then
+if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
     log "Restarting services..."
-    docker compose start
+    dc_run start
 fi
 
 # Output backup name for scripting
-if [ "$QUIET" = true ]; then
+if [ "$QUIET" -eq 1 ]; then
     echo "$ACTUAL_BACKUP_NAME"
 fi
 

@@ -8,29 +8,27 @@
 
 set -euo pipefail
 
-# Prevent concurrent deployments
-LOCK_FILE="/var/lock/homy-deployment.lock"
-exec 200>"$LOCK_FILE"
-if ! flock -n 200; then
-    echo "ERROR: Another deployment operation is in progress" >&2
-    echo "If you're sure no other operation is running, remove: $LOCK_FILE" >&2
+# Load common helper functions
+HELPER_SCRIPT="$(dirname "$0")/docker-helper.sh"
+if [ ! -f "$HELPER_SCRIPT" ]; then
+    echo "FATAL: Required helper library not found: $HELPER_SCRIPT" >&2
     exit 1
 fi
+# shellcheck source=scripts/docker-helper.sh
+source "$HELPER_SCRIPT" || {
+    echo "FATAL: Failed to load helper library: $HELPER_SCRIPT" >&2
+    exit 1
+}
 
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEPLOY_LOG_DIR="$PROJECT_DIR/logs"
-DEPLOY_LOG="$DEPLOY_LOG_DIR/deploy-$(date +%Y%m%d-%H%M%S).log"
-VERSION_FILE="$PROJECT_DIR/.deployed-version"
-PREVIOUS_VERSION_FILE="$PROJECT_DIR/.previous-version"
-BACKUP_REF_FILE="$PROJECT_DIR/.pre-upgrade-backup"
+LOG_FILE="$DEPLOY_LOG_DIR/deploy-$(date +%Y%m%d-%H%M%S).log"
 
 # Default values
-FORCE_DEPLOY=false
+FORCE_DEPLOY=0
 IMAGE_TAG="${IMAGE_TAG:-}"
-SKIP_CONFIRM=false
-SKIP_BACKUP=false
+YES_FLAG=0
+SKIP_BACKUP=0
 
 usage() {
     cat <<EOF
@@ -71,15 +69,15 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -f|--force)
-            FORCE_DEPLOY=true
+            FORCE_DEPLOY=1
             shift
             ;;
         -y|--yes)
-            SKIP_CONFIRM=true
+            YES_FLAG=1
             shift
             ;;
         --skip-backup)
-            SKIP_BACKUP=true
+            SKIP_BACKUP=1
             shift
             ;;
         *)
@@ -93,70 +91,14 @@ done
 # Ensure log directory exists
 mkdir -p "$DEPLOY_LOG_DIR"
 
-# Track if services were stopped
-SERVICES_STOPPED=false
+# Setup emergency restart handler
+setup_emergency_restart
 
-# Cleanup handler for interruption
-cleanup() {
-    local exit_code=$?
-    if [ "$SERVICES_STOPPED" = true ]; then
-        log "Script interrupted! Attempting to restart services..."
-        docker compose up -d || true
-        log "Emergency restart attempted. Check service status!"
-    fi
-    exit $exit_code
-}
+# Acquire deployment lock
+acquire_lock
 
-trap cleanup EXIT INT TERM
-
-# Load secrets for notifications (optional)
-TELEGRAM_TOKEN=""
-TELEGRAM_CHAT_ID=""
-[ -f "$PROJECT_DIR/secrets/telegram_bot_token" ] && TELEGRAM_TOKEN=$(cat "$PROJECT_DIR/secrets/telegram_bot_token")
-[ -f "$PROJECT_DIR/secrets/telegram_chat_id" ] && TELEGRAM_CHAT_ID=$(cat "$PROJECT_DIR/secrets/telegram_chat_id")
-
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$DEPLOY_LOG"
-}
-
-notify() {
-    local message="$1"
-    if [ -n "$TELEGRAM_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-        curl -s -X POST \
-            "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="$message" \
-            -d parse_mode="HTML" > /dev/null 2>&1 || true
-    fi
-}
-
-cleanup_old_logs() {
-    # Keep only the last 30 deployment logs
-    local log_count
-    log_count=$(ls -1 "$DEPLOY_LOG_DIR"/deploy-*.log 2>/dev/null | wc -l || echo "0")
-    if [ "$log_count" -gt 30 ]; then
-        log "Cleaning up old deployment logs..."
-        ls -1t "$DEPLOY_LOG_DIR"/deploy-*.log | tail -n +31 | xargs rm -f
-    fi
-}
-
-confirm() {
-    if [ "$SKIP_CONFIRM" = true ]; then
-        return 0
-    fi
-
-    local prompt="$1"
-    echo ""
-    read -r -p "$prompt [y/N] " response
-    case "$response" in
-        [yY][eE][sS]|[yY])
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
+# Load notification secrets
+load_notification_secrets
 
 # Change to project directory
 cd "$PROJECT_DIR"
@@ -164,23 +106,17 @@ cd "$PROJECT_DIR"
 # Pre-flight checks
 log "Starting deployment..."
 log "Project directory: $PROJECT_DIR"
-log "Deployment log: $DEPLOY_LOG"
+log "Deployment log: $LOG_FILE"
 
-if [ ! -f docker-compose.yml ]; then
-    log "ERROR: docker-compose.yml not found. Not in project root?"
-    exit 1
-fi
+validate_compose_file
 
 # Record current state
-CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
+CURRENT_VERSION=$(get_deployed_version)
 log "Current version: $CURRENT_VERSION"
 
-# Validate IMAGE_TAG if provided (prevent injection)
+# Validate IMAGE_TAG if provided
 if [ -n "$IMAGE_TAG" ]; then
-    # Allow: git SHA (7-40 hex), semver, 'latest', or branch names (alphanumeric with .-_)
-    if ! echo "$IMAGE_TAG" | grep -qE '^[a-fA-F0-9]{7,40}$|^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$|^latest$|^[a-zA-Z0-9._-]+$'; then
-        log "ERROR: Invalid IMAGE_TAG format: $IMAGE_TAG"
-        log "IMAGE_TAG must be a git SHA, semantic version (v1.2.3), branch name, or 'latest'"
+    if ! validate_image_tag "$IMAGE_TAG"; then
         exit 1
     fi
 fi
@@ -192,7 +128,7 @@ git fetch origin master
 NEW_VERSION="${IMAGE_TAG:-$(git rev-parse origin/master)}"
 log "Target version: $NEW_VERSION"
 
-if [ "$CURRENT_VERSION" = "$NEW_VERSION" ] && [ "$FORCE_DEPLOY" = false ]; then
+if [ "$CURRENT_VERSION" = "$NEW_VERSION" ] && [ "$FORCE_DEPLOY" -eq 0 ]; then
     log "Already at target version. Use --force to redeploy."
     exit 0
 fi
@@ -222,7 +158,7 @@ if ! confirm "Proceed with deployment?"; then
 fi
 
 # Extra confirmation for --skip-backup
-if [ "$SKIP_BACKUP" = true ]; then
+if [ "$SKIP_BACKUP" -eq 1 ]; then
     log ""
     log "⚠️  WARNING: You are deploying WITHOUT a backup!"
     log "⚠️  If deployment fails, rollback will NOT be possible!"
@@ -230,7 +166,7 @@ if [ "$SKIP_BACKUP" = true ]; then
     log ""
 
     # Only require manual confirmation if --yes flag was not provided
-    if [ "$SKIP_CONFIRM" = false ]; then
+    if [ "$YES_FLAG" -eq 0 ]; then
         read -r -p "Type 'yes-skip-backup' to confirm: " confirmation
         if [ "$confirmation" != "yes-skip-backup" ]; then
             log "Deployment cancelled. Use without --skip-backup for safe deployment."
@@ -254,8 +190,8 @@ log "Using IMAGE_TAG: $IMAGE_TAG"
 
 # Pull prebuilt images from GHCR (while services are still running)
 log "Pulling prebuilt images from GHCR..."
-if ! docker compose pull 2>&1 | tee -a "$DEPLOY_LOG"; then
-    log "ERROR: Failed to pull images from GHCR"
+if ! dc_run pull 2>&1 | tee -a "$LOG_FILE"; then
+    error "Failed to pull images from GHCR"
     log "This usually means:"
     log "  - Images for tag '$IMAGE_TAG' don't exist in GHCR"
     log "  - Network connectivity issues"
@@ -270,91 +206,54 @@ if ! docker compose pull 2>&1 | tee -a "$DEPLOY_LOG"; then
 fi
 
 # Create pre-upgrade backup or just stop services
-if [ "$SKIP_BACKUP" = false ]; then
+if [ "$SKIP_BACKUP" -eq 0 ]; then
     # Create backup (stops services, creates backup, but doesn't restart)
     log "Creating backup before upgrade..."
     BACKUP_NAME=$("$SCRIPT_DIR/backup.sh" --stop --yes --quiet --no-lock) || {
-        log "ERROR: Backup failed"
+        error "Backup failed"
         notify "Deployment failed: Backup error"
         # Try to restart services
-        docker compose up -d
+        dc_run up -d
         exit 1
     }
     log "Backup created: $BACKUP_NAME"
-    SERVICES_STOPPED=true
+    mark_services_stopped
 else
     # Skip backup but still stop services for clean deployment
     log "Skipping backup (as requested)..."
     log "Stopping services..."
-    docker compose down
-    SERVICES_STOPPED=true
+    dc_run down
+    mark_services_stopped
 fi
 
 # Start services with new images
 log "Starting services..."
-docker compose up -d
-SERVICES_STOPPED=false
+dc_run up -d
+mark_services_running
 
-# Health check loop
+# Health check
 log "Waiting for services to be healthy..."
-HEALTHY=false
-MAX_WAIT=300  # 5 minutes
-WAIT_INTERVAL=10
-ELAPSED=0
-
-while [ $ELAPSED -lt $MAX_WAIT ]; do
-    sleep $WAIT_INTERVAL
-    ELAPSED=$((ELAPSED + WAIT_INTERVAL))
-
-    # docker compose ps --format json outputs NDJSON (one JSON object per line)
-    # Use jq -s to slurp lines into an array, then filter
-    #
-    # Health check strategy:
-    # - Services WITH health checks: wait for Health == "healthy"
-    # - Services WITHOUT health checks: considered healthy by default if running
-    # - Only fail on explicit health check failures (Health == "unhealthy")
-    #
-    # This allows services without health checks (like modbus-serial instances)
-    # to not block deployment, even if they're in a restart loop due to missing hardware
-
-    # Check for explicitly unhealthy containers (health check failed)
-    UNHEALTHY=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "unhealthy")] | .[].Name' 2>/dev/null | head -5 || echo "")
-
-    if [ -z "$UNHEALTHY" ]; then
-        # No unhealthy containers - check if any with health checks are still starting
-        STARTING=$(docker compose ps --format json 2>/dev/null | jq -rs '[.[] | select(.Health == "starting")] | .[].Name' 2>/dev/null | head -5 || echo "")
-        if [ -z "$STARTING" ]; then
-            # All containers with health checks are healthy
-            # Containers without health checks are considered healthy by default
-            HEALTHY=true
-            break
-        fi
-        log "Waiting... still starting: $STARTING (${ELAPSED}s)"
-    else
-        log "Waiting... unhealthy: $UNHEALTHY (${ELAPSED}s)"
-    fi
-done
-
-if [ "$HEALTHY" = true ]; then
+if wait_for_health "$HEALTH_CHECK_TIMEOUT_DEPLOY"; then
     log "Deployment successful!"
 
     # Save previous version before updating
     if [ "$CURRENT_VERSION" != "unknown" ]; then
-        echo "$CURRENT_VERSION" > "${PREVIOUS_VERSION_FILE}.tmp"
-        mv "${PREVIOUS_VERSION_FILE}.tmp" "$PREVIOUS_VERSION_FILE"
+        save_previous_version "$CURRENT_VERSION"
         log "Previous version saved: $CURRENT_VERSION"
     fi
 
-    echo "$NEW_VERSION" > "${VERSION_FILE}.tmp"
-    mv "${VERSION_FILE}.tmp" "$VERSION_FILE"
-    notify "Deployment successful: ${NEW_VERSION:0:8}"
-    cleanup_old_logs
+    save_deployed_version "$NEW_VERSION"
+    notify "Deployment successful: $(format_version_short "$NEW_VERSION")"
+    cleanup_old_logs "$DEPLOY_LOG_DIR" "deploy-*.log" 30
 else
-    log "ERROR: Services unhealthy after ${MAX_WAIT}s"
+    error "Services unhealthy after timeout"
     log "Unhealthy services:"
-    docker compose ps | tee -a "$DEPLOY_LOG"
+    dc_run ps | tee -a "$LOG_FILE"
 
     notify "Deployment failed: Services unhealthy. Initiating rollback..."
+
+    # Disarm emergency restart trap - rollback will handle service management
+    mark_services_running
 
     log "Initiating automatic rollback..."
     if "$SCRIPT_DIR/rollback.sh" --yes --no-lock; then
