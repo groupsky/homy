@@ -217,16 +217,18 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
 
   console.error('Step 11: Detecting testable services...');
+  // Tests should run for all changed services, not just ones being built
   const testableServices = services
-    .filter((s) => toBuild.includes(s.service_name))
+    .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
     .filter(serviceHasRealTests)
     .map((s) => s.service_name)
     .sort();
   console.error(`Testable services: ${testableServices.length}`);
 
   console.error('Step 12: Detecting healthcheck services...');
+  // Health checks should run for all changed services, not just ones being built
   const healthcheckServices = services
-    .filter((s) => toBuild.includes(s.service_name))
+    .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
     .filter((s) => {
       try {
         const content = readFileSync(s.dockerfile_path, 'utf-8');
@@ -240,8 +242,9 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   console.error(`Healthcheck services: ${healthcheckServices.length}`);
 
   console.error('Step 13: Detecting version check services...');
+  // Version checks should run for all changed services, not just ones being built
   const versionCheckServices = services
-    .filter((s) => toBuild.includes(s.service_name))
+    .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
     .filter(needsVersionCheck)
     .map((s) => s.service_name)
     .sort();

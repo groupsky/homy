@@ -14,6 +14,17 @@ import type { BaseImage, Service } from './types.js';
 import { ValidationError } from '../utils/errors.js';
 
 /**
+ * Find the git repository root directory.
+ * Git commands must be run from the repository root for pathspecs to work correctly.
+ */
+function getGitRoot(execFileSync: typeof defaultExecFileSync = defaultExecFileSync): string {
+  const output = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf-8',
+  }) as string;
+  return output.trim();
+}
+
+/**
  * Dependencies that can be injected for testing.
  * @internal
  */
@@ -55,11 +66,15 @@ export function detectChangedBaseImages(
   // Build a set of known base image directories for filtering
   const knownDirs = new Set(baseImages.map((img) => img.directory));
 
+  // Get repository root - git commands must run from repo root for pathspecs to work
+  const repoRoot = getGitRoot(execFileSync);
+
   // Run git diff to get changed files in base-images/
   let output: string;
 
   try {
     output = execFileSync('git', ['diff', '--name-only', baseRef, 'HEAD', '--', 'base-images/'], {
+      cwd: repoRoot,
       encoding: 'utf-8',
     }) as string;
   } catch (error) {
@@ -137,6 +152,11 @@ export function detectChangedServices(
     }
   }
 
+  // Get repository root - git commands must run from repo root for pathspecs to work
+  // CRITICAL: Git pathspecs are relative to repo root, but execFileSync runs from cwd
+  // Running from subdirectories (like .github/scripts/detect-changes) breaks pathspecs
+  const repoRoot = getGitRoot(execFileSync);
+
   // Run git diff to get changed files in docker/
   // IMPORTANT: Use 'docker/' not 'docker/STAR/' - the glob pattern doesn't work as expected
   // with git pathspecs. 'docker/' matches all files recursively, but glob patterns do not.
@@ -145,6 +165,7 @@ export function detectChangedServices(
 
   try {
     output = execFileSync('git', ['diff', '--name-only', baseRef, 'HEAD', '--', 'docker/'], {
+      cwd: repoRoot,
       encoding: 'utf-8',
     }) as string;
   } catch (error) {
