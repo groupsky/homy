@@ -1,3 +1,12 @@
 [submodule "docker/homeassistant/custom_components/sunseeker-lawn-mower"]
 	path = docker/homeassistant/custom_components/sunseeker-lawn-mower
 	url = https://github.com/Sdahl1234/Sunseeker-lawn-mower.git
+[submodule "scripts/tests/bats-core"]
+	path = scripts/tests/bats-core
+	url = https://github.com/bats-core/bats-core.git
+[submodule "scripts/tests/bats-support"]
+	path = scripts/tests/bats-support
+	url = https://github.com/bats-core/bats-support.git
+[submodule "scripts/tests/bats-assert"]
+	path = scripts/tests/bats-assert
+	url = https://github.com/bats-core/bats-assert.git
