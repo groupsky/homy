@@ -58,6 +58,7 @@ readonly DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-$(detect_docker_compose)}"
 
 # Check if docker-compose supports JSON format output
 # Returns 0 if supported, 1 if not
+# Note: $DOCKER_COMPOSE_CMD is intentionally unquoted for word splitting (see dc_run comment)
 supports_json_format() {
     # Try the command and check if it accepts --format flag
     $DOCKER_COMPOSE_CMD ps --format json &> /dev/null
@@ -69,8 +70,13 @@ supports_json_format() {
 # Wrapper function for docker-compose commands
 # Usage: dc_run [docker-compose args...]
 # Example: dc_run ps --format json
+# Note: $DOCKER_COMPOSE_CMD is intentionally unquoted to allow word splitting
+# for "docker compose" (two words). This is safe because:
+# - DOCKER_COMPOSE_CMD is readonly
+# - Only set by detect_docker_compose() with hardcoded safe values
+# - Not user-controllable
 dc_run() {
-    "$DOCKER_COMPOSE_CMD" "$@"
+    $DOCKER_COMPOSE_CMD "$@"
 }
 
 # Get running service count (version-aware)

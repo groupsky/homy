@@ -1,0 +1,115 @@
+name: Deployment Scripts Tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/deployment-scripts-tests.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/deployment-scripts-tests.yml'
+  workflow_dispatch:
+
+# Limit workflow permissions (security best practice)
+permissions:
+  contents: read
+
+# Prevent multiple concurrent runs, cancel in-progress for PRs
+concurrency:
+  group: ${{ github.ref == 'refs/heads/master' && format('deployment-tests-master-{0}', github.sha) || format('deployment-tests-pr-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  test:
+    name: Run BATS Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          submodules: true
+
+      - name: Set up test environment
+        run: |
+          # Install dependencies
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+          # Verify BATS is available
+          if [ ! -f scripts/tests/bats-core/bin/bats ]; then
+            echo "❌ BATS not found. Submodules may not be initialized."
+            exit 1
+          fi
+
+          echo "✅ BATS framework ready"
+          scripts/tests/bats-core/bin/bats --version
+
+      - name: Run docker-helper.sh tests
+        run: |
+          cd scripts/tests
+          ./bats-core/bin/bats docker-helper.bats
+
+      - name: Run backup.sh tests
+        run: |
+          cd scripts/tests
+          ./bats-core/bin/bats backup.bats
+
+      - name: Run restore.sh tests
+        run: |
+          cd scripts/tests
+          ./bats-core/bin/bats restore.bats
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Test execution completed. Check individual steps for details." >> $GITHUB_STEP_SUMMARY
+
+  validate-scripts:
+    name: Validate Script Syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Validate bash syntax
+        run: |
+          echo "🔍 Validating bash script syntax..."
+          EXIT_CODE=0
+
+          for script in scripts/*.sh scripts/tests/*.bash; do
+            if [ -f "$script" ]; then
+              echo "  Checking $script..."
+              if ! bash -n "$script"; then
+                echo "  ❌ Syntax error in $script"
+                EXIT_CODE=1
+              else
+                echo "  ✅ $script syntax valid"
+              fi
+            fi
+          done
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ All scripts passed syntax validation"
+          else
+            echo "❌ Some scripts have syntax errors"
+            exit 1
+          fi
+
+      - name: Check shellcheck (optional)
+        continue-on-error: true
+        run: |
+          if command -v shellcheck &> /dev/null; then
+            echo "🔍 Running shellcheck..."
+            shellcheck scripts/*.sh || true
+          else
+            echo "ℹ️  shellcheck not installed, skipping"
+          fi
