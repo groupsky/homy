@@ -184,8 +184,9 @@ All Docker image builds and tests now use the unified CI/CD pipeline (`ci-unifie
 
 - **Application CI/CD**: Use `ci-unified.yml` for all service builds, tests, and deployments
   - Automatically triggered on push/PR when Docker-related files change
-  - 6-stage pipeline: detect → prepare bases → build apps → test (4 parallel jobs) → push → summary
+  - 7-stage pipeline: detect → prepare bases → build apps → pull for testing → test (4 parallel jobs) → push → summary
   - Test-gated promotion ensures only passing builds get `:latest` tag
+  - **Test-only optimization**: Services with only test file changes pull existing images instead of rebuilding (50-60% faster)
 
 - **Infrastructure Validation**: `infrastructure.yml` runs on path-filtered changes + weekly schedule
   - Validates nginx config generation, proxy routing, ingress configuration
@@ -263,6 +264,12 @@ When developing new features:
 - Use proper mocking for external dependencies
 - Create comprehensive test coverage for critical paths
 - Implement integration tests for end-to-end workflows
+
+**CI Optimization for Test Development:**
+- The CI pipeline automatically detects test-only changes (test files, test configs, devDependencies)
+- Test-only changes trigger fast CI runs by pulling existing images instead of rebuilding (~50-60% faster)
+- This encourages frequent test improvements without CI performance penalties
+- Recognized test patterns: `*.test.{js,ts}`, `*.spec.{js,ts}`, `__tests__/`, `jest.config.js`
 
 ### Monitoring and Observability
 

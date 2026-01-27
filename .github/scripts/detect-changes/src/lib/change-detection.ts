@@ -203,6 +203,196 @@ export function detectChangedServices(
 }
 
 /**
+ * Test file patterns that indicate test-only changes.
+ * Based on Jest/Mocha/Vitest conventions.
+ */
+const TEST_FILE_PATTERNS = [
+  /\.test\.(js|ts|jsx|tsx)$/,
+  /\.spec\.(js|ts|jsx|tsx)$/,
+  /\/__tests__\//,
+  /\/tests\//,
+  /^jest\.config\.(js|ts)$/,
+  /^jest\.setup\.(js|ts)$/,
+  /\.test\.env$/,
+  /^vitest\.config\.(js|ts)$/,
+];
+
+/**
+ * Check if a file path matches any test file pattern.
+ *
+ * @param filePath - Relative path to check (e.g., "docker/automations/bots/irrigation.test.js")
+ * @param serviceDir - Service directory name (e.g., "automations")
+ * @returns true if file matches test pattern
+ */
+function isTestFile(filePath: string, serviceDir: string): boolean {
+  // Extract the file path relative to the service directory
+  const parts = filePath.split('/');
+  if (parts.length < 3 || parts[0] !== 'docker' || parts[1] !== serviceDir) {
+    return false;
+  }
+
+  // Get path within service directory (with leading slash for pattern matching)
+  const relativePath = '/' + parts.slice(2).join('/');
+  const fileName = parts[parts.length - 1];
+
+  // Check against test patterns
+  return TEST_FILE_PATTERNS.some(pattern => {
+    // Check filename
+    if (pattern.test(fileName)) {
+      return true;
+    }
+    // Check full relative path
+    if (pattern.test(relativePath)) {
+      return true;
+    }
+    return false;
+  });
+}
+
+/**
+ * Check if package.json changes are test-only (devDependencies only).
+ *
+ * @param baseRef - Git reference to compare against
+ * @param packageJsonPath - Absolute path to package.json
+ * @param deps - Optional dependencies for testing
+ * @returns true if only devDependencies changed
+ */
+function isPackageJsonTestOnly(
+  baseRef: string,
+  packageJsonPath: string,
+  deps: ChangeDetectionDeps = {}
+): boolean {
+  const { execFileSync = defaultExecFileSync, readFileSync = defaultReadFileSync } = deps;
+
+  try {
+    // Get base version from git
+    const baseContent = execFileSync('git', ['show', `${baseRef}:${packageJsonPath}`], {
+      encoding: 'utf-8',
+    }) as string;
+    const basePackage = JSON.parse(baseContent);
+
+    // Get current version
+    const currentContent = readFileSync(packageJsonPath, 'utf-8') as string;
+    const currentPackage = JSON.parse(currentContent);
+
+    // Compare all fields except devDependencies
+    const fieldsToCheck = [
+      'name', 'version', 'description', 'main', 'bin', 'scripts',
+      'dependencies', 'peerDependencies', 'optionalDependencies',
+      'engines', 'os', 'cpu'
+    ];
+
+    for (const field of fieldsToCheck) {
+      const baseValue = JSON.stringify(basePackage[field] || null);
+      const currentValue = JSON.stringify(currentPackage[field] || null);
+
+      if (baseValue !== currentValue) {
+        return false; // Production-affecting field changed
+      }
+    }
+
+    // Only devDependencies changed (or nothing changed)
+    return true;
+  } catch (error) {
+    // If we can't determine, assume it's a production change (safer)
+    return false;
+  }
+}
+
+/**
+ * Detect if changes to a service are test-only (no production code changed).
+ *
+ * A service has test-only changes if ALL changed files match test file patterns
+ * or are package.json with only devDependencies changes.
+ *
+ * @param baseRef - Git reference to compare against (e.g., 'origin/master')
+ * @param service - Service to check for test-only changes
+ * @param deps - Optional dependencies for testing
+ * @returns true if only test files changed, false if any production code changed
+ *
+ * @example
+ * ```typescript
+ * // Service with only test file changes
+ * const result = isTestOnlyChange('origin/master', service);
+ * // Returns: true
+ *
+ * // Service with mixed changes
+ * const result = isTestOnlyChange('origin/master', service);
+ * // Returns: false
+ * ```
+ */
+export function isTestOnlyChange(
+  baseRef: string,
+  service: Service,
+  deps: ChangeDetectionDeps = {}
+): boolean {
+  const { execFileSync = defaultExecFileSync } = deps;
+
+  // Get service directory name from build context
+  const parts = service.build_context.split('/');
+  const serviceDir = parts[parts.length - 1];
+
+  if (!serviceDir) {
+    return false;
+  }
+
+  // Get repository root
+  const repoRoot = getGitRoot(execFileSync);
+
+  // Get changed files for this service
+  let output: string;
+  try {
+    output = execFileSync(
+      'git',
+      ['diff', '--name-only', baseRef, 'HEAD', '--', `docker/${serviceDir}/`],
+      { cwd: repoRoot, encoding: 'utf-8' }
+    ) as string;
+  } catch (error) {
+    // If git command fails, assume not test-only
+    return false;
+  }
+
+  if (!output.trim()) {
+    // No changes detected
+    return false;
+  }
+
+  const changedFiles = output.trim().split('\n').filter(line => line.trim());
+
+  if (changedFiles.length === 0) {
+    return false;
+  }
+
+  // Check each changed file
+  for (const filePath of changedFiles) {
+    const trimmedPath = filePath.trim();
+
+    // Check if it's a test file
+    if (isTestFile(trimmedPath, serviceDir)) {
+      continue; // Test file - OK
+    }
+
+    // Check if it's package.json with only devDependencies changes
+    if (trimmedPath.endsWith('package.json')) {
+      const absolutePath = trimmedPath.replace(/^docker\/[^/]+\//, '');
+      const fullPath = `docker/${serviceDir}/${absolutePath}`;
+
+      if (isPackageJsonTestOnly(baseRef, fullPath, deps)) {
+        continue; // Only devDependencies changed - OK
+      } else {
+        return false; // Production changes in package.json
+      }
+    }
+
+    // Any other file is production code
+    return false;
+  }
+
+  // All files are test-related
+  return true;
+}
+
+/**
  * Validate that a base image Dockerfile is an exact copy.
  *
  * Base images must only contain FROM and LABEL instructions to ensure they
