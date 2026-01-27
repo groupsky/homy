@@ -1,0 +1,32 @@
+{
+  "name": "@homy/detect-changes",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18.20.8"
+  },
+  "scripts": {
+    "detect-changes": "tsx src/index.ts",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "dockerfile-ast": "^0.7.1",
+    "js-yaml": "^4.1.0",
+    "semver": "^7.6.0",
+    "tsx": "^4.20.1"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^18.19.0",
+    "@types/semver": "^7.5.8",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.3"
+  }
+}

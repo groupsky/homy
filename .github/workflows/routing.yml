@@ -1,6 +1,15 @@
 name: routing
 
-on: [ push, pull_request ]
+# Network security boundary testing - validates VPN/routing layer
+# Requires special runner configuration (sudo, network namespaces)
+# Infrastructure validation, not application CI - runs scheduled or on-demand
+on:
+  # Weekly validation
+  schedule:
+    - cron: '0 3 * * 1'  # Every Monday at 3 AM UTC (after infrastructure.yml)
+
+  # Manual debugging/validation
+  workflow_dispatch:
 
 jobs:
   build:
