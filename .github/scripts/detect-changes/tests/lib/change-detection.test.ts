@@ -55,17 +55,26 @@ describe('detectChangedBaseImages', () => {
       },
     ];
 
+    // Mock getGitRoot call
+    mockExecFileSync.mockReturnValueOnce('/repo');
     // Mock git diff output showing changes in node-18-alpine and grafana-9
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSync.mockReturnValueOnce(
       'base-images/node-18-alpine/Dockerfile\nbase-images/grafana-9/README.md\n'
     );
 
     const result = detectChangedBaseImages(baseRef, baseImages, { execFileSync: mockExecFileSync });
 
-    expect(mockExecFileSync).toHaveBeenCalledWith(
+    expect(mockExecFileSync).toHaveBeenNthCalledWith(
+      1,
+      'git',
+      ['rev-parse', '--show-toplevel'],
+      { encoding: 'utf-8' }
+    );
+    expect(mockExecFileSync).toHaveBeenNthCalledWith(
+      2,
       'git',
       ['diff', '--name-only', 'origin/master', 'HEAD', '--', 'base-images/'],
-      { encoding: 'utf-8' }
+      { cwd: '/repo', encoding: 'utf-8' }
     );
     expect(result).toEqual(['node-18-alpine', 'grafana-9']);
   });
@@ -82,7 +91,8 @@ describe('detectChangedBaseImages', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue('');
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('');
 
     const result = detectChangedBaseImages(baseRef, baseImages, { execFileSync: mockExecFileSync });
 
@@ -100,7 +110,8 @@ describe('detectChangedBaseImages', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce(
         'base-images/node-18-alpine/Dockerfile\nbase-images/node-18-alpine/README.md\nbase-images/node-18-alpine/.dockerignore\n'
     );
 
@@ -120,7 +131,8 @@ describe('detectChangedBaseImages', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce(
         'base-images/node-18-alpine/Dockerfile\nbase-images/node-18-alpine/README.md\n'
     );
 
@@ -141,7 +153,8 @@ describe('detectChangedBaseImages', () => {
     ];
 
     // Git diff shows changes including unknown directory
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce(
         'base-images/node-18-alpine/Dockerfile\nbase-images/unknown-image/Dockerfile\n'
     );
 
@@ -153,8 +166,6 @@ describe('detectChangedBaseImages', () => {
   test('should handle empty base images list', () => {
     const baseRef = 'origin/master';
     const baseImages: BaseImage[] = [];
-
-    mockExecFileSync.mockReturnValue('base-images/node-18-alpine/Dockerfile\n');
 
     const result = detectChangedBaseImages(baseRef, baseImages, { execFileSync: mockExecFileSync });
 
@@ -172,7 +183,8 @@ describe('detectChangedBaseImages', () => {
       },
     ];
 
-    mockExecFileSync.mockImplementation(() => {
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockImplementationOnce(() => {
       throw new Error('fatal: bad revision \'origin/master\'');
     });
 
@@ -192,7 +204,8 @@ describe('detectChangedBaseImages', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue('base-images/node-18-alpine/\n');
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('base-images/node-18-alpine/\n');
 
     const result = detectChangedBaseImages(baseRef, baseImages, { execFileSync: mockExecFileSync });
 
@@ -225,14 +238,24 @@ describe('detectChangedServices', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue('docker/automations/index.js\ndocker/mqtt-influx/Dockerfile\n');
+    // Mock getGitRoot call
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    // Mock git diff call
+    mockExecFileSync.mockReturnValueOnce('docker/automations/index.js\ndocker/mqtt-influx/Dockerfile\n');
 
     const result = detectChangedServices(baseRef, services, { execFileSync: mockExecFileSync });
 
-    expect(mockExecFileSync).toHaveBeenCalledWith(
+    expect(mockExecFileSync).toHaveBeenNthCalledWith(
+      1,
+      'git',
+      ['rev-parse', '--show-toplevel'],
+      { encoding: 'utf-8' }
+    );
+    expect(mockExecFileSync).toHaveBeenNthCalledWith(
+      2,
       'git',
       ['diff', '--name-only', 'origin/master', 'HEAD', '--', 'docker/'],
-      { encoding: 'utf-8' }
+      { cwd: '/repo', encoding: 'utf-8' }
     );
     expect(result).toEqual(['automations', 'mqtt-influx']);
   });
@@ -247,7 +270,8 @@ describe('detectChangedServices', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue('');
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('');
 
     const result = detectChangedServices(baseRef, services, { execFileSync: mockExecFileSync });
 
@@ -264,7 +288,8 @@ describe('detectChangedServices', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce(
         'docker/automations/index.js\ndocker/automations/package.json\ndocker/automations/Dockerfile\n'
     );
 
@@ -283,7 +308,8 @@ describe('detectChangedServices', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue('docker/automations/index.js\ndocker/automations/package.json\n');
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/index.js\ndocker/automations/package.json\n');
 
     const result = detectChangedServices(baseRef, services, { execFileSync: mockExecFileSync });
 
@@ -300,7 +326,8 @@ describe('detectChangedServices', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue('docker/automations/index.js\ndocker/unknown-service/index.js\n');
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/index.js\ndocker/unknown-service/index.js\n');
 
     const result = detectChangedServices(baseRef, services, { execFileSync: mockExecFileSync });
 
@@ -310,8 +337,6 @@ describe('detectChangedServices', () => {
   test('should handle empty services list', () => {
     const baseRef = 'origin/master';
     const services: Service[] = [];
-
-    mockExecFileSync.mockReturnValue('docker/automations/index.js\n');
 
     const result = detectChangedServices(baseRef, services, { execFileSync: mockExecFileSync });
 
@@ -328,7 +353,8 @@ describe('detectChangedServices', () => {
       },
     ];
 
-    mockExecFileSync.mockImplementation(() => {
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockImplementationOnce(() => {
       throw new Error('fatal: bad revision \'origin/master\'');
     });
 
@@ -347,7 +373,8 @@ describe('detectChangedServices', () => {
       },
     ];
 
-    mockExecFileSync.mockReturnValue('docker/README.md\n');
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/README.md\n');
 
     const result = detectChangedServices(baseRef, services, { execFileSync: mockExecFileSync });
 
