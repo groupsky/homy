@@ -231,7 +231,7 @@ describe('detectChangedServices', () => {
 
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'git',
-      ['diff', '--name-only', 'origin/master', 'HEAD', '--', 'docker/*/'],
+      ['diff', '--name-only', 'origin/master', 'HEAD', '--', 'docker/'],
       { encoding: 'utf-8' }
     );
     expect(result).toEqual(['automations', 'mqtt-influx']);

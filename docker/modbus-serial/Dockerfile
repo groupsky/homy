@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM ghcr.io/groupsky/homy/node:20.20.0-alpine3.23 AS base
+FROM ghcr.io/groupsky/homy/node:24.13.0-alpine3.23 AS base
 
 # Install tools, create app dir, add user and set rights
 RUN set -ex && \
