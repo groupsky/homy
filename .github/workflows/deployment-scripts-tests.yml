@@ -13,6 +13,10 @@ on:
       - '.github/workflows/deployment-scripts-tests.yml'
   workflow_dispatch:
 
+# Limit workflow permissions (security best practice)
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Run BATS Tests
