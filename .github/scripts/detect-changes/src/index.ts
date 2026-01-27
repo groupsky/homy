@@ -243,11 +243,20 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   console.error('Step 13: Detecting version check services...');
   // Version checks should run for all changed services, not just ones being built
-  const versionCheckServices = services
+  // Extract unique build context directories (multiple services may share same build context)
+  const versionCheckBuildContexts = new Set<string>();
+  services
     .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
     .filter(needsVersionCheck)
-    .map((s) => s.service_name)
-    .sort();
+    .forEach((s) => {
+      // Extract directory name from build_context (e.g., "docker/modbus-serial" -> "modbus-serial")
+      const parts = s.build_context.split('/');
+      const directory = parts[parts.length - 1];
+      if (directory) {
+        versionCheckBuildContexts.add(directory);
+      }
+    });
+  const versionCheckServices = Array.from(versionCheckBuildContexts).sort();
   console.error(`Version check services: ${versionCheckServices.length}`);
 
   return {
