@@ -137,11 +137,14 @@ export function detectChangedServices(
     }
   }
 
-  // Run git diff to get changed files in docker/*/
+  // Run git diff to get changed files in docker/
+  // IMPORTANT: Use 'docker/' not 'docker/STAR/' - the glob pattern doesn't work as expected
+  // with git pathspecs. 'docker/' matches all files recursively, but glob patterns do not.
+  // See tests/integration/git-pathspec.integration.test.ts for detailed explanation.
   let output: string;
 
   try {
-    output = execFileSync('git', ['diff', '--name-only', baseRef, 'HEAD', '--', 'docker/*/'], {
+    output = execFileSync('git', ['diff', '--name-only', baseRef, 'HEAD', '--', 'docker/'], {
       encoding: 'utf-8',
     }) as string;
   } catch (error) {
