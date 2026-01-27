@@ -8,6 +8,12 @@ setup() {
 
     # Copy docker-helper.sh to test directory
     cp "${BATS_TEST_DIRNAME}/../docker-helper.sh" "$PROJECT_DIR/docker-helper.sh"
+
+    # Verify mock is set up correctly
+    [ -x "$TEST_DIR/docker" ] || {
+        echo "ERROR: Mock docker script not created or not executable" >&2
+        exit 1
+    }
 }
 
 teardown() {
@@ -26,14 +32,14 @@ teardown() {
 @test "dc_run: executes docker-compose commands" {
     source_docker_helper "$PROJECT_DIR/docker-helper.sh"
 
-    # Mock docker compose command is available
-    run bash -c 'type docker'
-    if [ $status -eq 0 ]; then
-        run dc_run version
-        assert_success
-    else
-        skip "docker not available in test environment"
-    fi
+    # Verify the mock is in PATH and executable
+    run which docker
+    assert_success
+
+    # Test that dc_run function exists and calls docker
+    run dc_run version
+    assert_success
+    assert_output --partial "Docker Compose version"
 }
 
 # Test: supports_json_format
@@ -48,8 +54,16 @@ teardown() {
 @test "get_running_services_count: returns count of running services" {
     source_docker_helper "$PROJECT_DIR/docker-helper.sh"
 
-    result=$(get_running_services_count)
+    # Verify mock docker is available
+    run which docker
+    assert_success
+
+    # Get the count
+    run get_running_services_count
+    assert_success
+
     # Result should be a single integer >= 0
+    result="$output"
     [[ "$result" =~ ^[0-9]+$ ]]
     [ "$result" -ge 0 ]
 }
