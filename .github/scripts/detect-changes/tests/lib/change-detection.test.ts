@@ -18,6 +18,7 @@ import {
   detectChangedBaseImages,
   detectChangedServices,
   validateBaseImageExactCopy,
+  isTestOnlyChange,
 } from '../../src/lib/change-detection.js';
 
 // Mock functions with correct types
@@ -577,5 +578,321 @@ FROM base AS final
     expect(() => validateBaseImageExactCopy(dockerfilePath, { readFileSync: mockReadFileSync })).toThrow(
       /must have exactly one FROM/
     );
+  });
+});
+
+describe('isTestOnlyChange', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('should detect test-only changes (*.test.js files)', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    // Mock getGitRoot call
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    // Mock git diff showing only .test.js files changed
+    mockExecFileSync.mockReturnValueOnce('docker/automations/bots/irrigation.test.js\ndocker/automations/bots/boiler.test.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should detect test-only changes (*.spec.ts files)', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'telegram-bridge',
+      build_context: '/repo/docker/telegram-bridge',
+      dockerfile_path: '/repo/docker/telegram-bridge/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/telegram-bridge/src/handlers.spec.ts\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should detect test-only changes (__tests__ directory)', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'telegram-bridge',
+      build_context: '/repo/docker/telegram-bridge',
+      dockerfile_path: '/repo/docker/telegram-bridge/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/telegram-bridge/__tests__/setup.js\ndocker/telegram-bridge/__tests__/integration.test.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should detect test-only changes (tests/ directory)', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'mqtt-influx',
+      build_context: '/repo/docker/mqtt-influx',
+      dockerfile_path: '/repo/docker/mqtt-influx/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/mqtt-influx/tests/converter.test.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should detect test-only changes (jest.config.js)', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/jest.config.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should reject changes with mixed test and production files', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/bots/irrigation.test.js\ndocker/automations/bots/irrigation.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should reject changes to Dockerfile as production change', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/Dockerfile\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should reject changes to .nvmrc as production change', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/.nvmrc\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should reject changes to package.json dependencies', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/package.json\n');
+
+    // Mock base version of package.json
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({
+      dependencies: { express: '^4.18.0' },
+      devDependencies: { jest: '^29.0.0' }
+    }));
+
+    // Mock current version with changed dependencies
+    mockReadFileSync.mockReturnValueOnce(JSON.stringify({
+      dependencies: { express: '^4.19.0' }, // Changed
+      devDependencies: { jest: '^29.0.0' }
+    }));
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should accept changes to package.json devDependencies only', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/package.json\n');
+
+    // Mock base version of package.json
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({
+      dependencies: { express: '^4.18.0' },
+      devDependencies: { jest: '^29.0.0' }
+    }));
+
+    // Mock current version with only devDependencies changed
+    mockReadFileSync.mockReturnValueOnce(JSON.stringify({
+      dependencies: { express: '^4.18.0' },
+      devDependencies: { jest: '^29.7.0' } // Only devDeps changed
+    }));
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should reject package.json changes to scripts', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/package.json\n');
+
+    // Mock base version
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({
+      scripts: { start: 'node index.js' },
+      devDependencies: { jest: '^29.0.0' }
+    }));
+
+    // Mock current version with changed scripts
+    mockReadFileSync.mockReturnValueOnce(JSON.stringify({
+      scripts: { start: 'node --enable-source-maps index.js' }, // Changed
+      devDependencies: { jest: '^29.0.0' }
+    }));
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should handle services with no test files', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/index.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should handle services with no changes', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should handle mixed test patterns (*.test.js and __tests__/)', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/bots/irrigation.test.js\ndocker/automations/__tests__/setup.js\ndocker/automations/jest.config.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should reject changes to src/ as production code', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'telegram-bridge',
+      build_context: '/repo/docker/telegram-bridge',
+      dockerfile_path: '/repo/docker/telegram-bridge/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/telegram-bridge/src/handlers.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(false);
+  });
+
+  test('should handle jest.setup.js as test-only', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/jest.setup.js\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
+  });
+
+  test('should handle .test.env as test-only', () => {
+    const baseRef = 'origin/master';
+    const service: Service = {
+      service_name: 'automations',
+      build_context: '/repo/docker/automations',
+      dockerfile_path: '/repo/docker/automations/Dockerfile',
+    };
+
+    mockExecFileSync.mockReturnValueOnce('/repo');
+    mockExecFileSync.mockReturnValueOnce('docker/automations/.test.env\n');
+
+    const result = isTestOnlyChange(baseRef, service, { execFileSync: mockExecFileSync, readFileSync: mockReadFileSync });
+
+    expect(result).toBe(true);
   });
 });

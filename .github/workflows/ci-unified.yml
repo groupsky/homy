@@ -72,6 +72,8 @@ jobs:
       to_build: ${{ steps.detect.outputs.to_build }}
       # Services that can be retagged (existing image in GHCR)
       to_retag: ${{ steps.detect.outputs.to_retag }}
+      # Services with test-only changes (pull existing image for testing)
+      to_pull_for_testing: ${{ steps.detect.outputs.to_pull_for_testing }}
       # Services with real test scripts in package.json
       testable_services: ${{ steps.detect.outputs.testable_services }}
       # Services with HEALTHCHECK in Dockerfile
@@ -190,6 +192,7 @@ jobs:
           echo "Affected services: ${{ steps.detect.outputs.affected_services }}"
           echo ""
           echo "To build: ${{ steps.detect.outputs.to_build }}"
+          echo "To pull for testing: ${{ steps.detect.outputs.to_pull_for_testing }}"
           echo "To retag: ${{ steps.detect.outputs.to_retag }}"
           echo ""
           echo "Testable services: ${{ steps.detect.outputs.testable_services }}"
@@ -755,6 +758,139 @@ jobs:
           if-no-files-found: error
 
   # ============================================================================
+  # Stage 3.5: Pull Images for Testing (Parallel Matrix)
+  # ============================================================================
+  # Pulls existing images from GHCR for services with test-only changes.
+  # These services don't need rebuilding but need images for Stage 4 tests.
+  # Saves images as artifacts with checksums for Stage 4 consumption.
+  # ============================================================================
+  pull-images-for-testing:
+    name: Pull Images for Testing
+    timeout-minutes: 10
+    needs: [detect-changes, prepare-base-images]
+    # Only run if we have services with test-only changes
+    if: needs.detect-changes.outputs.to_pull_for_testing != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read  # Required to pull from GHCR
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.to_pull_for_testing) }}
+      fail-fast: false
+      max-parallel: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine base SHA
+        id: base-sha
+        run: |
+          echo "=== Determining base SHA for image pull ==="
+
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            echo "Using PR base SHA: $BASE_SHA"
+          else
+            # For push events, use previous commit
+            BASE_SHA=$(git rev-parse HEAD^)
+            echo "Using previous commit SHA: $BASE_SHA"
+          fi
+
+          echo "sha=$BASE_SHA" >> $GITHUB_OUTPUT
+
+      - name: Pull image from GHCR
+        env:
+          SERVICE: ${{ matrix.service }}
+          BASE_SHA: ${{ steps.base-sha.outputs.sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          echo "=== Pulling image for $SERVICE ==="
+          echo "Base SHA: $BASE_SHA"
+          echo "Current SHA: $CURRENT_SHA"
+
+          BASE_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$BASE_SHA"
+          CURRENT_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$CURRENT_SHA"
+
+          echo "Pulling from: $BASE_IMAGE"
+
+          # Pull with retry
+          PULLED=false
+          for attempt in 1 2 3; do
+            echo "Pull attempt $attempt/3..."
+            if docker pull "$BASE_IMAGE"; then
+              PULLED=true
+              echo "✅ Successfully pulled image"
+              break
+            fi
+            if [ $attempt -lt 3 ]; then
+              echo "⚠️ Pull failed, retrying in $((attempt * 2))s..."
+              sleep $((attempt * 2))
+            fi
+          done
+
+          if [ "$PULLED" = "false" ]; then
+            echo "::error::Failed to pull $SERVICE from GHCR after 3 attempts"
+            echo "Image: $BASE_IMAGE"
+            echo "This indicates the base image doesn't exist, which shouldn't happen for test-only changes."
+            exit 1
+          fi
+
+          # Retag to current SHA (for consistency with Stage 3 artifacts)
+          echo "Retagging to current SHA..."
+          docker tag "$BASE_IMAGE" "$CURRENT_IMAGE"
+
+          # Verify image is available
+          echo ""
+          echo "=== Loaded image ==="
+          docker images "ghcr.io/groupsky/homy/$SERVICE"
+
+      - name: Generate checksum
+        env:
+          SERVICE: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
+        run: |
+          echo "=== Generating artifact ==="
+
+          # Save image to tarball
+          docker save "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
+            -o "/tmp/$SERVICE.tar"
+
+          # Generate SHA-256 checksum
+          CHECKSUM=$(sha256sum "/tmp/$SERVICE.tar" | cut -d' ' -f1)
+          echo "$CHECKSUM  $SERVICE.tar" > "/tmp/$SERVICE.tar.sha256"
+          echo "Checksum: $CHECKSUM"
+
+          # Check artifact size
+          SIZE_MB=$(du -m "/tmp/$SERVICE.tar" | cut -f1)
+          echo "Artifact size: ${SIZE_MB}MB"
+
+          if [ $SIZE_MB -gt 500 ]; then
+            echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
+            exit 1
+          fi
+
+      - name: Upload service artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607270d # v4.6.2
+        with:
+          name: service-${{ matrix.service }}
+          path: |
+            /tmp/${{ matrix.service }}.tar
+            /tmp/${{ matrix.service }}.tar.sha256
+          retention-days: 2
+          if-no-files-found: error
+
+  # ============================================================================
   # Stage 4: Run Tests (Parallel)
   # ============================================================================
   # Three independent test jobs run in parallel using artifacts from Stage 3:
@@ -843,8 +979,13 @@ jobs:
   unit-tests:
     name: Unit Tests
     timeout-minutes: 10
-    needs: [detect-changes, build-app-images]
-    if: needs.detect-changes.outputs.testable_services != '[]'
+    needs: [detect-changes, build-app-images, pull-images-for-testing]
+    # Always run after both build and pull stages (one or both may be skipped)
+    if: |
+      always() &&
+      needs.detect-changes.outputs.testable_services != '[]' &&
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
+      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -932,8 +1073,13 @@ jobs:
   healthcheck-tests:
     name: Healthcheck Tests
     timeout-minutes: 10
-    needs: [detect-changes, build-app-images]
-    if: needs.detect-changes.outputs.healthcheck_services != '[]'
+    needs: [detect-changes, build-app-images, pull-images-for-testing]
+    # Always run after both build and pull stages (one or both may be skipped)
+    if: |
+      always() &&
+      needs.detect-changes.outputs.healthcheck_services != '[]' &&
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
+      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1085,12 +1231,19 @@ jobs:
   lights-integration-test:
     name: Lights Integration Test
     timeout-minutes: 10
-    needs: [detect-changes, build-app-images]
+    needs: [detect-changes, build-app-images, pull-images-for-testing]
     # Only run if automations, broker, or features were built (or changed)
+    # Always run after both build and pull stages (one or both may be skipped)
     if: |
+      always() &&
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
+      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
       (contains(fromJson(needs.detect-changes.outputs.to_build), 'automations') ||
        contains(fromJson(needs.detect-changes.outputs.to_build), 'broker') ||
        contains(fromJson(needs.detect-changes.outputs.to_build), 'features') ||
+       contains(fromJson(needs.detect-changes.outputs.to_pull_for_testing), 'automations') ||
+       contains(fromJson(needs.detect-changes.outputs.to_pull_for_testing), 'broker') ||
+       contains(fromJson(needs.detect-changes.outputs.to_pull_for_testing), 'features') ||
        contains(fromJson(needs.detect-changes.outputs.changed_services), 'automations') ||
        contains(fromJson(needs.detect-changes.outputs.changed_services), 'broker') ||
        contains(fromJson(needs.detect-changes.outputs.changed_services), 'features'))
@@ -1296,7 +1449,7 @@ jobs:
   push-built-images:
     name: Push Built Images
     timeout-minutes: 15
-    needs: [detect-changes, build-app-images, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, build-app-images, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
     if: |
       (github.event_name == 'push' ||
@@ -1424,7 +1577,7 @@ jobs:
   retag-unchanged-images:
     name: Retag Unchanged Images
     timeout-minutes: 5
-    needs: [detect-changes, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
     if: |
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -1514,6 +1667,7 @@ jobs:
       - validate-base-images
       - prepare-base-images
       - build-app-images
+      - pull-images-for-testing
       - version-consistency-check
       - unit-tests
       - healthcheck-tests
@@ -1534,6 +1688,7 @@ jobs:
           VALIDATE_STATUS="${{ needs.validate-base-images.result }}"
           PREPARE_STATUS="${{ needs.prepare-base-images.result }}"
           BUILD_STATUS="${{ needs.build-app-images.result }}"
+          PULL_STATUS="${{ needs.pull-images-for-testing.result }}"
           VERSION_STATUS="${{ needs.version-consistency-check.result }}"
           TEST_STATUS="${{ needs.unit-tests.result }}"
           HEALTH_STATUS="${{ needs.healthcheck-tests.result }}"
@@ -1545,6 +1700,7 @@ jobs:
           echo "validate=$VALIDATE_STATUS" >> $GITHUB_OUTPUT
           echo "prepare=$PREPARE_STATUS" >> $GITHUB_OUTPUT
           echo "build=$BUILD_STATUS" >> $GITHUB_OUTPUT
+          echo "pull=$PULL_STATUS" >> $GITHUB_OUTPUT
           echo "version=$VERSION_STATUS" >> $GITHUB_OUTPUT
           echo "test=$TEST_STATUS" >> $GITHUB_OUTPUT
           echo "health=$HEALTH_STATUS" >> $GITHUB_OUTPUT
@@ -1555,6 +1711,7 @@ jobs:
           # Determine overall status
           if [[ "$DETECT_STATUS" == "failure" || "$VALIDATE_STATUS" == "failure" || \
                 "$PREPARE_STATUS" == "failure" || "$BUILD_STATUS" == "failure" || \
+                "$PULL_STATUS" == "failure" || \
                 "$VERSION_STATUS" == "failure" || "$TEST_STATUS" == "failure" || \
                 "$HEALTH_STATUS" == "failure" || "$LIGHTS_STATUS" == "failure" || \
                 "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
@@ -1562,10 +1719,10 @@ jobs:
             exit 1
           elif [[ "$DETECT_STATUS" == "cancelled" || "$VALIDATE_STATUS" == "cancelled" || \
                   "$PREPARE_STATUS" == "cancelled" || "$BUILD_STATUS" == "cancelled" || \
+                  "$PULL_STATUS" == "cancelled" || \
                   "$VERSION_STATUS" == "cancelled" || "$TEST_STATUS" == "cancelled" || \
                   "$HEALTH_STATUS" == "cancelled" || "$LIGHTS_STATUS" == "cancelled" || \
-                  "$PUSH_STATUS" == "cancelled" || "$PUSH_STATUS" == "cancelled" || \
-                  "$RETAG_STATUS" == "cancelled" ]]; then
+                  "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" ]]; then
             echo "overall=cancelled" >> $GITHUB_OUTPUT
             exit 1
           else
@@ -1585,6 +1742,7 @@ jobs:
           | 1️⃣.5️⃣ Validate Base Images | ${{ steps.status.outputs.validate }} |
           | 2️⃣ Prepare Base Images | ${{ steps.status.outputs.prepare }} |
           | 3️⃣ Build App Images | ${{ steps.status.outputs.build }} |
+          | 3️⃣.5️⃣ Pull Images for Testing | ${{ steps.status.outputs.pull }} |
           | 4️⃣A Version Checks | ${{ steps.status.outputs.version }} |
           | 4️⃣B Unit Tests | ${{ steps.status.outputs.test }} |
           | 4️⃣C Healthcheck Tests | ${{ steps.status.outputs.health }} |
@@ -1598,6 +1756,7 @@ jobs:
           - **Services Changed**: ${{ needs.detect-changes.outputs.changed_services }}
           - **Services Affected**: ${{ needs.detect-changes.outputs.affected_services }}
           - **Services to Build**: ${{ needs.detect-changes.outputs.to_build }}
+          - **Services to Pull for Testing**: ${{ needs.detect-changes.outputs.to_pull_for_testing }}
           - **Services to Retag**: ${{ needs.detect-changes.outputs.to_retag }}
           - **Testable Services**: ${{ needs.detect-changes.outputs.testable_services }}
           - **Healthcheck Services**: ${{ needs.detect-changes.outputs.healthcheck_services }}
