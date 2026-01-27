@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { execSync } from 'child_process';
@@ -65,11 +65,11 @@ function checkVersionConsistency(serviceDir: string): { match: boolean; nvmrc: s
   const dockerfilePath = join(serviceDir, 'Dockerfile');
 
   // Read .nvmrc (trim whitespace)
-  const nvmrcContent = execSync(`cat "${nvmrcPath}"`, { encoding: 'utf8' });
+  const nvmrcContent = readFileSync(nvmrcPath, 'utf8');
   const nvmrcVersion = nvmrcContent.trim();
 
   // Extract version from Dockerfile using same logic as ci-unified.yml line 752
-  const dockerfileContent = execSync(`cat "${dockerfilePath}"`, { encoding: 'utf8' });
+  const dockerfileContent = readFileSync(dockerfilePath, 'utf8');
   const fromLines = dockerfileContent.split('\n').filter((line) => /^FROM.*node:/.test(line));
 
   if (fromLines.length === 0) {
