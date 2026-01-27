@@ -116,7 +116,7 @@ if [ "$LIST_BACKUPS" -eq 1 ]; then
 fi
 
 # Validate backup name if provided by user
-validate_and_check_backup "$BACKUP_NAME"
+validate_backup_or_exit "$BACKUP_NAME"
 
 # Show backup plan
 if [ "$QUIET" -eq 0 ]; then
@@ -153,32 +153,24 @@ fi
 
 # Run backup
 log "Creating backup..."
-if [ -n "$BACKUP_NAME" ]; then
-    BACKUP_OUTPUT=$(dc_run run --rm volman backup "$BACKUP_NAME" 2>&1) || {
-        echo "ERROR: Backup failed" >&2
-        echo "$BACKUP_OUTPUT" >&2
-        # Restart services if we stopped them
-        if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
-            log "Restarting services..."
-            dc_run start
+BACKUP_ARGS=()
+[ -n "$BACKUP_NAME" ] && BACKUP_ARGS=("$BACKUP_NAME")
+
+if ! BACKUP_OUTPUT=$(dc_run run --rm volman backup "${BACKUP_ARGS[@]}" 2>&1); then
+    error "Backup failed"
+    echo "$BACKUP_OUTPUT" >&2
+    # Restart services if we stopped them
+    if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+        log "Restarting services after backup failure..."
+        if ! dc_run start; then
+            error "Failed to restart services - manual intervention required"
         fi
-        exit 1
-    }
-else
-    BACKUP_OUTPUT=$(dc_run run --rm volman backup 2>&1) || {
-        echo "ERROR: Backup failed" >&2
-        echo "$BACKUP_OUTPUT" >&2
-        # Restart services if we stopped them
-        if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
-            log "Restarting services..."
-            dc_run start
-        fi
-        exit 1
-    }
+    fi
+    exit 1
 fi
 
-# Extract actual backup name from output
-ACTUAL_BACKUP_NAME=$(echo "$BACKUP_OUTPUT" | grep -oP 'Creating backup \K[0-9_]+' || echo "$BACKUP_NAME")
+# Extract actual backup name from output using portable grep
+ACTUAL_BACKUP_NAME=$(echo "$BACKUP_OUTPUT" | grep -o 'Creating backup [0-9_]*' | sed 's/Creating backup //' || echo "$BACKUP_NAME")
 if [ -z "$ACTUAL_BACKUP_NAME" ]; then
     ACTUAL_BACKUP_NAME=$(date +%Y_%m_%d_%H_%M_%S)
 fi

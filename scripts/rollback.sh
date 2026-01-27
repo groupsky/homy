@@ -122,7 +122,7 @@ log "Rollback log: $ROLLBACK_LOG"
 BACKUP_NAME=$(determine_backup_name "$BACKUP_NAME") || exit 1
 
 # Validate backup name if provided by user
-validate_and_check_backup "$BACKUP_NAME"
+validate_backup_or_exit "$BACKUP_NAME"
 
 log "Rolling back to backup: $BACKUP_NAME"
 

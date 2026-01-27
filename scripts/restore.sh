@@ -120,7 +120,7 @@ fi
 BACKUP_NAME=$(determine_backup_name "$BACKUP_NAME") || exit 1
 
 # Validate backup name if provided by user
-validate_and_check_backup "$BACKUP_NAME"
+validate_backup_or_exit "$BACKUP_NAME"
 
 # Validate jq is installed and check if services are running
 require_jq
@@ -155,7 +155,7 @@ fi
 # Run restore
 log "Restoring from backup: $BACKUP_NAME"
 if ! dc_run run --rm volman restore "$BACKUP_NAME"; then
-    echo "ERROR: Restore failed" >&2
+    error "Restore failed for backup: $BACKUP_NAME"
     exit 1
 fi
 

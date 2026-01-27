@@ -54,7 +54,7 @@ detect_docker_compose() {
 }
 
 # Global variable to store the docker-compose command
-DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-$(detect_docker_compose)}"
+readonly DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD:-$(detect_docker_compose)}"
 
 # Check if docker-compose supports JSON format output
 # Returns 0 if supported, 1 if not
@@ -70,7 +70,7 @@ supports_json_format() {
 # Usage: dc_run [docker-compose args...]
 # Example: dc_run ps --format json
 dc_run() {
-    $DOCKER_COMPOSE_CMD "$@"
+    "$DOCKER_COMPOSE_CMD" "$@"
 }
 
 # Get running service count (version-aware)
@@ -197,12 +197,10 @@ load_notification_secrets() {
 
     if [ -f "$secrets_dir/telegram_bot_token" ]; then
         TELEGRAM_BOT_TOKEN=$(cat "$secrets_dir/telegram_bot_token")
-        export TELEGRAM_BOT_TOKEN
     fi
 
     if [ -f "$secrets_dir/telegram_chat_id" ]; then
         TELEGRAM_CHAT_ID=$(cat "$secrets_dir/telegram_chat_id")
-        export TELEGRAM_CHAT_ID
     fi
 }
 
@@ -359,14 +357,14 @@ atomic_write() {
     # Write to temp file with error handling
     if ! echo "$content" > "$temp_file" 2>/dev/null; then
         rm -f "$temp_file" 2>/dev/null || true
-        echo "ERROR: Failed to write to $filename (disk full? permissions?)" >&2
+        error "Failed to write to $filename (disk full? permissions?)"
         return 1
     fi
 
     # Move temp file to final location with error handling
     if ! mv "$temp_file" "$filename" 2>/dev/null; then
         rm -f "$temp_file" 2>/dev/null || true
-        echo "ERROR: Failed to update $filename (permissions? directory missing?)" >&2
+        error "Failed to update $filename (permissions? directory missing?)"
         return 1
     fi
 
@@ -397,8 +395,7 @@ cleanup_old_logs() {
 # Usage: require_jq
 require_jq() {
     if ! command -v jq &> /dev/null; then
-        error "jq is required but not installed"
-        echo "Install with: apt-get install jq or brew install jq" >&2
+        error "jq is required but not installed. Install with: apt-get install jq or brew install jq"
         exit 1
     fi
 }
@@ -407,8 +404,7 @@ require_jq() {
 # Usage: require_curl
 require_curl() {
     if ! command -v curl &> /dev/null; then
-        error "curl is required but not installed"
-        echo "Install with: apt-get install curl or brew install curl" >&2
+        error "curl is required but not installed. Install with: apt-get install curl or brew install curl"
         exit 1
     fi
 }
@@ -554,8 +550,8 @@ determine_backup_name() {
 }
 
 # Validate backup name and exit on error
-# Usage: validate_and_check_backup "$backup_name"
-validate_and_check_backup() {
+# Usage: validate_backup_or_exit "$backup_name"
+validate_backup_or_exit() {
     local backup_name="$1"
 
     if [ -z "$backup_name" ]; then
@@ -670,7 +666,7 @@ export -f get_git_branch
 export -f is_detached_head
 export -f format_version_short
 export -f determine_backup_name
-export -f validate_and_check_backup
+export -f validate_backup_or_exit
 export -f require_services_stopped
 export -f determine_previous_version
 export -f checkout_git_version
