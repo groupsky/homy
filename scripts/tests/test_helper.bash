@@ -15,6 +15,7 @@ setup_test_env() {
     mkdir -p "$PROJECT_DIR"
     mkdir -p "$PROJECT_DIR/logs"
     mkdir -p "$PROJECT_DIR/secrets"
+    mkdir -p "$PROJECT_DIR/scripts"
 
     # Create mock docker-compose.yml
     cat > "$PROJECT_DIR/docker-compose.yml" <<'EOF'
