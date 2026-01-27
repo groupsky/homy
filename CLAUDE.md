@@ -141,6 +141,33 @@ The system integrates with:
 - **Automation Bots**: `docker/automations/docs/` - Bot-specific guides and implementation details
 - **Service Development**: Service-specific CLAUDE.md files provide development patterns and best practices
 
+### CI/CD and Infrastructure
+- **Unified CI Pipeline**: `.github/workflows/CLAUDE.md` - Complete guide to the 6-stage Docker build pipeline with artifact-based security, test-gated promotion, and troubleshooting
+- **Base Images**: `base-images/CLAUDE.md` - Base image management, Dependabot workflow, and GHCR 503 handling
+
+**Workflow Execution Strategy** (Migration Complete):
+
+All Docker image builds and tests now use the unified CI/CD pipeline (`ci-unified.yml`). Previous fragmented workflows have been disabled or converted to scheduled execution:
+
+- **Application CI/CD**: Use `ci-unified.yml` for all service builds, tests, and deployments
+  - Automatically triggered on push/PR when Docker-related files change
+  - 6-stage pipeline: detect → prepare bases → build apps → test (4 parallel jobs) → push → summary
+  - Test-gated promotion ensures only passing builds get `:latest` tag
+
+- **Infrastructure Validation**: `infrastructure.yml` runs on path-filtered changes + weekly schedule
+  - Validates nginx config generation, proxy routing, ingress configuration
+  - 86% CI quota savings compared to running on every commit
+
+- **Network Security**: `routing.yml` runs on weekly schedule only (Monday 3 AM UTC)
+  - VPN/routing layer validation, infrastructure focus
+
+**Disabled Workflows (8 total)**: The following workflows have been renamed to `.disabled` and replaced by ci-unified.yml:
+- `base-images.yml`, `app-images.yml` (image building)
+- `automations-tests.yml`, `modbus-serial-tests.yml`, `telegram-bridge-tests.yml`, `automation-events-processor-tests.yml`, `sunseeker-monitoring-tests.yml` (service tests)
+- `lights-test.yml` (integration testing)
+
+See `.github/workflows/CLAUDE.md` for complete migration details and troubleshooting guide.
+
 ### Configuration References
 - **Main Configuration**: `config/automations/config.js` - Primary system configuration
 - **Architecture Overview**: `ARCHITECTURE.md` - Comprehensive system architecture documentation
@@ -171,6 +198,29 @@ When developing new features:
 3. **Configuration-driven**: Use declarative configuration patterns where possible
 4. **Testing**: Write comprehensive tests for all automation logic using minimal mocking to ensure tests verify real system behavior
 5. **Documentation standards**: Comments must explain what the code does and why for future maintainers. Avoid preserving development discussions, decision processes, or temporary implementation notes in production code.
+
+### Language Preference Policy
+
+**CRITICAL**: When creating new code, follow this priority order:
+
+1. **JavaScript/TypeScript** - For complex logic, API integrations, parsing, data transformations
+2. **Bash** - For simple scripts, file operations, basic automation
+3. **Go** - For performance-critical services, system-level tools
+4. **Other languages** - Only when specific library/ecosystem requirements mandate it
+
+**Rationale:**
+- JavaScript/TypeScript aligns with the majority of services (automations, mqtt-influx, etc.)
+- Enables code reuse and shared utilities across services
+- Better tooling and IDE support for the existing codebase
+- Bash keeps simple tasks simple without unnecessary complexity
+- Go for when performance truly matters
+
+**Examples:**
+- ✅ CI/CD orchestration scripts → **TypeScript**
+- ✅ Dockerfile parsing and validation → **TypeScript**
+- ✅ Git hooks and simple file operations → **Bash**
+- ✅ High-throughput data processing → **Go**
+- ⚠️ Python/other → Only when required library unavailable in preferred languages
 
 ### Test-Driven Development (TDD)
 

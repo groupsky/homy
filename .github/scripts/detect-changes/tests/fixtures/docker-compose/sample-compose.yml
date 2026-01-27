@@ -1,0 +1,105 @@
+version: '3.8'
+services:
+
+  # Service with standard build pattern
+  broker:
+    image: ghcr.io/groupsky/homy/mosquitto:${IMAGE_TAG:-latest}
+    build: docker/mosquitto
+    restart: unless-stopped
+    networks:
+      - automation
+    ports:
+      - "1883:1883"
+    volumes:
+      - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # Service with build context and Dockerfile specified
+  automations:
+    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
+    build:
+      context: docker/automations
+      dockerfile: Dockerfile
+    depends_on:
+      - broker
+    restart: unless-stopped
+    networks:
+      - automation
+    environment:
+      - MQTT_BROKER=mqtt://broker:1883
+    volumes:
+      - ${CONFIG_PATH}/automations:/app/config:ro
+
+  # Service with custom Dockerfile path
+  grafana:
+    image: ghcr.io/groupsky/homy/grafana:${IMAGE_TAG:-latest}
+    build:
+      context: docker/grafana
+      dockerfile: custom.dockerfile
+    restart: unless-stopped
+    networks:
+      - automation
+    ports:
+      - "3000:3000"
+
+  # Service without build section (using pre-built image only)
+  influxdb:
+    image: ghcr.io/groupsky/homy/influxdb:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    networks:
+      - automation
+    volumes:
+      - ${INFLUX_DATA_PATH}:/var/lib/influxdb2
+
+  # Service with additional build args
+  mqtt-influx:
+    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    build:
+      context: docker/mqtt-influx
+      args:
+        - NODE_ENV=production
+    depends_on:
+      - broker
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+
+  # Service with no dockerfile (base image service)
+  nginx:
+    image: ghcr.io/groupsky/homy/nginx:${IMAGE_TAG:-latest}
+    build: docker/nginx
+    restart: on-failure
+    networks:
+      - ingress
+    ports:
+      - "80:80"
+
+  # Home Assistant exception service
+  ha:
+    image: ghcr.io/groupsky/homy/homeassistant:${IMAGE_TAG:-latest}
+    build: docker/homeassistant
+    depends_on:
+      - broker
+    restart: unless-stopped
+    networks:
+      - automation
+    environment:
+      - TZ=UTC
+    volumes:
+      - ${HOMEASSISTANT_DATA_PATH}:/config
+
+  # Zigbee2MQTT service
+  z2m-home1:
+    image: ghcr.io/groupsky/homy/zigbee2mqtt:${IMAGE_TAG:-latest}
+    build: docker/zigbee2mqtt
+    depends_on:
+      - broker
+    restart: unless-stopped
+    networks:
+      - automation
+    environment:
+      - ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC=z2m/house1
+
+networks:
+  automation:
+  ingress:
