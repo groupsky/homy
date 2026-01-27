@@ -712,7 +712,8 @@ jobs:
   version-consistency-check:
     name: Version Consistency Check
     timeout-minutes: 3
-    needs: [detect-changes, build-app-images]
+    needs: [detect-changes]
+    # Run even if build-app-images is skipped (version check doesn't need built images)
     if: needs.detect-changes.outputs.version_check_services != '[]'
     runs-on: ubuntu-latest
     permissions:
