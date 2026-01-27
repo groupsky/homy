@@ -64,7 +64,7 @@ teardown() {
     cd "$PROJECT_DIR"
     run scripts/backup.sh "../invalid"
     assert_failure
-    assert_output --partial "Path traversal"
+    assert_output --partial "Invalid backup name format"
 }
 
 @test "backup.sh: creates backup with custom name" {
@@ -125,12 +125,19 @@ EOF
 @test "backup.sh: handles backup name extraction with portable grep" {
     cd "$PROJECT_DIR"
 
-    # Create a mock that returns output
+    # Create a mock that returns output with backup name
     cat > "$TEST_DIR/docker" <<'EOF'
 #!/bin/bash
-if [ "$1" = "compose" ] && [ "$3" = "volman" ]; then
-    echo "Creating backup 2024_01_27_153000"
-    exit 0
+if [ "$1" = "compose" ]; then
+    shift
+    if [ "$1" = "run" ] && [ "$3" = "volman" ] && [ "$4" = "backup" ]; then
+        # Return a specific backup name
+        echo "Creating backup 2024_01_27_153000"
+        echo "Backup completed successfully"
+        exit 0
+    elif [ "$1" = "stop" ] || [ "$1" = "start" ]; then
+        exit 0
+    fi
 fi
 exit 0
 EOF

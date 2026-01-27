@@ -63,7 +63,8 @@ if [ "$1" = "compose" ]; then
             ;;
         ps)
             if [[ "$*" == *"--format json"* ]]; then
-                echo '[{"Name":"test","State":"running","Health":"healthy"}]'
+                # Docker compose ps --format json returns newline-delimited JSON objects (one per line)
+                echo '{"Name":"test","State":"running","Health":"healthy"}'
             else
                 echo "NAME    STATE"
                 echo "test    Up"
