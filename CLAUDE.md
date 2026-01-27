@@ -54,6 +54,39 @@ docker compose up -d --build automations
 
 For detailed documentation, see `docker/volman/CLAUDE.md`.
 
+### Deployment Scripts Testing
+
+Deployment scripts (`backup.sh`, `restore.sh`, `deploy.sh`, `rollback.sh`) have comprehensive BATS (Bash Automated Testing System) test coverage to ensure reliability and prevent regressions.
+
+**Run All Tests:**
+```bash
+cd scripts/tests
+./bats-core/bin/bats *.bats
+```
+
+**Run Specific Test File:**
+```bash
+cd scripts/tests
+./bats-core/bin/bats docker-helper.bats  # Test helper functions
+./bats-core/bin/bats backup.bats         # Test backup operations
+./bats-core/bin/bats restore.bats        # Test restore operations
+```
+
+**Test Coverage:**
+- 60+ comprehensive tests
+- Version detection (docker compose v1 vs v2)
+- Input validation and security (path traversal prevention)
+- Logging and error handling
+- Atomic file operations
+- Backup/restore workflows
+
+**CI Integration:**
+- Tests run automatically on all PRs modifying `scripts/`
+- Bash syntax validation with shellcheck
+- No Docker required (fully mocked for fast execution)
+
+For detailed testing documentation, see `scripts/tests/README.md`.
+
 **IMPORTANT**: All containers must be built from the `docker/` directory structure. Each service should have its own subdirectory under `docker/` containing its Dockerfile and related files.
 
 **IMPORTANT**: All volume paths in docker-compose.yml should use environment variables: `CONFIG_PATH`, `DATA_PATH`, `SECRETS_PATH`, `BACKUP_PATH`, etc. Avoid hardcoded paths except for system mounts (like `/etc/localtime`, `/dev/bus/usb`, etc.).

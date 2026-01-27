@@ -301,16 +301,11 @@ teardown() {
 @test "require_jq: uses error function when jq missing" {
     source_docker_helper "$PROJECT_DIR/docker-helper.sh"
 
-    # Mock command to simulate jq not found
-    command() {
-        if [ "$2" = "jq" ]; then
-            return 1
-        fi
-        builtin command "$@"
-    }
-    export -f command
+    # Create empty directory and use it exclusively in PATH to hide jq
+    local empty_path="$TEST_DIR/empty"
+    mkdir -p "$empty_path"
 
-    run require_jq
+    PATH="$empty_path" run require_jq
     assert_failure
     assert_output --partial "ERROR:"
     assert_output --partial "jq is required"

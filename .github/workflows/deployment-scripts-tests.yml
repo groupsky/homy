@@ -17,16 +17,22 @@ on:
 permissions:
   contents: read
 
+# Prevent multiple concurrent runs, cancel in-progress for PRs
+concurrency:
+  group: ${{ github.ref == 'refs/heads/master' && format('deployment-tests-master-{0}', github.sha) || format('deployment-tests-pr-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
 jobs:
   test:
     name: Run BATS Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          submodules: recursive
+          submodules: true
 
       - name: Set up test environment
         run: |
@@ -68,10 +74,11 @@ jobs:
   validate-scripts:
     name: Validate Script Syntax
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Validate bash syntax
         run: |
