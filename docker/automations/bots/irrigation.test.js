@@ -143,13 +143,4 @@ describe('irrigation', () => {
 
         expect(mqtt.publish).toHaveBeenCalledWith('valve-control', 'on')
     })
-
-    test('[TEST] Verify test-only change detection works', async () => {
-        // This test verifies that test-only changes trigger Stage 3.5
-        // (Pull Images for Testing) instead of full rebuild
-        const schedule = '0 0 0 * * *'
-        const {mqtt} = await setup({schedule})
-
-        expect(mqtt.publish).toBeDefined()
-    })
 })
