@@ -767,7 +767,7 @@ jobs:
   pull-images-for-testing:
     name: Pull Images for Testing
     timeout-minutes: 10
-    needs: [detect-changes, prepare-base-images]
+    needs: [detect-changes]
     # Only run if we have services with test-only changes
     if: needs.detect-changes.outputs.to_pull_for_testing != '[]'
     runs-on: ubuntu-latest
