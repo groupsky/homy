@@ -750,7 +750,7 @@ jobs:
           # Extract version from FINAL Dockerfile stage
           # Look for the last FROM line with node: or node-<variant>: to get the final stage base
           # Supports both standard (node:) and variant (node-ubuntu:, node-alpine:, node-slim:) patterns
-          DOCKERFILE_VERSION=$(grep -E "^FROM.*node(-[a-z]+)?:" Dockerfile | tail -1 | sed 's/.*node(-[a-z]+)?:\([0-9.]*\).*/\1/')
+          DOCKERFILE_VERSION=$(grep -E "^FROM.*node(-[a-z]+)?:" Dockerfile | tail -1 | sed -E 's/.*node(-[a-z]+)?:([0-9.]+).*/\2/')
           echo "Dockerfile version: $DOCKERFILE_VERSION"
 
           if [ -z "$DOCKERFILE_VERSION" ]; then

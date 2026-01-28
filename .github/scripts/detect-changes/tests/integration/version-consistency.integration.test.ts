@@ -115,12 +115,13 @@ function checkVersionConsistency(serviceDir: string): { match: boolean; nvmrc: s
   // Get last FROM line with node: or node-<variant>: (final stage)
   const finalFromLine = fromLines[fromLines.length - 1];
 
-  // Extract version using sed-like regex - supports both node: and node-<variant>: patterns
+  // Extract version using regex that mirrors ci-unified.yml sed pattern
+  // Matches both node:X.Y.Z and node-<variant>:X.Y.Z patterns
   const match = finalFromLine.match(/node(-[a-z]+)?:([0-9.]+)/);
   if (!match) {
     throw new Error('Could not extract Node.js version from Dockerfile');
   }
-  const dockerfileVersion = match[2]; // Version is in capture group 2
+  const dockerfileVersion = match[2]; // Version is in capture group 2 (first group is the optional variant)
 
   return {
     match: nvmrcVersion === dockerfileVersion,
