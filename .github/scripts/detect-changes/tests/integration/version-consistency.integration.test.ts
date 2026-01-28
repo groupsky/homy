@@ -51,6 +51,41 @@ ENTRYPOINT ["node", "index.js"]
 
       return serviceDir;
     },
+    createServiceWithVariantBase: (
+      name: string,
+      nvmrcVersion: string,
+      dockerfileVersion: string,
+      variant: string
+    ) => {
+      const serviceDir = join(tmpDir, 'docker', name);
+      mkdirSync(serviceDir, { recursive: true });
+
+      // Create .nvmrc
+      writeFileSync(join(serviceDir, '.nvmrc'), `${nvmrcVersion}\n`);
+
+      // Create Dockerfile with variant node base image (e.g., node-ubuntu)
+      const dockerfile = `FROM ghcr.io/groupsky/homy/node-${variant}:${dockerfileVersion} AS base
+
+RUN apt-get update && apt-get install -y libftdi1 && \\
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app
+COPY package*.json ./
+
+FROM base AS build
+RUN npm ci
+
+FROM base AS RELEASE
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY . .
+
+USER node-app
+ENTRYPOINT ["node", "index.js"]
+`;
+      writeFileSync(join(serviceDir, 'Dockerfile'), dockerfile);
+
+      return serviceDir;
+    },
     cleanup: () => {
       rmSync(tmpDir, { recursive: true, force: true });
     },
@@ -69,22 +104,23 @@ function checkVersionConsistency(serviceDir: string): { match: boolean; nvmrc: s
   const nvmrcVersion = nvmrcContent.trim();
 
   // Extract version from Dockerfile using same logic as ci-unified.yml line 752
+  // UPDATED: Support both node: and node-<variant>: patterns (e.g., node-ubuntu:)
   const dockerfileContent = readFileSync(dockerfilePath, 'utf8');
-  const fromLines = dockerfileContent.split('\n').filter((line) => /^FROM.*node:/.test(line));
+  const fromLines = dockerfileContent.split('\n').filter((line) => /^FROM.*node(-[a-z]+)?:/.test(line));
 
   if (fromLines.length === 0) {
     throw new Error('No node base image found in Dockerfile');
   }
 
-  // Get last FROM line with node: (final stage)
+  // Get last FROM line with node: or node-<variant>: (final stage)
   const finalFromLine = fromLines[fromLines.length - 1];
 
-  // Extract version using sed-like regex
-  const match = finalFromLine.match(/node:([0-9.]+)/);
+  // Extract version using sed-like regex - supports both node: and node-<variant>: patterns
+  const match = finalFromLine.match(/node(-[a-z]+)?:([0-9.]+)/);
   if (!match) {
     throw new Error('Could not extract Node.js version from Dockerfile');
   }
-  const dockerfileVersion = match[1];
+  const dockerfileVersion = match[2]; // Version is in capture group 2
 
   return {
     match: nvmrcVersion === dockerfileVersion,
@@ -227,6 +263,64 @@ WORKDIR /app
       const result = checkVersionConsistency(serviceDir);
 
       expect(result.match).toBe(true);
+    });
+  });
+
+  describe('test_ghcr_base_image_variants', () => {
+    test('Should handle node-ubuntu variant with matching versions', () => {
+      // This is the real-world case from docker/dmx-driver
+      const serviceDir = testEnv.createServiceWithVariantBase('dmx-driver', '18.12.1', '18.12.1', 'ubuntu');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(true);
+      expect(result.nvmrc).toBe('18.12.1');
+      expect(result.dockerfile).toBe('18.12.1');
+    });
+
+    test('Should detect version mismatch with node-ubuntu variant', () => {
+      // Simulate Dependabot update from 18.12.1 to 18.20.8
+      const serviceDir = testEnv.createServiceWithVariantBase('dmx-driver', '18.12.1', '18.20.8', 'ubuntu');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(false);
+      expect(result.nvmrc).toBe('18.12.1');
+      expect(result.dockerfile).toBe('18.20.8');
+    });
+
+    test('Should handle node-alpine variant if created in future', () => {
+      const serviceDir = testEnv.createServiceWithVariantBase('test-service', '18.20.8', '18.20.8', 'alpine');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(true);
+      expect(result.nvmrc).toBe('18.20.8');
+      expect(result.dockerfile).toBe('18.20.8');
+    });
+
+    test('Should handle node-slim variant if created in future', () => {
+      const serviceDir = testEnv.createServiceWithVariantBase('test-service', '22.12.0', '22.12.0', 'slim');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(true);
+      expect(result.nvmrc).toBe('22.12.0');
+      expect(result.dockerfile).toBe('22.12.0');
+    });
+
+    test('Should work with standard node: base and variant node-ubuntu: in same codebase', () => {
+      // Create one service with standard node:
+      const standardService = testEnv.createService('standard-service', '24.13.0', '24.13.0');
+      const standardResult = checkVersionConsistency(standardService);
+
+      // Create another service with variant node-ubuntu:
+      const variantService = testEnv.createServiceWithVariantBase('variant-service', '18.12.1', '18.12.1', 'ubuntu');
+      const variantResult = checkVersionConsistency(variantService);
+
+      // Both should pass
+      expect(standardResult.match).toBe(true);
+      expect(variantResult.match).toBe(true);
     });
   });
 
