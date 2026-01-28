@@ -282,12 +282,13 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 
 **Migration Complete**: The unified CI/CD pipeline has replaced all previous fragmented workflows with feature parity. The following workflows have been disabled (renamed to `.disabled`) as their functionality is now fully integrated into `ci-unified.yml`:
 
-**Disabled Workflows and Replacements (8/8):**
+**Disabled Workflows and Replacements (9/9):**
 
 | Disabled Workflow | Replacement | Migration Date |
 |-------------------|-------------|----------------|
 | `base-images.yml.disabled` | Stage 2 (Prepare Base Images) | 2026-01 |
 | `app-images.yml.disabled` | Stages 1,3,5,6 (detect, build, push, summary) | 2026-01 |
+| `validate-base-images.yml.disabled` | Stage 1 (dynamic discovery) + Stage 2 (runtime validation) | 2026-01 |
 | `automations-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
 | `modbus-serial-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
 | `telegram-bridge-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
@@ -461,6 +462,48 @@ BROKER: mqtt://localhost  # Points to docker compose broker service
 ```
 
 **Replaced Workflow**: Previously implemented as standalone `lights-test.yml`, now integrated as Stage 4D for unified test-gating and better resource utilization.
+
+### Node.js Base Image Variants
+
+**Stage 4A (Version Consistency Check)** supports both standard and variant Node.js base images.
+
+**Supported Patterns:**
+- **Standard**: `ghcr.io/groupsky/homy/node:18.20.8-alpine`
+- **Variant**: `ghcr.io/groupsky/homy/node-ubuntu:18.12.1`
+- **Future variants**: `node-alpine:`, `node-slim:`, etc.
+
+**Version Extraction Logic:**
+
+The check uses extended regex to match both patterns (ci-unified.yml line 753):
+
+```bash
+# Grep pattern - matches both node: and node-<variant>:
+grep -E "^FROM.*node(-[a-z]+)?:" Dockerfile | tail -1
+
+# Sed extraction - captures version from group 2
+sed -E 's/.*node(-[a-z]+)?:([0-9.]+).*/\2/'
+```
+
+**How It Works:**
+- `(-[a-z]+)?` - Optional variant suffix (e.g., `-ubuntu`, `-alpine`, `-slim`)
+- Capture group 1: Variant name (may be empty for standard pattern)
+- Capture group 2: Version number (always present)
+- Returns version from group 2 regardless of variant presence
+
+**Example Extractions:**
+```dockerfile
+FROM ghcr.io/groupsky/homy/node:18.20.8-alpine → "18.20.8"
+FROM ghcr.io/groupsky/homy/node-ubuntu:18.12.1 → "18.12.1"
+FROM ghcr.io/groupsky/homy/node-slim:22.22.0 → "22.22.0"
+```
+
+**Limitations:**
+- ⚠️ Cannot extract from Debian codename suffixes (e.g., `node:18.20.8-bookworm`)
+- ⚠️ Supports single-hyphen variants only (e.g., `node-ubuntu:`, not `node-custom-variant:`)
+- ✅ All current base images in this repository use supported patterns
+
+**Services Using Variants:**
+- `docker/dmx-driver` - Uses `node-ubuntu:18.12.1` for apt dependencies (libftdi1)
 
 ### Fork PR Handling
 

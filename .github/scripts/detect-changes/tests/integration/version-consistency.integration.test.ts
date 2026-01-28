@@ -51,6 +51,41 @@ ENTRYPOINT ["node", "index.js"]
 
       return serviceDir;
     },
+    createServiceWithVariantBase: (
+      name: string,
+      nvmrcVersion: string,
+      dockerfileVersion: string,
+      variant: string
+    ) => {
+      const serviceDir = join(tmpDir, 'docker', name);
+      mkdirSync(serviceDir, { recursive: true });
+
+      // Create .nvmrc
+      writeFileSync(join(serviceDir, '.nvmrc'), `${nvmrcVersion}\n`);
+
+      // Create Dockerfile with variant node base image (e.g., node-ubuntu)
+      const dockerfile = `FROM ghcr.io/groupsky/homy/node-${variant}:${dockerfileVersion} AS base
+
+RUN apt-get update && apt-get install -y libftdi1 && \\
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app
+COPY package*.json ./
+
+FROM base AS build
+RUN npm ci
+
+FROM base AS RELEASE
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY . .
+
+USER node-app
+ENTRYPOINT ["node", "index.js"]
+`;
+      writeFileSync(join(serviceDir, 'Dockerfile'), dockerfile);
+
+      return serviceDir;
+    },
     cleanup: () => {
       rmSync(tmpDir, { recursive: true, force: true });
     },
@@ -64,27 +99,34 @@ function checkVersionConsistency(serviceDir: string): { match: boolean; nvmrc: s
   const nvmrcPath = join(serviceDir, '.nvmrc');
   const dockerfilePath = join(serviceDir, 'Dockerfile');
 
-  // Read .nvmrc (trim whitespace)
+  // Read .nvmrc (trim whitespace, matching: cat .nvmrc | tr -d '[:space:]')
   const nvmrcContent = readFileSync(nvmrcPath, 'utf8');
   const nvmrcVersion = nvmrcContent.trim();
 
-  // Extract version from Dockerfile using same logic as ci-unified.yml line 752
+  // Validate .nvmrc is not empty (mirrors CI validation)
+  if (nvmrcVersion === '') {
+    throw new Error('Could not extract Node.js version from .nvmrc (file is empty or contains only whitespace)');
+  }
+
+  // Extract version from Dockerfile using same logic as ci-unified.yml line 753
+  // UPDATED: Support both node: and node-<variant>: patterns (e.g., node-ubuntu:)
   const dockerfileContent = readFileSync(dockerfilePath, 'utf8');
-  const fromLines = dockerfileContent.split('\n').filter((line) => /^FROM.*node:/.test(line));
+  const fromLines = dockerfileContent.split('\n').filter((line) => /^FROM.*node(-[a-z]+)?:/.test(line));
 
   if (fromLines.length === 0) {
     throw new Error('No node base image found in Dockerfile');
   }
 
-  // Get last FROM line with node: (final stage)
+  // Get last FROM line with node: or node-<variant>: (final stage)
   const finalFromLine = fromLines[fromLines.length - 1];
 
-  // Extract version using sed-like regex
-  const match = finalFromLine.match(/node:([0-9.]+)/);
+  // Extract version using regex that mirrors ci-unified.yml sed pattern
+  // Matches both node:X.Y.Z and node-<variant>:X.Y.Z patterns
+  const match = finalFromLine.match(/node(-[a-z]+)?:([0-9.]+)/);
   if (!match) {
     throw new Error('Could not extract Node.js version from Dockerfile');
   }
-  const dockerfileVersion = match[1];
+  const dockerfileVersion = match[2]; // Version is in capture group 2 (first group is the optional variant)
 
   return {
     match: nvmrcVersion === dockerfileVersion,
@@ -230,6 +272,64 @@ WORKDIR /app
     });
   });
 
+  describe('test_ghcr_base_image_variants', () => {
+    test('Should handle node-ubuntu variant with matching versions', () => {
+      // This is the real-world case from docker/dmx-driver
+      const serviceDir = testEnv.createServiceWithVariantBase('dmx-driver', '18.12.1', '18.12.1', 'ubuntu');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(true);
+      expect(result.nvmrc).toBe('18.12.1');
+      expect(result.dockerfile).toBe('18.12.1');
+    });
+
+    test('Should detect version mismatch with node-ubuntu variant', () => {
+      // Simulate Dependabot update from 18.12.1 to 18.20.8
+      const serviceDir = testEnv.createServiceWithVariantBase('dmx-driver', '18.12.1', '18.20.8', 'ubuntu');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(false);
+      expect(result.nvmrc).toBe('18.12.1');
+      expect(result.dockerfile).toBe('18.20.8');
+    });
+
+    test('Should handle node-alpine variant if created in future', () => {
+      const serviceDir = testEnv.createServiceWithVariantBase('test-service', '18.20.8', '18.20.8', 'alpine');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(true);
+      expect(result.nvmrc).toBe('18.20.8');
+      expect(result.dockerfile).toBe('18.20.8');
+    });
+
+    test('Should handle node-slim variant if created in future', () => {
+      const serviceDir = testEnv.createServiceWithVariantBase('test-service', '22.12.0', '22.12.0', 'slim');
+
+      const result = checkVersionConsistency(serviceDir);
+
+      expect(result.match).toBe(true);
+      expect(result.nvmrc).toBe('22.12.0');
+      expect(result.dockerfile).toBe('22.12.0');
+    });
+
+    test('Should work with standard node: base and variant node-ubuntu: in same codebase', () => {
+      // Create one service with standard node:
+      const standardService = testEnv.createService('standard-service', '24.13.0', '24.13.0');
+      const standardResult = checkVersionConsistency(standardService);
+
+      // Create another service with variant node-ubuntu:
+      const variantService = testEnv.createServiceWithVariantBase('variant-service', '18.12.1', '18.12.1', 'ubuntu');
+      const variantResult = checkVersionConsistency(variantService);
+
+      // Both should pass
+      expect(standardResult.match).toBe(true);
+      expect(variantResult.match).toBe(true);
+    });
+  });
+
   describe('test_multi_stage_dockerfile', () => {
     test('Should extract version from final stage, not first stage', () => {
       const serviceDir = join(testEnv.root, 'docker', 'multi-stage');
@@ -334,19 +434,146 @@ To fix this issue:
   });
 
   describe('test_ci_workflow_integration', () => {
-    test('Should verify workflow script logic matches expectations', () => {
-      // Test that our checkVersionConsistency function matches ci-unified.yml logic
+    test('Should verify workflow script logic matches expectations with NEW regex', () => {
+      // Test that our checkVersionConsistency function matches ci-unified.yml logic (line 753)
       const serviceDir = testEnv.createService('test', '24.13.0', '24.13.0');
 
       // Read files using same commands as workflow
       const nvmrcCmd = `cat "${join(serviceDir, '.nvmrc')}" | tr -d '[:space:]'`;
       const nvmrcVersion = execSync(nvmrcCmd, { encoding: 'utf8' });
 
-      const dockerfileCmd = `grep -E "^FROM.*node:" "${join(serviceDir, 'Dockerfile')}" | tail -1 | sed 's/.*node:\\([0-9.]*\\).*/\\1/'`;
+      // UPDATED: Use NEW regex pattern from ci-unified.yml line 753 that supports variants
+      const dockerfileCmd = `grep -E "^FROM.*node(-[a-z]+)?:" "${join(serviceDir, 'Dockerfile')}" | tail -1 | sed -E 's/.*node(-[a-z]+)?:([0-9.]+).*/\\2/'`;
       const dockerfileVersion = execSync(dockerfileCmd, { encoding: 'utf8' }).trim();
 
       expect(nvmrcVersion).toBe('24.13.0');
       expect(dockerfileVersion).toBe('24.13.0');
+
+      // Also verify JavaScript helper produces same result
+      const jsResult = checkVersionConsistency(serviceDir);
+      expect(jsResult.nvmrc).toBe(nvmrcVersion);
+      expect(jsResult.dockerfile).toBe(dockerfileVersion);
+    });
+
+    test('Should verify workflow script logic with variant base image', () => {
+      // Test with node-ubuntu variant to ensure bash and JS logic match
+      const serviceDir = testEnv.createServiceWithVariantBase('dmx-driver', '18.12.1', '18.12.1', 'ubuntu');
+
+      const nvmrcCmd = `cat "${join(serviceDir, '.nvmrc')}" | tr -d '[:space:]'`;
+      const nvmrcVersion = execSync(nvmrcCmd, { encoding: 'utf8' });
+
+      const dockerfileCmd = `grep -E "^FROM.*node(-[a-z]+)?:" "${join(serviceDir, 'Dockerfile')}" | tail -1 | sed -E 's/.*node(-[a-z]+)?:([0-9.]+).*/\\2/'`;
+      const dockerfileVersion = execSync(dockerfileCmd, { encoding: 'utf8' }).trim();
+
+      expect(nvmrcVersion).toBe('18.12.1');
+      expect(dockerfileVersion).toBe('18.12.1');
+
+      // Verify JavaScript helper matches bash commands
+      const jsResult = checkVersionConsistency(serviceDir);
+      expect(jsResult.nvmrc).toBe(nvmrcVersion);
+      expect(jsResult.dockerfile).toBe(dockerfileVersion);
+    });
+  });
+
+  describe('test_edge_cases_and_validation', () => {
+    test('Should reject empty .nvmrc file', () => {
+      const serviceDir = join(testEnv.root, 'docker', 'empty-nvmrc');
+      mkdirSync(serviceDir, { recursive: true });
+
+      // Create .nvmrc with only whitespace
+      writeFileSync(join(serviceDir, '.nvmrc'), '   \n\n  ');
+      writeFileSync(
+        join(serviceDir, 'Dockerfile'),
+        `FROM ghcr.io/groupsky/homy/node:24.13.0-alpine AS base\nWORKDIR /app`
+      );
+
+      expect(() => checkVersionConsistency(serviceDir)).toThrow(/Could not extract Node.js version/);
+    });
+
+    test('Should detect malformed version with double dots', () => {
+      const serviceDir = join(testEnv.root, 'docker', 'malformed-version');
+      mkdirSync(serviceDir, { recursive: true });
+
+      writeFileSync(join(serviceDir, '.nvmrc'), '18..20.8\n');
+      writeFileSync(
+        join(serviceDir, 'Dockerfile'),
+        `FROM ghcr.io/groupsky/homy/node:18.20.8-alpine AS base\nWORKDIR /app`
+      );
+
+      const result = checkVersionConsistency(serviceDir);
+      // Should detect mismatch: "18..20.8" !== "18.20.8"
+      expect(result.match).toBe(false);
+      expect(result.nvmrc).toBe('18..20.8');
+      expect(result.dockerfile).toBe('18.20.8');
+    });
+
+    test('Should reject lts/* format in .nvmrc', () => {
+      const serviceDir = join(testEnv.root, 'docker', 'lts-format');
+      mkdirSync(serviceDir, { recursive: true });
+
+      writeFileSync(join(serviceDir, '.nvmrc'), 'lts/*\n');
+      writeFileSync(
+        join(serviceDir, 'Dockerfile'),
+        `FROM ghcr.io/groupsky/homy/node:18.20.8-alpine AS base\nWORKDIR /app`
+      );
+
+      // CI workflow explicitly rejects lts/* format (line 745-748)
+      const result = checkVersionConsistency(serviceDir);
+      expect(result.match).toBe(false);
+      expect(result.nvmrc).toBe('lts/*');
+      expect(result.dockerfile).toBe('18.20.8');
+    });
+
+    test('Should detect v-prefix in .nvmrc as mismatch', () => {
+      const serviceDir = join(testEnv.root, 'docker', 'v-prefix');
+      mkdirSync(serviceDir, { recursive: true });
+
+      writeFileSync(join(serviceDir, '.nvmrc'), 'v18.20.8\n');
+      writeFileSync(
+        join(serviceDir, 'Dockerfile'),
+        `FROM ghcr.io/groupsky/homy/node:18.20.8-alpine AS base\nWORKDIR /app`
+      );
+
+      const result = checkVersionConsistency(serviceDir);
+      // Should fail: "v18.20.8" !== "18.20.8"
+      expect(result.match).toBe(false);
+      expect(result.nvmrc).toBe('v18.20.8');
+      expect(result.dockerfile).toBe('18.20.8');
+    });
+
+    test('Should handle .nvmrc without trailing newline', () => {
+      const serviceDir = join(testEnv.root, 'docker', 'no-newline');
+      mkdirSync(serviceDir, { recursive: true });
+
+      // Write without newline (real case in sunseeker-monitoring)
+      writeFileSync(join(serviceDir, '.nvmrc'), '22.22.0', { flag: 'w' });
+      writeFileSync(
+        join(serviceDir, 'Dockerfile'),
+        `FROM ghcr.io/groupsky/homy/node:22.22.0-alpine AS base\nWORKDIR /app`
+      );
+
+      const result = checkVersionConsistency(serviceDir);
+      expect(result.match).toBe(true);
+      expect(result.nvmrc).toBe('22.22.0');
+      expect(result.dockerfile).toBe('22.22.0');
+    });
+
+    test('Should ignore commented FROM lines in Dockerfile', () => {
+      const serviceDir = join(testEnv.root, 'docker', 'commented-from');
+      mkdirSync(serviceDir, { recursive: true });
+
+      writeFileSync(join(serviceDir, '.nvmrc'), '18.20.8\n');
+
+      const dockerfile = `# Old base image - DO NOT USE
+# FROM ghcr.io/groupsky/homy/node:18.12.1 AS old
+
+FROM ghcr.io/groupsky/homy/node:18.20.8-alpine AS base
+WORKDIR /app`;
+      writeFileSync(join(serviceDir, 'Dockerfile'), dockerfile);
+
+      const result = checkVersionConsistency(serviceDir);
+      expect(result.dockerfile).toBe('18.20.8'); // Should extract from uncommented line
+      expect(result.match).toBe(true);
     });
   });
 });
