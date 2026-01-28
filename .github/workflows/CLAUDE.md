@@ -350,6 +350,15 @@ The pipeline consists of 6 sequential stages with parallel execution within stag
                  │
                  v
 ┌─────────────────────────────────────────────────────────────────┐
+│ Stage 3.5: Pull Images for Testing (Parallel, max 10)           │
+│ - Pull existing images from GHCR for test-only changes          │
+│ - Retag from base SHA to current SHA                            │
+│ - Save as artifacts (same format as Stage 3)                    │
+│ - Enables testing without unnecessary rebuilds                  │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
 │ Stage 4: Tests (4 parallel jobs)                                │
 │ 4A: Version Check  4B: Unit Tests  4C: Health Checks  4D: MQTT  │
 │ - Dockerfile vs    - npm test      - Container      - Lights    │
@@ -374,6 +383,184 @@ The pipeline consists of 6 sequential stages with parallel execution within stag
 │ - Fail workflow if any critical stage failed                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Stage 3.5: Pull Images for Testing
+
+**Purpose**: Optimize CI performance for test-only changes by pulling existing images instead of rebuilding.
+
+**When Stage 3.5 Runs:**
+
+Stage 3.5 activates when the change detection logic identifies services with **test-only changes**:
+- Only test files modified (`*.test.js`, `*.spec.ts`, `__tests__/*`)
+- Only test configuration changed (`jest.config.js`, `jest.setup.js`)
+- Only `devDependencies` changed in `package.json`
+- **AND** the service image exists at the base SHA in GHCR
+
+**How It Works:**
+
+1. **Detection Phase** (Stage 1):
+   ```typescript
+   // Service has changes, but are they test-only?
+   if (isTestOnlyChange(baseRef, service)) {
+     // Does image exist at base SHA?
+     if (imageExistsInGHCR(baseSha)) {
+       toPullForTesting.push(service);
+     } else {
+       toBuild.push(service); // Must build despite test-only change
+     }
+   }
+   ```
+
+2. **Pull Phase** (Stage 3.5):
+   ```yaml
+   # Pull existing image from base SHA
+   docker pull ghcr.io/groupsky/homy/automations:abc123 # base SHA
+
+   # Retag to current SHA for artifact compatibility
+   docker tag ghcr.io/groupsky/homy/automations:abc123 \
+              ghcr.io/groupsky/homy/automations:def456 # current SHA
+
+   # Save as artifact (identical format to Stage 3)
+   docker save ghcr.io/groupsky/homy/automations:def456 -o automations.tar
+   sha256sum automations.tar > automations.tar.sha256
+   ```
+
+3. **Test Phase** (Stage 4):
+   - Tests download artifacts from **either** Stage 3 or Stage 3.5
+   - Artifact format is identical, so tests work transparently
+   - No changes needed to test jobs
+
+**Test Pattern Detection:**
+
+The following patterns are recognized as test-only changes:
+
+```typescript
+const TEST_FILE_PATTERNS = [
+  /\.test\.(js|ts|jsx|tsx)$/,    // Jest/Mocha test files
+  /\.spec\.(js|ts|jsx|tsx)$/,    // Spec test files
+  /\/__tests__\//,               // __tests__ directories
+  /\/tests\//,                   // tests directories
+  /^jest\.config\.(js|ts)$/,     // Jest configuration
+  /^jest\.setup\.(js|ts)$/,      // Jest setup files
+  /\.test\.env$/,                // Test environment files
+  /^vitest\.config\.(js|ts)$/,   // Vitest configuration
+];
+```
+
+**Special Handling:**
+- **package.json changes**: Only test-only if ONLY `devDependencies` changed
+  - Changes to `dependencies`, `scripts`, `version`, `main`, etc. trigger rebuild
+  - Script parses JSON to compare base vs. current versions
+- **Mixed changes**: Any production file change forces full rebuild
+- **Missing base image**: Falls back to rebuild if base SHA image doesn't exist
+
+**Performance Benefits:**
+
+| Scenario | Without Stage 3.5 | With Stage 3.5 | Time Saved |
+|----------|-------------------|----------------|------------|
+| Test-only change (1 service) | ~7 min | ~3 min | 57% |
+| Test-only change (3 services) | ~12 min | ~5 min | 58% |
+| Production code change | ~12 min | ~12 min | 0% (no change) |
+| Mixed (1 test-only, 2 prod) | ~12 min | ~9 min | 25% |
+
+**Example Scenarios:**
+
+**Scenario 1: Add test coverage**
+```bash
+# Edit test file
+vim docker/automations/bots/irrigation.test.js
+
+# Commit and push
+git commit -m "test: Add edge case coverage for irrigation bot"
+git push
+
+# CI Behavior:
+# ✅ Stage 1: Detects test-only change → adds to toPullForTesting
+# ⏩ Stage 3: Skipped (no rebuild needed)
+# ✅ Stage 3.5: Pulls existing image, saves as artifact
+# ✅ Stage 4: Runs new tests against pulled image
+# ✅ Stage 5: Retagging (no new image to push)
+```
+
+**Scenario 2: Update Jest configuration**
+```bash
+# Edit Jest config
+vim docker/telegram-bridge/jest.config.js
+
+# CI Behavior:
+# ✅ Test-only change detected
+# ✅ Pulls existing telegram-bridge image
+# ✅ Runs tests with new configuration
+# ✅ Promotes if tests pass
+```
+
+**Scenario 3: Update devDependencies only**
+```bash
+# Update testing framework
+vim docker/mqtt-influx/package.json
+# Only changed: "jest": "^29.0.0" → "jest": "^29.7.0" in devDependencies
+
+# CI Behavior:
+# ✅ Detects package.json change
+# ✅ Parses JSON to verify only devDependencies changed
+# ✅ Classified as test-only change
+# ✅ Pulls existing image and runs tests
+```
+
+**Scenario 4: Mixed changes (NOT test-only)**
+```bash
+# Edit both production and test code
+vim docker/automations/bots/irrigation.js      # Production
+vim docker/automations/bots/irrigation.test.js  # Test
+
+# CI Behavior:
+# ❌ NOT test-only (production code changed)
+# ✅ Stage 3: Full rebuild
+# ✅ Stage 4: Run tests
+# ✅ Stage 5: Push new image
+```
+
+**Artifact Compatibility:**
+
+Stage 3.5 produces **identical artifact format** to Stage 3:
+- **Artifact name**: `service-<service-name>`
+- **Contents**:
+  - `<service-name>.tar` - Docker image tarball
+  - `<service-name>.tar.sha256` - SHA-256 checksum
+- **Image tag**: Current SHA (not base SHA)
+- **Retention**: 2 days
+
+This ensures Stage 4 test jobs can consume artifacts from either source without modification.
+
+**Error Handling:**
+
+1. **Base image not found in GHCR**:
+   ```
+   Error: ghcr.io/groupsky/homy/automations:abc123 not found
+   ```
+   - **Cause**: Base SHA image doesn't exist (possibly deleted or never built)
+   - **Solution**: Fallback to rebuild (already handled by detection logic)
+
+2. **Image pull failed (transient)**:
+   ```
+   Error: manifest unknown
+   ```
+   - **Retry logic**: 3 attempts with exponential backoff (2s, 4s delays)
+   - **Fallback**: Job fails, but build-app-images will rebuild service
+
+3. **Artifact too large**:
+   ```
+   Error: Image size exceeds 500MB limit
+   ```
+   - **Validation**: Size check before artifact upload
+   - **Solution**: Image optimization or increase limit
+
+**Monitoring:**
+
+Check Stage 3.5 effectiveness in workflow summary:
+- **Services to Pull for Testing**: Shows count of test-only services
+- **Stage 3.5 Status**: ✅ (success), ⏩ (skipped), or ❌ (failed)
+- **Duration**: Typical pull time ~30s per service
 
 ### Security Model: Artifact-Based Isolation
 
