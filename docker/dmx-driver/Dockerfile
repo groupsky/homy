@@ -1,46 +1,46 @@
 #### Stage BASE ########################################################################################################
-FROM ghcr.io/groupsky/homy/node-ubuntu:18.12.1 AS base
+FROM ghcr.io/groupsky/homy/node:18.20.8-alpine AS base
 
-# Install service-specific packages and create user
-RUN set -ex && \
-    apt-get update && apt-get install -y \
-      libftdi1 && \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /usr/src/app && \
-    deluser --remove-home node && \
-    useradd --home-dir /usr/src/app --no-create-home node-app --uid 1000 && \
-    addgroup node-app dialout && \
-    chown -R node-app:node-app /usr/src/app
-
-# Set work directory
 WORKDIR /usr/src/app
 
-# copy package.json and lock file
 COPY package*.json ./
 
 #### Stage BUILD #######################################################################################################
 FROM base AS build
 
-# Install Build tools
-RUN apt-get update && apt-get install -y \
-    udev python3 \
-    libftdi-dev && \
-    rm -rf /var/lib/apt/lists/* && \
-    npm ci --unsafe-perm --no-update-notifier --omit=dev && \
-    cp -R node_modules prod_node_modules
+# Install build dependencies for node-gyp and libftdi native compilation
+RUN apk add --no-cache --virtual .build-deps \
+    python3 \
+    make \
+    g++ \
+    linux-headers \
+    pkgconf \
+    libftdi1-dev && \
+    ln -s /usr/lib/libftdi1.so /usr/lib/libftdi.so && \
+    export CXXFLAGS="$(pkg-config --cflags libftdi1)" && \
+    export LDFLAGS="$(pkg-config --libs libftdi1)" && \
+    npm ci --omit=dev && \
+    cp -R node_modules prod_node_modules && \
+    rm /usr/lib/libftdi.so && \
+    apk del .build-deps
 
 #### Stage RELEASE #####################################################################################################
-FROM base AS RELEASE
+FROM base AS release
 
 ENV NODE_OPTIONS="--unhandled-rejections=strict"
+
+# Install only runtime dependencies
+RUN apk add --no-cache libftdi1 && \
+    deluser --remove-home node 2>/dev/null || true && \
+    delgroup node 2>/dev/null || true && \
+    addgroup -g 1000 node-app && \
+    adduser -D -u 1000 -G node-app node-app && \
+    addgroup node-app dialout && \
+    chown -R node-app:node-app /usr/src/app
 
 COPY --from=build /usr/src/app/prod_node_modules ./node_modules
 COPY . .
 
-# Chown & Clean up
-RUN chown -R node-app:node-app /usr/src/app && \
-    rm -rf /tmp/*
-
-#USER node-app
+USER node-app
 
 ENTRYPOINT ["node", "index.js"]
