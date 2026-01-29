@@ -7,10 +7,13 @@
   "main": "index.js",
   "scripts": {
     "start": "index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "dependencies": {
     "dmx": "https://github.com/groupsky/node-dmx.git#v1.0.2",
     "mqtt": "^5.14.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }
