@@ -78,6 +78,8 @@ jobs:
       healthcheck_services: ${{ steps.detect.outputs.healthcheck_services }}
       # Services with .nvmrc + node base (need version consistency check)
       version_check_services: ${{ steps.detect.outputs.version_check_services }}
+      # Base images that are not referenced by any service (should be removed)
+      unused_base_images: ${{ steps.detect.outputs.unused_base_images }}
 
     steps:
       - name: Checkout code
@@ -194,12 +196,66 @@ jobs:
           echo "Healthcheck services: ${{ steps.detect.outputs.healthcheck_services }}"
           echo "Version check services: ${{ steps.detect.outputs.version_check_services }}"
           echo ""
+          echo "⚠️  Unused base images: ${{ steps.detect.outputs.unused_base_images }}"
+          echo ""
           echo "=== Build Context ==="
           echo "Event: ${{ github.event_name }}"
           echo "Ref: ${{ github.ref }}"
           echo "Is fork: ${{ steps.fork.outputs.is_fork }}"
           echo "Force rebuild: ${{ inputs.force_rebuild }}"
           echo "Base ref: ${{ steps.base-ref.outputs.base_ref }}"
+
+  # ============================================================================
+  # Stage 1.5: Validate Base Images
+  # ============================================================================
+  # Validates that all base images in the repository are actually used by services.
+  # Runs as a separate check that fails the workflow if unused base images are found.
+  # This prevents base image proliferation and ensures clean repository state.
+  # ============================================================================
+  validate-base-images:
+    name: Validate Base Images
+    timeout-minutes: 2
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Always run - unused base images should block ALL builds (including master)
+    if: always()
+
+    steps:
+      - name: Check for unused base images
+        run: |
+          UNUSED='${{ needs.detect-changes.outputs.unused_base_images }}'
+
+          echo "=== Base Image Validation ==="
+          echo "Unused base images: $UNUSED"
+
+          # Parse JSON array and check if empty
+          UNUSED_COUNT=$(echo "$UNUSED" | jq '. | length')
+
+          if [ "$UNUSED_COUNT" -gt 0 ]; then
+            echo ""
+            echo "❌ ERROR: Unused base images detected!"
+            echo ""
+            echo "The following base image directories are not referenced by any service:"
+            echo "$UNUSED" | jq -r '.[]' | while read -r dir; do
+              echo "  - $dir"
+            done
+            echo ""
+            echo "Action required:"
+            echo "  1. Remove the unused base image directories from base-images/"
+            echo "  2. If a service no longer uses a base image, remove the base image directory"
+            echo "  3. This prevents base image proliferation and keeps the repository clean"
+            echo ""
+            echo "Why this matters:"
+            echo "  - Unused base images waste CI quota and storage"
+            echo "  - They create confusion about which images are actually in use"
+            echo "  - Dependabot will continue updating unused images"
+            echo ""
+            exit 1
+          fi
+
+          echo "✅ All base images are referenced by at least one service"
 
   # ============================================================================
   # Stage 2: Prepare Base Images (Sequential)
@@ -212,7 +268,7 @@ jobs:
   prepare-base-images:
     name: Prepare Base Images
     timeout-minutes: 30
-    needs: detect-changes
+    needs: [detect-changes, validate-base-images]
     runs-on: ubuntu-latest
     # Only run for non-fork PRs or master pushes
     # Skip if both changed_base_images and base_images_needed are empty
@@ -1455,6 +1511,7 @@ jobs:
     # Depend on all final-stage jobs to ensure proper sequencing
     needs:
       - detect-changes
+      - validate-base-images
       - prepare-base-images
       - build-app-images
       - version-consistency-check
@@ -1474,6 +1531,7 @@ jobs:
         run: |
           # Check if any previous job failed
           DETECT_STATUS="${{ needs.detect-changes.result }}"
+          VALIDATE_STATUS="${{ needs.validate-base-images.result }}"
           PREPARE_STATUS="${{ needs.prepare-base-images.result }}"
           BUILD_STATUS="${{ needs.build-app-images.result }}"
           VERSION_STATUS="${{ needs.version-consistency-check.result }}"
@@ -1484,6 +1542,7 @@ jobs:
           RETAG_STATUS="${{ needs.retag-unchanged-images.result }}"
 
           echo "detect=$DETECT_STATUS" >> $GITHUB_OUTPUT
+          echo "validate=$VALIDATE_STATUS" >> $GITHUB_OUTPUT
           echo "prepare=$PREPARE_STATUS" >> $GITHUB_OUTPUT
           echo "build=$BUILD_STATUS" >> $GITHUB_OUTPUT
           echo "version=$VERSION_STATUS" >> $GITHUB_OUTPUT
@@ -1494,17 +1553,18 @@ jobs:
           echo "retag=$RETAG_STATUS" >> $GITHUB_OUTPUT
 
           # Determine overall status
-          if [[ "$DETECT_STATUS" == "failure" || "$PREPARE_STATUS" == "failure" || \
-                "$BUILD_STATUS" == "failure" || "$VERSION_STATUS" == "failure" || \
-                "$TEST_STATUS" == "failure" || "$HEALTH_STATUS" == "failure" || \
-                "$LIGHTS_STATUS" == "failure" || "$PUSH_STATUS" == "failure" || \
-                "$RETAG_STATUS" == "failure" ]]; then
+          if [[ "$DETECT_STATUS" == "failure" || "$VALIDATE_STATUS" == "failure" || \
+                "$PREPARE_STATUS" == "failure" || "$BUILD_STATUS" == "failure" || \
+                "$VERSION_STATUS" == "failure" || "$TEST_STATUS" == "failure" || \
+                "$HEALTH_STATUS" == "failure" || "$LIGHTS_STATUS" == "failure" || \
+                "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
             echo "overall=failure" >> $GITHUB_OUTPUT
             exit 1
-          elif [[ "$DETECT_STATUS" == "cancelled" || "$PREPARE_STATUS" == "cancelled" || \
-                  "$BUILD_STATUS" == "cancelled" || "$VERSION_STATUS" == "cancelled" || \
-                  "$TEST_STATUS" == "cancelled" || "$HEALTH_STATUS" == "cancelled" || \
-                  "$LIGHTS_STATUS" == "cancelled" || "$PUSH_STATUS" == "cancelled" || \
+          elif [[ "$DETECT_STATUS" == "cancelled" || "$VALIDATE_STATUS" == "cancelled" || \
+                  "$PREPARE_STATUS" == "cancelled" || "$BUILD_STATUS" == "cancelled" || \
+                  "$VERSION_STATUS" == "cancelled" || "$TEST_STATUS" == "cancelled" || \
+                  "$HEALTH_STATUS" == "cancelled" || "$LIGHTS_STATUS" == "cancelled" || \
+                  "$PUSH_STATUS" == "cancelled" || "$PUSH_STATUS" == "cancelled" || \
                   "$RETAG_STATUS" == "cancelled" ]]; then
             echo "overall=cancelled" >> $GITHUB_OUTPUT
             exit 1
@@ -1522,6 +1582,7 @@ jobs:
           | Stage | Status |
           |-------|--------|
           | 1️⃣ Detect Changes | ${{ steps.status.outputs.detect }} |
+          | 1️⃣.5️⃣ Validate Base Images | ${{ steps.status.outputs.validate }} |
           | 2️⃣ Prepare Base Images | ${{ steps.status.outputs.prepare }} |
           | 3️⃣ Build App Images | ${{ steps.status.outputs.build }} |
           | 4️⃣A Version Checks | ${{ steps.status.outputs.version }} |
@@ -1540,6 +1601,7 @@ jobs:
           - **Services to Retag**: ${{ needs.detect-changes.outputs.to_retag }}
           - **Testable Services**: ${{ needs.detect-changes.outputs.testable_services }}
           - **Healthcheck Services**: ${{ needs.detect-changes.outputs.healthcheck_services }}
+          - **Unused Base Images**: ${{ needs.detect-changes.outputs.unused_base_images }}
 
           ## Overall Status: ${{ steps.status.outputs.overall }}
           EOF

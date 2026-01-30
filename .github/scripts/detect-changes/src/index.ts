@@ -209,7 +209,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   if (unusedBaseImages.length > 0) {
     console.error('');
-    console.error('❌ ERROR: Unused base images detected!');
+    console.error('⚠️  WARNING: Unused base images detected!');
     console.error('');
     console.error('The following base image directories are not referenced by any service:');
     for (const dir of unusedBaseImages) {
@@ -219,7 +219,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     console.error('These base images should be removed from the base-images/ directory.');
     console.error('If a service no longer uses a base image, remove the base image directory.');
     console.error('');
-    process.exit(1);
+    console.error('Note: This check will be enforced in a separate validation job.');
   }
 
   // Step 9: Fork PR validation (if applicable)

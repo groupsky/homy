@@ -33,7 +33,7 @@ describe('Unused Base Images Detection', () => {
     }
   });
 
-  test('Should fail when base images are not used by any service', () => {
+  test('Should warn when base images are not used by any service', () => {
     // Setup: Create base-images with two images
     const baseImagesDir = path.join(testDir, 'base-images');
     fs.mkdirSync(path.join(baseImagesDir, 'node-18-alpine'), { recursive: true });
@@ -84,21 +84,20 @@ services:
     // Setup: Create output file path
     const outputFile = path.join(testDir, 'output.txt');
 
-    // Execute: Run detect-changes script (should fail)
-    try {
-      execSync(
-        `npx tsx ${scriptPath} --base-ref HEAD --base-images-dir ${baseImagesDir} --compose-file ${composeFile} --env-file ${envFile} --docker-dir ${path.join(testDir, 'docker')} --output-file ${outputFile} --base-sha abc123`,
-        { cwd: testDir, stdio: 'pipe' }
-      );
-      // Should not reach here
-      expect(true).toBe(false);
-    } catch (error: any) {
-      // Verify error message contains unused base image
-      const stderr = error.stderr?.toString() || '';
-      expect(stderr).toContain('❌ ERROR: Unused base images detected!');
-      expect(stderr).toContain('unused-grafana');
-      expect(error.status).toBe(1);
-    }
+    // Execute: Run detect-changes script (should succeed but warn)
+    const result = execSync(
+      `npx tsx ${scriptPath} --base-ref HEAD --base-images-dir ${baseImagesDir} --compose-file ${composeFile} --env-file ${envFile} --docker-dir ${path.join(testDir, 'docker')} --output-file ${outputFile} --base-sha abc123 2>&1`,
+      { cwd: testDir, encoding: 'utf-8' }
+    );
+
+    // Verify warning message in output (stderr redirected to stdout)
+    expect(result).toContain('⚠️  WARNING: Unused base images detected!');
+    expect(result).toContain('unused-grafana');
+
+    // Verify output file created and contains unused_base_images
+    expect(fs.existsSync(outputFile)).toBe(true);
+    const output = fs.readFileSync(outputFile, 'utf-8');
+    expect(output).toContain('unused_base_images=["unused-grafana"]');
   });
 
   test('Should pass when all base images are used', () => {
@@ -192,7 +191,7 @@ services:
     }
   });
 
-  test('Should correctly identify multiple unused base images', () => {
+  test('Should warn about multiple unused base images', () => {
     // Setup: Create base-images with four images
     const baseImagesDir = path.join(testDir, 'base-images');
     if (fs.existsSync(baseImagesDir)) {
@@ -262,22 +261,21 @@ services:
     // Setup: Create output file path
     const outputFile = path.join(testDir, 'output.txt');
 
-    // Execute: Run detect-changes script (should fail)
-    try {
-      execSync(
-        `npx tsx ${scriptPath} --base-ref HEAD --base-images-dir ${baseImagesDir} --compose-file ${composeFile} --env-file ${envFile} --docker-dir ${path.join(testDir, 'docker')} --output-file ${outputFile} --base-sha abc123`,
-        { cwd: testDir, stdio: 'pipe' }
-      );
-      // Should not reach here
-      expect(true).toBe(false);
-    } catch (error: any) {
-      // Verify error message contains all three unused base images
-      const stderr = error.stderr?.toString() || '';
-      expect(stderr).toContain('❌ ERROR: Unused base images detected!');
-      expect(stderr).toContain('unused-alpine');
-      expect(stderr).toContain('unused-grafana');
-      expect(stderr).toContain('unused-nginx');
-      expect(error.status).toBe(1);
-    }
+    // Execute: Run detect-changes script (should succeed but warn)
+    const result = execSync(
+      `npx tsx ${scriptPath} --base-ref HEAD --base-images-dir ${baseImagesDir} --compose-file ${composeFile} --env-file ${envFile} --docker-dir ${path.join(testDir, 'docker')} --output-file ${outputFile} --base-sha abc123 2>&1`,
+      { cwd: testDir, encoding: 'utf-8' }
+    );
+
+    // Verify warning message contains all three unused base images
+    expect(result).toContain('⚠️  WARNING: Unused base images detected!');
+    expect(result).toContain('unused-alpine');
+    expect(result).toContain('unused-grafana');
+    expect(result).toContain('unused-nginx');
+
+    // Verify output file contains all unused base images
+    expect(fs.existsSync(outputFile)).toBe(true);
+    const output = fs.readFileSync(outputFile, 'utf-8');
+    expect(output).toMatch(/unused_base_images=\["unused-alpine","unused-grafana","unused-nginx"\]/);
   });
 });
