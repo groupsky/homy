@@ -11,7 +11,6 @@ group "default" {
     "node-18-alpine",
     "node-22-alpine",
     "node-24-alpine",
-    "node-ubuntu",
     "grafana",
     "influxdb",
     "mosquitto",
@@ -58,11 +57,6 @@ target "mosquitto" {
 target "mongo" {
   context = "./mongo"
   # Tags set via workflow: ghcr.io/groupsky/homy/mongo:${VERSION}
-}
-
-target "node-ubuntu" {
-  context = "./node-ubuntu"
-  # Tags set via workflow: ghcr.io/groupsky/homy/node-ubuntu:${VERSION}
 }
 
 target "nginx" {

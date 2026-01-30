@@ -503,7 +503,7 @@ FROM ghcr.io/groupsky/homy/node-slim:22.22.0 → "22.22.0"
 - ✅ All current base images in this repository use supported patterns
 
 **Services Using Variants:**
-- `docker/dmx-driver` - Uses `node-ubuntu:18.12.1` for apt dependencies (libftdi1)
+- None currently. All services use standard Alpine-based Node images.
 
 ### Fork PR Handling
 
