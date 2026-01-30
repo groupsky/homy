@@ -273,18 +273,21 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   console.error(`Test-only changes: ${toPullForTesting.length}`);
 
   console.error('Step 11: Detecting testable services...');
-  // Tests should run for all changed services, not just ones being built
+  // Tests should run only for services with artifacts (toBuild or toPullForTesting)
+  // Services in toRetag don't have artifacts and should not run tests
+  const servicesWithArtifacts = [...toBuild, ...toPullForTesting];
   const testableServices = services
-    .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
+    .filter((s) => servicesWithArtifacts.includes(s.service_name))
     .filter(serviceHasRealTests)
     .map((s) => s.service_name)
     .sort();
   console.error(`Testable services: ${testableServices.length}`);
 
   console.error('Step 12: Detecting healthcheck services...');
-  // Health checks should run for all changed services, not just ones being built
+  // Health checks should run only for services with artifacts (toBuild or toPullForTesting)
+  // Services in toRetag don't have artifacts and should not run healthchecks
   const healthcheckServices = services
-    .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
+    .filter((s) => servicesWithArtifacts.includes(s.service_name))
     .filter((s) => {
       try {
         const content = readFileSync(s.dockerfile_path, 'utf-8');
@@ -298,7 +301,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   console.error(`Healthcheck services: ${healthcheckServices.length}`);
 
   console.error('Step 13: Detecting version check services...');
-  // Version checks should run for all changed services, not just ones being built
+  // Version checks run for all changed services (don't need artifacts - just check files)
   // Extract unique build context directories (multiple services may share same build context)
   const versionCheckBuildContexts = new Set<string>();
   services
