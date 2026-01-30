@@ -115,16 +115,21 @@ jobs:
         id: base-ref
         run: |
           # Determine the git reference to compare against
-          # PR: compare to base SHA
-          # Master push: compare to previous commit (HEAD^)
-          # Other branches: compare to merge-base with master
+          # PR: use merge-base to handle rebases correctly
+          # Master push: use first parent (HEAD^1) to handle merge commits
+          # Other branches: use merge-base with master
 
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE_REF="${{ github.event.pull_request.base.sha }}"
-            echo "Using PR base SHA: $BASE_REF"
+            # Use merge-base for PRs to handle rebases correctly
+            # This ensures we compare against the actual divergence point
+            git fetch origin ${{ github.event.pull_request.base.ref }}
+            BASE_REF=$(git merge-base HEAD origin/${{ github.event.pull_request.base.ref }})
+            echo "Using PR merge-base: $BASE_REF"
           elif [ "${{ github.ref }}" == "refs/heads/master" ]; then
-            BASE_REF="HEAD^"
-            echo "Using previous commit on master: $BASE_REF"
+            # For master pushes, use first parent (^1) to handle merge commits
+            # This ensures we get the previous master commit, not the merged branch
+            BASE_REF=$(git rev-parse HEAD^1)
+            echo "Using previous commit on master (first parent): $BASE_REF"
           else
             # For non-master branches (manual trigger), use merge-base with master
             git fetch origin master
@@ -1456,7 +1461,9 @@ jobs:
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository)) &&
-      needs.detect-changes.outputs.to_build != '[]'
+      needs.detect-changes.outputs.to_build != '[]' &&
+      (needs.pull-images-for-testing.result == 'success' ||
+       needs.pull-images-for-testing.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1580,7 +1587,9 @@ jobs:
     needs: [detect-changes, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
     if: |
       needs.detect-changes.outputs.to_retag != '[]' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.pull-images-for-testing.result == 'success' ||
+       needs.pull-images-for-testing.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read

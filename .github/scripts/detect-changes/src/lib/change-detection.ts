@@ -207,14 +207,14 @@ export function detectChangedServices(
  * Based on Jest/Mocha/Vitest conventions.
  */
 const TEST_FILE_PATTERNS = [
-  /\.test\.(js|ts|jsx|tsx)$/,
-  /\.spec\.(js|ts|jsx|tsx)$/,
+  /\.test\.(js|ts|jsx|tsx|mjs|cjs)$/,
+  /\.spec\.(js|ts|jsx|tsx|mjs|cjs)$/,
   /\/__tests__\//,
   /\/tests\//,
-  /^jest\.config\.(js|ts)$/,
-  /^jest\.setup\.(js|ts)$/,
-  /\.test\.env$/,
-  /^vitest\.config\.(js|ts)$/,
+  /^jest\.config\.(js|ts|mjs|cjs)$/,
+  /^jest\.setup\.(js|ts|mjs|cjs)$/,
+  /\.(test|spec)\.env$/,
+  /^vitest\.config\.(js|ts|mjs|cjs)$/,
 ];
 
 /**
@@ -374,10 +374,9 @@ export function isTestOnlyChange(
 
     // Check if it's package.json with only devDependencies changes
     if (trimmedPath.endsWith('package.json')) {
-      const absolutePath = trimmedPath.replace(/^docker\/[^/]+\//, '');
-      const fullPath = `docker/${serviceDir}/${absolutePath}`;
-
-      if (isPackageJsonTestOnly(baseRef, fullPath, deps)) {
+      // trimmedPath is already the correct relative path from git diff
+      // e.g., "docker/automations/package.json"
+      if (isPackageJsonTestOnly(baseRef, trimmedPath, deps)) {
         continue; // Only devDependencies changed - OK
       } else {
         return false; // Production changes in package.json
