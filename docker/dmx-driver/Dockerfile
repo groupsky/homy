@@ -1,5 +1,5 @@
 #### Stage BASE ########################################################################################################
-FROM ghcr.io/groupsky/homy/node:20.20.0-alpine3.23 AS base
+FROM ghcr.io/groupsky/homy/node:18.20.8-alpine AS base
 
 WORKDIR /usr/src/app
 
