@@ -153,9 +153,16 @@ export async function checkAllServices(
       continue;
     }
 
-    // Check if the service's image exists in GHCR
+    // Check if the service's image exists in GHCR at the baseSha tag
+    // NOTE: We must check the SHA-tagged image, not the tag from docker-compose
+    // (which might be :latest or ${IMAGE_TAG})
     try {
-      const exists = await checkImageExists(service.image, 3);
+      // Extract registry/image-name from service.image, replace tag with baseSha
+      // Example: ghcr.io/groupsky/homy/automations:latest -> ghcr.io/groupsky/homy/automations:abc123
+      const imageWithoutTag = service.image.split(':').slice(0, -1).join(':');
+      const imageTag = `${imageWithoutTag}:${baseSha}`;
+
+      const exists = await checkImageExists(imageTag, 3);
 
       if (exists) {
         toRetag.push(service.service_name);
