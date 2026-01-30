@@ -76,11 +76,12 @@ export interface Service {
 
 /**
  * Bidirectional mapping between base image directories and GHCR tags.
+ * Maps both raw versions (as published) and normalized versions (for matching).
  */
 export interface DirectoryGHCRMapping {
-  /** Maps directory name to GHCR tag */
+  /** Maps directory name to GHCR tag (normalized for comparison) */
   dir_to_ghcr: Record<string, string>;
-  /** Maps GHCR tag to directory name */
+  /** Maps GHCR tag (both raw and normalized) to directory name */
   ghcr_to_dir: Record<string, string>;
 }
 
@@ -94,6 +95,8 @@ export interface DetectionResult {
   changed_base_images: string[];
   /** Base images that need to be built */
   base_images_needed: string[];
+  /** Base images not referenced by any service */
+  unused_base_images: string[];
   /** Services that have changed */
   changed_services: string[];
   /** Services affected by base image changes */

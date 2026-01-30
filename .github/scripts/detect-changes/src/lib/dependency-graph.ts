@@ -74,8 +74,56 @@ export function buildReverseDependencyMap(
         continue;
       }
 
-      // Look up the base image directory from the GHCR tag
-      const baseDir = baseImageMapping.ghcr_to_dir[finalBaseImage];
+      // Strip the GHCR registry prefix to get the short tag for lookup
+      // Example: 'ghcr.io/groupsky/homy/node:18.20.8-alpine' -> 'node:18.20.8-alpine'
+      // Example: 'ghcr.io/groupsky/homy/grafana:9.5.21' -> 'grafana:9.5.21'
+      const shortTag = finalBaseImage.replace('ghcr.io/groupsky/homy/', '');
+
+      // Check if this service uses any base image from our managed base-images/
+      // We need version-agnostic matching to handle Dependabot base image updates
+      // where the base image version changes but services haven't been updated yet.
+      let baseDir = baseImageMapping.ghcr_to_dir[shortTag];
+
+      // If exact match fails, try version-agnostic matching
+      // This handles cases where:
+      // - Base image updated: node:22.23.0 (new)
+      // - Service still uses: node:22.22.0 (old)
+      // - Both should map to node-22-alpine directory
+      if (!baseDir) {
+        const colonIndex = shortTag.indexOf(':');
+        if (colonIndex !== -1) {
+          const serviceImageName = shortTag.substring(0, colonIndex);
+          const serviceVersion = shortTag.substring(colonIndex + 1);
+
+          // Find base directories that could produce this GHCR image name
+          // by checking if any dir_to_ghcr mapping has the same image name prefix
+          for (const [dir, mappedTag] of Object.entries(baseImageMapping.dir_to_ghcr)) {
+            const mappedColonIndex = mappedTag.indexOf(':');
+            if (mappedColonIndex !== -1) {
+              const mappedImageName = mappedTag.substring(0, mappedColonIndex);
+
+              // If image names match, this base image directory produces this namespace
+              if (serviceImageName === mappedImageName) {
+                // For node-X-alpine images, also check major version match
+                // node-22-alpine should match node:22.* but not node:18.*
+                if (dir.match(/^node-(\d+)-/)) {
+                  const dirMajor = dir.match(/^node-(\d+)-/)![1];
+                  const serviceMajor = serviceVersion.match(/^(\d+)\./)![1];
+
+                  if (dirMajor === serviceMajor) {
+                    baseDir = dir;
+                    break;
+                  }
+                } else {
+                  // For other images, image name match is sufficient
+                  baseDir = dir;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
 
       if (!baseDir) {
         // Base image not in our mapping, skip

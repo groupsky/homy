@@ -9,16 +9,13 @@
 group "default" {
   targets = [
     "node-18-alpine",
-    "node-20-alpine",
     "node-22-alpine",
     "node-24-alpine",
     "node-ubuntu",
     "grafana",
     "influxdb",
-    "influxdb2",
     "mosquitto",
     "mongo",
-    "alpine",
     "nginx",
     "ubuntu",
     "dockergen",
@@ -30,11 +27,6 @@ group "default" {
 
 target "node-18-alpine" {
   context = "./node-18-alpine"
-  # Tags set via workflow: ghcr.io/groupsky/homy/node:${VERSION}
-}
-
-target "node-20-alpine" {
-  context = "./node-20-alpine"
   # Tags set via workflow: ghcr.io/groupsky/homy/node:${VERSION}
 }
 
@@ -73,11 +65,6 @@ target "node-ubuntu" {
   # Tags set via workflow: ghcr.io/groupsky/homy/node-ubuntu:${VERSION}
 }
 
-target "alpine" {
-  context = "./alpine"
-  # Tags set via workflow: ghcr.io/groupsky/homy/alpine:${VERSION}
-}
-
 target "nginx" {
   context = "./nginx"
   # Tags set via workflow: ghcr.io/groupsky/homy/nginx:${VERSION}
@@ -101,11 +88,6 @@ target "wireguard" {
 target "mongo-express" {
   context = "./mongo-express"
   # Tags set via workflow: ghcr.io/groupsky/homy/mongo-express:${VERSION}
-}
-
-target "influxdb2" {
-  context = "./influxdb2"
-  # Tags set via workflow: ghcr.io/groupsky/homy/influxdb2:${VERSION}
 }
 
 target "zigbee2mqtt" {

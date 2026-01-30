@@ -178,10 +178,11 @@ describe('TestNormalizeGhcrTag', () => {
   });
 
   describe('test_normalize_grafana_no_change', () => {
-    test('Should not modify non-node images', () => {
+    test('Should use directory name for GHCR images', () => {
+      // GHCR images use flattened names (grafana:*) even if upstream is grafana/grafana:*
       const result = normalizeGhcrTag('grafana', '9.5.21');
 
-      expect(result).toBe('grafana/grafana:9.5.21');
+      expect(result).toBe('grafana:9.5.21');
     });
   });
 
@@ -214,7 +215,8 @@ describe('TestNormalizeGhcrTag', () => {
       const result = normalizeGhcrTag('node-ubuntu', '18.20.8-ubuntu22.04');
 
       // Should normalize ubuntu22.04 -> ubuntu
-      expect(result).toBe('node:18.20.8-ubuntu');
+      // GHCR publishes as node-ubuntu:*, not node:*-ubuntu
+      expect(result).toBe('node-ubuntu:18.20.8-ubuntu');
     });
   });
 
@@ -251,16 +253,19 @@ describe('TestBuildDirectoryToGhcrMapping', () => {
   });
 
   describe('test_mapping_is_bidirectional', () => {
-    test('Should verify that dir_to_ghcr and ghcr_to_dir are inverses', () => {
+    test('Should verify that ghcr_to_dir maps back to valid directories', () => {
       const result = buildDirectoryToGhcrMapping(FIXTURES_DIR);
 
-      // Verify bidirectional consistency
+      // For every dir_to_ghcr mapping, the reverse should exist in ghcr_to_dir
       for (const [dir, ghcrTag] of Object.entries(result.dir_to_ghcr)) {
         expect(result.ghcr_to_dir[ghcrTag]).toBe(dir);
       }
 
-      for (const [ghcrTag, dir] of Object.entries(result.ghcr_to_dir)) {
-        expect(result.dir_to_ghcr[dir]).toBe(ghcrTag);
+      // For every ghcr_to_dir mapping, the directory should have a dir_to_ghcr entry
+      // Note: ghcr_to_dir may have multiple entries for the same directory
+      // (both raw and normalized versions), so we just check the directory exists
+      for (const dir of Object.values(result.ghcr_to_dir)) {
+        expect(result.dir_to_ghcr[dir]).toBeDefined();
       }
     });
   });
@@ -325,8 +330,9 @@ describe('TestBaseImagesIntegration', () => {
       expect(mapping.dir_to_ghcr['node-18-alpine']).toBe('node:18.20.8-alpine');
       expect(mapping.ghcr_to_dir['node:18.20.8-alpine']).toBe('node-18-alpine');
 
-      expect(mapping.dir_to_ghcr['grafana']).toBe('grafana/grafana:9.5.21');
-      expect(mapping.ghcr_to_dir['grafana/grafana:9.5.21']).toBe('grafana');
+      // GHCR uses flattened names (grafana:*) even if upstream is grafana/grafana:*
+      expect(mapping.dir_to_ghcr['grafana']).toBe('grafana:9.5.21');
+      expect(mapping.ghcr_to_dir['grafana:9.5.21']).toBe('grafana');
     });
   });
 
