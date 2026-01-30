@@ -6,8 +6,7 @@
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "start": "index.js",
-    "test": "node verify-native-module.js"
+    "start": "index.js"
   },
   "dependencies": {
     "dmx": "https://github.com/groupsky/node-dmx.git#v1.0.2",

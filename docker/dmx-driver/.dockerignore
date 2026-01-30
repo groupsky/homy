@@ -1,10 +1,7 @@
 node_modules
 Dockerfile
 Dockerfile.old
-*.test.js
-test-constants.js
-jest.config.js
-coverage
+.dockerignore
+.nvmrc
 .git
 .github
-OPTIMIZATION.md
