@@ -213,7 +213,7 @@ jobs:
   # This prevents base image proliferation and ensures clean repository state.
   # ============================================================================
   validate-base-images:
-    name: Validate Base Images
+    name: Validate Unused Base Images
     timeout-minutes: 2
     needs: detect-changes
     runs-on: ubuntu-latest

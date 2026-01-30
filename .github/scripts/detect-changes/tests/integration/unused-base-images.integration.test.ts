@@ -10,7 +10,7 @@ import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,10 +85,30 @@ services:
     const outputFile = path.join(testDir, 'output.txt');
 
     // Execute: Run detect-changes script (should succeed but warn)
-    const result = execSync(
-      `npx tsx ${scriptPath} --base-ref HEAD --base-images-dir ${baseImagesDir} --compose-file ${composeFile} --env-file ${envFile} --docker-dir ${path.join(testDir, 'docker')} --output-file ${outputFile} --base-sha abc123 2>&1`,
+    const scriptResult = spawnSync(
+      'npx',
+      [
+        'tsx',
+        scriptPath,
+        '--base-ref',
+        'HEAD',
+        '--base-images-dir',
+        baseImagesDir,
+        '--compose-file',
+        composeFile,
+        '--env-file',
+        envFile,
+        '--docker-dir',
+        path.join(testDir, 'docker'),
+        '--output-file',
+        outputFile,
+        '--base-sha',
+        'abc123',
+      ],
       { cwd: testDir, encoding: 'utf-8' }
     );
+    // Combine stdout and stderr (warnings go to stderr)
+    const result = scriptResult.stdout + scriptResult.stderr;
 
     // Verify warning message in output (stderr redirected to stdout)
     expect(result).toContain('⚠️  WARNING: Unused base images detected!');
@@ -171,9 +191,27 @@ services:
 
     // Execute: Run detect-changes script (should pass)
     try {
-      execSync(
-        `npx tsx ${scriptPath} --base-ref HEAD --base-images-dir ${baseImagesDir} --compose-file ${composeFile} --env-file ${envFile} --docker-dir ${path.join(testDir, 'docker')} --output-file ${outputFile} --base-sha abc123`,
-        { cwd: testDir, stdio: 'pipe' }
+      spawnSync(
+        'npx',
+        [
+          'tsx',
+          scriptPath,
+          '--base-ref',
+          'HEAD',
+          '--base-images-dir',
+          baseImagesDir,
+          '--compose-file',
+          composeFile,
+          '--env-file',
+          envFile,
+          '--docker-dir',
+          path.join(testDir, 'docker'),
+          '--output-file',
+          outputFile,
+          '--base-sha',
+          'abc123',
+        ],
+        { cwd: testDir, encoding: 'utf-8' }
       );
 
       // Verify success
@@ -262,10 +300,30 @@ services:
     const outputFile = path.join(testDir, 'output.txt');
 
     // Execute: Run detect-changes script (should succeed but warn)
-    const result = execSync(
-      `npx tsx ${scriptPath} --base-ref HEAD --base-images-dir ${baseImagesDir} --compose-file ${composeFile} --env-file ${envFile} --docker-dir ${path.join(testDir, 'docker')} --output-file ${outputFile} --base-sha abc123 2>&1`,
+    const scriptResult = spawnSync(
+      'npx',
+      [
+        'tsx',
+        scriptPath,
+        '--base-ref',
+        'HEAD',
+        '--base-images-dir',
+        baseImagesDir,
+        '--compose-file',
+        composeFile,
+        '--env-file',
+        envFile,
+        '--docker-dir',
+        path.join(testDir, 'docker'),
+        '--output-file',
+        outputFile,
+        '--base-sha',
+        'abc123',
+      ],
       { cwd: testDir, encoding: 'utf-8' }
     );
+    // Combine stdout and stderr (warnings go to stderr)
+    const result = scriptResult.stdout + scriptResult.stderr;
 
     // Verify warning message contains all three unused base images
     expect(result).toContain('⚠️  WARNING: Unused base images detected!');
