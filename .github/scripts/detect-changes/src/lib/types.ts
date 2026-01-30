@@ -94,6 +94,8 @@ export interface DetectionResult {
   changed_base_images: string[];
   /** Base images that need to be built */
   base_images_needed: string[];
+  /** Base images not referenced by any service */
+  unused_base_images: string[];
   /** Services that have changed */
   changed_services: string[];
   /** Services affected by base image changes */

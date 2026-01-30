@@ -134,6 +134,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     base_images: JSON.stringify(result.base_images),
     changed_base_images: JSON.stringify(result.changed_base_images),
     base_images_needed: JSON.stringify(result.base_images_needed),
+    unused_base_images: JSON.stringify(result.unused_base_images),
 
     // Service outputs
     services: JSON.stringify([...result.changed_services, ...result.affected_services].sort()),
@@ -199,6 +200,28 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   const baseImagesNeeded = extractBaseImagesNeeded(servicesToBuild, services, baseImageMapping);
   console.error(`Base images needed: ${baseImagesNeeded.length}`);
 
+  console.error('Step 8.5: Detecting unused base images...');
+  // Find base images that are not referenced by any service
+  const allBaseDirs = baseImages.map((img) => img.directory);
+  const referencedBaseDirs = new Set(reverseDeps.keys());
+  const unusedBaseImages = allBaseDirs.filter((dir) => !referencedBaseDirs.has(dir)).sort();
+  console.error(`Unused base images: ${unusedBaseImages.length}`);
+
+  if (unusedBaseImages.length > 0) {
+    console.error('');
+    console.error('❌ ERROR: Unused base images detected!');
+    console.error('');
+    console.error('The following base image directories are not referenced by any service:');
+    for (const dir of unusedBaseImages) {
+      console.error(`  - ${dir}`);
+    }
+    console.error('');
+    console.error('These base images should be removed from the base-images/ directory.');
+    console.error('If a service no longer uses a base image, remove the base image directory.');
+    console.error('');
+    process.exit(1);
+  }
+
   // Step 9: Fork PR validation (if applicable)
   if (options.isFork) {
     console.error('Step 9: Validating fork PR base images...');
@@ -263,6 +286,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     base_images: baseImages.map((img) => img.directory).sort(),
     changed_base_images: changedBaseImages.sort(),
     base_images_needed: baseImagesNeeded,
+    unused_base_images: unusedBaseImages,
     changed_services: changedServices.sort(),
     affected_services: affectedServices,
     to_build: toBuild,
@@ -313,6 +337,7 @@ program
       console.error('');
       console.error('=== Detection Summary ===');
       console.error(`Base images changed: ${result.changed_base_images.length}`);
+      console.error(`Base images unused: ${result.unused_base_images.length}`);
       console.error(`Services changed: ${result.changed_services.length}`);
       console.error(`Services affected: ${result.affected_services.length}`);
       console.error(`Total to build: ${result.to_build.length}`);

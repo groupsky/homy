@@ -178,10 +178,11 @@ describe('TestNormalizeGhcrTag', () => {
   });
 
   describe('test_normalize_grafana_no_change', () => {
-    test('Should not modify non-node images', () => {
+    test('Should use directory name for GHCR images', () => {
+      // GHCR images use flattened names (grafana:*) even if upstream is grafana/grafana:*
       const result = normalizeGhcrTag('grafana', '9.5.21');
 
-      expect(result).toBe('grafana/grafana:9.5.21');
+      expect(result).toBe('grafana:9.5.21');
     });
   });
 
@@ -325,8 +326,9 @@ describe('TestBaseImagesIntegration', () => {
       expect(mapping.dir_to_ghcr['node-18-alpine']).toBe('node:18.20.8-alpine');
       expect(mapping.ghcr_to_dir['node:18.20.8-alpine']).toBe('node-18-alpine');
 
-      expect(mapping.dir_to_ghcr['grafana']).toBe('grafana/grafana:9.5.21');
-      expect(mapping.ghcr_to_dir['grafana/grafana:9.5.21']).toBe('grafana');
+      // GHCR uses flattened names (grafana:*) even if upstream is grafana/grafana:*
+      expect(mapping.dir_to_ghcr['grafana']).toBe('grafana:9.5.21');
+      expect(mapping.ghcr_to_dir['grafana:9.5.21']).toBe('grafana');
     });
   });
 

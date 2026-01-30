@@ -74,8 +74,13 @@ export function buildReverseDependencyMap(
         continue;
       }
 
-      // Look up the base image directory from the GHCR tag
-      const baseDir = baseImageMapping.ghcr_to_dir[finalBaseImage];
+      // Strip the GHCR registry prefix to get the short tag for lookup
+      // Example: 'ghcr.io/groupsky/homy/node:18.20.8-alpine' -> 'node:18.20.8-alpine'
+      // Example: 'ghcr.io/groupsky/homy/grafana:9.5.21' -> 'grafana:9.5.21' (matches 'grafana/grafana:9.5.21' upstream)
+      const shortTag = finalBaseImage.replace('ghcr.io/groupsky/homy/', '');
+
+      // Look up the base image directory from the short GHCR tag
+      const baseDir = baseImageMapping.ghcr_to_dir[shortTag];
 
       if (!baseDir) {
         // Base image not in our mapping, skip

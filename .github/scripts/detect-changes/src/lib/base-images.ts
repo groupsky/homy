@@ -132,10 +132,10 @@ export function parseBaseDockerfile(dockerfilePath: string): BaseImageInfo | nul
  * Maps base image directory names to their GHCR tag format, with special
  * handling for node-*-alpine directories and platform version normalization.
  *
- * Mapping rules:
+ * Mapping rules (GHCR format, not upstream format):
  * - node-18-alpine + "18.20.8-alpine3.21" -> "node:18.20.8-alpine"
  * - node-22-alpine + "22.22.0-alpine3.23" -> "node:22.22.0-alpine"
- * - grafana + "9.5.21" -> "grafana/grafana:9.5.21"
+ * - grafana + "9.5.21" -> "grafana:9.5.21" (upstream is grafana/grafana, GHCR flattens to grafana)
  * - alpine + "3.22.1" -> "alpine:3.22.1"
  * - Empty/null version -> ":latest"
  *
@@ -149,7 +149,7 @@ export function parseBaseDockerfile(dockerfilePath: string): BaseImageInfo | nul
  * // Returns: 'node:18.20.8-alpine'
  *
  * normalizeGhcrTag('grafana', '9.5.21')
- * // Returns: 'grafana/grafana:9.5.21'
+ * // Returns: 'grafana:9.5.21'
  * ```
  */
 export function normalizeGhcrTag(directoryName: string, rawVersion: string): string {
@@ -173,17 +173,9 @@ export function normalizeGhcrTag(directoryName: string, rawVersion: string): str
     return `node:${normalizedVersion}`;
   }
 
-  // Special handling for known images with org/image format
-  const imageOrgMappings: Record<string, string> = {
-    grafana: 'grafana/grafana',
-    nodered: 'nodered/node-red',
-  };
-
-  if (imageOrgMappings[directoryName]) {
-    return `${imageOrgMappings[directoryName]}:${normalizedVersion}`;
-  }
-
-  // Default: use directory name as image name
+  // GHCR images are published with flattened names (e.g., ghcr.io/groupsky/homy/grafana:*)
+  // even if upstream uses org/image format (e.g., grafana/grafana:*).
+  // Always use the directory name as the GHCR image name.
   return `${directoryName}:${normalizedVersion}`;
 }
 
@@ -205,11 +197,11 @@ export function normalizeGhcrTag(directoryName: string, rawVersion: string): str
  * // Returns: {
  * //   dir_to_ghcr: {
  * //     'node-18-alpine': 'node:18.20.8-alpine',
- * //     'grafana': 'grafana/grafana:9.5.21'
+ * //     'grafana': 'grafana:9.5.21'
  * //   },
  * //   ghcr_to_dir: {
  * //     'node:18.20.8-alpine': 'node-18-alpine',
- * //     'grafana/grafana:9.5.21': 'grafana'
+ * //     'grafana:9.5.21': 'grafana'
  * //   }
  * // }
  * ```
