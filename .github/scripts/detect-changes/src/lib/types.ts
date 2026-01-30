@@ -105,6 +105,8 @@ export interface DetectionResult {
   to_build: string[];
   /** Services that can be retagged */
   to_retag: string[];
+  /** Services that need testing but can use existing images from GHCR */
+  to_pull_for_testing: string[];
   /** Services with tests that should be run */
   testable_services: string[];
   /** Services with healthchecks that should be validated */

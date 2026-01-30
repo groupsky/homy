@@ -15,7 +15,7 @@ import * as path from 'path';
 import { discoverBaseImages, buildDirectoryToGhcrMapping } from './lib/base-images.js';
 import { discoverServicesFromCompose, filterGhcrServices } from './lib/services.js';
 import { buildReverseDependencyMap, detectAffectedServices } from './lib/dependency-graph.js';
-import { detectChangedBaseImages, detectChangedServices } from './lib/change-detection.js';
+import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
@@ -144,6 +144,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     // Build strategy outputs
     to_build: JSON.stringify(result.to_build),
     to_retag: JSON.stringify(result.to_retag),
+    to_pull_for_testing: JSON.stringify(result.to_pull_for_testing),
 
     // Test and verification outputs
     testable_services: JSON.stringify(result.testable_services),
@@ -239,6 +240,38 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   const toRetag = checkResult.toRetag;
   console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
 
+  // Step 10.5: Detect test-only changes
+  console.error('Step 10.5: Detecting test-only changes...');
+  const toPullForTesting: string[] = [];
+
+  for (const serviceName of changedServices) {
+    // Skip if already marked for building
+    if (toBuild.includes(serviceName)) {
+      continue;
+    }
+
+    // Find service object
+    const service = services.find((s) => s.service_name === serviceName);
+    if (!service) {
+      continue;
+    }
+
+    // Check if this is a test-only change
+    if (isTestOnlyChange(options.baseRef, service)) {
+      // Verify that image exists in toRetag (already checked by Step 10)
+      // If image exists at base SHA, we can pull it for testing
+      if (toRetag.includes(serviceName)) {
+        toPullForTesting.push(serviceName);
+      } else {
+        // Image doesn't exist, must build despite test-only change
+        // This can happen if base image changed (service is in affectedServices)
+        toBuild.push(serviceName);
+      }
+    }
+  }
+
+  console.error(`Test-only changes: ${toPullForTesting.length}`);
+
   console.error('Step 11: Detecting testable services...');
   // Tests should run for all changed services, not just ones being built
   const testableServices = services
@@ -291,6 +324,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     affected_services: affectedServices,
     to_build: toBuild,
     to_retag: toRetag,
+    to_pull_for_testing: toPullForTesting.sort(),
     testable_services: testableServices,
     healthcheck_services: healthcheckServices,
     version_check_services: versionCheckServices,
