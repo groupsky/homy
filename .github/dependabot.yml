@@ -529,17 +529,6 @@ updates:
           - "*"
 
   # Development and Testing
-  - package-ecosystem: "docker"
-    directory: "/docker/test"
-    schedule:
-      interval: "monthly"
-    reviewers:
-      - "groupsky"
-    groups:
-      development:
-        patterns:
-          - "*"
-
   - package-ecosystem: "npm"
     directory: "/docker/test"
     schedule:
