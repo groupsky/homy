@@ -6,8 +6,7 @@
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "start": "index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "index.js"
   },
   "dependencies": {
     "dmx": "https://github.com/groupsky/node-dmx.git#v1.0.2",
