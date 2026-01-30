@@ -76,11 +76,43 @@ export function buildReverseDependencyMap(
 
       // Strip the GHCR registry prefix to get the short tag for lookup
       // Example: 'ghcr.io/groupsky/homy/node:18.20.8-alpine' -> 'node:18.20.8-alpine'
-      // Example: 'ghcr.io/groupsky/homy/grafana:9.5.21' -> 'grafana:9.5.21' (matches 'grafana/grafana:9.5.21' upstream)
+      // Example: 'ghcr.io/groupsky/homy/grafana:9.5.21' -> 'grafana:9.5.21'
       const shortTag = finalBaseImage.replace('ghcr.io/groupsky/homy/', '');
 
-      // Look up the base image directory from the short GHCR tag
-      const baseDir = baseImageMapping.ghcr_to_dir[shortTag];
+      // The shortTag may have platform suffixes (e.g., 'node:22.22.0-alpine3.23')
+      // but the mapping keys are normalized (e.g., 'node:22.22.0-alpine').
+      // We need to check both the exact match and all possible base image mappings.
+      let baseDir = baseImageMapping.ghcr_to_dir[shortTag];
+
+      // If exact match fails, try to find a match by checking if any mapping key
+      // matches the normalized version of the shortTag
+      if (!baseDir) {
+        // Extract image name and version from shortTag
+        const colonIndex = shortTag.indexOf(':');
+        if (colonIndex !== -1) {
+          const imageName = shortTag.substring(0, colonIndex);
+          const version = shortTag.substring(colonIndex + 1);
+
+          // Try to find a base directory that matches this image and version pattern
+          for (const [mappedTag, dir] of Object.entries(baseImageMapping.ghcr_to_dir)) {
+            // Check if the mapped tag matches our image name
+            if (mappedTag.startsWith(imageName + ':')) {
+              // Extract the mapped version
+              const mappedVersion = mappedTag.substring(colonIndex + 1);
+
+              // Check if versions match after normalization
+              // E.g., '22.22.0-alpine3.23' should match '22.22.0-alpine'
+              const normalizedVersion = version.replace(/alpine3\.\d+/g, 'alpine').replace(/debian\d+/g, 'debian');
+              const normalizedMappedVersion = mappedVersion.replace(/alpine3\.\d+/g, 'alpine').replace(/debian\d+/g, 'debian');
+
+              if (normalizedVersion === normalizedMappedVersion) {
+                baseDir = dir;
+                break;
+              }
+            }
+          }
+        }
+      }
 
       if (!baseDir) {
         // Base image not in our mapping, skip

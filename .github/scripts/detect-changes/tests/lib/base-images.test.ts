@@ -215,7 +215,8 @@ describe('TestNormalizeGhcrTag', () => {
       const result = normalizeGhcrTag('node-ubuntu', '18.20.8-ubuntu22.04');
 
       // Should normalize ubuntu22.04 -> ubuntu
-      expect(result).toBe('node:18.20.8-ubuntu');
+      // GHCR publishes as node-ubuntu:*, not node:*-ubuntu
+      expect(result).toBe('node-ubuntu:18.20.8-ubuntu');
     });
   });
 

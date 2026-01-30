@@ -169,8 +169,9 @@ export function normalizeGhcrTag(directoryName: string, rawVersion: string): str
   }
 
   // Special handling for node-ubuntu directory
+  // GHCR publishes as ghcr.io/groupsky/homy/node-ubuntu:*, not node:*
   if (directoryName === 'node-ubuntu') {
-    return `node:${normalizedVersion}`;
+    return `node-ubuntu:${normalizedVersion}`;
   }
 
   // GHCR images are published with flattened names (e.g., ghcr.io/groupsky/homy/grafana:*)
