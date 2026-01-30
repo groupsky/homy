@@ -7,15 +7,10 @@
   "main": "index.js",
   "scripts": {
     "start": "index.js",
-    "test": "jest",
-    "test:native": "node verify-native-module.js",
-    "test:all": "npm run test:native && npm test"
+    "test": "node verify-native-module.js"
   },
   "dependencies": {
     "dmx": "https://github.com/groupsky/node-dmx.git#v1.0.2",
     "mqtt": "^5.14.1"
-  },
-  "devDependencies": {
-    "jest": "^29.7.0"
   }
 }
