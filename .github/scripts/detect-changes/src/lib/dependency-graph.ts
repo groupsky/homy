@@ -79,35 +79,46 @@ export function buildReverseDependencyMap(
       // Example: 'ghcr.io/groupsky/homy/grafana:9.5.21' -> 'grafana:9.5.21'
       const shortTag = finalBaseImage.replace('ghcr.io/groupsky/homy/', '');
 
-      // The shortTag may have platform suffixes (e.g., 'node:22.22.0-alpine3.23')
-      // but the mapping keys are normalized (e.g., 'node:22.22.0-alpine').
-      // We need to check both the exact match and all possible base image mappings.
+      // Check if this service uses any base image from our managed base-images/
+      // We need version-agnostic matching to handle Dependabot base image updates
+      // where the base image version changes but services haven't been updated yet.
       let baseDir = baseImageMapping.ghcr_to_dir[shortTag];
 
-      // If exact match fails, try to find a match by checking if any mapping key
-      // matches the normalized version of the shortTag
+      // If exact match fails, try version-agnostic matching
+      // This handles cases where:
+      // - Base image updated: node:22.23.0 (new)
+      // - Service still uses: node:22.22.0 (old)
+      // - Both should map to node-22-alpine directory
       if (!baseDir) {
-        // Extract image name and version from shortTag
         const colonIndex = shortTag.indexOf(':');
         if (colonIndex !== -1) {
-          const imageName = shortTag.substring(0, colonIndex);
-          const version = shortTag.substring(colonIndex + 1);
+          const serviceImageName = shortTag.substring(0, colonIndex);
+          const serviceVersion = shortTag.substring(colonIndex + 1);
 
-          // Try to find a base directory that matches this image and version pattern
-          for (const [mappedTag, dir] of Object.entries(baseImageMapping.ghcr_to_dir)) {
-            // Check if the mapped tag matches our image name
-            if (mappedTag.startsWith(imageName + ':')) {
-              // Extract the mapped version
-              const mappedVersion = mappedTag.substring(colonIndex + 1);
+          // Find base directories that could produce this GHCR image name
+          // by checking if any dir_to_ghcr mapping has the same image name prefix
+          for (const [dir, mappedTag] of Object.entries(baseImageMapping.dir_to_ghcr)) {
+            const mappedColonIndex = mappedTag.indexOf(':');
+            if (mappedColonIndex !== -1) {
+              const mappedImageName = mappedTag.substring(0, mappedColonIndex);
 
-              // Check if versions match after normalization
-              // E.g., '22.22.0-alpine3.23' should match '22.22.0-alpine'
-              const normalizedVersion = version.replace(/alpine3\.\d+/g, 'alpine').replace(/debian\d+/g, 'debian');
-              const normalizedMappedVersion = mappedVersion.replace(/alpine3\.\d+/g, 'alpine').replace(/debian\d+/g, 'debian');
+              // If image names match, this base image directory produces this namespace
+              if (serviceImageName === mappedImageName) {
+                // For node-X-alpine images, also check major version match
+                // node-22-alpine should match node:22.* but not node:18.*
+                if (dir.match(/^node-(\d+)-/)) {
+                  const dirMajor = dir.match(/^node-(\d+)-/)![1];
+                  const serviceMajor = serviceVersion.match(/^(\d+)\./)![1];
 
-              if (normalizedVersion === normalizedMappedVersion) {
-                baseDir = dir;
-                break;
+                  if (dirMajor === serviceMajor) {
+                    baseDir = dir;
+                    break;
+                  }
+                } else {
+                  // For other images, image name match is sufficient
+                  baseDir = dir;
+                  break;
+                }
               }
             }
           }
