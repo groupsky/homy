@@ -609,7 +609,11 @@ jobs:
     needs: [detect-changes, prepare-base-images]
     # Only run if we have services to build
     # Check JSON array != '[]' before matrix evaluation (prevents workflow crash)
-    if: needs.detect-changes.outputs.to_build != '[]'
+    # Run even if prepare-base-images was skipped (base images already in GHCR)
+    if: |
+      always() &&
+      needs.detect-changes.outputs.to_build != '[]' &&
+      (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read  # NO packages permissions - cannot pull from registries
