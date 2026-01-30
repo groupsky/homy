@@ -323,11 +323,30 @@ export function buildDirectoryToGhcrMapping(baseImagesDir: string): DirectoryGHC
 
   // Build mappings
   for (const baseImage of baseImages) {
-    const ghcrTag = normalizeGhcrTag(baseImage.directory, baseImage.raw_version || '');
+    const normalizedTag = normalizeGhcrTag(baseImage.directory, baseImage.raw_version || '');
+    const rawVersion = baseImage.raw_version || '';
 
-    // Add to both mappings
-    dirToGhcr[baseImage.directory] = ghcrTag;
-    ghcrToDir[ghcrTag] = baseImage.directory;
+    // Map directory to normalized tag
+    dirToGhcr[baseImage.directory] = normalizedTag;
+
+    // Map normalized tag to directory
+    ghcrToDir[normalizedTag] = baseImage.directory;
+
+    // ALSO map raw version tag to directory (if different from normalized)
+    // This handles cases where services use the full upstream version
+    // E.g., node:22.22.0-alpine3.23 maps to node-22-alpine directory
+    if (rawVersion) {
+      // Extract the image name from the normalized tag (before the colon)
+      const colonIndex = normalizedTag.indexOf(':');
+      if (colonIndex !== -1) {
+        const imageName = normalizedTag.substring(0, colonIndex);
+        const rawTag = `${imageName}:${rawVersion}`;
+
+        if (rawTag !== normalizedTag) {
+          ghcrToDir[rawTag] = baseImage.directory;
+        }
+      }
+    }
   }
 
   return {

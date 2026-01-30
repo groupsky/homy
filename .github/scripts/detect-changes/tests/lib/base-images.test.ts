@@ -253,16 +253,19 @@ describe('TestBuildDirectoryToGhcrMapping', () => {
   });
 
   describe('test_mapping_is_bidirectional', () => {
-    test('Should verify that dir_to_ghcr and ghcr_to_dir are inverses', () => {
+    test('Should verify that ghcr_to_dir maps back to valid directories', () => {
       const result = buildDirectoryToGhcrMapping(FIXTURES_DIR);
 
-      // Verify bidirectional consistency
+      // For every dir_to_ghcr mapping, the reverse should exist in ghcr_to_dir
       for (const [dir, ghcrTag] of Object.entries(result.dir_to_ghcr)) {
         expect(result.ghcr_to_dir[ghcrTag]).toBe(dir);
       }
 
-      for (const [ghcrTag, dir] of Object.entries(result.ghcr_to_dir)) {
-        expect(result.dir_to_ghcr[dir]).toBe(ghcrTag);
+      // For every ghcr_to_dir mapping, the directory should have a dir_to_ghcr entry
+      // Note: ghcr_to_dir may have multiple entries for the same directory
+      // (both raw and normalized versions), so we just check the directory exists
+      for (const dir of Object.values(result.ghcr_to_dir)) {
+        expect(result.dir_to_ghcr[dir]).toBeDefined();
       }
     });
   });
