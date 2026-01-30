@@ -14,18 +14,59 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { parseBaseDockerfile as dockerfileParserParseBaseDockerfile } from './dockerfile-parser.js';
 import { normalizeVersion } from './version-normalizer.js';
 import type { BaseImage, BaseImageInfo, DirectoryGHCRMapping } from './types.js';
 
 /**
+ * Get base image targets from docker-bake.hcl using Docker Buildx.
+ *
+ * Uses `docker buildx bake --print` to parse the HCL file and extract
+ * the list of targets in the "default" group. This is the authoritative
+ * source of truth for what gets built in CI.
+ *
+ * @param baseImagesDir - Path to the base-images directory containing docker-bake.hcl
+ * @returns Array of target names from the default group
+ * @throws Error if docker buildx is not installed or HCL parsing fails
+ *
+ * @example
+ * ```typescript
+ * const targets = getTargetsFromDockerBake('/path/to/base-images');
+ * // Returns: ['node-18-alpine', 'grafana', 'influxdb', ...]
+ * ```
+ */
+export function getTargetsFromDockerBake(baseImagesDir: string): string[] {
+  try {
+    const output = execSync('docker buildx bake --print', {
+      cwd: baseImagesDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const parsed = JSON.parse(output);
+    return (parsed.group?.default?.targets || []).sort();
+  } catch (error: any) {
+    if (error.message?.includes('command not found') || error.message?.includes('not recognized')) {
+      throw new Error(
+        'Docker Buildx is required but not installed. ' +
+          'See: https://docs.docker.com/buildx/working-with-buildx/'
+      );
+    }
+    throw new Error(`Failed to parse docker-bake.hcl: ${error.message}`);
+  }
+}
+
+/**
  * Discover all base images in the base-images directory.
  *
- * Scans the base-images directory for subdirectories containing Dockerfiles
- * and parses each to extract upstream image information.
+ * Uses docker-bake.hcl as the source of truth for what base images exist,
+ * then validates that corresponding directories and Dockerfiles exist.
+ * This ensures consistency between the HCL file and the filesystem.
  *
  * @param baseImagesDir - Path to the base-images directory
  * @returns Array of discovered base images with metadata
+ * @throws Error if validation fails (missing directories, orphaned directories, etc.)
  *
  * @example
  * ```typescript
@@ -39,41 +80,107 @@ import type { BaseImage, BaseImageInfo, DirectoryGHCRMapping } from './types.js'
 export function discoverBaseImages(baseImagesDir: string): BaseImage[] {
   const baseImages: BaseImage[] = [];
 
-  // Read all entries in base-images directory
-  const entries = fs.readdirSync(baseImagesDir);
+  // Check if docker-bake.hcl exists
+  const dockerBakeHclPath = path.join(baseImagesDir, 'docker-bake.hcl');
+  const hasDockerBakeHcl = fs.existsSync(dockerBakeHclPath);
 
-  for (const entry of entries) {
-    const entryPath = path.join(baseImagesDir, entry);
+  let targets: string[] = [];
+  let validateBidirectionally = false;
 
-    // Check if entry is a directory
-    const stat = fs.statSync(entryPath);
-    if (!stat.isDirectory()) {
-      continue;
+  if (hasDockerBakeHcl) {
+    // Use docker-bake.hcl as source of truth (production path)
+    try {
+      targets = getTargetsFromDockerBake(baseImagesDir);
+      validateBidirectionally = true;
+    } catch (error) {
+      // Fall back to directory scanning if docker buildx fails
+      console.error(`Warning: Failed to parse docker-bake.hcl, falling back to directory scanning: ${error}`);
+      targets = [];
+      validateBidirectionally = false;
+    }
+  }
+
+  if (targets.length === 0) {
+    // Fallback: scan directories (for tests and backward compatibility)
+    targets = fs
+      .readdirSync(baseImagesDir)
+      .filter((entry) => {
+        const entryPath = path.join(baseImagesDir, entry);
+        const stat = fs.statSync(entryPath);
+        if (!stat.isDirectory()) {
+          return false;
+        }
+        return fs.existsSync(path.join(entryPath, 'Dockerfile'));
+      })
+      .sort();
+    validateBidirectionally = false;
+  }
+
+  // Bidirectional validation (only if using docker-bake.hcl)
+  if (validateBidirectionally) {
+    const directoriesWithDockerfiles = fs
+      .readdirSync(baseImagesDir)
+      .filter((entry) => {
+        const entryPath = path.join(baseImagesDir, entry);
+        const stat = fs.statSync(entryPath);
+        if (!stat.isDirectory()) {
+          return false;
+        }
+        return fs.existsSync(path.join(entryPath, 'Dockerfile'));
+      })
+      .sort();
+
+    const orphaned = directoriesWithDockerfiles.filter((dir) => !targets.includes(dir));
+    const missing = targets.filter((target) => !directoriesWithDockerfiles.includes(target));
+
+    if (orphaned.length > 0) {
+      throw new Error(
+        `Orphaned base image directories found (exist but not in docker-bake.hcl): ${orphaned.join(', ')}\n` +
+          'Please either:\n' +
+          '  1. Add these to docker-bake.hcl if they should be built, or\n' +
+          '  2. Remove these directories if they are no longer needed'
+      );
     }
 
-    // Check if directory contains a Dockerfile
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing base image directories (in docker-bake.hcl but no directory exists): ${missing.join(', ')}\n` +
+          'Please either:\n' +
+          '  1. Create the missing directories with Dockerfiles, or\n' +
+          '  2. Remove these targets from docker-bake.hcl'
+      );
+    }
+  }
+
+  // Process all targets
+  for (const target of targets) {
+    const entryPath = path.join(baseImagesDir, target);
     const dockerfilePath = path.join(entryPath, 'Dockerfile');
-    if (!fs.existsSync(dockerfilePath)) {
-      continue;
-    }
 
     // Parse the Dockerfile
     let info: BaseImageInfo | null = null;
     try {
       info = parseBaseDockerfile(dockerfilePath);
     } catch (error) {
-      // Skip directories where Dockerfile cannot be parsed
+      if (validateBidirectionally) {
+        // Parsing failure is an error for targets in docker-bake.hcl
+        throw new Error(`Failed to parse Dockerfile for target "${target}": ${error}`);
+      }
+      // Skip directories where Dockerfile cannot be parsed (backward compatibility)
       continue;
     }
 
     if (!info) {
-      // Skip if parsing failed
+      if (validateBidirectionally) {
+        throw new Error(`Failed to parse Dockerfile for target "${target}": No valid FROM line found`);
+      }
+      // Skip if parsing failed (backward compatibility)
       continue;
     }
 
     // Create base image entry
     const baseImage: BaseImage = {
-      directory: entry,
+      directory: target,
       dockerfile_path: dockerfilePath,
       upstream_image: info.upstream_image,
       image_name: info.image_name,
