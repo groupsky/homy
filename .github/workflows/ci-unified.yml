@@ -137,6 +137,12 @@ jobs:
             echo "Using merge-base with master: $BASE_REF"
           fi
 
+          # Validate SHA format (40-character hexadecimal)
+          if [[ ! "$BASE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid SHA format: $BASE_REF"
+            exit 1
+          fi
+
           echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
 
       - name: Determine fork status
@@ -295,8 +301,6 @@ jobs:
     env:
       BASE_IMAGES: ${{ needs.detect-changes.outputs.changed_base_images }}
       BASE_IMAGES_NEEDED: ${{ needs.detect-changes.outputs.base_images_needed }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout code
@@ -363,6 +367,9 @@ jobs:
 
       - name: Process base images sequentially
         id: process
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           # Process each base image one at a time to:
           # - Avoid Docker Hub rate limits (sequential pulls)

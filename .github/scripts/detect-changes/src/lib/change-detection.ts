@@ -88,6 +88,8 @@ export function detectChangedBaseImages(
 
   // Parse changed paths and extract directory names
   const changedDirs = new Set<string>();
+  // Validate directory names to prevent path traversal
+  const VALID_DIR_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
   for (const line of output.split('\n')) {
     const trimmedLine = line.trim();
@@ -100,8 +102,13 @@ export function detectChangedBaseImages(
     if (parts.length >= 2 && parts[0] === 'base-images') {
       const directory = parts[1];
 
+      // Validate directory name format to prevent path traversal
+      if (!directory || !VALID_DIR_PATTERN.test(directory)) {
+        continue;
+      }
+
       // Only include if it's a known base image directory
-      if (directory && knownDirs.has(directory)) {
+      if (knownDirs.has(directory)) {
         changedDirs.add(directory);
       }
     }
@@ -142,12 +149,15 @@ export function detectChangedServices(
 
   // Build a map of build context directories to service names
   const dirToService = new Map<string, string>();
+  // Validate directory names to prevent path traversal
+  const VALID_DIR_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
   for (const service of services) {
     // Extract directory name from build_context path
     // Format: /repo/docker/<service-name>
     const parts = service.build_context.split('/');
     const directory = parts[parts.length - 1];
-    if (directory) {
+    if (directory && VALID_DIR_PATTERN.test(directory)) {
       dirToService.set(directory, service.service_name);
     }
   }
