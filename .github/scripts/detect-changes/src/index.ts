@@ -275,7 +275,14 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   // Step 10.75: Ensure base images are prepared for all services in toBuild
   console.error('Step 10.75: Ensuring base images are prepared for services to build...');
   // Even if a base image exists in GHCR, if a service needs to be built,
-  // the base image must be prepared as an artifact for Stage 3 (which has no registry access)
+  // the base image must be prepared as an artifact for Stage 3 (which has no registry access).
+  //
+  // Stage 2 behavior:
+  // - CHANGED bases (in changedBaseImages): BUILD from Docker Hub
+  // - NEEDED bases (in baseImagesNeeded): PULL from GHCR, fallback to build if missing
+  //
+  // This step adds bases to baseImagesNeeded (not changedBaseImages), so they will be
+  // PULLED from GHCR (efficient), not unnecessarily rebuilt.
   for (const serviceName of toBuild) {
     const service = services.find((s) => s.service_name === serviceName);
     if (!service) {
@@ -294,13 +301,23 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
       // Look up base image directory
       const baseDir = baseImageMapping.ghcr_to_dir[finalBase];
       if (baseDir) {
-        // Check if this base is already in one of our lists
-        const alreadyPrepared =
-          changedBaseImages.includes(baseDir) || baseImagesNeeded.includes(baseDir);
+        // Check if this base is already scheduled for preparation
+        const isChanged = changedBaseImages.includes(baseDir);
+        const isNeeded = baseImagesNeeded.includes(baseDir);
 
-        if (!alreadyPrepared) {
-          console.error(`  Adding ${baseDir} to base images needed (required by ${serviceName})`);
+        if (!isChanged && !isNeeded) {
+          console.error(
+            `  Adding ${baseDir} to base images needed (required by ${serviceName}, will be PULLED from GHCR)`
+          );
           baseImagesNeeded.push(baseDir);
+        } else if (isChanged) {
+          console.error(
+            `  ${baseDir} already in changed bases (required by ${serviceName}, will be BUILT)`
+          );
+        } else {
+          console.error(
+            `  ${baseDir} already in needed bases (required by ${serviceName}, will be PULLED)`
+          );
         }
       }
     } catch (error) {
