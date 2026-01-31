@@ -148,7 +148,8 @@ export function detectChangedServices(
   }
 
   // Build a map of build context directories to service names
-  const dirToService = new Map<string, string>();
+  // Multiple services can share the same build context (e.g., service aliases)
+  const dirToServices = new Map<string, string[]>();
   // Validate directory names to prevent path traversal
   const VALID_DIR_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
@@ -158,7 +159,10 @@ export function detectChangedServices(
     const parts = service.build_context.split('/');
     const directory = parts[parts.length - 1];
     if (directory && VALID_DIR_PATTERN.test(directory)) {
-      dirToService.set(directory, service.service_name);
+      // Add service to the list for this directory
+      const existingServices = dirToServices.get(directory) || [];
+      existingServices.push(service.service_name);
+      dirToServices.set(directory, existingServices);
     }
   }
 
@@ -201,10 +205,13 @@ export function detectChangedServices(
     if (parts.length >= 2 && parts[0] === 'docker') {
       const directory = parts[1];
 
-      // Look up service name from directory
-      const serviceName = dirToService.get(directory);
-      if (serviceName) {
-        changedServices.add(serviceName);
+      // Look up all services using this directory
+      const serviceNames = dirToServices.get(directory);
+      if (serviceNames) {
+        // Add all services that share this build context
+        for (const serviceName of serviceNames) {
+          changedServices.add(serviceName);
+        }
       }
     }
   }
