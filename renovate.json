@@ -12,13 +12,29 @@
   "ignorePresets": [":prHourlyLimit2"],
   "prConcurrentLimit": 10,
   "prCreation": "immediate",
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
   "packageRules": [
     {
-      "description": "Base Images - Weekly updates with grouping",
+      "description": "Base Images - Automerge patch and minor updates",
       "matchPaths": ["base-images/**"],
       "matchManagers": ["dockerfile"],
       "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch", "minor"],
       "groupName": "base-images",
+      "schedule": ["before 3am on Monday"],
+      "automerge": true,
+      "commitMessagePrefix": "chore(base-images):",
+      "commitMessageTopic": "{{depName}}",
+      "commitMessageExtra": "to {{newVersion}}"
+    },
+    {
+      "description": "Base Images - Manual review for major updates",
+      "matchPaths": ["base-images/**"],
+      "matchManagers": ["dockerfile"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "base-images-major",
       "schedule": ["before 3am on Monday"],
       "automerge": false,
       "commitMessagePrefix": "chore(base-images):",
@@ -99,11 +115,18 @@
       "automerge": false
     },
     {
-      "description": "GitHub Actions - Monthly updates",
+      "description": "GitHub Actions - Automerge all updates",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions",
       "schedule": ["before 3am on the first day of the month"],
-      "automerge": false
+      "automerge": true
+    },
+    {
+      "description": "npm devDependencies - Automerge all updates",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "dev-dependencies",
+      "automerge": true
     },
     {
       "description": "Automatically sync .nvmrc when Dockerfile Node.js version changes (uses tail -1 to match CI validation logic for multi-stage builds)",
