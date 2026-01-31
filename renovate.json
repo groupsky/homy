@@ -1,0 +1,139 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for homy home automation system",
+  "extends": [
+    "config:recommended"
+  ],
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "📋 Dependency Updates Dashboard",
+  "labels": ["dependencies"],
+  "assignees": ["groupsky"],
+  "timezone": "UTC",
+  "ignoreDeps": [],
+  "ignorePresets": [":prHourlyLimit2"],
+  "prConcurrentLimit": 10,
+  "prCreation": "immediate",
+  "packageRules": [
+    {
+      "description": "Base Images - Weekly updates with grouping",
+      "matchPaths": ["base-images/**"],
+      "matchManagers": ["dockerfile"],
+      "groupName": "base-images",
+      "schedule": ["before 3am on Monday"],
+      "automerge": false,
+      "commitMessagePrefix": "chore(base-images):",
+      "commitMessageTopic": "{{depName}}",
+      "commitMessageExtra": "to {{newVersion}}"
+    },
+    {
+      "description": "Ignore Node.js major version updates for base images",
+      "matchPaths": ["base-images/node-*/**"],
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["node"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Infrastructure Services - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/nginx/**",
+        "docker/mosquitto/**",
+        "docker/influxdb/**",
+        "docker/grafana/**",
+        "docker/mongo/**",
+        "docker/mongo-express/**",
+        "docker/wireguard/**",
+        "docker/zigbee2mqtt/**",
+        "docker/dockergen/**",
+        "docker/volman/**"
+      ],
+      "groupName": "infrastructure",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "MQTT Services - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/automations/**",
+        "docker/automation-events-processor/**",
+        "docker/mqtt-influx/**",
+        "docker/mqtt-mongo/**"
+      ],
+      "groupName": "mqtt-services",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "Hardware Integration - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/modbus-serial/**",
+        "docker/dmx-driver/**",
+        "docker/telegram-bridge/**"
+      ],
+      "groupName": "hardware-integration",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "Monitoring Services - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/historian/**",
+        "docker/sunseeker-monitoring/**"
+      ],
+      "groupName": "monitoring",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "Home Assistant - Docker updates",
+      "matchPaths": ["docker/homeassistant/**"],
+      "groupName": "home-automation",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "Development and Testing - npm dependencies",
+      "matchPaths": ["docker/test/**"],
+      "groupName": "development",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "GitHub Actions - Monthly updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "Automatically sync .nvmrc when Dockerfile Node.js version changes",
+      "matchPaths": ["docker/**"],
+      "matchManagers": ["dockerfile"],
+      "postUpgradeTasks": {
+        "commands": [
+          "bash -c 'DOCKERFILE=\"{{{packageFile}}}\"; SERVICE_DIR=\"{{{packageFileDir}}}\"; if [ -f \"$SERVICE_DIR/.nvmrc\" ]; then NEW_VERSION=$(grep -E \"^FROM.*node(-[a-z]+)?:\" \"$DOCKERFILE\" | sed -E \"s/.*node(-[a-z]+)?:([0-9.]+).*/\\2/\" | head -1); if [ ! -z \"$NEW_VERSION\" ] && [ \"$NEW_VERSION\" != \"$(cat \"$SERVICE_DIR/.nvmrc\" | tr -d \"\\n\\r\")\" ]; then echo \"$NEW_VERSION\" > \"$SERVICE_DIR/.nvmrc\" && echo \"✓ Synced .nvmrc to $NEW_VERSION in $SERVICE_DIR\" || echo \"✗ Failed to update .nvmrc in $SERVICE_DIR\"; else echo \"⊙ .nvmrc already synced ($NEW_VERSION) in $SERVICE_DIR\"; fi; else echo \"⊘ No .nvmrc file in $SERVICE_DIR\"; fi'"
+        ],
+        "fileFilters": ["**/.nvmrc"],
+        "executionMode": "update"
+      }
+    }
+  ],
+  "dockerfile": {
+    "enabled": true
+  },
+  "npm": {
+    "enabled": true,
+    "rangeStrategy": "pin"
+  },
+  "github-actions": {
+    "enabled": true
+  },
+  "git-submodules": {
+    "enabled": true
+  },
+  "nvm": {
+    "enabled": true
+  },
+  "platformAutomerge": false,
+  "rebaseWhen": "conflicted"
+}
