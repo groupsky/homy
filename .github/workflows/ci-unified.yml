@@ -1090,50 +1090,37 @@ jobs:
             exit 1
           fi
 
-          # Process _FILE environment variables to support Docker secrets pattern
-          # Create temporary secret files for any *_FILE variables in test.env
-          TEMP_SECRETS_DIR=$(mktemp -d)
-          SECRET_MOUNTS=""
+          # Mount repo secrets directory for Docker secrets pattern
+          # This directory contains example/placeholder secrets safe for testing
+          SECRETS_DIR="$GITHUB_WORKSPACE/secrets"
 
+          # Process _FILE environment variables to point to repo secrets
+          # This supports the Docker secrets pattern used in production
+          PROCESSED_ENV=$(mktemp)
           while IFS='=' read -r key value; do
             # Skip comments and empty lines
             [[ "$key" =~ ^#.*$ ]] || [ -z "$key" ] && continue
 
-            # Check if this is a *_FILE variable
             if [[ "$key" =~ _FILE$ ]]; then
-              # Extract the base variable name (e.g., MQTT_PASSWORD from MQTT_PASSWORD_FILE)
-              BASE_VAR="${key%_FILE}"
-
-              # Create temporary file with test value
-              SECRET_FILE="$TEMP_SECRETS_DIR/${BASE_VAR,,}"  # lowercase filename
-              echo "test-${BASE_VAR,,}-value" > "$SECRET_FILE"
-
-              # Add volume mount for this secret
-              SECRET_MOUNTS="$SECRET_MOUNTS -v $SECRET_FILE:/run/secrets/${BASE_VAR,,}:ro"
-
-              echo "Created secret file: /run/secrets/${BASE_VAR,,}"
-            fi
-          done < "$ENV_FILE"
-
-          # Update _FILE variables to point to mounted secrets
-          PROCESSED_ENV=$(mktemp)
-          while IFS='=' read -r key value; do
-            if [[ "$key" =~ _FILE$ ]]; then
-              BASE_VAR="${key%_FILE}"
-              echo "${key}=/run/secrets/${BASE_VAR,,}"
+              # Extract secret name from the original path (e.g., /run/secrets/mqtt_password)
+              SECRET_NAME=$(basename "$value")
+              # Point to repo secret file
+              echo "${key}=/run/secrets/${SECRET_NAME}"
             else
               echo "${key}=${value}"
             fi
           done < "$ENV_FILE" > "$PROCESSED_ENV"
 
-          # Start container with healthcheck
+          echo "Using secrets from: $SECRETS_DIR"
+          echo "Processed env file: $PROCESSED_ENV"
+
+          # Start container with healthcheck, mounting repo secrets
           CONTAINER_ID=$(docker run -d \
             --env-file "$PROCESSED_ENV" \
-            $SECRET_MOUNTS \
+            -v "$SECRETS_DIR:/run/secrets:ro" \
             ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
 
           echo "container_id=$CONTAINER_ID" >> $GITHUB_OUTPUT
-          echo "temp_secrets=$TEMP_SECRETS_DIR" >> $GITHUB_OUTPUT
           echo "Container started: $CONTAINER_ID"
 
           # Wait for healthy status
@@ -1183,11 +1170,6 @@ jobs:
             echo "Cleaning up container..."
             docker stop ${{ steps.container.outputs.container_id }} || true
             docker rm ${{ steps.container.outputs.container_id }} || true
-          fi
-
-          if [ -n "${{ steps.container.outputs.temp_secrets }}" ]; then
-            echo "Cleaning up temporary secrets..."
-            rm -rf "${{ steps.container.outputs.temp_secrets }}" || true
           fi
 
   # Stage 4C: Lights Integration Test
