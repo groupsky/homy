@@ -13,11 +13,11 @@
 #   service-directory  - Path to the service directory (e.g., docker/automations)
 #
 # Exit codes:
-#   0 - Success (.nvmrc synced or already in sync)
-#   1 - Error (failed to extract version or update .nvmrc)
+#   0 - Success (.nvmrc synced, already in sync, or no .nvmrc file)
+#   1 - Error (failed to extract version from Dockerfile or update .nvmrc)
 #
 
-set -euo pipefail
+set -eu
 
 # Check arguments
 if [ $# -ne 2 ]; then
@@ -59,11 +59,5 @@ fi
 
 # Update .nvmrc file
 echo "$NEW_VERSION" > "$NVMRC_FILE"
-
-if [ $? -eq 0 ]; then
-  echo "✓ Synced .nvmrc to $NEW_VERSION in $SERVICE_DIR"
-  exit 0
-else
-  echo "✗ Failed to update .nvmrc in $SERVICE_DIR"
-  exit 1
-fi
+echo "✓ Synced .nvmrc to $NEW_VERSION in $SERVICE_DIR"
+exit 0

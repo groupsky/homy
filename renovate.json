@@ -64,7 +64,7 @@
         "docker/volman/**"
       ],
       "groupName": "infrastructure",
-      "schedule": ["after 3am every weekday"],
+      "schedule": ["before 3am on Monday"],
       "automerge": false
     },
     {
@@ -76,7 +76,7 @@
         "docker/mqtt-mongo/**"
       ],
       "groupName": "mqtt-services",
-      "schedule": ["after 3am every weekday"],
+      "schedule": ["before 3am on Monday"],
       "automerge": false
     },
     {
@@ -87,7 +87,7 @@
         "docker/telegram-bridge/**"
       ],
       "groupName": "hardware-integration",
-      "schedule": ["after 3am every weekday"],
+      "schedule": ["before 3am on Monday"],
       "automerge": false
     },
     {
@@ -97,14 +97,14 @@
         "docker/sunseeker-monitoring/**"
       ],
       "groupName": "monitoring",
-      "schedule": ["after 3am every weekday"],
+      "schedule": ["before 3am on Monday"],
       "automerge": false
     },
     {
       "description": "Home Assistant - Docker updates",
       "matchPaths": ["docker/homeassistant/**"],
       "groupName": "home-automation",
-      "schedule": ["after 3am every weekday"],
+      "schedule": ["before 3am on Monday"],
       "automerge": false
     },
     {
@@ -115,11 +115,20 @@
       "automerge": false
     },
     {
-      "description": "GitHub Actions - Automerge all updates",
+      "description": "GitHub Actions - Automerge patch and minor updates",
       "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor"],
       "groupName": "github-actions",
       "schedule": ["before 3am on the first day of the month"],
       "automerge": true
+    },
+    {
+      "description": "GitHub Actions - Manual review for major updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "github-actions-major",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
     },
     {
       "description": "npm devDependencies - Automerge all updates",

@@ -70,14 +70,14 @@ Updates are [grouped by service category](https://docs.renovatebot.com/noise-red
 | Group | Services | Schedule | Automerge |
 |-------|----------|----------|-----------|
 | **base-images** | All base images in `base-images/` | Weekly (Monday 3 AM) | ✅ Patch/minor only |
-| **infrastructure** | nginx, mosquitto, influxdb, grafana, mongo, etc. | Daily (weekdays after 3 AM) | ❌ Manual review |
-| **mqtt-services** | automations, automation-events-processor, mqtt-influx, mqtt-mongo | Daily (weekdays after 3 AM) | ❌ Manual review |
-| **hardware-integration** | modbus-serial, dmx-driver, telegram-bridge | Daily (weekdays after 3 AM) | ❌ Manual review |
-| **monitoring** | historian, sunseeker-monitoring | Daily (weekdays after 3 AM) | ❌ Manual review |
-| **home-automation** | homeassistant | Daily (weekdays after 3 AM) | ❌ Manual review |
+| **infrastructure** | nginx, mosquitto, influxdb, grafana, mongo, etc. | Weekly (Monday 3 AM) | ❌ Manual review |
+| **mqtt-services** | automations, automation-events-processor, mqtt-influx, mqtt-mongo | Weekly (Monday 3 AM) | ❌ Manual review |
+| **hardware-integration** | modbus-serial, dmx-driver, telegram-bridge | Weekly (Monday 3 AM) | ❌ Manual review |
+| **monitoring** | historian, sunseeker-monitoring | Weekly (Monday 3 AM) | ❌ Manual review |
+| **home-automation** | homeassistant | Weekly (Monday 3 AM) | ❌ Manual review |
 | **development** | test | Monthly (1st, 3 AM) | ❌ Manual review |
-| **github-actions** | All GitHub Actions | Monthly (1st, 3 AM) | ✅ All updates |
-| **dev-dependencies** | npm devDependencies (all services) | Daily (weekdays after 3 AM) | ✅ All updates |
+| **github-actions** | All GitHub Actions | Monthly (1st, 3 AM) | ✅ Patch/minor only |
+| **dev-dependencies** | npm devDependencies (all services) | Immediate | ✅ All updates |
 
 ### Dependency Dashboard
 
@@ -118,15 +118,6 @@ Main Renovate configuration file at repository root.
 }
 ```
 
-### .github/workflows/renovate.yml
-
-GitHub Actions workflow that runs Renovate on a schedule.
-
-**Triggers:**
-- **Schedule**: Monday 2 AM (base images), 1st of month 2 AM (all dependencies)
-- **Manual**: workflow_dispatch with options for log level and dry-run mode
-- **Push**: When renovate.json or workflow file changes (for testing)
-
 ## Setup Requirements
 
 ### Using Mend Renovate App (Recommended - Current Setup)
@@ -154,7 +145,7 @@ This repository uses the **Mend Renovate App** hosted solution:
 - [x] Configure automerge settings ([docs](https://docs.renovatebot.com/key-concepts/automerge/))
 - [x] Create migration documentation
 - [x] Install Mend Renovate App ([install link](https://github.com/apps/renovate))
-- [ ] Disable Dependabot (rename `.github/dependabot.yml` → `.github/dependabot.yml.disabled`)
+- [x] Disable Dependabot (rename `.github/dependabot.yml` → `.github/dependabot.yml.disabled`)
 - [ ] Wait for first Renovate run (check [Dependency Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) issue)
 - [ ] Verify .nvmrc synchronization works (check first Node.js update PR)
 - [ ] Verify automerge works for base images/actions/devDependencies
@@ -182,10 +173,14 @@ See [official comparison](https://docs.renovatebot.com/bot-comparison/) for more
 If Renovate doesn't work as expected:
 
 1. **Disable Renovate**:
-   ```bash
-   # Rename or delete workflow
-   mv .github/workflows/renovate.yml .github/workflows/renovate.yml.disabled
-   ```
+   - Uninstall Mend Renovate App:
+     - Go to GitHub repository Settings → Integrations → Applications
+     - Remove "Mend Renovate" app
+     - This immediately stops all Renovate activity
+   - Or temporarily disable via config:
+     ```bash
+     mv renovate.json renovate.json.disabled
+     ```
 
 2. **Re-enable Dependabot**:
    ```bash
@@ -194,11 +189,16 @@ If Renovate doesn't work as expected:
    mv .github/workflows/dependabot-coverage.yml.disabled .github/workflows/dependabot-coverage.yml
    ```
 
-3. **Close Renovate PRs**:
+3. **Close Renovate PRs and Dashboard**:
    ```bash
    # Close all open Renovate PRs
-   gh pr list --author renovate[bot] --state open | while read pr _; do
-     gh pr close $pr
+   gh pr list --author "renovate[bot]" --state open --json number --jq '.[].number' | while read pr; do
+     gh pr close $pr --comment "Reverting to Dependabot"
+   done
+
+   # Close dependency dashboard issue
+   gh issue list --author "renovate[bot]" --label "renovate" --json number --jq '.[].number' | while read issue; do
+     gh issue close $issue
    done
    ```
 
@@ -210,81 +210,41 @@ The repository has existing CI validation (`.github/workflows/ci-unified.yml` St
 
 Renovate's `postUpgradeTasks` ensures `.nvmrc` files are updated automatically when Dockerfiles change, so the CI validation should always pass.
 
-### Test Renovate Trigger Integration
+### Verify Mend Renovate App Setup
 
-**Manual test of Renovate trigger:**
+**IMPORTANT**: Mend Renovate App runs on Renovate's schedule and **cannot be manually triggered**.
 
-The CI pipeline automatically triggers Renovate after base images are built. You can test this manually:
+**Verify Installation:**
 
 ```bash
-# Option 1: Trigger Renovate directly
-gh workflow run renovate.yml --ref master -f logLevel=info
-
-# Option 2: Test the full flow (trigger CI which will trigger Renovate)
-# This requires a base image change to actually trigger Renovate
-gh workflow run ci-unified.yml --ref master
+# Check that Renovate app has repository access
+gh api repos/groupsky/homy/installation
 ```
 
-**Test end-to-end workflow:**
+**Monitor First Run:**
 
-1. Update a base image to trigger the full flow:
+1. Wait for Renovate's scheduled run (check schedule in `renovate.json`)
+2. Check for Dependency Dashboard issue creation:
    ```bash
-   # Edit base image Dockerfile
-   vim base-images/node-18-alpine/Dockerfile
-   # Change: FROM node:18.20.8-alpine → FROM node:18.20.9-alpine
-
-   # Commit and push to master
-   git add base-images/node-18-alpine/Dockerfile
-   git commit -m "chore(base-images): update node to 18.20.9"
-   git push origin master
+   gh issue list --label renovate
+   ```
+3. Verify PR creation:
+   ```bash
+   gh pr list --author "renovate[bot]"
    ```
 
-2. CI pipeline runs and triggers Renovate:
-   - Stage 2: Builds and pushes updated base image to GHCR
-   - Stage 7: Triggers Renovate workflow via `workflow_dispatch`
+**Verify .nvmrc Synchronization:**
 
-3. Renovate workflow runs:
-   - Scans GHCR for updated base images
-   - Creates grouped PRs for affected services
+When Renovate creates its first Node.js base image update PR:
+1. Check that the PR includes both Dockerfile and `.nvmrc` changes
+2. Verify versions match between files
+3. Look for "auto-synced" mention in commit message or PR description
+4. Confirm CI Stage 4A validation passes
 
-4. Check for PR creation:
-   ```bash
-   # Wait a few minutes for workflows to complete
-   gh pr list --author renovate[bot] --label dependencies
-   ```
-
-5. Verify PR contents:
-   - Services grouped by category (mqtt-services, infrastructure, etc.)
-   - Dockerfiles updated with new base image versions
-   - .nvmrc files automatically synced
-   - Consistent commit message formatting
-
-### Test Renovate
-
-**Dry-run test:**
-
-```bash
-# Run Renovate without creating PRs
-gh workflow run renovate.yml -f dryRun=true -f logLevel=debug
-
-# Check logs
-gh run list --workflow=renovate.yml
-gh run view <run-id> --log
-```
-
-**Check what Renovate will do:**
-
-```bash
-# Install Renovate CLI locally (optional)
-npm install -g renovate
-
-# Run locally in dry-run mode
-RENOVATE_TOKEN=<your-github-token> \
-  renovate --dry-run=true \
-  --platform=github \
-  --token=<your-github-token> \
-  <owner>/<repo>
-```
+**Expected Timeline:**
+- Base images: Check weekly on Monday ~3 AM UTC
+- Services: Check daily on weekdays ~3 AM UTC
+- First PR may take 24-48 hours after installation
 
 ## Monitoring and Maintenance
 
@@ -336,17 +296,27 @@ Edit `renovate.json` to change update schedules:
 
 ### Renovate not creating PRs
 
-**Check:**
-1. Workflow is enabled: `.github/workflows/renovate.yml`
-2. Secrets are configured: `RENOVATE_APP_ID`, `RENOVATE_APP_PRIVATE_KEY`
-3. GitHub App is installed on the repository
-4. Schedule has run (check workflow runs)
+**For Mend Renovate App:**
 
-**Debug:**
-```bash
-# Run manually with debug logging
-gh workflow run renovate.yml -f logLevel=debug -f dryRun=false
-```
+1. **Verify app installation**:
+   ```bash
+   # Check if Renovate app has access
+   gh api repos/groupsky/homy/installation
+   ```
+
+2. **Check permissions**: App needs:
+   - Contents (read/write)
+   - Pull requests (read/write)
+   - Issues (read/write)
+   - Checks & Statuses (read/write)
+
+3. **Verify schedule**: Check `renovate.json` schedule settings match your expectations
+
+4. **Check dashboard**: Look for "Dependency Updates Dashboard" issue for status messages
+
+5. **Review logs**: Renovate logs are not directly accessible with Mend app. Check:
+   - Dashboard issue for errors
+   - Failed check runs on open PRs
 
 ### .nvmrc not updating
 
