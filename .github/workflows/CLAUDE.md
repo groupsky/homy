@@ -274,27 +274,41 @@ For services with Docker HEALTHCHECK in Dockerfile, validate the container healt
     flags: service-name
 ```
 
-## Unified CI/CD Pipeline
+## CI/CD Architecture
 
-The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements a 6-stage architecture for building, testing, and deploying Docker images.
+The repository uses a **dual-pipeline architecture** that separates containerized and non-containerized testing:
 
-### Migration Status
+### Workflows
 
-**Migration Complete**: The unified CI/CD pipeline has replaced all previous fragmented workflows with feature parity. The following workflows have been disabled (renamed to `.disabled`) as their functionality is now fully integrated into `ci-unified.yml`:
+1. **`service-tests.yml`** - Non-containerized unit tests
+   - Runs `npm ci` + `npm test` directly on GitHub runners
+   - Fast execution without Docker overhead
+   - Covers: automations, modbus-serial, telegram-bridge, automation-events-processor, sunseeker-monitoring
+   - Path-filtered change detection (only runs tests for changed services)
 
-**Disabled Workflows and Replacements (9/9):**
+2. **`ci-unified.yml`** - Containerized builds and tests
+   - 6-stage Docker build pipeline
+   - Container-specific tests: healthchecks, integration tests
+   - Artifact-based security with test-gated promotion
+
+3. **`validate-base-images.yml`** - Base image validation
+   - Validates base-images/ configuration
+   - Checks Dependabot, docker-bake.hcl, and workflow consistency
+
+### Migration History
+
+**Disabled Workflows (8 total):**
 
 | Disabled Workflow | Replacement | Migration Date |
 |-------------------|-------------|----------------|
-| `base-images.yml.disabled` | Stage 2 (Prepare Base Images) | 2026-01 |
-| `app-images.yml.disabled` | Stages 1,3,5,6 (detect, build, push, summary) | 2026-01 |
-| `validate-base-images.yml.disabled` | Stage 1 (dynamic discovery) + Stage 2 (runtime validation) | 2026-01 |
-| `automations-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
-| `modbus-serial-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
-| `telegram-bridge-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
-| `automation-events-processor-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
-| `sunseeker-monitoring-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
-| `lights-test.yml.disabled` | Stage 4D (Lights Integration Test) | 2026-01 |
+| `base-images.yml.disabled` | ci-unified.yml Stage 2 (Prepare Base Images) | 2026-01 |
+| `app-images.yml.disabled` | ci-unified.yml Stages 1,3,5,6 (detect, build, push, summary) | 2026-01 |
+| `automations-tests.yml.disabled` | service-tests.yml (non-containerized) | 2026-01 |
+| `modbus-serial-tests.yml.disabled` | service-tests.yml (non-containerized) | 2026-01 |
+| `telegram-bridge-tests.yml.disabled` | service-tests.yml (non-containerized) + ci-unified.yml Stage 4B (healthchecks) | 2026-01 |
+| `automation-events-processor-tests.yml.disabled` | service-tests.yml (non-containerized) | 2026-01 |
+| `sunseeker-monitoring-tests.yml.disabled` | service-tests.yml (non-containerized) + ci-unified.yml Stage 4B (healthchecks) | 2026-01 |
+| `lights-test.yml.disabled` | ci-unified.yml Stage 4C (integration tests) | 2026-01 |
 
 **Converted to Scheduled Workflows:**
 
@@ -305,17 +319,18 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 
 **Why These Workflows Were Disabled:**
 
-1. **Race Conditions**: `base-images.yml` and `app-images.yml` both pushed `:latest` tags, creating non-deterministic manifest assignment (last workflow to finish wins)
+1. **Race Conditions**: `base-images.yml` and `app-images.yml` both pushed `:latest` tags, creating non-deterministic manifest assignment
 2. **No Test-Gating**: Previous workflows could push broken builds to `:latest` without test validation
-3. **Duplicate Work**: Service test workflows ran redundantly with unified pipeline tests
-4. **Inefficient Resource Usage**: Infrastructure tests ran on every commit regardless of changes
+3. **Inefficient Resource Usage**: Infrastructure tests ran on every commit regardless of changes
+4. **Containerized Tests**: Unit tests were running inside Docker containers (slow), now run directly on GitHub runners (fast)
 
-**Key Improvements in Unified Pipeline:**
+**Key Improvements:**
 
-- ✅ **Deterministic Builds**: Single source of truth for `:latest` tags
-- ✅ **Test-Gated Promotion**: All Stage 4 tests must pass before `:latest` tagging
+- ✅ **Dual-Pipeline Architecture**: Separates fast unit tests from container-specific tests
+- ✅ **Test-Gated Promotion**: All container tests must pass before `:latest` tagging
 - ✅ **Artifact-Based Security**: Build/test stages isolated from registry access
-- ✅ **Efficient Change Detection**: Only rebuilds affected services
+- ✅ **Efficient Change Detection**: Only rebuilds/tests affected services
+- ✅ **Faster Unit Tests**: Run directly on GitHub runners without Docker overhead
 - ✅ **Cascading Updates**: Base image changes automatically rebuild dependent services
 
 ### Architecture Overview
@@ -359,10 +374,11 @@ The pipeline consists of 6 sequential stages with parallel execution within stag
                  │
                  v
 ┌─────────────────────────────────────────────────────────────────┐
-│ Stage 4: Tests (4 parallel jobs)                                │
-│ 4A: Version Check  4B: Unit Tests  4C: Health Checks  4D: MQTT  │
-│ - Dockerfile vs    - npm test      - Container      - Lights    │
-│   package.json                        health          integration│
+│ Stage 4: Container Tests (3 parallel jobs)                      │
+│ 4A: Version Check  4B: Health Checks     4C: MQTT Integration   │
+│ - Dockerfile vs    - Container health    - Lights test          │
+│   package.json                                                   │
+│ NOTE: Unit tests run separately in service-tests.yml            │
 │ - All jobs must pass for promotion to succeed                   │
 └────────────────┬────────────────────────────────────────────────┘
                  │
@@ -595,12 +611,13 @@ retag-unchanged-images:
   # ↑ Also depends on ALL test jobs
 ```
 
-**Stage 4 Test Jobs:**
+**Stage 4 Container Test Jobs:**
 
 1. **Stage 4A: Version Consistency Check** - Validates that `package.json` and Dockerfile `LABEL version` match for services with package.json
-2. **Stage 4B: Unit Tests** - Runs `npm test` for services with test suites (automations, modbus-serial, telegram-bridge, automation-events-processor, sunseeker-monitoring)
-3. **Stage 4C: Healthcheck Tests** - Validates Docker HEALTHCHECK functionality by starting containers and verifying healthy status
-4. **Stage 4D: Lights Integration Test** - MQTT integration testing between automations, features, and broker services using docker/test suite
+2. **Stage 4B: Healthcheck Tests** - Validates Docker HEALTHCHECK functionality by starting containers and verifying healthy status
+3. **Stage 4C: Lights Integration Test** - MQTT integration testing between automations, features, and broker services using docker/test suite
+
+**NOTE**: Unit tests run separately in `service-tests.yml` (non-containerized, faster execution)
 
 **What This Prevents:**
 
@@ -616,7 +633,7 @@ retag-unchanged-images:
 - ✅ Retag operations respect test results
 - ✅ Rollback to last known-good `:latest`
 
-### Stage 4D: Lights Integration Test
+### Stage 4C: Lights Integration Test
 
 **Purpose**: Validates end-to-end MQTT message flow between core automation services (automations, features, broker).
 

@@ -1,0 +1,239 @@
+name: Service Tests (Non-Containerized)
+
+# Runs unit tests directly on GitHub runners (not inside containers)
+# This workflow handles fast unit testing without Docker overhead
+# Container-specific tests (healthchecks, integration) remain in ci-unified.yml
+
+on:
+  push:
+    paths:
+      - 'docker/automations/**'
+      - 'docker/modbus-serial/**'
+      - 'docker/telegram-bridge/**'
+      - 'docker/automation-events-processor/**'
+      - 'docker/sunseeker-monitoring/**'
+      - '.github/workflows/service-tests.yml'
+  pull_request:
+    paths:
+      - 'docker/automations/**'
+      - 'docker/modbus-serial/**'
+      - 'docker/telegram-bridge/**'
+      - 'docker/automation-events-processor/**'
+      - 'docker/sunseeker-monitoring/**'
+      - '.github/workflows/service-tests.yml'
+
+jobs:
+  # Detect which services changed to run tests only for affected services
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      automations: ${{ steps.filter.outputs.automations }}
+      modbus-serial: ${{ steps.filter.outputs.modbus-serial }}
+      telegram-bridge: ${{ steps.filter.outputs.telegram-bridge }}
+      automation-events-processor: ${{ steps.filter.outputs.automation-events-processor }}
+      sunseeker-monitoring: ${{ steps.filter.outputs.sunseeker-monitoring }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Check changed files
+        id: filter
+        run: |
+          # Get list of changed files
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD^1 HEAD)
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Check each service
+          echo "automations=$(echo "$CHANGED_FILES" | grep -q '^docker/automations/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "modbus-serial=$(echo "$CHANGED_FILES" | grep -q '^docker/modbus-serial/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "telegram-bridge=$(echo "$CHANGED_FILES" | grep -q '^docker/telegram-bridge/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "automation-events-processor=$(echo "$CHANGED_FILES" | grep -q '^docker/automation-events-processor/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "sunseeker-monitoring=$(echo "$CHANGED_FILES" | grep -q '^docker/sunseeker-monitoring/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+  # Run tests for each service in parallel
+  test-automations:
+    name: Test Automations
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.automations == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: 'docker/automations/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/automations/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/automations
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/automations
+        run: npm test
+
+      - name: Generate coverage
+        working-directory: docker/automations
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/automations/coverage
+          flags: automations
+          fail_ci_if_error: false
+
+  test-modbus-serial:
+    name: Test Modbus Serial
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.modbus-serial == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: 'docker/modbus-serial/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/modbus-serial/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/modbus-serial
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/modbus-serial
+        run: npm test
+
+      - name: Generate coverage
+        working-directory: docker/modbus-serial
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/modbus-serial/coverage
+          flags: modbus-serial
+          fail_ci_if_error: false
+
+  test-telegram-bridge:
+    name: Test Telegram Bridge
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.telegram-bridge == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: 'docker/telegram-bridge/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/telegram-bridge/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/telegram-bridge
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/telegram-bridge
+        run: npm test
+
+      - name: Generate coverage
+        working-directory: docker/telegram-bridge
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/telegram-bridge/coverage
+          flags: telegram-bridge
+          fail_ci_if_error: false
+
+  test-automation-events-processor:
+    name: Test Automation Events Processor
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.automation-events-processor == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: 'docker/automation-events-processor/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/automation-events-processor/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/automation-events-processor
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/automation-events-processor
+        run: npm test
+
+      - name: Generate coverage
+        working-directory: docker/automation-events-processor
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/automation-events-processor/coverage
+          flags: automation-events-processor
+          fail_ci_if_error: false
+
+  test-sunseeker-monitoring:
+    name: Test Sunseeker Monitoring
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.sunseeker-monitoring == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: 'docker/sunseeker-monitoring/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/sunseeker-monitoring/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/sunseeker-monitoring
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/sunseeker-monitoring
+        run: npm test
+
+      - name: Generate coverage
+        working-directory: docker/sunseeker-monitoring
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/sunseeker-monitoring/coverage
+          flags: sunseeker-monitoring
+          fail_ci_if_error: false

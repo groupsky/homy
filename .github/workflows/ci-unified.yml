@@ -907,12 +907,14 @@ jobs:
           if-no-files-found: error
 
   # ============================================================================
-  # Stage 4: Run Tests (Parallel)
+  # Stage 4: Run Container Tests (Parallel)
   # ============================================================================
-  # Three independent test jobs run in parallel using artifacts from Stage 3:
+  # Three independent container-specific test jobs run in parallel:
   # A) Version Consistency Check - Validates .nvmrc matches Dockerfile node version
-  # B) Unit Tests - Runs test suite and uploads coverage
-  # C) Healthcheck Tests - Starts container and validates healthcheck passes
+  # B) Healthcheck Tests - Starts container and validates healthcheck passes
+  # C) Lights Integration Test - MQTT integration test with docker compose
+  #
+  # NOTE: Unit tests (npm test) run outside containers in service-tests.yml
   # All jobs have NO packages permissions (artifact-only testing).
   # ============================================================================
 
@@ -991,101 +993,7 @@ jobs:
 
           echo "✅ Versions match: $NVMRC_VERSION"
 
-  # Stage 4B: Unit Tests (Parallel Matrix)
-  unit-tests:
-    name: Unit Tests
-    timeout-minutes: 10
-    needs: [detect-changes, build-app-images, pull-images-for-testing]
-    # Always run after both build and pull stages (one or both may be skipped)
-    if: |
-      always() &&
-      needs.detect-changes.outputs.testable_services != '[]' &&
-      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.testable_services) }}
-      fail-fast: false
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
-
-      - name: Download service artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: /tmp
-
-      - name: Verify and load image
-        run: |
-          echo "=== Verifying artifact for ${{ matrix.service }} ==="
-          cd /tmp
-
-          # Verify checksum
-          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-            echo "::error::Checksum verification failed for ${{ matrix.service }}"
-            exit 1
-          fi
-          echo "✅ Checksum verified"
-
-          # Load Docker image
-          echo "Loading Docker image..."
-          if ! docker load -i ${{ matrix.service }}.tar; then
-            echo "::error::Failed to load Docker image"
-            exit 1
-          fi
-
-          # Verify image is available
-          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
-
-      - name: Detect test command
-        id: test-cmd
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          echo "=== Detecting test command ==="
-
-          # Check if package.json exists
-          if [ ! -f package.json ]; then
-            echo "::error::package.json not found"
-            exit 1
-          fi
-
-          # Check for test:coverage script (preferred)
-          if jq -e '.scripts["test:coverage"]' package.json > /dev/null 2>&1; then
-            echo "command=npm run test:coverage" >> $GITHUB_OUTPUT
-            echo "Using: npm run test:coverage"
-          else
-            # Fallback to npm test with coverage flag
-            echo "command=npm test -- --coverage" >> $GITHUB_OUTPUT
-            echo "Using: npm test -- --coverage"
-          fi
-
-      - name: Run tests
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          echo "=== Running tests for ${{ matrix.service }} ==="
-
-          # Run tests inside the built Docker image
-          # This ensures tests run in the exact same environment as production
-          docker run --rm \
-            -v "$(pwd):/app" \
-            -w /app \
-            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} \
-            ${{ steps.test-cmd.outputs.command }}
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
-        continue-on-error: true
-        with:
-          directory: docker/${{ matrix.service }}/coverage
-          flags: ${{ matrix.service }}
-          fail_ci_if_error: false
-
-  # Stage 4C: Healthcheck Tests (Parallel Matrix)
+  # Stage 4B: Healthcheck Tests (Parallel Matrix)
   healthcheck-tests:
     name: Healthcheck Tests
     timeout-minutes: 10
@@ -1243,7 +1151,7 @@ jobs:
             docker rm ${{ steps.container.outputs.container_id }} || true
           fi
 
-  # Stage 4D: Lights Integration Test
+  # Stage 4C: Lights Integration Test
   lights-integration-test:
     name: Lights Integration Test
     timeout-minutes: 10
@@ -1465,7 +1373,7 @@ jobs:
   push-built-images:
     name: Push Built Images
     timeout-minutes: 15
-    needs: [detect-changes, build-app-images, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, build-app-images, pull-images-for-testing, version-consistency-check, healthcheck-tests, lights-integration-test]
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
     if: |
       (github.event_name == 'push' ||
@@ -1595,7 +1503,7 @@ jobs:
   retag-unchanged-images:
     name: Retag Unchanged Images
     timeout-minutes: 5
-    needs: [detect-changes, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, pull-images-for-testing, version-consistency-check, healthcheck-tests, lights-integration-test]
     if: |
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
@@ -1689,7 +1597,6 @@ jobs:
       - build-app-images
       - pull-images-for-testing
       - version-consistency-check
-      - unit-tests
       - healthcheck-tests
       - lights-integration-test
       - push-built-images
@@ -1710,7 +1617,6 @@ jobs:
           BUILD_STATUS="${{ needs.build-app-images.result }}"
           PULL_STATUS="${{ needs.pull-images-for-testing.result }}"
           VERSION_STATUS="${{ needs.version-consistency-check.result }}"
-          TEST_STATUS="${{ needs.unit-tests.result }}"
           HEALTH_STATUS="${{ needs.healthcheck-tests.result }}"
           LIGHTS_STATUS="${{ needs.lights-integration-test.result }}"
           PUSH_STATUS="${{ needs.push-built-images.result }}"
@@ -1722,7 +1628,6 @@ jobs:
           echo "build=$BUILD_STATUS" >> $GITHUB_OUTPUT
           echo "pull=$PULL_STATUS" >> $GITHUB_OUTPUT
           echo "version=$VERSION_STATUS" >> $GITHUB_OUTPUT
-          echo "test=$TEST_STATUS" >> $GITHUB_OUTPUT
           echo "health=$HEALTH_STATUS" >> $GITHUB_OUTPUT
           echo "lights=$LIGHTS_STATUS" >> $GITHUB_OUTPUT
           echo "push=$PUSH_STATUS" >> $GITHUB_OUTPUT
@@ -1732,7 +1637,7 @@ jobs:
           if [[ "$DETECT_STATUS" == "failure" || "$VALIDATE_STATUS" == "failure" || \
                 "$PREPARE_STATUS" == "failure" || "$BUILD_STATUS" == "failure" || \
                 "$PULL_STATUS" == "failure" || \
-                "$VERSION_STATUS" == "failure" || "$TEST_STATUS" == "failure" || \
+                "$VERSION_STATUS" == "failure" || \
                 "$HEALTH_STATUS" == "failure" || "$LIGHTS_STATUS" == "failure" || \
                 "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
             echo "overall=failure" >> $GITHUB_OUTPUT
@@ -1740,7 +1645,7 @@ jobs:
           elif [[ "$DETECT_STATUS" == "cancelled" || "$VALIDATE_STATUS" == "cancelled" || \
                   "$PREPARE_STATUS" == "cancelled" || "$BUILD_STATUS" == "cancelled" || \
                   "$PULL_STATUS" == "cancelled" || \
-                  "$VERSION_STATUS" == "cancelled" || "$TEST_STATUS" == "cancelled" || \
+                  "$VERSION_STATUS" == "cancelled" || \
                   "$HEALTH_STATUS" == "cancelled" || "$LIGHTS_STATUS" == "cancelled" || \
                   "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" ]]; then
             echo "overall=cancelled" >> $GITHUB_OUTPUT
@@ -1764,9 +1669,8 @@ jobs:
           | 3️⃣ Build App Images | ${{ steps.status.outputs.build }} |
           | 3️⃣.5️⃣ Pull Images for Testing | ${{ steps.status.outputs.pull }} |
           | 4️⃣A Version Checks | ${{ steps.status.outputs.version }} |
-          | 4️⃣B Unit Tests | ${{ steps.status.outputs.test }} |
-          | 4️⃣C Healthcheck Tests | ${{ steps.status.outputs.health }} |
-          | 4️⃣D Lights Integration Test | ${{ steps.status.outputs.lights }} |
+          | 4️⃣B Healthcheck Tests | ${{ steps.status.outputs.health }} |
+          | 4️⃣C Lights Integration Test | ${{ steps.status.outputs.lights }} |
           | 5️⃣A Push Images | ${{ steps.status.outputs.push }} |
           | 5️⃣B Retag Images | ${{ steps.status.outputs.retag }} |
 
