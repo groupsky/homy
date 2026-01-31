@@ -29,36 +29,38 @@ The system uses a two-step workflow to keep Node.js versions synchronized:
 - Creates PR to update `base-images/node-XX-alpine/Dockerfile`
 - Example: `FROM node:18.20.8-alpine` → `FROM node:18.20.9-alpine`
 
-**Step 2: Service Update Cascade (Automated Workflow)**
-- When base image Dockerfile merges to master, triggers `cascade-base-image-updates` workflow
-- Workflow automatically:
-  1. Detects which base images changed
-  2. Finds all services using those base images
-  3. Updates service Dockerfiles: `ghcr.io/groupsky/homy/node:18.20.8-alpine` → `18.20.9-alpine`
-  4. Syncs `.nvmrc` files: `18.20.8` → `18.20.9`
-  5. Creates single PR with all changes
+**Step 2: Service Update via Renovate (Triggered Automatically)**
+- When base images are built and pushed to GHCR, CI pipeline triggers Renovate workflow via `workflow_dispatch`
+- Renovate automatically:
+  1. Scans GHCR for updated base image versions
+  2. Detects services using the updated base images
+  3. Creates grouped PRs per service category (mqtt-services, infrastructure, etc.)
+  4. Updates service Dockerfiles: `ghcr.io/groupsky/homy/node:18.20.8-alpine` → `18.20.9-alpine`
+  5. Syncs `.nvmrc` files via `postUpgradeTasks`: `18.20.8` → `18.20.9`
 
-**Example Cascade PR:**
+**Example Renovate PR (Created Automatically):**
 ```
-chore(deps): Cascade base image updates to services
+chore(deps): update mqtt-services group
 
-Base Images Changed: node-18-alpine
-Services Updated: automations, mqtt-influx, dmx-driver
+Updates Node.js base image dependencies
 
-Changes:
-- docker/automations/Dockerfile: 18.20.8 → 18.20.9
-- docker/automations/.nvmrc: 18.20.8 → 18.20.9
-- docker/mqtt-influx/Dockerfile: 18.20.8 → 18.20.9
-- docker/mqtt-influx/.nvmrc: 18.20.8 → 18.20.9
-- docker/dmx-driver/Dockerfile: 18.20.8 → 18.20.9
-- docker/dmx-driver/.nvmrc: 18.20.8 → 18.20.9
+Services Updated:
+- docker/automations/Dockerfile: ghcr.io/groupsky/homy/node:18.20.8-alpine → 18.20.9-alpine
+- docker/automations/.nvmrc: 18.20.8 → 18.20.9 (auto-synced)
+- docker/mqtt-influx/Dockerfile: ghcr.io/groupsky/homy/node:18.20.8-alpine → 18.20.9-alpine
+- docker/mqtt-influx/.nvmrc: 18.20.8 → 18.20.9 (auto-synced)
+
+This PR was automatically created by Renovate after the CI pipeline built and pushed
+updated base images to GHCR.
 ```
 
 **Why Two Steps?**
 - Base images (`ghcr.io/groupsky/homy/*`) are public GHCR mirrors of Docker Hub images
-- Renovate tracks base-images/ (Docker Hub sources) but needs help propagating to services
-- Cascade workflow automates the propagation from base images to services
-- Without cascade, you'd need to manually update each service's Dockerfile when base images change
+- Renovate tracks base-images/ (Docker Hub sources) for detecting updates
+- Services use GHCR sources (docker/*/) to avoid Docker Hub rate limits
+- CI pipeline automatically triggers Renovate after base image builds
+- Renovate's existing grouping and .nvmrc sync configuration handles service updates
+- This approach is simpler and more secure than a custom bash-based cascade workflow
 
 ### Update Grouping
 
@@ -174,17 +176,17 @@ gh run view <run-id> --log
 
 - [x] Create `renovate.json` configuration
 - [x] Create `.github/workflows/renovate.yml`
-- [x] Create `.github/workflows/cascade-base-image-updates.yml`
+- [x] Add Renovate trigger to CI pipeline (`ci-unified.yml`)
 - [x] Create migration documentation
 - [ ] Set up Renovate GitHub App
 - [ ] Configure repository secrets (RENOVATE_APP_ID, RENOVATE_APP_PRIVATE_KEY)
 - [ ] Test Renovate with dry-run mode
-- [ ] Test cascade workflow manually
+- [ ] Test Renovate trigger (verify CI triggers Renovate after base image update)
 - [ ] Disable Dependabot (rename `.github/dependabot.yml` → `.github/dependabot.yml.disabled`)
 - [ ] Disable Dependabot coverage workflow (rename to `.disabled`)
 - [ ] Create initial Renovate PRs
 - [ ] Verify .nvmrc synchronization works
-- [ ] Verify cascade workflow works
+- [ ] Verify automatic Renovate trigger works after base image update
 - [ ] Update CLAUDE.md documentation
 
 ## Comparison: Dependabot vs Renovate
@@ -234,24 +236,24 @@ The repository has existing CI validation (`.github/workflows/ci-unified.yml` St
 
 Renovate's `postUpgradeTasks` ensures `.nvmrc` files are updated automatically when Dockerfiles change, so the CI validation should always pass.
 
-### Test Cascade Workflow
+### Test Renovate Trigger Integration
 
-**Manual test of cascade workflow:**
+**Manual test of Renovate trigger:**
+
+The CI pipeline automatically triggers Renovate after base images are built. You can test this manually:
 
 ```bash
-# Dry-run mode (no PR created)
-gh workflow run cascade-base-image-updates.yml \
-  -f baseImage=node-18-alpine \
-  -f dryRun=true
+# Option 1: Trigger Renovate directly
+gh workflow run renovate.yml --ref master -f logLevel=info
 
-# Check workflow logs
-gh run list --workflow=cascade-base-image-updates.yml
-gh run view <run-id> --log
+# Option 2: Test the full flow (trigger CI which will trigger Renovate)
+# This requires a base image change to actually trigger Renovate
+gh workflow run ci-unified.yml --ref master
 ```
 
-**Test end-to-end:**
+**Test end-to-end workflow:**
 
-1. Update a base image manually:
+1. Update a base image to trigger the full flow:
    ```bash
    # Edit base image Dockerfile
    vim base-images/node-18-alpine/Dockerfile
@@ -263,18 +265,25 @@ gh run view <run-id> --log
    git push origin master
    ```
 
-2. Cascade workflow automatically triggers
+2. CI pipeline runs and triggers Renovate:
+   - Stage 2: Builds and pushes updated base image to GHCR
+   - Stage 7: Triggers Renovate workflow via `workflow_dispatch`
 
-3. Check for PR creation:
+3. Renovate workflow runs:
+   - Scans GHCR for updated base images
+   - Creates grouped PRs for affected services
+
+4. Check for PR creation:
    ```bash
-   # Wait a few minutes for workflow to complete
-   gh pr list --label dependencies
+   # Wait a few minutes for workflows to complete
+   gh pr list --author renovate[bot] --label dependencies
    ```
 
-4. Verify PR contents:
-   - All services using node-18-alpine should be updated
-   - All corresponding .nvmrc files should be updated
-   - Single PR with all changes
+5. Verify PR contents:
+   - Services grouped by category (mqtt-services, infrastructure, etc.)
+   - Dockerfiles updated with new base image versions
+   - .nvmrc files automatically synced
+   - Consistent commit message formatting
 
 ### Test Renovate
 

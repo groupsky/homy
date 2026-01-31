@@ -1780,3 +1780,44 @@ jobs:
 
           ## Overall Status: ${{ steps.status.outputs.overall }}
           EOF
+
+  # ============================================================================
+  # Stage 7: Trigger Renovate for Service Updates
+  # ============================================================================
+  # After base images are successfully built and pushed to GHCR, trigger
+  # Renovate to detect and create PRs for services that need updating.
+  # This replaces the previous cascade workflow approach with a cleaner
+  # solution that leverages Renovate's existing configuration and grouping.
+  # ============================================================================
+  trigger-renovate:
+    name: Trigger Renovate for Service Updates
+    timeout-minutes: 2
+    needs: [detect-changes, push-built-images, retag-unchanged-images, workflow-summary]
+    # Only trigger on master when base images were changed and successfully pushed
+    if: |
+      github.ref == 'refs/heads/master' &&
+      needs.detect-changes.outputs.changed_base_images != '[]' &&
+      needs.workflow-summary.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # Required to trigger workflow_dispatch
+      contents: read
+
+    steps:
+      - name: Trigger Renovate workflow
+        run: |
+          echo "::notice::Base images updated - triggering Renovate to update dependent services"
+          echo ""
+          echo "Changed base images: ${{ needs.detect-changes.outputs.changed_base_images }}"
+          echo ""
+          echo "Renovate will scan GHCR for newly available base image versions"
+          echo "and create grouped PRs for affected services (mqtt-services, infrastructure, etc.)"
+          echo ""
+
+          gh workflow run renovate.yml \
+            --ref master \
+            -f logLevel=info
+
+          echo "✅ Renovate workflow triggered successfully"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
