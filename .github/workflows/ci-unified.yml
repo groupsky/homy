@@ -1082,41 +1082,23 @@ jobs:
         run: |
           echo "=== Starting container and monitoring health ==="
 
-          # Prepare test environment (use test.env if exists, or minimal config)
+          # Verify test.env exists
           ENV_FILE="docker/${{ matrix.service }}/test.env"
           if [ ! -f "$ENV_FILE" ]; then
             echo "::error::Service has HEALTHCHECK but missing docker/${{ matrix.service }}/test.env"
-            echo "Create test.env with minimal viable configuration for healthcheck testing."
+            echo "Create test.env with minimal configuration and _FILE variables pointing to /run/secrets/..."
             exit 1
           fi
 
           # Mount repo secrets directory for Docker secrets pattern
-          # This directory contains example/placeholder secrets safe for testing
+          # test.env should contain _FILE variables like: MQTT_PASSWORD_FILE=/run/secrets/sunseeker_mqtt_password
+          # This directory is mounted as /run/secrets in the container
           SECRETS_DIR="$GITHUB_WORKSPACE/secrets"
+          echo "Mounting secrets from: $SECRETS_DIR → /run/secrets"
 
-          # Process _FILE environment variables to point to repo secrets
-          # This supports the Docker secrets pattern used in production
-          PROCESSED_ENV=$(mktemp)
-          while IFS='=' read -r key value; do
-            # Skip comments and empty lines
-            [[ "$key" =~ ^#.*$ ]] || [ -z "$key" ] && continue
-
-            if [[ "$key" =~ _FILE$ ]]; then
-              # Extract secret name from the original path (e.g., /run/secrets/mqtt_password)
-              SECRET_NAME=$(basename "$value")
-              # Point to repo secret file
-              echo "${key}=/run/secrets/${SECRET_NAME}"
-            else
-              echo "${key}=${value}"
-            fi
-          done < "$ENV_FILE" > "$PROCESSED_ENV"
-
-          echo "Using secrets from: $SECRETS_DIR"
-          echo "Processed env file: $PROCESSED_ENV"
-
-          # Start container with healthcheck, mounting repo secrets
+          # Start container with test.env and mounted secrets
           CONTAINER_ID=$(docker run -d \
-            --env-file "$PROCESSED_ENV" \
+            --env-file "$ENV_FILE" \
             -v "$SECRETS_DIR:/run/secrets:ro" \
             ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
 
