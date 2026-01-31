@@ -272,6 +272,43 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   console.error(`Test-only changes: ${toPullForTesting.length}`);
 
+  // Step 10.75: Ensure base images are prepared for all services in toBuild
+  console.error('Step 10.75: Ensuring base images are prepared for services to build...');
+  // Even if a base image exists in GHCR, if a service needs to be built,
+  // the base image must be prepared as an artifact for Stage 3 (which has no registry access)
+  for (const serviceName of toBuild) {
+    const service = services.find((s) => s.service_name === serviceName);
+    if (!service) {
+      continue;
+    }
+
+    try {
+      // Read Dockerfile and extract final base image
+      const dockerfileContent = readFileSync(service.dockerfile_path, 'utf-8');
+      const finalBase = extractFinalStageBase(dockerfileContent);
+
+      if (!finalBase || !finalBase.startsWith('ghcr.io/groupsky/homy/')) {
+        continue;
+      }
+
+      // Look up base image directory
+      const baseDir = baseImageMapping.ghcr_to_dir[finalBase];
+      if (baseDir) {
+        // Check if this base is already in one of our lists
+        const alreadyPrepared =
+          changedBaseImages.includes(baseDir) || baseImagesNeeded.includes(baseDir);
+
+        if (!alreadyPrepared) {
+          console.error(`  Adding ${baseDir} to base images needed (required by ${serviceName})`);
+          baseImagesNeeded.push(baseDir);
+        }
+      }
+    } catch (error) {
+      console.error(`  Warning: Could not extract base image for ${serviceName}: ${error}`);
+    }
+  }
+  console.error(`Base images needed (updated): ${baseImagesNeeded.length}`);
+
   console.error('Step 11: Detecting testable services...');
   // Tests should run only for services with artifacts (toBuild or toPullForTesting)
   // Services in toRetag don't have artifacts and should not run tests
