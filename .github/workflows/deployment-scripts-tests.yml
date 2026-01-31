@@ -64,6 +64,11 @@ jobs:
           cd scripts/tests
           ./bats-core/bin/bats restore.bats
 
+      - name: Run sync-nvmrc.sh tests
+        run: |
+          cd scripts/tests
+          ./bats-core/bin/bats sync-nvmrc.bats
+
       - name: Test Summary
         if: always()
         run: |

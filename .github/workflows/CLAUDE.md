@@ -99,7 +99,7 @@ Use `docker/build-push-action` with optimized GitHub Actions cache:
     cache-to: type=gha,mode=max,scope=service-name,ignore-error=true
 ```
 
-**Note**: Services use pinned base image versions (e.g., `ghcr.io/groupsky/homy/node:18.20.8-alpine`), so `pull: true` is not needed. Dependabot manages version updates through separate PRs.
+**Note**: Services use pinned base image versions (e.g., `ghcr.io/groupsky/homy/node:18.20.8-alpine`), so `pull: true` is not needed. Renovate manages version updates through separate PRs.
 
 #### Docker Compose Builds
 
@@ -962,7 +962,7 @@ Container still in 'starting' state after 35s
 
 **When Updating Dependencies:**
 
-1. ✅ Let Dependabot handle base image updates
+1. ✅ Let Renovate handle base image updates
 2. ✅ Test locally before pushing
 3. ✅ Monitor workflow for cascading rebuild impact
 4. ✅ Review test results before merging
@@ -1011,6 +1011,6 @@ docker buildx imagetools create \
 
 ### Related Documentation
 
-- **Base Images**: `base-images/CLAUDE.md` - Base image management and Dependabot workflow
+- **Base Images**: `base-images/CLAUDE.md` - Base image management and Renovate workflow
 - **Project Root**: `CLAUDE.md` - Docker base image policy and GHCR-only requirement
 - **Architecture**: `ARCHITECTURE.md` - System architecture and data flow

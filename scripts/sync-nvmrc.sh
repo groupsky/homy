@@ -18,6 +18,7 @@
 #
 
 set -eu
+set -o pipefail
 
 # Check arguments
 if [ $# -ne 2 ]; then
@@ -28,6 +29,19 @@ fi
 DOCKERFILE="$1"
 SERVICE_DIR="$2"
 NVMRC_FILE="$SERVICE_DIR/.nvmrc"
+
+# Validate paths are within expected directories (security: prevent path traversal)
+if [[ ! "$DOCKERFILE" =~ ^(docker|base-images)/ ]]; then
+  echo "✗ Error: Dockerfile must be in docker/ or base-images/ directory"
+  echo "  Got: $DOCKERFILE"
+  exit 1
+fi
+
+if [[ ! "$SERVICE_DIR" =~ ^(docker|base-images)/ ]]; then
+  echo "✗ Error: Service directory must be in docker/ or base-images/ directory"
+  echo "  Got: $SERVICE_DIR"
+  exit 1
+fi
 
 # Check if .nvmrc file exists
 if [ ! -f "$NVMRC_FILE" ]; then

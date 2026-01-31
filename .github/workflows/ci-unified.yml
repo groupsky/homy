@@ -264,7 +264,7 @@ jobs:
             echo "Why this matters:"
             echo "  - Unused base images waste CI quota and storage"
             echo "  - They create confusion about which images are actually in use"
-            echo "  - Dependabot will continue updating unused images"
+            echo "  - Renovate will continue updating unused images"
             echo ""
             exit 1
           fi
