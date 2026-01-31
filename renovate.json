@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Renovate configuration for homy home automation system. Service Dockerfiles are updated via on-demand workflow_dispatch triggers (CI pipeline automatically triggers Renovate after base image updates).",
+  "description": "Renovate configuration for homy home automation system using Mend Renovate App. Base images check weekly for Docker Hub updates; services check daily for GHCR base image updates.",
   "extends": [
     "config:recommended"
   ],
@@ -48,7 +48,7 @@
         "docker/volman/**"
       ],
       "groupName": "infrastructure",
-      "schedule": ["before 3am on the first day of the month"],
+      "schedule": ["after 3am every weekday"],
       "automerge": false
     },
     {
@@ -60,7 +60,7 @@
         "docker/mqtt-mongo/**"
       ],
       "groupName": "mqtt-services",
-      "schedule": ["before 3am on the first day of the month"],
+      "schedule": ["after 3am every weekday"],
       "automerge": false
     },
     {
@@ -71,7 +71,7 @@
         "docker/telegram-bridge/**"
       ],
       "groupName": "hardware-integration",
-      "schedule": ["before 3am on the first day of the month"],
+      "schedule": ["after 3am every weekday"],
       "automerge": false
     },
     {
@@ -81,14 +81,14 @@
         "docker/sunseeker-monitoring/**"
       ],
       "groupName": "monitoring",
-      "schedule": ["before 3am on the first day of the month"],
+      "schedule": ["after 3am every weekday"],
       "automerge": false
     },
     {
       "description": "Home Assistant - Docker updates",
       "matchPaths": ["docker/homeassistant/**"],
       "groupName": "home-automation",
-      "schedule": ["before 3am on the first day of the month"],
+      "schedule": ["after 3am every weekday"],
       "automerge": false
     },
     {

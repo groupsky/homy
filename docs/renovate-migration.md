@@ -29,14 +29,16 @@ The system uses a two-step workflow to keep Node.js versions synchronized:
 - Creates PR to update `base-images/node-XX-alpine/Dockerfile`
 - Example: `FROM node:18.20.8-alpine` → `FROM node:18.20.9-alpine`
 
-**Step 2: Service Update via Renovate (Triggered Automatically)**
-- When base images are built and pushed to GHCR, CI pipeline triggers Renovate workflow via `workflow_dispatch`
+**Step 2: Service Update via Renovate (Scheduled)**
+- Renovate runs on a daily schedule (weekdays after 3 AM UTC)
 - Renovate automatically:
   1. Scans GHCR for updated base image versions
   2. Detects services using the updated base images
   3. Creates grouped PRs per service category (mqtt-services, infrastructure, etc.)
   4. Updates service Dockerfiles: `ghcr.io/groupsky/homy/node:18.20.8-alpine` → `18.20.9-alpine`
   5. Syncs `.nvmrc` files via `postUpgradeTasks`: `18.20.8` → `18.20.9`
+
+**Note**: Using Mend Renovate App means updates happen on schedule, not immediately. Typical delay: < 24 hours after base image push.
 
 **Example Renovate PR (Created Automatically):**
 ```
@@ -50,8 +52,7 @@ Services Updated:
 - docker/mqtt-influx/Dockerfile: ghcr.io/groupsky/homy/node:18.20.8-alpine → 18.20.9-alpine
 - docker/mqtt-influx/.nvmrc: 18.20.8 → 18.20.9 (auto-synced)
 
-This PR was automatically created by Renovate after the CI pipeline built and pushed
-updated base images to GHCR.
+This PR was automatically created by Mend Renovate App during its scheduled run.
 ```
 
 **Why Two Steps?**
