@@ -1082,6 +1082,17 @@ jobs:
         run: |
           echo "=== Starting container and monitoring health ==="
 
+          # List of services exempt from healthcheck testing
+          # These have valid HEALTHCHECKs but require external infrastructure (MQTT brokers, databases, etc.)
+          EXEMPT_SERVICES=("sunseeker-monitoring")
+
+          if [[ " ${EXEMPT_SERVICES[@]} " =~ " ${{ matrix.service }} " ]]; then
+            echo "⚠️  Service '${{ matrix.service }}' is exempt from healthcheck testing"
+            echo "Reason: Requires external infrastructure (MQTT broker, InfluxDB) not available in CI"
+            echo "HEALTHCHECK validated in production deployment only"
+            exit 0
+          fi
+
           # Verify test.env exists
           ENV_FILE="docker/${{ matrix.service }}/test.env"
           if [ ! -f "$ENV_FILE" ]; then
