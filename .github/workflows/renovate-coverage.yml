@@ -1,0 +1,207 @@
+name: renovate-coverage
+
+on:
+  push:
+    paths:
+      - 'renovate.json'
+      - 'docker/*/Dockerfile'
+      - 'docker/*/package.json'
+      - '.github/workflows/renovate-coverage.yml'
+  pull_request:
+    paths:
+      - 'renovate.json'
+      - 'docker/*/Dockerfile'
+      - 'docker/*/package.json'
+      - '.github/workflows/renovate-coverage.yml'
+
+jobs:
+  validate-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Validate Renovate JSON syntax
+        run: |
+          # Validate JSON syntax
+          if ! jq empty renovate.json 2>/dev/null; then
+            echo "❌ renovate.json has invalid JSON syntax"
+            exit 1
+          fi
+
+          # Validate against Renovate schema (if jq is available)
+          SCHEMA_URL=$(jq -r '."$schema" // empty' renovate.json)
+          if [ -n "$SCHEMA_URL" ]; then
+            echo "✅ Schema reference found: $SCHEMA_URL"
+          fi
+
+          echo "✅ Renovate JSON syntax is valid"
+
+      - name: Find all Docker services
+        id: docker-services
+        run: |
+          # Find all directories with Dockerfiles (excluding node_modules)
+          DOCKER_SERVICES=$(find docker -maxdepth 2 -name "Dockerfile" -not -path "*/node_modules/*" | sed 's|/Dockerfile||' | sed 's|^docker/||' | sort)
+          echo "Found Docker services:"
+          echo "$DOCKER_SERVICES"
+          echo "docker_services<<EOF" >> $GITHUB_OUTPUT
+          echo "$DOCKER_SERVICES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Find all npm services
+        id: npm-services
+        run: |
+          # Find all directories with package.json files (excluding node_modules)
+          NPM_SERVICES=$(find docker -maxdepth 2 -name "package.json" -not -path "*/node_modules/*" | sed 's|/package.json||' | sed 's|^docker/||' | sort)
+          echo "Found npm services:"
+          echo "$NPM_SERVICES"
+          echo "npm_services<<EOF" >> $GITHUB_OUTPUT
+          echo "$NPM_SERVICES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Extract configured paths from renovate.json
+        id: configured-paths
+        run: |
+          # Extract all matchPaths from packageRules
+          # This gets paths like "docker/automations/**", "docker/nginx/**", etc.
+          CONFIGURED_PATHS=$(jq -r '.packageRules[].matchPaths[]? // empty' renovate.json | sort -u)
+          echo "Found configured paths in renovate.json:"
+          echo "$CONFIGURED_PATHS"
+
+          # Extract service names from paths (remove docker/ prefix and /** suffix)
+          CONFIGURED_SERVICES=$(echo "$CONFIGURED_PATHS" | sed 's|^docker/||' | sed 's|/\*\*$||' | sort -u)
+          echo "Configured services:"
+          echo "$CONFIGURED_SERVICES"
+
+          echo "configured_services<<EOF" >> $GITHUB_OUTPUT
+          echo "$CONFIGURED_SERVICES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Validate Docker service coverage
+        run: |
+          DOCKER_SERVICES="${{ steps.docker-services.outputs.docker_services }}"
+          CONFIGURED_SERVICES="${{ steps.configured-paths.outputs.configured_services }}"
+
+          echo "Checking Docker service coverage..."
+          MISSING=""
+          for service in $DOCKER_SERVICES; do
+            if ! echo "$CONFIGURED_SERVICES" | grep -q "^${service}$"; then
+              echo "❌ Missing Renovate packageRule for: $service"
+              MISSING="$MISSING $service"
+            else
+              echo "✅ $service"
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo ""
+            echo "ERROR: The following Docker services are missing from renovate.json packageRules:"
+            echo "$MISSING"
+            echo ""
+            echo "Add these services to the appropriate group in renovate.json:"
+            echo "  - infrastructure (nginx, mosquitto, influxdb, grafana, mongo, etc.)"
+            echo "  - mqtt-services (automations, mqtt-influx, automation-events-processor)"
+            echo "  - hardware-integration (modbus-serial, dmx-driver, telegram-bridge)"
+            echo "  - monitoring (historian, sunseeker-monitoring)"
+            echo "  - home-automation (homeassistant)"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All Docker services are covered by renovate.json"
+
+      - name: Validate npm service coverage
+        run: |
+          NPM_SERVICES="${{ steps.npm-services.outputs.npm_services }}"
+          CONFIGURED_SERVICES="${{ steps.configured-paths.outputs.configured_services }}"
+
+          echo "Checking npm service coverage..."
+          MISSING=""
+          for service in $NPM_SERVICES; do
+            if ! echo "$CONFIGURED_SERVICES" | grep -q "^${service}$"; then
+              echo "❌ Missing Renovate packageRule for: $service"
+              MISSING="$MISSING $service"
+            else
+              echo "✅ $service"
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo ""
+            echo "ERROR: The following npm services are missing from renovate.json packageRules:"
+            echo "$MISSING"
+            echo ""
+            echo "Add these services to the appropriate group in renovate.json"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All npm services are covered by renovate.json"
+
+      - name: Check for orphaned entries
+        run: |
+          DOCKER_SERVICES="${{ steps.docker-services.outputs.docker_services }}"
+          NPM_SERVICES="${{ steps.npm-services.outputs.npm_services }}"
+          CONFIGURED_SERVICES="${{ steps.configured-paths.outputs.configured_services }}"
+
+          echo "Checking for orphaned entries in renovate.json..."
+          ORPHANED=""
+          for service in $CONFIGURED_SERVICES; do
+            # Check if service exists as Docker OR npm service
+            DOCKER_EXISTS=$(echo "$DOCKER_SERVICES" | grep -c "^${service}$" || true)
+            NPM_EXISTS=$(echo "$NPM_SERVICES" | grep -c "^${service}$" || true)
+
+            if [ "$DOCKER_EXISTS" -eq 0 ] && [ "$NPM_EXISTS" -eq 0 ]; then
+              echo "⚠️  Orphaned entry (no Dockerfile or package.json): $service"
+              ORPHANED="$ORPHANED $service"
+            fi
+          done
+
+          if [ -n "$ORPHANED" ]; then
+            echo ""
+            echo "WARNING: Found orphaned entries in renovate.json"
+            echo "These services are configured but don't have Dockerfile or package.json:"
+            echo "$ORPHANED"
+            echo ""
+            echo "Consider removing these from packageRules in renovate.json"
+            echo ""
+            echo "Note: This is a warning, not an error. The workflow will continue."
+          else
+            echo ""
+            echo "✅ No orphaned entries found"
+          fi
+
+      - name: Validate base-images coverage
+        run: |
+          # Find all base image directories
+          BASE_IMAGES=$(find base-images -maxdepth 1 -type d -not -name "base-images" -not -name ".*" | sed 's|base-images/||' | sort)
+          echo "Found base images:"
+          echo "$BASE_IMAGES"
+
+          # Check if base-images group exists in renovate.json
+          if ! jq -e '.packageRules[] | select(.groupName == "base-images")' renovate.json > /dev/null; then
+            echo "❌ Missing 'base-images' group in renovate.json"
+            exit 1
+          fi
+
+          # Verify matchPaths includes "base-images/**"
+          BASE_IMAGES_PATHS=$(jq -r '.packageRules[] | select(.groupName == "base-images") | .matchPaths[]?' renovate.json)
+          if ! echo "$BASE_IMAGES_PATHS" | grep -q "base-images/\*\*"; then
+            echo "❌ base-images group doesn't include 'base-images/**' in matchPaths"
+            exit 1
+          fi
+
+          echo "✅ Base images are covered by renovate.json (base-images/** pattern)"
+
+      - name: Summary
+        run: |
+          echo "================================"
+          echo "Renovate Coverage Validation"
+          echo "================================"
+          echo "✅ JSON syntax valid"
+          echo "✅ All Docker services covered"
+          echo "✅ All npm services covered"
+          echo "✅ Base images covered"
+          echo "✅ Configuration is complete"
+          echo "================================"

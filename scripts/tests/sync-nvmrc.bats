@@ -6,7 +6,7 @@
 # postUpgradeTasks to keep Dockerfile Node.js versions in sync with .nvmrc files.
 #
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SYNC_SCRIPT="$SCRIPT_DIR/sync-nvmrc.sh"
 
 setup() {

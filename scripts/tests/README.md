@@ -10,6 +10,7 @@ The test suite validates the functionality, error handling, and robustness of:
 - `restore.sh` - Restore operations
 - `deploy.sh` - Deployment operations
 - `rollback.sh` - Rollback operations
+- `sync-nvmrc.sh` - Node.js version synchronization for Renovate
 
 ## Running Tests Locally
 
@@ -48,6 +49,7 @@ cd scripts/tests
 - `docker-helper.bats` - Tests for core helper functions
 - `backup.bats` - Tests for backup script
 - `restore.bats` - Tests for restore script
+- `sync-nvmrc.bats` - Tests for Node.js version synchronization
 - `test_helper.bash` - Common test utilities and mocks
 
 ### Test Helper Functions
@@ -154,6 +156,17 @@ Current test coverage:
 - ✅ Service state validation
 - ✅ Error handling with error function
 - ✅ Backup reference resolution
+
+### sync-nvmrc.sh
+- ✅ Version extraction from standard Node.js images
+- ✅ Version extraction from variant images (node-ubuntu, etc.)
+- ✅ Multi-stage Dockerfile support
+- ✅ Missing .nvmrc file handling
+- ✅ Non-Node.js Dockerfile error handling
+- ✅ Already-synced version detection (idempotency)
+- ✅ Whitespace handling in .nvmrc
+- ✅ Invalid arguments rejection
+- ✅ Empty/comment-only Dockerfile handling
 
 ## Debugging Tests
 
