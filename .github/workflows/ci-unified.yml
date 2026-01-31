@@ -3,17 +3,7 @@ name: CI - Unified Docker Build Pipeline
 on:
   push:
     branches: [master]
-    paths:
-      - 'base-images/**'
-      - 'docker/**'
-      - '.github/workflows/ci-unified.yml'
-      - '.github/scripts/detect-changes/**'
   pull_request:
-    paths:
-      - 'base-images/**'
-      - 'docker/**'
-      - '.github/workflows/ci-unified.yml'
-      - '.github/scripts/detect-changes/**'
   workflow_dispatch:
     inputs:
       force_rebuild:
