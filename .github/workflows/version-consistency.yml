@@ -77,6 +77,13 @@ jobs:
             exit 1
           fi
 
+          # Skip if no Dockerfile exists (e.g., test-only services)
+          if [ ! -f Dockerfile ]; then
+            echo "⚠️  No Dockerfile found - skipping version check for ${{ matrix.service }}"
+            echo "This service has .nvmrc for local development but no container"
+            exit 0
+          fi
+
           # Extract version from FINAL Dockerfile stage
           # Look for the last FROM line with node: or node-<variant>: to get the final stage base
           # Supports both standard (node:) and variant (node-ubuntu:, node-alpine:, node-slim:) patterns
