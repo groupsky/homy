@@ -70,7 +70,21 @@ jobs:
           done
           echo ""
 
-          # 3. Validate Dockerfile FROM lines can be parsed
+          # 3. Check docker-bake.hcl configuration
+          echo "📋 Checking docker-bake.hcl configuration..."
+          for dir in "${BASE_IMAGE_DIRS[@]}"; do
+            BASE_NAME=$(basename "$dir")
+            if ! grep -q "\"$BASE_NAME\"" base-images/docker-bake.hcl; then
+              echo "  ❌ Missing target '$BASE_NAME' in docker-bake.hcl"
+              echo "     Add this target to base-images/docker-bake.hcl"
+              VALIDATION_FAILED=1
+            else
+              echo "  ✅ $BASE_NAME target in docker-bake.hcl"
+            fi
+          done
+          echo ""
+
+          # 4. Validate Dockerfile FROM lines can be parsed
           echo "📋 Validating Dockerfile FROM lines..."
           for dir in "${BASE_IMAGE_DIRS[@]}"; do
             dockerfile="$dir/Dockerfile"
@@ -99,7 +113,8 @@ jobs:
             echo "Please ensure:"
             echo "  1. Each base-images/* directory has a Dockerfile"
             echo "  2. Each base image is configured in .github/dependabot.yml"
-            echo "  3. Each Dockerfile has a valid FROM line with version"
+            echo "  3. Each base image has a target in base-images/docker-bake.hcl"
+            echo "  4. Each Dockerfile has a valid FROM line with version"
             exit 1
           fi
 
