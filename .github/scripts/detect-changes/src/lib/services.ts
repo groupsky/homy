@@ -197,6 +197,117 @@ export function filterGhcrServices(services: Service[]): Service[] {
 }
 
 /**
+ * Builds a mapping from service names (including aliases) to their canonical service names.
+ *
+ * Service aliases are docker-compose services that use the same Docker image as another
+ * service but with different runtime configuration. They should resolve to the canonical
+ * service name for build purposes.
+ *
+ * A canonical service is one where the service name matches the image name.
+ * An alias is any other service using that same image.
+ *
+ * @param services Array of all services
+ * @returns Map from service name to canonical service name
+ *
+ * @example
+ * ```typescript
+ * const services = [
+ *   { service_name: 'historian', image: 'ghcr.io/groupsky/homy/historian:latest', ... },
+ *   { service_name: 'historian-secondary', image: 'ghcr.io/groupsky/homy/historian:latest', ... }
+ * ];
+ * const mapping = buildServiceAliasMapping(services);
+ * console.log(mapping.get('historian')); // 'historian'
+ * console.log(mapping.get('historian-secondary')); // 'historian'
+ * ```
+ */
+export function buildServiceAliasMapping(services: Service[]): Map<string, string> {
+  // First pass: find canonical services (service name matches image name)
+  const imageToCanonicalService = new Map<string, string>();
+
+  for (const service of services) {
+    if (!service.image) {
+      // Services without images (local builds) map to themselves
+      imageToCanonicalService.set(service.service_name, service.service_name);
+      continue;
+    }
+
+    // Extract image name without tag (e.g., "ghcr.io/groupsky/homy/historian:latest" -> "historian")
+    const imageParts = service.image.split('/');
+    const imageNameWithTag = imageParts[imageParts.length - 1];
+    const imageName = imageNameWithTag.split(':')[0];
+
+    // If service name matches image name, it's canonical
+    if (service.service_name === imageName) {
+      imageToCanonicalService.set(service.image, service.service_name);
+    }
+  }
+
+  // Second pass: build alias mapping
+  const aliasMapping = new Map<string, string>();
+
+  for (const service of services) {
+    if (!service.image) {
+      // Local builds map to themselves
+      aliasMapping.set(service.service_name, service.service_name);
+      continue;
+    }
+
+    // Look up canonical service for this image
+    const canonicalService = imageToCanonicalService.get(service.image);
+
+    if (canonicalService) {
+      // Map to canonical service
+      aliasMapping.set(service.service_name, canonicalService);
+    } else {
+      // No canonical service found - map to itself (orphan image)
+      aliasMapping.set(service.service_name, service.service_name);
+    }
+  }
+
+  return aliasMapping;
+}
+
+/**
+ * Resolves a list of service names to their canonical names, removing duplicates.
+ *
+ * Service aliases are resolved to their canonical service names based on the
+ * alias mapping. Duplicates are removed to ensure each canonical service appears
+ * only once in the result.
+ *
+ * @param serviceNames Array of service names (may include aliases)
+ * @param aliasMapping Map from service name to canonical service name
+ * @returns Array of unique canonical service names, sorted
+ *
+ * @example
+ * ```typescript
+ * const aliasMapping = new Map([
+ *   ['historian', 'historian'],
+ *   ['historian-secondary', 'historian'],
+ * ]);
+ * const resolved = resolveServiceAliases(['historian', 'historian-secondary'], aliasMapping);
+ * console.log(resolved); // ['historian']
+ * ```
+ */
+export function resolveServiceAliases(
+  serviceNames: string[],
+  aliasMapping: Map<string, string>
+): string[] {
+  const canonicalServices = new Set<string>();
+
+  for (const serviceName of serviceNames) {
+    const canonical = aliasMapping.get(serviceName);
+    if (canonical) {
+      canonicalServices.add(canonical);
+    } else {
+      // No mapping found - use service name as-is
+      canonicalServices.add(serviceName);
+    }
+  }
+
+  return Array.from(canonicalServices).sort();
+}
+
+/**
  * Normalizes a file path by joining context and filename.
  *
  * This helper function ensures consistent path formatting by:

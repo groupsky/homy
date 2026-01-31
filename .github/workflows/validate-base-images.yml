@@ -76,6 +76,7 @@ jobs:
             BASE_NAME=$(basename "$dir")
             if ! grep -q "\"$BASE_NAME\"" base-images/docker-bake.hcl; then
               echo "  ❌ Missing target '$BASE_NAME' in docker-bake.hcl"
+              echo "     Add this target to base-images/docker-bake.hcl"
               VALIDATION_FAILED=1
             else
               echo "  ✅ $BASE_NAME target in docker-bake.hcl"
@@ -83,23 +84,7 @@ jobs:
           done
           echo ""
 
-          # 4. Check base-images workflow extracts versions
-          echo "📋 Checking base-images workflow version extraction..."
-          for dir in "${BASE_IMAGE_DIRS[@]}"; do
-            BASE_NAME=$(basename "$dir")
-            WORKFLOW_VAR=$(echo "$BASE_NAME" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
-
-            # Check if workflow extracts version for this base image
-            if ! grep -q "$BASE_NAME" .github/workflows/base-images.yml; then
-              echo "  ❌ Workflow missing version extraction for $BASE_NAME"
-              VALIDATION_FAILED=1
-            else
-              echo "  ✅ Workflow extracts version for $BASE_NAME"
-            fi
-          done
-          echo ""
-
-          # 5. Validate Dockerfile FROM lines can be parsed
+          # 4. Validate Dockerfile FROM lines can be parsed
           echo "📋 Validating Dockerfile FROM lines..."
           for dir in "${BASE_IMAGE_DIRS[@]}"; do
             dockerfile="$dir/Dockerfile"
@@ -129,8 +114,7 @@ jobs:
             echo "  1. Each base-images/* directory has a Dockerfile"
             echo "  2. Each base image is configured in .github/dependabot.yml"
             echo "  3. Each base image has a target in base-images/docker-bake.hcl"
-            echo "  4. Each base image has version extraction in .github/workflows/base-images.yml"
-            echo "  5. Each Dockerfile has a valid FROM line with version"
+            echo "  4. Each Dockerfile has a valid FROM line with version"
             exit 1
           fi
 

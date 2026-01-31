@@ -13,7 +13,7 @@ import { Command } from 'commander';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import { discoverBaseImages, buildDirectoryToGhcrMapping } from './lib/base-images.js';
-import { discoverServicesFromCompose, filterGhcrServices } from './lib/services.js';
+import { discoverServicesFromCompose, filterGhcrServices, buildServiceAliasMapping, resolveServiceAliases } from './lib/services.js';
 import { buildReverseDependencyMap, detectAffectedServices } from './lib/dependency-graph.js';
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
@@ -178,13 +178,21 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   const services = filterGhcrServices(allServices);
   console.error(`Found ${services.length} GHCR services (${allServices.length} total)`);
 
+  console.error('Step 3.5: Building service alias mapping...');
+  const serviceAliasMapping = buildServiceAliasMapping(services);
+  const aliasCount = Array.from(serviceAliasMapping.entries()).filter(
+    ([alias, canonical]) => alias !== canonical
+  ).length;
+  console.error(`Found ${aliasCount} service aliases`);
+
   console.error('Step 4: Detecting changed base images...');
   const changedBaseImages = detectChangedBaseImages(options.baseRef, baseImages);
   console.error(`Changed base images: ${changedBaseImages.length}`);
 
   console.error('Step 5: Detecting changed services...');
-  const changedServices = detectChangedServices(options.baseRef, services);
-  console.error(`Changed services: ${changedServices.length}`);
+  const changedServicesRaw = detectChangedServices(options.baseRef, services);
+  const changedServices = resolveServiceAliases(changedServicesRaw, serviceAliasMapping);
+  console.error(`Changed services (raw): ${changedServicesRaw.length}, resolved: ${changedServices.length}`);
 
   console.error('Step 6: Building reverse dependency map...');
   const reverseDeps = buildReverseDependencyMap(services, options.dockerDir, baseImageMapping);
@@ -272,19 +280,81 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   console.error(`Test-only changes: ${toPullForTesting.length}`);
 
+  // Step 10.75: Ensure base images are prepared for all services in toBuild
+  console.error('Step 10.75: Ensuring base images are prepared for services to build...');
+  // Even if a base image exists in GHCR, if a service needs to be built,
+  // the base image must be prepared as an artifact for Stage 3 (which has no registry access).
+  //
+  // Stage 2 behavior:
+  // - CHANGED bases (in changedBaseImages): BUILD from Docker Hub
+  // - NEEDED bases (in baseImagesNeeded): PULL from GHCR, fallback to build if missing
+  //
+  // This step adds bases to baseImagesNeeded (not changedBaseImages), so they will be
+  // PULLED from GHCR (efficient), not unnecessarily rebuilt.
+  for (const serviceName of toBuild) {
+    const service = services.find((s) => s.service_name === serviceName);
+    if (!service) {
+      continue;
+    }
+
+    try {
+      // Read Dockerfile and extract final base image
+      const dockerfileContent = readFileSync(service.dockerfile_path, 'utf-8');
+      const finalBase = extractFinalStageBase(dockerfileContent);
+
+      if (!finalBase || !finalBase.startsWith('ghcr.io/groupsky/homy/')) {
+        continue;
+      }
+
+      // Strip GHCR prefix for mapping lookup
+      // Mapping uses short tags like "node:22.22.0-alpine3.23"
+      // But extractFinalStageBase returns "ghcr.io/groupsky/homy/node:22.22.0-alpine3.23"
+      const shortTag = finalBase.replace('ghcr.io/groupsky/homy/', '');
+
+      // Look up base image directory
+      const baseDir = baseImageMapping.ghcr_to_dir[shortTag];
+      if (baseDir) {
+        // Check if this base is already scheduled for preparation
+        const isChanged = changedBaseImages.includes(baseDir);
+        const isNeeded = baseImagesNeeded.includes(baseDir);
+
+        if (!isChanged && !isNeeded) {
+          console.error(
+            `  Adding ${baseDir} to base images needed (required by ${serviceName}, will be PULLED from GHCR)`
+          );
+          baseImagesNeeded.push(baseDir);
+        } else if (isChanged) {
+          console.error(
+            `  ${baseDir} already in changed bases (required by ${serviceName}, will be BUILT)`
+          );
+        } else {
+          console.error(
+            `  ${baseDir} already in needed bases (required by ${serviceName}, will be PULLED)`
+          );
+        }
+      }
+    } catch (error) {
+      console.error(`  Warning: Could not extract base image for ${serviceName}: ${error}`);
+    }
+  }
+  console.error(`Base images needed (updated): ${baseImagesNeeded.length}`);
+
   console.error('Step 11: Detecting testable services...');
-  // Tests should run for all changed services, not just ones being built
+  // Tests should run only for services with artifacts (toBuild or toPullForTesting)
+  // Services in toRetag don't have artifacts and should not run tests
+  const servicesWithArtifacts = [...toBuild, ...toPullForTesting];
   const testableServices = services
-    .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
+    .filter((s) => servicesWithArtifacts.includes(s.service_name))
     .filter(serviceHasRealTests)
     .map((s) => s.service_name)
     .sort();
   console.error(`Testable services: ${testableServices.length}`);
 
   console.error('Step 12: Detecting healthcheck services...');
-  // Health checks should run for all changed services, not just ones being built
+  // Health checks should run only for services with artifacts (toBuild or toPullForTesting)
+  // Services in toRetag don't have artifacts and should not run healthchecks
   const healthcheckServices = services
-    .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
+    .filter((s) => servicesWithArtifacts.includes(s.service_name))
     .filter((s) => {
       try {
         const content = readFileSync(s.dockerfile_path, 'utf-8');
@@ -298,7 +368,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   console.error(`Healthcheck services: ${healthcheckServices.length}`);
 
   console.error('Step 13: Detecting version check services...');
-  // Version checks should run for all changed services, not just ones being built
+  // Version checks run for all changed services (don't need artifacts - just check files)
   // Extract unique build context directories (multiple services may share same build context)
   const versionCheckBuildContexts = new Set<string>();
   services
