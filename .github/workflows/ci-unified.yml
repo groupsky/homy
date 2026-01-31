@@ -1082,36 +1082,69 @@ jobs:
         run: |
           echo "=== Starting container and monitoring health ==="
 
-          # List of services exempt from healthcheck testing
-          # These have valid HEALTHCHECKs but require external infrastructure (MQTT brokers, databases, etc.)
-          EXEMPT_SERVICES=("sunseeker-monitoring")
+          # Services that require docker compose (have dependencies like influxdb, broker, etc.)
+          COMPOSE_SERVICES=("sunseeker-monitoring")
 
-          if [[ " ${EXEMPT_SERVICES[@]} " =~ " ${{ matrix.service }} " ]]; then
-            echo "⚠️  Service '${{ matrix.service }}' is exempt from healthcheck testing"
-            echo "Reason: Requires external infrastructure (MQTT broker, InfluxDB) not available in CI"
-            echo "HEALTHCHECK validated in production deployment only"
-            exit 0
+          if [[ " ${COMPOSE_SERVICES[@]} " =~ " ${{ matrix.service }} " ]]; then
+            echo "🐳 Service requires docker compose (has dependencies)"
+
+            # Prepare directories
+            mkdir -p config/automations data/nodered
+            chmod 777 data/nodered
+
+            # Load image from artifact
+            cd /tmp
+            if [ ! -f "${{ matrix.service }}.tar" ]; then
+              echo "::error::Artifact tarball not found: ${{ matrix.service }}.tar"
+              exit 1
+            fi
+
+            # Verify checksum
+            if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
+              echo "::error::Checksum verification failed for ${{ matrix.service }}"
+              exit 1
+            fi
+            echo "✅ Checksum verified"
+
+            # Load image
+            if ! docker load -i ${{ matrix.service }}.tar; then
+              echo "::error::Failed to load Docker image"
+              exit 1
+            fi
+            echo "✅ Image loaded from artifact"
+
+            cd $GITHUB_WORKSPACE
+
+            # Start service with dependencies using docker compose
+            echo "Starting ${{ matrix.service }} with dependencies..."
+            docker compose --env-file example.env up --force-recreate -d ${{ matrix.service }}
+
+            # Get the container ID
+            CONTAINER_ID=$(docker compose ps -q ${{ matrix.service }})
+            echo "use_compose=true" >> $GITHUB_ENV
+          else
+            echo "🐳 Service runs standalone (no dependencies)"
+
+            # Verify test.env exists for standalone services
+            ENV_FILE="docker/${{ matrix.service }}/test.env"
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::Service has HEALTHCHECK but missing docker/${{ matrix.service }}/test.env"
+              echo "Create test.env with minimal configuration"
+              exit 1
+            fi
+
+            # Mount repo secrets directory for Docker secrets pattern
+            SECRETS_DIR="$GITHUB_WORKSPACE/secrets"
+            echo "Mounting secrets from: $SECRETS_DIR → /run/secrets"
+
+            # Start container with test.env and mounted secrets
+            CONTAINER_ID=$(docker run -d \
+              --env-file "$ENV_FILE" \
+              -v "$SECRETS_DIR:/run/secrets:ro" \
+              ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
+
+            echo "use_compose=false" >> $GITHUB_ENV
           fi
-
-          # Verify test.env exists
-          ENV_FILE="docker/${{ matrix.service }}/test.env"
-          if [ ! -f "$ENV_FILE" ]; then
-            echo "::error::Service has HEALTHCHECK but missing docker/${{ matrix.service }}/test.env"
-            echo "Create test.env with minimal configuration and _FILE variables pointing to /run/secrets/..."
-            exit 1
-          fi
-
-          # Mount repo secrets directory for Docker secrets pattern
-          # test.env should contain _FILE variables like: MQTT_PASSWORD_FILE=/run/secrets/sunseeker_mqtt_password
-          # This directory is mounted as /run/secrets in the container
-          SECRETS_DIR="$GITHUB_WORKSPACE/secrets"
-          echo "Mounting secrets from: $SECRETS_DIR → /run/secrets"
-
-          # Start container with test.env and mounted secrets
-          CONTAINER_ID=$(docker run -d \
-            --env-file "$ENV_FILE" \
-            -v "$SECRETS_DIR:/run/secrets:ro" \
-            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
 
           echo "container_id=$CONTAINER_ID" >> $GITHUB_OUTPUT
           echo "Container started: $CONTAINER_ID"
@@ -1159,7 +1192,10 @@ jobs:
       - name: Cleanup container
         if: always()
         run: |
-          if [ -n "${{ steps.container.outputs.container_id }}" ]; then
+          if [ "${{ env.use_compose }}" = "true" ]; then
+            echo "Cleaning up docker compose services..."
+            docker compose --env-file example.env down -v || true
+          elif [ -n "${{ steps.container.outputs.container_id }}" ]; then
             echo "Cleaning up container..."
             docker stop ${{ steps.container.outputs.container_id }} || true
             docker rm ${{ steps.container.outputs.container_id }} || true
