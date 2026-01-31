@@ -20,7 +20,7 @@ Renovate provides several advantages over Dependabot ([comparison](https://docs.
 The repository already has `.nvmrc` validation in `.github/workflows/ci-unified.yml` (Stage 4A: Version Consistency Check) that ensures Dockerfile and `.nvmrc` versions match. This catches mismatches and fails the build.
 
 **Renovate Enhancement:**
-Renovate's [`postUpgradeTasks`](https://docs.renovatebot.com/configuration-options/#postupgradetasks) **automatically updates** `.nvmrc` files when Dockerfiles change, eliminating manual fixes. Instead of CI failing and requiring manual intervention, the `.nvmrc` updates happen automatically in the same PR via the `.github/scripts/sync-nvmrc.sh` script.
+Renovate's [`postUpgradeTasks`](https://docs.renovatebot.com/configuration-options/#postupgradetasks) **automatically updates** `.nvmrc` files when Dockerfiles change, eliminating manual fixes. Instead of CI failing and requiring manual intervention, the `.nvmrc` updates happen automatically in the same PR via the `scripts/sync-nvmrc.sh` script.
 
 The system uses a two-step workflow to keep Node.js versions synchronized:
 
@@ -141,7 +141,7 @@ This repository uses the **Mend Renovate App** hosted solution:
 ## Migration Checklist
 
 - [x] Create `renovate.json` configuration ([docs](https://docs.renovatebot.com/configuration-options/))
-- [x] Create `.github/scripts/sync-nvmrc.sh` script
+- [x] Create `scripts/sync-nvmrc.sh` script
 - [x] Configure automerge settings ([docs](https://docs.renovatebot.com/key-concepts/automerge/))
 - [x] Create migration documentation
 - [x] Install Mend Renovate App ([install link](https://github.com/apps/renovate))

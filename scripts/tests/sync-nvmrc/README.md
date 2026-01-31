@@ -1,6 +1,6 @@
-# GitHub Scripts Tests
+# sync-nvmrc Script Tests
 
-This directory contains BATS (Bash Automated Testing System) tests for GitHub scripts.
+This directory contains BATS (Bash Automated Testing System) tests for the `scripts/sync-nvmrc.sh` script.
 
 ## Running Tests
 
@@ -11,7 +11,7 @@ If not already installed, you can use the BATS installation from the main `scrip
 ```bash
 # Run from repository root
 cd scripts/tests
-./bats-core/bin/bats ../../.github/scripts/tests/*.bats
+./bats-core/bin/bats sync-nvmrc/*.bats
 ```
 
 Or install BATS separately:
@@ -26,20 +26,20 @@ cd bats-core
 
 ```bash
 # From repository root
-bats .github/scripts/tests/*.bats
+bats scripts/tests/sync-nvmrc/*.bats
 ```
 
 ### Run Specific Test File
 
 ```bash
-bats .github/scripts/tests/sync-nvmrc.bats
+bats scripts/tests/sync-nvmrc/sync-nvmrc.bats
 ```
 
 ## Test Coverage
 
 ### sync-nvmrc.bats
 
-Tests for the `.github/scripts/sync-nvmrc.sh` script used by Renovate's postUpgradeTasks:
+Tests for the `scripts/sync-nvmrc.sh` script used by Renovate's postUpgradeTasks:
 
 - ✅ Version extraction from standard Node.js images
 - ✅ Version extraction from variant images (node-ubuntu, etc.)
@@ -58,8 +58,8 @@ These tests can be integrated into the CI pipeline to ensure script correctness 
 Example workflow:
 
 ```yaml
-- name: Test GitHub scripts
+- name: Test sync-nvmrc script
   run: |
     cd scripts/tests
-    ./bats-core/bin/bats ../../.github/scripts/tests/*.bats
+    ./bats-core/bin/bats sync-nvmrc/*.bats
 ```

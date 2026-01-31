@@ -145,7 +145,7 @@
       "matchPackagePatterns": ["node"],
       "postUpgradeTasks": {
         "commands": [
-          "bash .github/scripts/sync-nvmrc.sh {{{packageFile}}} {{{packageFileDir}}}"
+          "bash scripts/sync-nvmrc.sh {{{packageFile}}} {{{packageFileDir}}}"
         ],
         "fileFilters": ["**/.nvmrc"],
         "executionMode": "update"

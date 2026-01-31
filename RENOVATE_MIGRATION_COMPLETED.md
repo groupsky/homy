@@ -85,13 +85,13 @@ This document summarizes the critical and high priority fixes that have been imp
 ### Files Modified
 1. `.github/dependabot.yml` → `.github/dependabot.yml.disabled`
 2. `.github/workflows/dependabot-coverage.yml` → `.github/workflows/dependabot-coverage.yml.disabled`
-3. `.github/scripts/sync-nvmrc.sh` (3 fixes)
+3. `scripts/sync-nvmrc.sh` (3 fixes)
 4. `renovate.json` (10 updates)
 5. `docs/renovate-migration.md` (7 sections updated)
 
 ### Files Created
-1. `.github/scripts/tests/sync-nvmrc.bats` (14 tests)
-2. `.github/scripts/tests/README.md`
+1. `scripts/tests/sync-nvmrc/sync-nvmrc.bats` (14 tests)
+2. `scripts/tests/sync-nvmrc/README.md`
 3. `RENOVATE_MIGRATION_COMPLETED.md` (this file)
 
 ### Git Status
