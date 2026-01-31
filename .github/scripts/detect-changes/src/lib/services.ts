@@ -197,18 +197,17 @@ export function filterGhcrServices(services: Service[]): Service[] {
 }
 
 /**
- * Filters out service aliases that share the same image with another service.
+ * Builds a mapping from service names (including aliases) to their canonical service names.
  *
  * Service aliases are docker-compose services that use the same Docker image as another
- * service but with different runtime configuration (environment variables, volumes, etc.).
- * These should not be built separately since they share the same image.
+ * service but with different runtime configuration. They should resolve to the canonical
+ * service name for build purposes.
  *
- * A service is considered an alias if:
- * 1. Its image name doesn't match its service name
- * 2. Another service exists whose service name matches the image name
+ * A canonical service is one where the service name matches the image name.
+ * An alias is any other service using that same image.
  *
- * @param services Array of services to filter
- * @returns Filtered array with service aliases removed
+ * @param services Array of all services
+ * @returns Map from service name to canonical service name
  *
  * @example
  * ```typescript
@@ -216,18 +215,18 @@ export function filterGhcrServices(services: Service[]): Service[] {
  *   { service_name: 'historian', image: 'ghcr.io/groupsky/homy/historian:latest', ... },
  *   { service_name: 'historian-secondary', image: 'ghcr.io/groupsky/homy/historian:latest', ... }
  * ];
- * const filtered = filterServiceAliases(services);
- * console.log(filtered.length); // 1 (only historian, historian-secondary is filtered out)
+ * const mapping = buildServiceAliasMapping(services);
+ * console.log(mapping.get('historian')); // 'historian'
+ * console.log(mapping.get('historian-secondary')); // 'historian'
  * ```
  */
-export function filterServiceAliases(services: Service[]): Service[] {
-  // Build a map of image names to service names for canonical services
-  // A canonical service is one where the service name matches the image name
+export function buildServiceAliasMapping(services: Service[]): Map<string, string> {
+  // First pass: find canonical services (service name matches image name)
   const imageToCanonicalService = new Map<string, string>();
 
   for (const service of services) {
     if (!service.image) {
-      // Services without images (local builds) are always canonical
+      // Services without images (local builds) map to themselves
       imageToCanonicalService.set(service.service_name, service.service_name);
       continue;
     }
@@ -243,26 +242,69 @@ export function filterServiceAliases(services: Service[]): Service[] {
     }
   }
 
-  // Filter out service aliases
-  return services.filter((service) => {
-    // Services without image field are always kept (local builds)
+  // Second pass: build alias mapping
+  const aliasMapping = new Map<string, string>();
+
+  for (const service of services) {
     if (!service.image) {
-      return true;
+      // Local builds map to themselves
+      aliasMapping.set(service.service_name, service.service_name);
+      continue;
     }
 
-    // Check if this service's image has a canonical service
+    // Look up canonical service for this image
     const canonicalService = imageToCanonicalService.get(service.image);
 
-    // Keep service if:
-    // 1. No canonical service exists (orphan image), OR
-    // 2. This IS the canonical service
-    if (!canonicalService || canonicalService === service.service_name) {
-      return true;
+    if (canonicalService) {
+      // Map to canonical service
+      aliasMapping.set(service.service_name, canonicalService);
+    } else {
+      // No canonical service found - map to itself (orphan image)
+      aliasMapping.set(service.service_name, service.service_name);
     }
+  }
 
-    // This is a service alias - filter it out
-    return false;
-  });
+  return aliasMapping;
+}
+
+/**
+ * Resolves a list of service names to their canonical names, removing duplicates.
+ *
+ * Service aliases are resolved to their canonical service names based on the
+ * alias mapping. Duplicates are removed to ensure each canonical service appears
+ * only once in the result.
+ *
+ * @param serviceNames Array of service names (may include aliases)
+ * @param aliasMapping Map from service name to canonical service name
+ * @returns Array of unique canonical service names, sorted
+ *
+ * @example
+ * ```typescript
+ * const aliasMapping = new Map([
+ *   ['historian', 'historian'],
+ *   ['historian-secondary', 'historian'],
+ * ]);
+ * const resolved = resolveServiceAliases(['historian', 'historian-secondary'], aliasMapping);
+ * console.log(resolved); // ['historian']
+ * ```
+ */
+export function resolveServiceAliases(
+  serviceNames: string[],
+  aliasMapping: Map<string, string>
+): string[] {
+  const canonicalServices = new Set<string>();
+
+  for (const serviceName of serviceNames) {
+    const canonical = aliasMapping.get(serviceName);
+    if (canonical) {
+      canonicalServices.add(canonical);
+    } else {
+      // No mapping found - use service name as-is
+      canonicalServices.add(serviceName);
+    }
+  }
+
+  return Array.from(canonicalServices).sort();
 }
 
 /**

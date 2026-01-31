@@ -13,7 +13,7 @@ import { Command } from 'commander';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import { discoverBaseImages, buildDirectoryToGhcrMapping } from './lib/base-images.js';
-import { discoverServicesFromCompose, filterGhcrServices, filterServiceAliases } from './lib/services.js';
+import { discoverServicesFromCompose, filterGhcrServices, buildServiceAliasMapping, resolveServiceAliases } from './lib/services.js';
 import { buildReverseDependencyMap, detectAffectedServices } from './lib/dependency-graph.js';
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
@@ -175,17 +175,24 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   console.error('Step 3: Discovering services from docker-compose...');
   const allServices = discoverServicesFromCompose(options.composeFile, options.envFile);
-  const ghcrServices = filterGhcrServices(allServices);
-  const services = filterServiceAliases(ghcrServices);
-  console.error(`Found ${services.length} buildable services (${ghcrServices.length} GHCR, ${allServices.length} total)`);
+  const services = filterGhcrServices(allServices);
+  console.error(`Found ${services.length} GHCR services (${allServices.length} total)`);
+
+  console.error('Step 3.5: Building service alias mapping...');
+  const serviceAliasMapping = buildServiceAliasMapping(services);
+  const aliasCount = Array.from(serviceAliasMapping.entries()).filter(
+    ([alias, canonical]) => alias !== canonical
+  ).length;
+  console.error(`Found ${aliasCount} service aliases`);
 
   console.error('Step 4: Detecting changed base images...');
   const changedBaseImages = detectChangedBaseImages(options.baseRef, baseImages);
   console.error(`Changed base images: ${changedBaseImages.length}`);
 
   console.error('Step 5: Detecting changed services...');
-  const changedServices = detectChangedServices(options.baseRef, services);
-  console.error(`Changed services: ${changedServices.length}`);
+  const changedServicesRaw = detectChangedServices(options.baseRef, services);
+  const changedServices = resolveServiceAliases(changedServicesRaw, serviceAliasMapping);
+  console.error(`Changed services (raw): ${changedServicesRaw.length}, resolved: ${changedServices.length}`);
 
   console.error('Step 6: Building reverse dependency map...');
   const reverseDeps = buildReverseDependencyMap(services, options.dockerDir, baseImageMapping);
