@@ -13,7 +13,7 @@ import { Command } from 'commander';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import { discoverBaseImages, buildDirectoryToGhcrMapping } from './lib/base-images.js';
-import { discoverServicesFromCompose, filterGhcrServices } from './lib/services.js';
+import { discoverServicesFromCompose, filterGhcrServices, filterServiceAliases } from './lib/services.js';
 import { buildReverseDependencyMap, detectAffectedServices } from './lib/dependency-graph.js';
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
@@ -175,8 +175,9 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   console.error('Step 3: Discovering services from docker-compose...');
   const allServices = discoverServicesFromCompose(options.composeFile, options.envFile);
-  const services = filterGhcrServices(allServices);
-  console.error(`Found ${services.length} GHCR services (${allServices.length} total)`);
+  const ghcrServices = filterGhcrServices(allServices);
+  const services = filterServiceAliases(ghcrServices);
+  console.error(`Found ${services.length} buildable services (${ghcrServices.length} GHCR, ${allServices.length} total)`);
 
   console.error('Step 4: Detecting changed base images...');
   const changedBaseImages = detectChangedBaseImages(options.baseRef, baseImages);

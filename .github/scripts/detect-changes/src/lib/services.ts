@@ -197,6 +197,75 @@ export function filterGhcrServices(services: Service[]): Service[] {
 }
 
 /**
+ * Filters out service aliases that share the same image with another service.
+ *
+ * Service aliases are docker-compose services that use the same Docker image as another
+ * service but with different runtime configuration (environment variables, volumes, etc.).
+ * These should not be built separately since they share the same image.
+ *
+ * A service is considered an alias if:
+ * 1. Its image name doesn't match its service name
+ * 2. Another service exists whose service name matches the image name
+ *
+ * @param services Array of services to filter
+ * @returns Filtered array with service aliases removed
+ *
+ * @example
+ * ```typescript
+ * const services = [
+ *   { service_name: 'historian', image: 'ghcr.io/groupsky/homy/historian:latest', ... },
+ *   { service_name: 'historian-secondary', image: 'ghcr.io/groupsky/homy/historian:latest', ... }
+ * ];
+ * const filtered = filterServiceAliases(services);
+ * console.log(filtered.length); // 1 (only historian, historian-secondary is filtered out)
+ * ```
+ */
+export function filterServiceAliases(services: Service[]): Service[] {
+  // Build a map of image names to service names for canonical services
+  // A canonical service is one where the service name matches the image name
+  const imageToCanonicalService = new Map<string, string>();
+
+  for (const service of services) {
+    if (!service.image) {
+      // Services without images (local builds) are always canonical
+      imageToCanonicalService.set(service.service_name, service.service_name);
+      continue;
+    }
+
+    // Extract image name without tag (e.g., "ghcr.io/groupsky/homy/historian:latest" -> "historian")
+    const imageParts = service.image.split('/');
+    const imageNameWithTag = imageParts[imageParts.length - 1];
+    const imageName = imageNameWithTag.split(':')[0];
+
+    // If service name matches image name, it's canonical
+    if (service.service_name === imageName) {
+      imageToCanonicalService.set(service.image, service.service_name);
+    }
+  }
+
+  // Filter out service aliases
+  return services.filter((service) => {
+    // Services without image field are always kept (local builds)
+    if (!service.image) {
+      return true;
+    }
+
+    // Check if this service's image has a canonical service
+    const canonicalService = imageToCanonicalService.get(service.image);
+
+    // Keep service if:
+    // 1. No canonical service exists (orphan image), OR
+    // 2. This IS the canonical service
+    if (!canonicalService || canonicalService === service.service_name) {
+      return true;
+    }
+
+    // This is a service alias - filter it out
+    return false;
+  });
+}
+
+/**
  * Normalizes a file path by joining context and filename.
  *
  * This helper function ensures consistent path formatting by:
