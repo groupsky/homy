@@ -350,8 +350,8 @@ jobs:
           echo "Total unique base images to prepare: ${#ALL_IMAGES[@]}"
           printf '  - %s\n' "${ALL_IMAGES[@]}"
 
-          # Save as JSON array for iteration
-          IMAGES_JSON=$(printf '%s\n' "${ALL_IMAGES[@]}" | jq -R . | jq -s .)
+          # Save as JSON array for iteration (compact, no newlines)
+          IMAGES_JSON=$(printf '%s\n' "${ALL_IMAGES[@]}" | jq -R . | jq -s -c .)
           echo "images=$IMAGES_JSON" >> $GITHUB_OUTPUT
           echo "count=${#ALL_IMAGES[@]}" >> $GITHUB_OUTPUT
 
@@ -538,8 +538,8 @@ jobs:
             echo "::endgroup::"
           done
 
-          # Save built images list as JSON
-          BUILT_JSON=$(printf '%s\n' "${BUILT_IMAGES[@]}" | jq -R . | jq -s .)
+          # Save built images list as JSON (compact, no newlines)
+          BUILT_JSON=$(printf '%s\n' "${BUILT_IMAGES[@]}" | jq -R . | jq -s -c .)
           echo "built_images=$BUILT_JSON" >> $GITHUB_OUTPUT
 
           echo ""
