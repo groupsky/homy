@@ -36,15 +36,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+        with:
+          fetch-depth: 0
 
       - name: Check changed files
         id: filter
         run: |
           # Get list of changed files
           if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Fetch base branch for comparison
+            git fetch origin ${{ github.event.pull_request.base.ref }}
             CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
           else
-            CHANGED_FILES=$(git diff --name-only HEAD^1 HEAD)
+            # For push events, fetch previous commit
+            git fetch --depth=2
+            CHANGED_FILES=$(git diff --name-only HEAD^1 HEAD || git diff --name-only HEAD)
           fi
 
           echo "Changed files:"
