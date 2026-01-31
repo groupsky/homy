@@ -14,9 +14,14 @@ on:
       - 'docker/*/package.json'
       - '.github/workflows/renovate-coverage.yml'
 
+permissions:
+  contents: read
+
 jobs:
   validate-coverage:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
