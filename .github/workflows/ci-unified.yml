@@ -1085,17 +1085,55 @@ jobs:
           # Prepare test environment (use test.env if exists, or minimal config)
           ENV_FILE="docker/${{ matrix.service }}/test.env"
           if [ ! -f "$ENV_FILE" ]; then
-            echo "No test.env found, creating minimal config"
-            touch /tmp/test.env
-            ENV_FILE="/tmp/test.env"
+            echo "::error::Service has HEALTHCHECK but missing docker/${{ matrix.service }}/test.env"
+            echo "Create test.env with minimal viable configuration for healthcheck testing."
+            exit 1
           fi
+
+          # Process _FILE environment variables to support Docker secrets pattern
+          # Create temporary secret files for any *_FILE variables in test.env
+          TEMP_SECRETS_DIR=$(mktemp -d)
+          SECRET_MOUNTS=""
+
+          while IFS='=' read -r key value; do
+            # Skip comments and empty lines
+            [[ "$key" =~ ^#.*$ ]] || [ -z "$key" ] && continue
+
+            # Check if this is a *_FILE variable
+            if [[ "$key" =~ _FILE$ ]]; then
+              # Extract the base variable name (e.g., MQTT_PASSWORD from MQTT_PASSWORD_FILE)
+              BASE_VAR="${key%_FILE}"
+
+              # Create temporary file with test value
+              SECRET_FILE="$TEMP_SECRETS_DIR/${BASE_VAR,,}"  # lowercase filename
+              echo "test-${BASE_VAR,,}-value" > "$SECRET_FILE"
+
+              # Add volume mount for this secret
+              SECRET_MOUNTS="$SECRET_MOUNTS -v $SECRET_FILE:/run/secrets/${BASE_VAR,,}:ro"
+
+              echo "Created secret file: /run/secrets/${BASE_VAR,,}"
+            fi
+          done < "$ENV_FILE"
+
+          # Update _FILE variables to point to mounted secrets
+          PROCESSED_ENV=$(mktemp)
+          while IFS='=' read -r key value; do
+            if [[ "$key" =~ _FILE$ ]]; then
+              BASE_VAR="${key%_FILE}"
+              echo "${key}=/run/secrets/${BASE_VAR,,}"
+            else
+              echo "${key}=${value}"
+            fi
+          done < "$ENV_FILE" > "$PROCESSED_ENV"
 
           # Start container with healthcheck
           CONTAINER_ID=$(docker run -d \
-            --env-file "$ENV_FILE" \
+            --env-file "$PROCESSED_ENV" \
+            $SECRET_MOUNTS \
             ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
 
           echo "container_id=$CONTAINER_ID" >> $GITHUB_OUTPUT
+          echo "temp_secrets=$TEMP_SECRETS_DIR" >> $GITHUB_OUTPUT
           echo "Container started: $CONTAINER_ID"
 
           # Wait for healthy status
@@ -1145,6 +1183,11 @@ jobs:
             echo "Cleaning up container..."
             docker stop ${{ steps.container.outputs.container_id }} || true
             docker rm ${{ steps.container.outputs.container_id }} || true
+          fi
+
+          if [ -n "${{ steps.container.outputs.temp_secrets }}" ]; then
+            echo "Cleaning up temporary secrets..."
+            rm -rf "${{ steps.container.outputs.temp_secrets }}" || true
           fi
 
   # Stage 4C: Lights Integration Test
