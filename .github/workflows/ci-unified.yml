@@ -1080,71 +1080,46 @@ jobs:
       - name: Start container and wait for healthy
         id: container
         run: |
-          echo "=== Starting container and monitoring health ==="
+          echo "=== Starting service with docker compose ==="
+          echo "Using docker compose ensures all dependencies are available"
 
-          # Services that require docker compose (have dependencies like influxdb, broker, etc.)
-          COMPOSE_SERVICES=("sunseeker-monitoring")
+          # Prepare directories
+          mkdir -p config/automations data/nodered
+          chmod 777 data/nodered
 
-          if [[ " ${COMPOSE_SERVICES[@]} " =~ " ${{ matrix.service }} " ]]; then
-            echo "🐳 Service requires docker compose (has dependencies)"
-
-            # Prepare directories
-            mkdir -p config/automations data/nodered
-            chmod 777 data/nodered
-
-            # Load image from artifact
-            cd /tmp
-            if [ ! -f "${{ matrix.service }}.tar" ]; then
-              echo "::error::Artifact tarball not found: ${{ matrix.service }}.tar"
-              exit 1
-            fi
-
-            # Verify checksum
-            if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-              echo "::error::Checksum verification failed for ${{ matrix.service }}"
-              exit 1
-            fi
-            echo "✅ Checksum verified"
-
-            # Load image
-            if ! docker load -i ${{ matrix.service }}.tar; then
-              echo "::error::Failed to load Docker image"
-              exit 1
-            fi
-            echo "✅ Image loaded from artifact"
-
-            cd $GITHUB_WORKSPACE
-
-            # Start service with dependencies using docker compose
-            echo "Starting ${{ matrix.service }} with dependencies..."
-            docker compose --env-file example.env up --force-recreate -d ${{ matrix.service }}
-
-            # Get the container ID
-            CONTAINER_ID=$(docker compose ps -q ${{ matrix.service }})
-            echo "use_compose=true" >> $GITHUB_ENV
-          else
-            echo "🐳 Service runs standalone (no dependencies)"
-
-            # Verify test.env exists for standalone services
-            ENV_FILE="docker/${{ matrix.service }}/test.env"
-            if [ ! -f "$ENV_FILE" ]; then
-              echo "::error::Service has HEALTHCHECK but missing docker/${{ matrix.service }}/test.env"
-              echo "Create test.env with minimal configuration"
-              exit 1
-            fi
-
-            # Mount repo secrets directory for Docker secrets pattern
-            SECRETS_DIR="$GITHUB_WORKSPACE/secrets"
-            echo "Mounting secrets from: $SECRETS_DIR → /run/secrets"
-
-            # Start container with test.env and mounted secrets
-            CONTAINER_ID=$(docker run -d \
-              --env-file "$ENV_FILE" \
-              -v "$SECRETS_DIR:/run/secrets:ro" \
-              ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
-
-            echo "use_compose=false" >> $GITHUB_ENV
+          # Load image from artifact
+          cd /tmp
+          if [ ! -f "${{ matrix.service }}.tar" ]; then
+            echo "::error::Artifact tarball not found: ${{ matrix.service }}.tar"
+            exit 1
           fi
+
+          # Verify checksum
+          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
+            echo "::error::Checksum verification failed for ${{ matrix.service }}"
+            exit 1
+          fi
+          echo "✅ Checksum verified"
+
+          # Load image
+          if ! docker load -i ${{ matrix.service }}.tar; then
+            echo "::error::Failed to load Docker image"
+            exit 1
+          fi
+          echo "✅ Image loaded from artifact"
+
+          cd $GITHUB_WORKSPACE
+
+          # Start service using docker compose (handles all dependencies automatically)
+          echo "Starting ${{ matrix.service }} with docker compose..."
+          docker compose --env-file example.env up --force-recreate -d ${{ matrix.service }}
+
+          echo ""
+          echo "=== Container status ==="
+          docker compose ps
+
+          # Get the container ID
+          CONTAINER_ID=$(docker compose ps -q ${{ matrix.service }})
 
           echo "container_id=$CONTAINER_ID" >> $GITHUB_OUTPUT
           echo "Container started: $CONTAINER_ID"
@@ -1192,14 +1167,8 @@ jobs:
       - name: Cleanup container
         if: always()
         run: |
-          if [ "${{ env.use_compose }}" = "true" ]; then
-            echo "Cleaning up docker compose services..."
-            docker compose --env-file example.env down -v || true
-          elif [ -n "${{ steps.container.outputs.container_id }}" ]; then
-            echo "Cleaning up container..."
-            docker stop ${{ steps.container.outputs.container_id }} || true
-            docker rm ${{ steps.container.outputs.container_id }} || true
-          fi
+          echo "Cleaning up docker compose services..."
+          docker compose --env-file example.env down -v || true
 
   # Stage 4C: Lights Integration Test
   lights-integration-test:
