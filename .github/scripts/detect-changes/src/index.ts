@@ -298,8 +298,13 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
         continue;
       }
 
+      // Strip GHCR prefix for mapping lookup
+      // Mapping uses short tags like "node:22.22.0-alpine3.23"
+      // But extractFinalStageBase returns "ghcr.io/groupsky/homy/node:22.22.0-alpine3.23"
+      const shortTag = finalBase.replace('ghcr.io/groupsky/homy/', '');
+
       // Look up base image directory
-      const baseDir = baseImageMapping.ghcr_to_dir[finalBase];
+      const baseDir = baseImageMapping.ghcr_to_dir[shortTag];
       if (baseDir) {
         // Check if this base is already scheduled for preparation
         const isChanged = changedBaseImages.includes(baseDir);
