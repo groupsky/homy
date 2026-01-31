@@ -4,13 +4,13 @@ This document explains the migration from Dependabot to Renovate for dependency 
 
 ## Why Renovate?
 
-Renovate provides several advantages over Dependabot:
+Renovate provides several advantages over Dependabot ([comparison](https://docs.renovatebot.com/bot-comparison/)):
 
 1. **Synchronized Updates**: Can update multiple files in a single PR (e.g., Dockerfile + .nvmrc)
-2. **Advanced Grouping**: More flexible grouping and scheduling options
-3. **Post-Upgrade Tasks**: Can run commands after updating dependencies (used for .nvmrc sync)
-4. **Better Customization**: More granular control over update behavior
-5. **Dependency Dashboard**: Visual dashboard of all pending updates
+2. **Advanced Grouping**: More flexible [grouping](https://docs.renovatebot.com/noise-reduction/#package-grouping) and [scheduling](https://docs.renovatebot.com/noise-reduction/#scheduling) options
+3. **Post-Upgrade Tasks**: Can run commands after updating dependencies ([postUpgradeTasks](https://docs.renovatebot.com/configuration-options/#postupgradetasks))
+4. **Better Customization**: More granular control over update behavior ([packageRules](https://docs.renovatebot.com/configuration-options/#packagerules))
+5. **Dependency Dashboard**: Visual [dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) of all pending updates
 
 ## Key Features
 
@@ -20,7 +20,7 @@ Renovate provides several advantages over Dependabot:
 The repository already has `.nvmrc` validation in `.github/workflows/ci-unified.yml` (Stage 4A: Version Consistency Check) that ensures Dockerfile and `.nvmrc` versions match. This catches mismatches and fails the build.
 
 **Renovate Enhancement:**
-Renovate's `postUpgradeTasks` **automatically updates** `.nvmrc` files when Dockerfiles change, eliminating manual fixes. Instead of CI failing and requiring manual intervention, the `.nvmrc` updates happen automatically in the same PR.
+Renovate's [`postUpgradeTasks`](https://docs.renovatebot.com/configuration-options/#postupgradetasks) **automatically updates** `.nvmrc` files when Dockerfiles change, eliminating manual fixes. Instead of CI failing and requiring manual intervention, the `.nvmrc` updates happen automatically in the same PR via the `.github/scripts/sync-nvmrc.sh` script.
 
 The system uses a two-step workflow to keep Node.js versions synchronized:
 
@@ -65,22 +65,23 @@ This PR was automatically created by Mend Renovate App during its scheduled run.
 
 ### Update Grouping
 
-Updates are grouped by service category to reduce PR noise:
+Updates are [grouped by service category](https://docs.renovatebot.com/noise-reduction/#package-grouping) to reduce PR noise:
 
-| Group | Services | Schedule |
-|-------|----------|----------|
-| **base-images** | All base images in `base-images/` | Weekly (Monday 2 AM) |
-| **infrastructure** | nginx, mosquitto, influxdb, grafana, mongo, etc. | Monthly (1st, 2 AM) |
-| **mqtt-services** | automations, automation-events-processor, mqtt-influx, mqtt-mongo | Monthly (1st, 2 AM) |
-| **hardware-integration** | modbus-serial, dmx-driver, telegram-bridge | Monthly (1st, 2 AM) |
-| **monitoring** | historian, sunseeker-monitoring | Monthly (1st, 2 AM) |
-| **home-automation** | homeassistant | Monthly (1st, 2 AM) |
-| **development** | test | Monthly (1st, 2 AM) |
-| **github-actions** | All GitHub Actions | Monthly (1st, 2 AM) |
+| Group | Services | Schedule | Automerge |
+|-------|----------|----------|-----------|
+| **base-images** | All base images in `base-images/` | Weekly (Monday 3 AM) | ✅ Patch/minor only |
+| **infrastructure** | nginx, mosquitto, influxdb, grafana, mongo, etc. | Daily (weekdays after 3 AM) | ❌ Manual review |
+| **mqtt-services** | automations, automation-events-processor, mqtt-influx, mqtt-mongo | Daily (weekdays after 3 AM) | ❌ Manual review |
+| **hardware-integration** | modbus-serial, dmx-driver, telegram-bridge | Daily (weekdays after 3 AM) | ❌ Manual review |
+| **monitoring** | historian, sunseeker-monitoring | Daily (weekdays after 3 AM) | ❌ Manual review |
+| **home-automation** | homeassistant | Daily (weekdays after 3 AM) | ❌ Manual review |
+| **development** | test | Monthly (1st, 3 AM) | ❌ Manual review |
+| **github-actions** | All GitHub Actions | Monthly (1st, 3 AM) | ✅ All updates |
+| **dev-dependencies** | npm devDependencies (all services) | Daily (weekdays after 3 AM) | ✅ All updates |
 
 ### Dependency Dashboard
 
-Renovate creates a "Dependency Updates Dashboard" issue that shows:
+Renovate creates a "[Dependency Updates Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/)" issue that shows:
 
 - ✅ All open update PRs
 - ⏰ Scheduled updates waiting for next run
@@ -128,74 +129,46 @@ GitHub Actions workflow that runs Renovate on a schedule.
 
 ## Setup Requirements
 
-### 1. Create Renovate GitHub App
+### Using Mend Renovate App (Recommended - Current Setup)
 
-**Option A: Use Mend Renovate (Recommended)**
+This repository uses the **Mend Renovate App** hosted solution:
 
-1. Go to https://github.com/apps/renovate
-2. Click "Install" and select your repository
-3. Renovate will automatically start creating PRs
+1. **Install the app**: Go to [github.com/apps/renovate](https://github.com/apps/renovate)
+2. **Select repository**: Choose `groupsky/homy` during installation
+3. **Grant permissions**: The app needs access to:
+   - Contents (read/write) - Create commits and branches
+   - Pull requests (read/write) - Create and update PRs
+   - Issues (read/write) - Create dependency dashboard
+   - Checks & Statuses (read/write) - Update check runs
+   - See [full permission list](https://docs.renovatebot.com/modules/platform/github/#running-as-a-github-app)
+4. **Done!** Renovate will automatically start running on schedule
 
-**Option B: Self-Hosted with GitHub App**
+**No secrets or workflow files needed** - Mend app handles everything automatically.
 
-1. Create a GitHub App at https://github.com/settings/apps/new
-2. Required permissions:
-   - **Contents**: Read & Write (to create commits)
-   - **Pull Requests**: Read & Write (to create PRs)
-   - **Issues**: Read & Write (for dependency dashboard)
-   - **Metadata**: Read-only
-3. Generate a private key and download it
-4. Install the app on your repository
-
-### 2. Configure GitHub Secrets
-
-Add the following secrets to your repository:
-
-```
-RENOVATE_APP_ID=123456
-RENOVATE_APP_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
-```
-
-**Where to find these:**
-- **App ID**: GitHub App settings → About section
-- **Private Key**: Generated when creating the app
-
-### 3. Test Configuration
-
-```bash
-# Dry-run mode (no PRs created)
-gh workflow run renovate.yml -f dryRun=true -f logLevel=debug
-
-# Check workflow logs
-gh run list --workflow=renovate.yml
-gh run view <run-id> --log
-```
+**Configuration**: The `renovate.json` file in repository root controls Renovate's behavior ([configuration reference](https://docs.renovatebot.com/configuration-options/)).
 
 ## Migration Checklist
 
-- [x] Create `renovate.json` configuration
-- [x] Create `.github/workflows/renovate.yml`
-- [x] Add Renovate trigger to CI pipeline (`ci-unified.yml`)
+- [x] Create `renovate.json` configuration ([docs](https://docs.renovatebot.com/configuration-options/))
+- [x] Create `.github/scripts/sync-nvmrc.sh` script
+- [x] Configure automerge settings ([docs](https://docs.renovatebot.com/key-concepts/automerge/))
 - [x] Create migration documentation
-- [ ] Set up Renovate GitHub App
-- [ ] Configure repository secrets (RENOVATE_APP_ID, RENOVATE_APP_PRIVATE_KEY)
-- [ ] Test Renovate with dry-run mode
-- [ ] Test Renovate trigger (verify CI triggers Renovate after base image update)
+- [x] Install Mend Renovate App ([install link](https://github.com/apps/renovate))
 - [ ] Disable Dependabot (rename `.github/dependabot.yml` → `.github/dependabot.yml.disabled`)
-- [ ] Disable Dependabot coverage workflow (rename to `.disabled`)
-- [ ] Create initial Renovate PRs
-- [ ] Verify .nvmrc synchronization works
-- [ ] Verify automatic Renovate trigger works after base image update
+- [ ] Wait for first Renovate run (check [Dependency Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) issue)
+- [ ] Verify .nvmrc synchronization works (check first Node.js update PR)
+- [ ] Verify automerge works for base images/actions/devDependencies
+- [ ] Monitor for 1-2 weeks, adjust schedules if needed
 - [ ] Update CLAUDE.md documentation
 
 ## Comparison: Dependabot vs Renovate
 
+See [official comparison](https://docs.renovatebot.com/bot-comparison/) for more details.
+
 | Feature | Dependabot | Renovate |
 |---------|------------|----------|
-| **Multi-file updates** | ❌ No | ✅ Yes (Dockerfile + .nvmrc) |
-| **Dependency Dashboard** | ❌ No | ✅ Yes |
+| **Multi-file updates** | ❌ No | ✅ Yes (Dockerfile + .nvmrc via [postUpgradeTasks](https://docs.renovatebot.com/configuration-options/#postupgradetasks)) |
+| **Dependency Dashboard** | ❌ No | ✅ Yes ([docs](https://docs.renovatebot.com/key-concepts/dashboard/)) |
 | **Post-upgrade tasks** | ❌ No | ✅ Yes (bash scripts) |
 | **Grouping flexibility** | ⚠️ Basic | ✅ Advanced (paths, patterns) |
 | **Schedule control** | ⚠️ Limited | ✅ Full cron expressions |
