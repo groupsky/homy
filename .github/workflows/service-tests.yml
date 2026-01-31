@@ -22,6 +22,9 @@ on:
       - 'docker/sunseeker-monitoring/**'
       - '.github/workflows/service-tests.yml'
 
+permissions:
+  contents: read
+
 jobs:
   # Detect which services changed to run tests only for affected services
   detect-changes:
