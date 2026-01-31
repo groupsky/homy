@@ -9,7 +9,6 @@
 group "default" {
   targets = [
     "node-18-alpine",
-    "node-22-alpine",
     "node-24-alpine",
     "grafana",
     "influxdb",
@@ -26,11 +25,6 @@ group "default" {
 
 target "node-18-alpine" {
   context = "./node-18-alpine"
-  # Tags set via workflow: ghcr.io/groupsky/homy/node:${VERSION}
-}
-
-target "node-22-alpine" {
-  context = "./node-22-alpine"
   # Tags set via workflow: ghcr.io/groupsky/homy/node:${VERSION}
 }
 

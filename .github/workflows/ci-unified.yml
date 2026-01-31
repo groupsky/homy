@@ -995,12 +995,11 @@ jobs:
     name: Healthcheck Tests
     timeout-minutes: 10
     needs: [detect-changes, build-app-images, pull-images-for-testing]
-    # Always run after both build and pull stages (one or both may be skipped)
+    # Run only if artifacts are available (at least one of build/pull succeeded)
     if: |
       always() &&
       needs.detect-changes.outputs.healthcheck_services != '[]' &&
-      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped')
+      (needs.build-app-images.result == 'success' || needs.pull-images-for-testing.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1153,12 +1152,11 @@ jobs:
     name: Lights Integration Test
     timeout-minutes: 10
     needs: [detect-changes, build-app-images, pull-images-for-testing]
-    # Only run if automations, broker, or features were built (or changed)
-    # Always run after both build and pull stages (one or both may be skipped)
+    # Only run if automations, broker, or features artifacts are available
+    # Requires at least one of build/pull to have succeeded (artifacts created)
     if: |
       always() &&
-      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
+      (needs.build-app-images.result == 'success' || needs.pull-images-for-testing.result == 'success') &&
       (contains(fromJson(needs.detect-changes.outputs.to_build), 'automations') ||
        contains(fromJson(needs.detect-changes.outputs.to_build), 'broker') ||
        contains(fromJson(needs.detect-changes.outputs.to_build), 'features') ||
