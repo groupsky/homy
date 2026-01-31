@@ -175,7 +175,6 @@ gh run view <run-id> --log
 - [x] Create `renovate.json` configuration
 - [x] Create `.github/workflows/renovate.yml`
 - [x] Create `.github/workflows/cascade-base-image-updates.yml`
-- [x] Create `scripts/test-nvmrc-sync.sh` validation script
 - [x] Create migration documentation
 - [ ] Set up Renovate GitHub App
 - [ ] Configure repository secrets (RENOVATE_APP_ID, RENOVATE_APP_PRIVATE_KEY)
@@ -231,34 +230,9 @@ If Renovate doesn't work as expected:
 
 ### Test .nvmrc Synchronization
 
-The repository has existing CI validation (`.github/workflows/ci-unified.yml` Stage 4A) that verifies `.nvmrc` matches Dockerfile versions. For local testing before pushing, use the validation script:
+The repository has existing CI validation (`.github/workflows/ci-unified.yml` Stage 4A) that verifies `.nvmrc` matches Dockerfile versions. This runs automatically on all PRs.
 
-```bash
-# Check all services
-./scripts/test-nvmrc-sync.sh
-
-# Check specific service
-./scripts/test-nvmrc-sync.sh docker/automations
-```
-
-This duplicates the CI validation logic for convenience during local development.
-
-**Expected Output:**
-```
-Node.js Version Synchronization Test
-=====================================
-
-Checking: docker/automations
-  Docker Node.js version: 18.20.8
-  .nvmrc version: 18.20.8
-  ✓ Versions match
-
-Summary
-=================================
-Total services checked: 10
-Passed: 10
-Failed: 0
-```
+Renovate's `postUpgradeTasks` ensures `.nvmrc` files are updated automatically when Dockerfiles change, so the CI validation should always pass.
 
 ### Test Cascade Workflow
 
