@@ -286,6 +286,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run for non-fork PRs or master pushes
     # Skip if both changed_base_images and base_images_needed are empty
+    # AND validate-base-images completed successfully or was skipped
     # For workflow_dispatch: require non-fork PR when publish_pr_images=true
     if: |
       (github.event_name == 'push' ||
@@ -294,7 +295,8 @@ jobs:
        (github.event_name == 'workflow_dispatch' &&
         (inputs.publish_pr_images != true || github.event.pull_request.head.repo.full_name == github.repository))) &&
       (needs.detect-changes.outputs.changed_base_images != '[]' ||
-       needs.detect-changes.outputs.base_images_needed != '[]')
+       needs.detect-changes.outputs.base_images_needed != '[]') &&
+      (needs.validate-base-images.result == 'success' || needs.validate-base-images.result == 'skipped')
     permissions:
       contents: read
       packages: write  # CRITICAL: Only this stage can push to GHCR
@@ -1465,14 +1467,19 @@ jobs:
     timeout-minutes: 15
     needs: [detect-changes, build-app-images, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
+    # AND all dependencies completed successfully or were skipped
     if: |
       (github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository)) &&
       needs.detect-changes.outputs.to_build != '[]' &&
-      (needs.pull-images-for-testing.result == 'success' ||
-       needs.pull-images-for-testing.result == 'skipped')
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
+      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
+      (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
+      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
+      (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
+      (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1594,11 +1601,15 @@ jobs:
     name: Retag Unchanged Images
     timeout-minutes: 5
     needs: [detect-changes, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    # Only retag if all test dependencies completed successfully or were skipped
     if: |
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (needs.pull-images-for-testing.result == 'success' ||
-       needs.pull-images-for-testing.result == 'skipped')
+      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
+      (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
+      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
+      (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
+      (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
