@@ -38,16 +38,7 @@ const playground = {
   }
 }
 
-const contentProcessors = {
-  json: {
-    read: (val) => JSON.parse(val),
-    write: (val) => JSON.stringify(val),
-  },
-  plain: {
-    read: (val) => String(val),
-    write: (val) => String(val),
-  }
-}
+const contentProcessors = require('./lib/content-processors')
 
 playground.gates.mqtt.setMaxListeners(1000)
 const mqttSubscriptions = {}
@@ -189,14 +180,14 @@ playground.bots.forEach(async bot => {
           throw new Error(`Missing ${content} write transformation!`)
         }
         const writer = contentProcessors[content].write
-        return new Promise((resolve, reject) => playground.gates.mqtt.publish(topic, writer({
-          ...payload,
+        const meta = {
           _bot: {
             name: bot.name,
             type: bot.config.type
           },
           _tz: Date.now()
-        }), { qos, retain }, (err) => {
+        }
+        return new Promise((resolve, reject) => playground.gates.mqtt.publish(topic, writer(payload, meta), { qos, retain }, (err) => {
           if (err) {
             console.error(`[${bot.config.type}] failure sending to ${topic}`, payload)
             reject(err)
