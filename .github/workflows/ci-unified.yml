@@ -607,9 +607,11 @@ jobs:
     name: Build App Images
     timeout-minutes: 20
     needs: [detect-changes, prepare-base-images]
-    # Only run if we have services to build
+    # Only run if we have services to build AND prepare-base-images completed (success or skipped)
     # Check JSON array != '[]' before matrix evaluation (prevents workflow crash)
-    if: needs.detect-changes.outputs.to_build != '[]'
+    if: |
+      needs.detect-changes.outputs.to_build != '[]' &&
+      (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read  # NO packages permissions - cannot pull from registries
