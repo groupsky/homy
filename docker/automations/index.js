@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
+// TEST: Temporary change to verify CI workflow handles service-only changes
 const mqtt = require('mqtt')
 const resolve = require('./lib/resolve')
 const StateManager = require('./lib/state-manager')
