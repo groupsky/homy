@@ -416,6 +416,52 @@ module.exports = {
       emitValue: { state: 'ON' },
       verbose: false
     },
+
+    // TV IR Control - Physical Button Triggers
+    tvLivingVolumeUpFromButton: {
+      type: 'mqtt-transform',
+      inputTopic: `${featuresPrefix}/button/living_main_up/status`,
+      filterInput: (payload) => payload.state === true,
+      transform: () => ({ ir_code_to_send: 'BgMjhxFgAi6gAQOdBi4CwAHgARUBLgJAF0ADQAFAB+AHA0ABQBPgAwHgBz9AAUAj4AsDBymcAyP0CC4C' }),
+      outputTopic: 'z2m/house1/ir-living/set/ir_code_to_send',
+    },
+    tvLivingVolumeDownFromButton: {
+      type: 'mqtt-transform',
+      inputTopic: `${featuresPrefix}/button/living_main_down/status`,
+      filterInput: (payload) => payload.state === true,
+      transform: () => ({ ir_code_to_send: 'Bj8jexFqAiQgAUAFA5QGJALgAwFAE0ABQBdAA0APQAfgDwOAAUAlASQCgAVAAUAJQAMEJAKUBmogA8AHQAuAAwcCnD8jjAhqAg==' }),
+      outputTopic: 'z2m/house1/ir-living/set/ir_code_to_send',
+    },
+    tvLivingPowerFromButton: {
+      type: 'mqtt-transform',
+      inputTopic: `${featuresPrefix}/button/living_main_left/status`,
+      filterInput: (payload) => payload.state === true,
+      transform: () => ({ ir_code_to_send: 'BUAjkREyAsABA5UGMgLgAwECagIyYAFAF0ADQAFAB+AHA+ADAUAb4AcBQBPAA0ABwAvABw8dnEAjuQgyAv//QCO5CDIC' }),
+      outputTopic: 'z2m/house1/ir-living/set/ir_code_to_send',
+    },
+
+    // TV IR Control - Home Assistant Button Triggers
+    tvLivingVolumeUpFromHA: {
+      type: 'mqtt-transform',
+      inputTopic: `${featuresPrefix}/button/tv_living_volume_up/trigger`,
+      filterInput: () => true,
+      transform: () => ({ ir_code_to_send: 'BgMjhxFgAi6gAQOdBi4CwAHgARUBLgJAF0ADQAFAB+AHA0ABQBPgAwHgBz9AAUAj4AsDBymcAyP0CC4C' }),
+      outputTopic: 'z2m/house1/ir-living/set/ir_code_to_send',
+    },
+    tvLivingVolumeDownFromHA: {
+      type: 'mqtt-transform',
+      inputTopic: `${featuresPrefix}/button/tv_living_volume_down/trigger`,
+      filterInput: () => true,
+      transform: () => ({ ir_code_to_send: 'Bj8jexFqAiQgAUAFA5QGJALgAwFAE0ABQBdAA0APQAfgDwOAAUAlASQCgAVAAUAJQAMEJAKUBmogA8AHQAuAAwcCnD8jjAhqAg==' }),
+      outputTopic: 'z2m/house1/ir-living/set/ir_code_to_send',
+    },
+    tvLivingPowerFromHA: {
+      type: 'mqtt-transform',
+      inputTopic: `${featuresPrefix}/button/tv_living_power/trigger`,
+      filterInput: () => true,
+      transform: () => ({ ir_code_to_send: 'BUAjkREyAsABA5UGMgLgAwECagIyYAFAF0ADQAFAB+AHA+ADAUAb4AcBQBPAA0ABwAvABw8dnEAjuQgyAv//QCO5CDIC' }),
+      outputTopic: 'z2m/house1/ir-living/set/ir_code_to_send',
+    },
   },
   gates: {
     mqtt: {
