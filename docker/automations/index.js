@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 /* eslint-env node */
-// TEST: Verify CI workflow handles service-only changes with always() fix
 const mqtt = require('mqtt')
 const resolve = require('./lib/resolve')
 const StateManager = require('./lib/state-manager')
