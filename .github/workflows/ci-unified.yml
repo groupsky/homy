@@ -289,6 +289,7 @@ jobs:
     # AND validate-base-images completed successfully or was skipped
     # For workflow_dispatch: require non-fork PR when publish_pr_images=true
     if: |
+      always() &&
       (github.event_name == 'push' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository) ||
@@ -612,6 +613,7 @@ jobs:
     # Only run if we have services to build AND prepare-base-images completed (success or skipped)
     # Check JSON array != '[]' before matrix evaluation (prevents workflow crash)
     if: |
+      always() &&
       needs.detect-changes.outputs.to_build != '[]' &&
       (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
@@ -1469,6 +1471,7 @@ jobs:
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
     # AND all dependencies completed successfully or were skipped
     if: |
+      always() &&
       (github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'pull_request' &&
@@ -1603,6 +1606,7 @@ jobs:
     needs: [detect-changes, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
     # Only retag if all test dependencies completed successfully or were skipped
     if: |
+      always() &&
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
