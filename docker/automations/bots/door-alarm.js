@@ -206,17 +206,18 @@ module.exports = (name, config) => {
           return
         }
 
-        if (newDoorState && !doorState) {
-          // Door opened
+        // Update state
+        doorState = newDoorState
+        persistedCache.doorState = newDoorState
+
+        // React to new state
+        if (newDoorState) {
+          // Door is now open (from closed or initial null state)
           log('door opened, scheduling alarms')
-          doorState = true
-          persistedCache.doorState = true
           scheduleAlarms()
-        } else if (!newDoorState && doorState) {
-          // Door closed
+        } else {
+          // Door is now closed (from open or initial null state)
           log('door closed, cancelling alarms and stopping alarm')
-          doorState = false
-          persistedCache.doorState = false
           await cancelAlarms()
         }
       })
