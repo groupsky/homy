@@ -4,84 +4,22 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'docker/*/package.json'
-      - 'docker/*/package-lock.json'
-      - 'docker/**/*.js'
-      - 'docker/**/*.ts'
-      - 'docker/**/jest.config.js'
-      - 'docker/**/.nvmrc'
-      - '.github/workflows/unit-tests.yml'
   pull_request:
-    paths:
-      - 'docker/*/package.json'
-      - 'docker/*/package-lock.json'
-      - 'docker/**/*.js'
-      - 'docker/**/*.ts'
-      - 'docker/**/jest.config.js'
-      - 'docker/**/.nvmrc'
-      - '.github/workflows/unit-tests.yml'
   workflow_dispatch:
 
 jobs:
-  detect-testable-services:
-    name: Detect Services with Tests
+  # ============================================================================
+  # Automation Events Processor Tests
+  # ============================================================================
+  test-automation-events-processor:
+    name: Test automation-events-processor
     runs-on: ubuntu-latest
-    outputs:
-      services: ${{ steps.detect.outputs.services }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
-
-      - name: Detect services with test scripts
-        id: detect
-        run: |
-          echo "Detecting services with test scripts..."
-
-          SERVICES='[]'
-
-          # Find all services with package.json
-          for service_dir in docker/*/; do
-            SERVICE=$(basename "$service_dir")
-
-            # Skip if no package.json
-            if [ ! -f "$service_dir/package.json" ]; then
-              echo "⏭️  Skipping $SERVICE (no package.json)"
-              continue
-            fi
-
-            # Check if package.json has a test script
-            if jq -e '.scripts.test' "$service_dir/package.json" > /dev/null 2>&1; then
-              # Check if it's not the default placeholder
-              TEST_SCRIPT=$(jq -r '.scripts.test' "$service_dir/package.json")
-              if [[ "$TEST_SCRIPT" == *"no test specified"* ]]; then
-                echo "⏭️  Skipping $SERVICE (placeholder test script)"
-              else
-                echo "✅ Found test script in $SERVICE"
-                SERVICES=$(echo "$SERVICES" | jq --arg svc "$SERVICE" '. + [$svc]')
-              fi
-            else
-              echo "⏭️  Skipping $SERVICE (no test script)"
-            fi
-          done
-
-          # Compact JSON to single line for GitHub Actions output
-          SERVICES_COMPACT=$(echo "$SERVICES" | jq -c .)
-
-          echo "services=$SERVICES_COMPACT" >> $GITHUB_OUTPUT
-          echo ""
-          echo "Services with tests: $SERVICES"
-
-  test-service:
-    name: Test ${{ matrix.service }}
-    needs: detect-testable-services
-    if: needs.detect-testable-services.outputs.services != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-testable-services.outputs.services) }}
-      fail-fast: false
-
+    # Only run when automation-events-processor files change
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.modified, 'docker/automation-events-processor/') ||
+      contains(github.event.head_commit.added, 'docker/automation-events-processor/') ||
+      github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
@@ -89,67 +27,173 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
-          node-version-file: 'docker/${{ matrix.service }}/.nvmrc'
+          node-version-file: 'docker/automation-events-processor/.nvmrc'
           cache: 'npm'
-          cache-dependency-path: 'docker/${{ matrix.service }}/package-lock.json'
+          cache-dependency-path: 'docker/automation-events-processor/package-lock.json'
 
       - name: Install dependencies
-        working-directory: docker/${{ matrix.service }}
+        working-directory: docker/automation-events-processor
         run: npm ci
 
-      - name: Run linting
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          if jq -e '.scripts.lint' package.json > /dev/null 2>&1; then
-            echo "Running linter..."
-            npm run lint
-          else
-            echo "No lint script found, skipping"
-          fi
-        continue-on-error: true
+      - name: Run tests
+        working-directory: docker/automation-events-processor
+        run: npm test -- --coverage
 
-      - name: Run tests with coverage
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          # Detect test command
-          if jq -e '.scripts["test:coverage"]' package.json > /dev/null 2>&1; then
-            echo "Running: npm run test:coverage"
-            npm run test:coverage
-          elif jq -e '.scripts.test' package.json > /dev/null 2>&1; then
-            echo "Running: npm test -- --coverage"
-            npm test -- --coverage
-          else
-            echo "::error::No test script found"
-            exit 1
-          fi
-
-      - name: Upload coverage to Codecov
+      - name: Upload coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
         continue-on-error: true
         with:
-          directory: docker/${{ matrix.service }}/coverage
-          flags: ${{ matrix.service }}
-          fail_ci_if_error: false
+          directory: docker/automation-events-processor/coverage
+          flags: automation-events-processor
 
-  summary:
-    name: Unit Tests Summary
-    needs: [detect-testable-services, test-service]
-    if: always()
+  # ============================================================================
+  # Automations Tests
+  # ============================================================================
+  test-automations:
+    name: Test automations
     runs-on: ubuntu-latest
+    # Only run when automations files change
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.modified, 'docker/automations/') ||
+      contains(github.event.head_commit.added, 'docker/automations/') ||
+      github.event_name == 'pull_request'
     steps:
-      - name: Check test results
-        run: |
-          echo "=== Unit Tests Summary ==="
-          echo ""
-          echo "Services tested: ${{ needs.detect-testable-services.outputs.services }}"
-          echo "Test job result: ${{ needs.test-service.result }}"
-          echo ""
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
-          if [ "${{ needs.test-service.result }}" == "failure" ]; then
-            echo "❌ Some tests failed"
-            exit 1
-          elif [ "${{ needs.test-service.result }}" == "success" ]; then
-            echo "✅ All tests passed"
-          else
-            echo "⏭️  Tests skipped or cancelled"
-          fi
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version-file: 'docker/automations/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/automations/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/automations
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/automations
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/automations/coverage
+          flags: automations
+
+  # ============================================================================
+  # Modbus Serial Tests
+  # ============================================================================
+  test-modbus-serial:
+    name: Test modbus-serial
+    runs-on: ubuntu-latest
+    # Only run when modbus-serial files change
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.modified, 'docker/modbus-serial/') ||
+      contains(github.event.head_commit.added, 'docker/modbus-serial/') ||
+      github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version-file: 'docker/modbus-serial/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/modbus-serial/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/modbus-serial
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/modbus-serial
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/modbus-serial/coverage
+          flags: modbus-serial
+
+  # ============================================================================
+  # Sunseeker Monitoring Tests
+  # ============================================================================
+  test-sunseeker-monitoring:
+    name: Test sunseeker-monitoring
+    runs-on: ubuntu-latest
+    # Only run when sunseeker-monitoring files change
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.modified, 'docker/sunseeker-monitoring/') ||
+      contains(github.event.head_commit.added, 'docker/sunseeker-monitoring/') ||
+      github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version-file: 'docker/sunseeker-monitoring/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/sunseeker-monitoring/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/sunseeker-monitoring
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/sunseeker-monitoring
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/sunseeker-monitoring/coverage
+          flags: sunseeker-monitoring
+
+  # ============================================================================
+  # Telegram Bridge Tests
+  # ============================================================================
+  test-telegram-bridge:
+    name: Test telegram-bridge
+    runs-on: ubuntu-latest
+    # Only run when telegram-bridge files change
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.modified, 'docker/telegram-bridge/') ||
+      contains(github.event.head_commit.added, 'docker/telegram-bridge/') ||
+      github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version-file: 'docker/telegram-bridge/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/telegram-bridge/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/telegram-bridge
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/telegram-bridge
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/telegram-bridge/coverage
+          flags: telegram-bridge
