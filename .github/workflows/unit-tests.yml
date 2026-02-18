@@ -14,6 +14,8 @@ jobs:
   test-automation-events-processor:
     name: Test automation-events-processor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Only run when automation-events-processor files change
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -52,6 +54,8 @@ jobs:
   test-automations:
     name: Test automations
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Only run when automations files change
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -90,6 +94,8 @@ jobs:
   test-modbus-serial:
     name: Test modbus-serial
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Only run when modbus-serial files change
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -128,6 +134,8 @@ jobs:
   test-sunseeker-monitoring:
     name: Test sunseeker-monitoring
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Only run when sunseeker-monitoring files change
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -166,6 +174,8 @@ jobs:
   test-telegram-bridge:
     name: Test telegram-bridge
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Only run when telegram-bridge files change
     if: |
       github.event_name == 'workflow_dispatch' ||
