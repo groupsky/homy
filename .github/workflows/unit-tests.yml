@@ -52,8 +52,14 @@ jobs:
 
             # Check if package.json has a test script
             if jq -e '.scripts.test' "$service_dir/package.json" > /dev/null 2>&1; then
-              echo "✅ Found test script in $SERVICE"
-              SERVICES=$(echo "$SERVICES" | jq --arg svc "$SERVICE" '. + [$svc]')
+              # Check if it's not the default placeholder
+              TEST_SCRIPT=$(jq -r '.scripts.test' "$service_dir/package.json")
+              if [[ "$TEST_SCRIPT" == *"no test specified"* ]]; then
+                echo "⏭️  Skipping $SERVICE (placeholder test script)"
+              else
+                echo "✅ Found test script in $SERVICE"
+                SERVICES=$(echo "$SERVICES" | jq --arg svc "$SERVICE" '. + [$svc]')
+              fi
             else
               echo "⏭️  Skipping $SERVICE (no test script)"
             fi
