@@ -59,7 +59,10 @@ jobs:
             fi
           done
 
-          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          # Compact JSON to single line for GitHub Actions output
+          SERVICES_COMPACT=$(echo "$SERVICES" | jq -c .)
+
+          echo "services=$SERVICES_COMPACT" >> $GITHUB_OUTPUT
           echo ""
           echo "Services with tests: $SERVICES"
 
