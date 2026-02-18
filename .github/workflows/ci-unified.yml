@@ -718,9 +718,21 @@ jobs:
           echo "SHA: $SHA"
           echo "Short SHA: $SHORT_SHA"
 
-          # Verify Dockerfile exists
-          if [ ! -f "docker/$SERVICE/Dockerfile" ]; then
-            echo "::error::Dockerfile not found for service: $SERVICE"
+          # Get build context from docker-compose.yml
+          BUILD_PATH=$(docker compose --env-file example.env config | \
+            yq eval ".services.$SERVICE.build.context // .services.$SERVICE.build" - | \
+            sed 's|^./||')
+
+          if [ -z "$BUILD_PATH" ] || [ "$BUILD_PATH" = "null" ]; then
+            echo "::error::No build configuration found for service: $SERVICE"
+            exit 1
+          fi
+
+          echo "Build context: $BUILD_PATH"
+
+          # Verify Dockerfile exists in build context
+          if [ ! -f "$BUILD_PATH/Dockerfile" ]; then
+            echo "::error::Dockerfile not found at: $BUILD_PATH/Dockerfile"
             exit 1
           fi
 
@@ -730,13 +742,13 @@ jobs:
           # If Dockerfile references wrong image -> auth failure (not explicit error)
           docker buildx build \
             --pull=false \
-            --file "docker/$SERVICE/Dockerfile" \
+            --file "$BUILD_PATH/Dockerfile" \
             --tag "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
             --tag "ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA" \
             --cache-from type=gha,scope=$SERVICE \
             --cache-to type=gha,mode=max,scope=$SERVICE,ignore-error=true,ghtoken=${{ github.token }} \
             --load \
-            "docker/$SERVICE"
+            "$BUILD_PATH"
 
           echo "✅ Build successful"
 
