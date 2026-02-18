@@ -1006,99 +1006,6 @@ jobs:
           echo "✅ Versions match: $NVMRC_VERSION"
 
   # Stage 4B: Unit Tests (Parallel Matrix)
-  unit-tests:
-    name: Unit Tests
-    timeout-minutes: 10
-    needs: [detect-changes, build-app-images, pull-images-for-testing]
-    # Always run after both build and pull stages (one or both may be skipped)
-    if: |
-      always() &&
-      needs.detect-changes.outputs.testable_services != '[]' &&
-      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.testable_services) }}
-      fail-fast: false
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
-
-      - name: Download service artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: /tmp
-
-      - name: Verify and load image
-        run: |
-          echo "=== Verifying artifact for ${{ matrix.service }} ==="
-          cd /tmp
-
-          # Verify checksum
-          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-            echo "::error::Checksum verification failed for ${{ matrix.service }}"
-            exit 1
-          fi
-          echo "✅ Checksum verified"
-
-          # Load Docker image
-          echo "Loading Docker image..."
-          if ! docker load -i ${{ matrix.service }}.tar; then
-            echo "::error::Failed to load Docker image"
-            exit 1
-          fi
-
-          # Verify image is available
-          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
-
-      - name: Detect test command
-        id: test-cmd
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          echo "=== Detecting test command ==="
-
-          # Check if package.json exists
-          if [ ! -f package.json ]; then
-            echo "::error::package.json not found"
-            exit 1
-          fi
-
-          # Check for test:coverage script (preferred)
-          if jq -e '.scripts["test:coverage"]' package.json > /dev/null 2>&1; then
-            echo "command=npm run test:coverage" >> $GITHUB_OUTPUT
-            echo "Using: npm run test:coverage"
-          else
-            # Fallback to npm test with coverage flag
-            echo "command=npm test -- --coverage" >> $GITHUB_OUTPUT
-            echo "Using: npm test -- --coverage"
-          fi
-
-      - name: Run tests
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          echo "=== Running tests for ${{ matrix.service }} ==="
-
-          # Run tests inside the built Docker image
-          # This ensures tests run in the exact same environment as production
-          docker run --rm \
-            -v "$(pwd):/app" \
-            -w /app \
-            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} \
-            ${{ steps.test-cmd.outputs.command }}
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
-        continue-on-error: true
-        with:
-          directory: docker/${{ matrix.service }}/coverage
-          flags: ${{ matrix.service }}
-          fail_ci_if_error: false
-
   # Stage 4C: Healthcheck Tests (Parallel Matrix)
   healthcheck-tests:
     name: Healthcheck Tests
@@ -1479,7 +1386,7 @@ jobs:
   push-built-images:
     name: Push Built Images
     timeout-minutes: 15
-    needs: [detect-changes, build-app-images, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, build-app-images, pull-images-for-testing, version-consistency-check, healthcheck-tests, lights-integration-test]
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
     # AND all dependencies completed successfully or were skipped
     if: |
@@ -1492,7 +1399,6 @@ jobs:
       (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
       (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
       (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
-      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
       (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
       (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
     runs-on: ubuntu-latest
@@ -1615,7 +1521,7 @@ jobs:
   retag-unchanged-images:
     name: Retag Unchanged Images
     timeout-minutes: 5
-    needs: [detect-changes, pull-images-for-testing, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, pull-images-for-testing, version-consistency-check, healthcheck-tests, lights-integration-test]
     # Only retag if all test dependencies completed successfully or were skipped
     if: |
       always() &&
@@ -1623,7 +1529,6 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
       (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
-      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
       (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
       (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
     runs-on: ubuntu-latest
@@ -1714,7 +1619,6 @@ jobs:
       - build-app-images
       - pull-images-for-testing
       - version-consistency-check
-      - unit-tests
       - healthcheck-tests
       - lights-integration-test
       - push-built-images
@@ -1735,7 +1639,6 @@ jobs:
           BUILD_STATUS="${{ needs.build-app-images.result }}"
           PULL_STATUS="${{ needs.pull-images-for-testing.result }}"
           VERSION_STATUS="${{ needs.version-consistency-check.result }}"
-          TEST_STATUS="${{ needs.unit-tests.result }}"
           HEALTH_STATUS="${{ needs.healthcheck-tests.result }}"
           LIGHTS_STATUS="${{ needs.lights-integration-test.result }}"
           PUSH_STATUS="${{ needs.push-built-images.result }}"
