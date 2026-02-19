@@ -247,7 +247,7 @@ module.exports = (name, {
                 }
                 const changed = toggleState !== payload.state
                 toggleState = payload.state
-                if ((toggleType === 'switch' && changed) || (toggleType === 'button' && payload.state)) {
+                if ((toggleType === 'switch' && changed) || (toggleType === 'button' && changed && payload.state)) {
                     if (lightState) {
                         if (!lockState) {
                             if (verbose) {
@@ -302,8 +302,8 @@ module.exports = (name, {
                         if (verbose) {
                             console.log(`[${name}] turning off lights from unlocked timeout`)
                         }
-                        // Check current state before turning off
-                        if (lightState !== false && !lockState) {
+                        // Check current state before turning off - toggledTimer takes priority
+                        if (lightState !== false && !lockState && !toggledTimer) {
                             smartPublish(light.commandTopic, {state: false, r: 'unl-tout'})
                         }
                         unlockedTimer = null
@@ -346,8 +346,8 @@ module.exports = (name, {
                                 if (verbose) {
                                     console.log(`[${name}] turning off lights from opened timeout`)
                                 }
-                                // Check current state before turning off
-                                if (lightState !== false && !lockState) {
+                                // Check current state before turning off - toggledTimer takes priority
+                                if (lightState !== false && !lockState && !toggledTimer) {
                                     smartPublish(light.commandTopic, {state: false, r: 'don-tout'})
                                 }
                                 openedTimer = null
@@ -370,8 +370,8 @@ module.exports = (name, {
                             if (verbose) {
                                 console.log(`[${name}] turning off lights from closed timeout`)
                             }
-                            // Check current state before turning off
-                            if (lightState !== false && !lockState) {
+                            // Check current state before turning off - toggledTimer takes priority
+                            if (lightState !== false && !lockState && !toggledTimer) {
                                 smartPublish(light.commandTopic, {state: false, r: 'doff-tout'})
                             }
                             closedTimer = null
