@@ -704,4 +704,143 @@ describe('door-alarm bot', () => {
       expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
     })
   })
+
+  describe('message ordering and initial state handling', () => {
+    it('should handle initial state null with first message being closed', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // First message: door is closed
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+      // Wait for any async operations
+      await Promise.resolve()
+
+      // Should update persisted state to closed
+      expect(persistedCache.doorState).toBe(false)
+
+      // Should send alarm OFF command (ensuring alarm is off)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        { alarm: false }
+      )
+    })
+
+    it('should recognize duplicate closed messages even from initial null state', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // Multiple closed messages in a row
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+
+      // Wait for async operations
+      await Promise.resolve()
+
+      // Should only process the first message (send alarm OFF once)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      expect(persistedCache.doorState).toBe(false)
+    })
+
+    it('should handle null->false->true->false sequence correctly', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // Door starts closed
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
+      expect(persistedCache.doorState).toBe(false)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1) // alarm OFF
+      mockMqtt.publish.mockClear()
+
+      // Door opens
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      expect(persistedCache.doorState).toBe(true)
+
+      // Wait for first alarm
+      jest.advanceTimersByTime(60000)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1) // alarm ON
+      mockMqtt.publish.mockClear()
+
+      // Door closes
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
+      expect(persistedCache.doorState).toBe(false)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1) // alarm OFF
+    })
+
+    it('should not schedule duplicate alarms when receiving same open message multiple times', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // Door opens
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+
+      // Sensor republishes same state multiple times
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+
+      // Advance to trigger all possible alarms
+      jest.advanceTimersByTime(180000)
+
+      // Should only have one set of alarms (3 escalation steps), not 4 sets
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(3)
+    })
+
+    it('should not cancel alarms multiple times when receiving same closed message', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // Door opens and first alarm triggers
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      jest.advanceTimersByTime(60000)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1) // alarm ON
+      mockMqtt.publish.mockClear()
+
+      // Door closes
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1) // alarm OFF
+      mockMqtt.publish.mockClear()
+
+      // Sensor republishes same closed state multiple times
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
+      // Should not send additional alarm OFF commands
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
+    })
+
+    it('should handle interleaved duplicate messages during state transitions', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // Complex sequence: open, open, close, close, open, open
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true }) // dup
+
+      jest.advanceTimersByTime(30000) // 30 seconds
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false }) // dup
+      await Promise.resolve()
+
+      mockMqtt.publish.mockClear()
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true }) // dup
+
+      // Advance to first alarm of second opening
+      jest.advanceTimersByTime(60000)
+
+      // Should only trigger one alarm (from second opening)
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        expect.objectContaining({ alarm: true, volume: 'low' })
+      )
+    })
+  })
 })

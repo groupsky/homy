@@ -97,9 +97,10 @@ Using the default configuration:
 ### Edge Cases
 
 - **Rapid open/close cycles**: Timers reset on each door state change
-- **Duplicate messages**: Duplicate door state messages are ignored to prevent multiple timer sets
+- **Duplicate messages**: Duplicate door state messages are ignored to prevent multiple timer sets, even when same message is received multiple times
 - **Service restart with door open**: Timers are restored from persisted state, expired alarms trigger immediately
-- **Door already open on startup**: Starts monitoring from first state message received
+- **Initial state handling**: First message initializes the door state correctly, whether door starts open or closed
+- **Message republishing**: Sensors that republish the same state multiple times are handled correctly through duplicate detection
 - **Door closes after some alarms**: Only cancels pending alarms, doesn't stop currently sounding alarm
 
 ### State Persistence
@@ -286,9 +287,11 @@ Monitor bot health through:
 
 ### State Management
 
-- **No persistent cache**: State is ephemeral, resets on service restart
-- **Local variables**: `isDoorOpen` boolean and `timers` array
-- **Timer management**: All timers cleared on door close or new door open
+- **Persistent cache**: Door state and pending alarms are persisted to survive service restarts
+- **State tracking**: `doorState` boolean (null/true/false) tracks current door state
+- **Timer restoration**: Timers are automatically restored after service restart if door was left open
+- **Reactive state handling**: State updates react to the new state value, not the transition, ensuring correct behavior from any initial state
+- **Timer management**: All timers cleared on door close, new timers scheduled on door open
 
 ### Dependencies
 
