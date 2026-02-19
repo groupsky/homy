@@ -289,11 +289,11 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 | `base-images.yml.disabled` | Stage 2 (Prepare Base Images) | 2026-01 |
 | `app-images.yml.disabled` | Stages 1,3,5,6 (detect, build, push, summary) | 2026-01 |
 | `validate-base-images.yml.disabled` | Stage 1 (dynamic discovery) + Stage 2 (runtime validation) | 2026-01 |
-| `automations-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
-| `modbus-serial-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
-| `telegram-bridge-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
-| `automation-events-processor-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
-| `sunseeker-monitoring-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
+| `automations-tests.yml.disabled` | `test-automations.yml` (standalone) | 2026-01 |
+| `modbus-serial-tests.yml.disabled` | `test-modbus-serial.yml` (standalone) | 2026-01 |
+| `telegram-bridge-tests.yml.disabled` | `test-telegram-bridge.yml` (standalone) + Stage 4C | 2026-01 |
+| `automation-events-processor-tests.yml.disabled` | `test-automation-events-processor.yml` (standalone) + Stage 4C | 2026-01 |
+| `sunseeker-monitoring-tests.yml.disabled` | `test-sunseeker-monitoring.yml` (standalone) + Stage 4C | 2026-01 |
 | `lights-test.yml.disabled` | Stage 4D (Lights Integration Test) | 2026-01 |
 
 **Converted to Scheduled Workflows:**
@@ -317,6 +317,73 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 - ✅ **Artifact-Based Security**: Build/test stages isolated from registry access
 - ✅ **Efficient Change Detection**: Only rebuilds affected services
 - ✅ **Cascading Updates**: Base image changes automatically rebuild dependent services
+
+### Standalone Unit Test Workflows
+
+**Purpose**: Provide fast feedback for test-only changes without Docker build overhead.
+
+The following standalone workflows run unit tests independently from the unified CI pipeline:
+
+| Workflow | Service | Triggers On |
+|----------|---------|-------------|
+| `test-automations.yml` | automations | `docker/automations/**` |
+| `test-automation-events-processor.yml` | automation-events-processor | `docker/automation-events-processor/**` |
+| `test-modbus-serial.yml` | modbus-serial | `docker/modbus-serial/**` |
+| `test-sunseeker-monitoring.yml` | sunseeker-monitoring | `docker/sunseeker-monitoring/**` |
+| `test-telegram-bridge.yml` | telegram-bridge | `docker/telegram-bridge/**` |
+
+**Key Characteristics:**
+- **Fast execution**: ~3-4 minutes (no Docker build required)
+- **Path filtering**: Only run when service files change
+- **Parallel execution**: Run independently and in parallel with ci-unified.yml
+- **Minimal permissions**: `contents: read` only
+- **npm caching**: Configured for optimal performance
+- **Coverage reporting**: Upload to Codecov with service-specific flags
+
+**Workflow Structure** (consistent across all 5):
+```yaml
+on:
+  push:
+    branches: [master]
+    paths: ['docker/<service>/**', '.github/workflows/test-<service>.yml']
+  pull_request:
+    paths: ['docker/<service>/**', '.github/workflows/test-<service>.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    permissions:
+      contents: read
+    steps:
+      - Checkout (v6.0.1)
+      - Setup Node.js (v6.2.0) with npm cache
+      - npm ci
+      - npm test -- --coverage
+      - Upload to Codecov (v5)
+```
+
+**Relationship to Unified Pipeline:**
+- These workflows provide **fast feedback** during development
+- ci-unified.yml Stage 4C (Health Checks) provides **integration testing**
+- **Both run in parallel** for comprehensive validation
+- **Branch protection recommended**: Configure required status checks to enforce test passage before merge
+
+**Branch Protection Configuration:**
+
+To ensure tests pass before merge, add these required status checks:
+1. Navigate to repository Settings → Branches → master
+2. Enable "Require status checks to pass before merging"
+3. Add required checks:
+   - `Test Automations / test`
+   - `Test Automation Events Processor / test`
+   - `Test Modbus Serial / test`
+   - `Test Sunseeker Monitoring / test`
+   - `Test Telegram Bridge / test`
+
+**Performance Benefits:**
+- 50-60% faster than dockerized unit tests in ci-unified.yml
+- Eliminates Docker image load overhead
+- Direct npm execution with proper caching
 
 ### Architecture Overview
 

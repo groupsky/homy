@@ -1,0 +1,47 @@
+name: Test Sunseeker Monitoring
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docker/sunseeker-monitoring/**'
+      - '.github/workflows/test-sunseeker-monitoring.yml'
+  pull_request:
+    paths:
+      - 'docker/sunseeker-monitoring/**'
+      - '.github/workflows/test-sunseeker-monitoring.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test sunseeker-monitoring
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: 'docker/sunseeker-monitoring/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/sunseeker-monitoring/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/sunseeker-monitoring
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/sunseeker-monitoring
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/sunseeker-monitoring/coverage
+          flags: sunseeker-monitoring

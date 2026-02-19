@@ -180,13 +180,19 @@ The system integrates with:
 
 **Workflow Execution Strategy** (Migration Complete):
 
-All Docker image builds and tests now use the unified CI/CD pipeline (`ci-unified.yml`). Previous fragmented workflows have been disabled or converted to scheduled execution:
+The CI/CD pipeline uses a hybrid approach combining the unified pipeline with standalone unit test workflows:
 
-- **Application CI/CD**: Use `ci-unified.yml` for all service builds, tests, and deployments
+- **Application CI/CD**: Use `ci-unified.yml` for all service builds and integration tests
   - Automatically triggered on push/PR when Docker-related files change
-  - 7-stage pipeline: detect → prepare bases → build apps → pull for testing → test (4 parallel jobs) → push → summary
+  - 6-stage pipeline: detect → prepare bases → build apps → pull for testing → test (health checks, integration tests) → push → summary
   - Test-gated promotion ensures only passing builds get `:latest` tag
   - **Test-only optimization**: Services with only test file changes pull existing images instead of rebuilding (50-60% faster)
+
+- **Unit Testing**: Standalone workflows for fast feedback (50-60% faster than dockerized tests)
+  - `test-automations.yml`, `test-automation-events-processor.yml`, `test-modbus-serial.yml`, `test-sunseeker-monitoring.yml`, `test-telegram-bridge.yml`
+  - Triggered on service file changes with path filtering
+  - Run independently and in parallel with ci-unified.yml
+  - **Branch protection recommended**: Configure required status checks to enforce test passage before merge
 
 - **Infrastructure Validation**: `infrastructure.yml` runs on path-filtered changes + weekly schedule
   - Validates nginx config generation, proxy routing, ingress configuration
@@ -195,10 +201,11 @@ All Docker image builds and tests now use the unified CI/CD pipeline (`ci-unifie
 - **Network Security**: `routing.yml` runs on weekly schedule only (Monday 3 AM UTC)
   - VPN/routing layer validation, infrastructure focus
 
-**Disabled Workflows (8 total)**: The following workflows have been renamed to `.disabled` and replaced by ci-unified.yml:
-- `base-images.yml`, `app-images.yml` (image building)
-- `automations-tests.yml`, `modbus-serial-tests.yml`, `telegram-bridge-tests.yml`, `automation-events-processor-tests.yml`, `sunseeker-monitoring-tests.yml` (service tests)
-- `lights-test.yml` (integration testing)
+**Disabled Workflows (9 total)**: The following workflows have been renamed to `.disabled` and replaced:
+- `base-images.yml`, `app-images.yml` (replaced by ci-unified.yml image building)
+- `automations-tests.yml`, `modbus-serial-tests.yml`, `telegram-bridge-tests.yml`, `automation-events-processor-tests.yml`, `sunseeker-monitoring-tests.yml` (replaced by standalone test workflows)
+- `lights-test.yml` (replaced by ci-unified.yml Stage 4D)
+- `unit-tests.yml` (replaced by 5 standalone test workflows)
 
 See `.github/workflows/CLAUDE.md` for complete migration details and troubleshooting guide.
 
