@@ -46,14 +46,14 @@ const requiredFields = [
   'MQTT_USERNAME',
   'MQTT_DEVICE_ID',
   'MQTT_APP_ID',
-  'INFLUX_ORG',
-  'INFLUX_BUCKET'
+  'INFLUXDB_ORG',
+  'INFLUXDB_BUCKET'
 ];
 
 // Password/token fields - must use direct vars, not _FILE
 const secretFields = [
   { direct: 'MQTT_PASSWORD', file: 'MQTT_PASSWORD_FILE' },
-  { direct: 'INFLUX_TOKEN', file: 'INFLUX_TOKEN_FILE' }
+  { direct: 'INFLUXDB_TOKEN', file: 'INFLUXDB_TOKEN_FILE' }
 ];
 
 let hasErrors = false;
