@@ -1,0 +1,24 @@
+version: '3.8'
+
+# Test configuration for sunseeker-monitoring healthcheck validation
+# Used by CI Stage 4C (healthcheck-tests) and local development testing
+
+services:
+  sunseeker-monitoring:
+    image: ghcr.io/groupsky/homy/sunseeker-monitoring:${IMAGE_TAG:-latest}
+    build: .
+    env_file: test.env
+    secrets:
+      - sunseeker_mqtt_password
+      - influxdb_write_user
+      - influxdb_write_user_password
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  sunseeker_mqtt_password:
+    file: ./test-secrets/sunseeker_mqtt_password
+  influxdb_write_user:
+    file: ./test-secrets/influxdb_write_user
+  influxdb_write_user_password:
+    file: ./test-secrets/influxdb_write_user_password

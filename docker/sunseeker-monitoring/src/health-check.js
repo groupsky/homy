@@ -84,3 +84,16 @@ async function loadHealthCheckConfig() {
   const { loadConfig } = await import('./config.js');
   return loadConfig();
 }
+
+// CLI entry point when run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  performHealthCheck()
+    .then(result => {
+      console.log(JSON.stringify(result, null, 2));
+      process.exit(result.status === HEALTH_CHECK.STATUS.HEALTHY ? 0 : 1);
+    })
+    .catch(error => {
+      console.error('Health check failed:', error.message);
+      process.exit(1);
+    });
+}
