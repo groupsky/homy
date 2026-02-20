@@ -553,7 +553,7 @@ jobs:
 
       - name: Upload base image artifacts
         if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: base-images
           path: /tmp/base-image-*.tar
@@ -562,7 +562,7 @@ jobs:
 
       - name: Upload checksum manifest
         if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: base-images-checksums
           path: /tmp/checksums.txt
@@ -778,7 +778,7 @@ jobs:
           fi
 
       - name: Upload service artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: service-${{ matrix.service }}
           path: |
@@ -911,7 +911,7 @@ jobs:
           fi
 
       - name: Upload service artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: service-${{ matrix.service }}
           path: |
