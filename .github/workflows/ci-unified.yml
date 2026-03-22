@@ -3,17 +3,7 @@ name: CI - Unified Docker Build Pipeline
 on:
   push:
     branches: [master]
-    paths:
-      - 'base-images/**'
-      - 'docker/**'
-      - '.github/workflows/ci-unified.yml'
-      - '.github/scripts/detect-changes/**'
   pull_request:
-    paths:
-      - 'base-images/**'
-      - 'docker/**'
-      - '.github/workflows/ci-unified.yml'
-      - '.github/scripts/detect-changes/**'
   workflow_dispatch:
     inputs:
       force_rebuild:
@@ -42,6 +32,79 @@ permissions:
 
 jobs:
   # ============================================================================
+  # Stage 0: Check Relevant Paths
+  # ============================================================================
+  # Determines if Docker-related paths changed to skip unnecessary work
+  # ============================================================================
+  check-relevant-paths:
+    name: Check Relevant Paths
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant path changes
+        id: check
+        run: |
+          # Always run on workflow_dispatch or force_rebuild
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || [[ "${{ github.event.inputs.force_rebuild }}" == "true" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Running due to manual trigger"
+            exit 0
+          fi
+
+          # For push events, check against previous commit
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          # For pull_request events, check against base branch
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Unknown event type, running pipeline"
+            exit 0
+          fi
+
+          echo "Checking for changes between $BASE_SHA and $HEAD_SHA"
+
+          # Check if any relevant paths changed
+          RELEVANT_PATHS=(
+            "base-images/"
+            "docker/"
+            ".github/workflows/ci-unified.yml"
+            ".github/scripts/detect-changes/"
+          )
+
+          CHANGED=false
+          for path in "${RELEVANT_PATHS[@]}"; do
+            # Use grep -E with proper anchoring to avoid false positives
+            # Matches paths that start with the pattern, followed by end-of-line or /
+            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE "^${path}(/|$)"; then
+              echo "✅ Changes detected in: $path"
+              CHANGED=true
+              break
+            fi
+          done
+
+          if [[ "$CHANGED" == "true" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Relevant Docker paths changed - running full pipeline"
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "⏩ No Docker-related changes - skipping build pipeline"
+          fi
+
+  # ============================================================================
   # Stage 1: Detect Changes
   # ============================================================================
   # Analyzes file changes and determines:
@@ -53,6 +116,8 @@ jobs:
   detect-changes:
     name: Detect Changes
     timeout-minutes: 10
+    needs: [check-relevant-paths]
+    if: needs.check-relevant-paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1613,6 +1678,7 @@ jobs:
     # Always run at the end to summarize all stages
     # Depend on all final-stage jobs to ensure proper sequencing
     needs:
+      - check-relevant-paths
       - detect-changes
       - validate-base-images
       - prepare-base-images
@@ -1632,6 +1698,31 @@ jobs:
       - name: Determine workflow status
         id: status
         run: |
+          # Check if pipeline was skipped due to no relevant path changes
+          SHOULD_RUN="${{ needs.check-relevant-paths.outputs.should_run }}"
+          PATH_CHECK_STATUS="${{ needs.check-relevant-paths.result }}"
+
+          echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+          echo "path_check=$PATH_CHECK_STATUS" >> $GITHUB_OUTPUT
+
+          if [[ "$SHOULD_RUN" != "true" ]]; then
+            echo "✅ Pipeline skipped - no Docker-related changes detected"
+            echo "overall=skipped" >> $GITHUB_OUTPUT
+            # Set all stage statuses to skipped
+            echo "detect=skipped" >> $GITHUB_OUTPUT
+            echo "validate=skipped" >> $GITHUB_OUTPUT
+            echo "prepare=skipped" >> $GITHUB_OUTPUT
+            echo "build=skipped" >> $GITHUB_OUTPUT
+            echo "pull=skipped" >> $GITHUB_OUTPUT
+            echo "version=skipped" >> $GITHUB_OUTPUT
+            echo "test=skipped" >> $GITHUB_OUTPUT
+            echo "health=skipped" >> $GITHUB_OUTPUT
+            echo "lights=skipped" >> $GITHUB_OUTPUT
+            echo "push=skipped" >> $GITHUB_OUTPUT
+            echo "retag=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # Check if any previous job failed
           DETECT_STATUS="${{ needs.detect-changes.result }}"
           VALIDATE_STATUS="${{ needs.validate-base-images.result }}"
@@ -1682,10 +1773,16 @@ jobs:
           cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           # CI Workflow Summary
 
+          ## Path Check
+
+          - **Should Run**: ${{ steps.status.outputs.should_run }}
+          - **Reason**: ${{ steps.status.outputs.should_run == 'true' && 'Docker-related files changed' || 'No Docker-related changes detected' }}
+
           ## Stage Results
 
           | Stage | Status |
           |-------|--------|
+          | 0️⃣ Check Relevant Paths | ${{ steps.status.outputs.path_check }} |
           | 1️⃣ Detect Changes | ${{ steps.status.outputs.detect }} |
           | 1️⃣.5️⃣ Validate Base Images | ${{ steps.status.outputs.validate }} |
           | 2️⃣ Prepare Base Images | ${{ steps.status.outputs.prepare }} |
@@ -1698,6 +1795,11 @@ jobs:
           | 5️⃣A Push Images | ${{ steps.status.outputs.push }} |
           | 5️⃣B Retag Images | ${{ steps.status.outputs.retag }} |
 
+          EOF
+
+          # Only show detection results if pipeline ran
+          if [[ "${{ steps.status.outputs.should_run }}" == "true" ]]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ## Detection Results
 
           - **Base Images Changed**: ${{ needs.detect-changes.outputs.changed_base_images }}
@@ -1710,5 +1812,9 @@ jobs:
           - **Healthcheck Services**: ${{ needs.detect-changes.outputs.healthcheck_services }}
           - **Unused Base Images**: ${{ needs.detect-changes.outputs.unused_base_images }}
 
+          EOF
+          fi
+
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ## Overall Status: ${{ steps.status.outputs.overall }}
           EOF

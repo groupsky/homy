@@ -387,11 +387,20 @@ To ensure tests pass before merge, add these required status checks:
 
 ### Architecture Overview
 
-The pipeline consists of 6 sequential stages with parallel execution within stages:
+The pipeline consists of 7 sequential stages with parallel execution within stages. The workflow always runs and produces a summary, with intelligent path-based optimization to skip unnecessary work.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Stage 1: Detect Changes                                         │
+│ Stage 0: Check Relevant Paths                                   │
+│ - Determine if Docker-related files changed                     │
+│ - Skip build pipeline if no relevant changes                    │
+│ - Always run workflow summary for visibility                    │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 1: Detect Changes (Conditional)                           │
+│ - Only runs if Stage 0 detected relevant changes                │
 │ - Analyze git diff to detect changed files                      │
 │ - Parse Dockerfiles to extract base image dependencies          │
 │ - Check GHCR for existing images                                │
@@ -450,6 +459,50 @@ The pipeline consists of 6 sequential stages with parallel execution within stag
 │ - Fail workflow if any critical stage failed                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Stage 0: Check Relevant Paths
+
+**Purpose**: Determine if Docker-related files changed to enable intelligent workflow execution with guaranteed summary generation.
+
+**Key Behavior:**
+- The workflow **always runs** on all pushes and pull requests
+- Stage 0 checks if relevant paths changed:
+  - `base-images/**`
+  - `docker/**`
+  - `.github/workflows/ci-unified.yml`
+  - `.github/scripts/detect-changes/**`
+- If no relevant paths changed:
+  - Stages 1-5 are **skipped** (saving CI resources)
+  - Stage 6 (Workflow Summary) **always runs** to report status
+- If relevant paths changed or `workflow_dispatch` triggered:
+  - Full pipeline executes normally
+
+**Benefits:**
+- ✅ **Always visible**: PR checks always show ci-unified status
+- ✅ **Resource efficient**: Skips Docker builds for non-Docker changes
+- ✅ **Clear reporting**: Summary explains why pipeline was skipped
+- ✅ **Manual override**: `workflow_dispatch` bypasses path check
+
+**Example Scenarios:**
+
+| Change Type | Stage 0 Result | Pipeline Behavior |
+|-------------|----------------|-------------------|
+| Update `docker/automations/bot.js` | `should_run=true` | Full pipeline executes |
+| Update `scripts/backup.sh` | `should_run=false` | Stages 1-5 skipped, summary shows "no Docker changes" |
+| Update `README.md` | `should_run=false` | Stages 1-5 skipped, summary shows "no Docker changes" |
+| Manual trigger (`workflow_dispatch`) | `should_run=true` | Full pipeline executes regardless of changes |
+
+**Previous Behavior:**
+- Workflow used path filtering at trigger level (`on.pull_request.paths`)
+- PRs without Docker changes had **no ci-unified check at all**
+- Users saw "waiting for workflow" with no explanation
+- No visibility into why workflow didn't run
+
+**Current Behavior:**
+- Workflow triggers on **all PRs and pushes**
+- Path check determines execution strategy
+- Summary **always generated** with clear explanation
+- Better user experience and CI visibility
 
 ### Stage 3.5: Pull Images for Testing
 
