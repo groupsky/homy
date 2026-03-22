@@ -62,6 +62,7 @@ node_modules/
 # Environment files (secrets should be mounted)
 .env
 .env.*
+test.env
 
 # Build artifacts
 build/
