@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "mongodb": "^7.0.0",
-    "mqtt": "^5.14.1"
+    "mongodb": "^7.1.0",
+    "mqtt": "^5.15.0"
   }
 }
