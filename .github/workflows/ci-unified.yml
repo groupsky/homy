@@ -87,7 +87,9 @@ jobs:
 
           CHANGED=false
           for path in "${RELEVANT_PATHS[@]}"; do
-            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -q "^$path"; then
+            # Use grep -E with proper anchoring to avoid false positives
+            # Matches paths that start with the pattern, followed by end-of-line or /
+            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE "^${path}(/|$)"; then
               echo "✅ Changes detected in: $path"
               CHANGED=true
               break
