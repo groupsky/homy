@@ -355,6 +355,7 @@ jobs:
     # For workflow_dispatch: require non-fork PR when publish_pr_images=true
     if: |
       always() &&
+      needs.detect-changes.result == 'success' &&
       (github.event_name == 'push' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository) ||
@@ -679,6 +680,7 @@ jobs:
     # Check JSON array != '[]' before matrix evaluation (prevents workflow crash)
     if: |
       always() &&
+      needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.to_build != '[]' &&
       (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
@@ -864,7 +866,9 @@ jobs:
     timeout-minutes: 10
     needs: [detect-changes]
     # Only run if we have services with test-only changes
-    if: needs.detect-changes.outputs.to_pull_for_testing != '[]'
+    if: |
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.to_pull_for_testing != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1001,7 +1005,9 @@ jobs:
     timeout-minutes: 3
     needs: [detect-changes]
     # Run even if build-app-images is skipped (version check doesn't need built images)
-    if: needs.detect-changes.outputs.version_check_services != '[]'
+    if: |
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.version_check_services != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1079,6 +1085,7 @@ jobs:
     # Always run after both build and pull stages (one or both may be skipped)
     if: |
       always() &&
+      needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.healthcheck_services != '[]' &&
       (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
       (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped')
@@ -1238,6 +1245,7 @@ jobs:
     # Always run after both build and pull stages (one or both may be skipped)
     if: |
       always() &&
+      needs.detect-changes.result == 'success' &&
       (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
       (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
       (contains(fromJson(needs.detect-changes.outputs.to_build), 'automations') ||
@@ -1456,6 +1464,7 @@ jobs:
     # AND all dependencies completed successfully or were skipped
     if: |
       always() &&
+      needs.detect-changes.result == 'success' &&
       (github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'pull_request' &&
@@ -1590,6 +1599,7 @@ jobs:
     # Only retag if all test dependencies completed successfully or were skipped
     if: |
       always() &&
+      needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
