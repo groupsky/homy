@@ -18,6 +18,11 @@ This directory contains technical documentation for the home automation system.
 #### Infrastructure
 - **[Wiring](wiring/)** - Electrical load diagrams and wiring specifications
 
+#### Serial Hardware
+- **[Serial Hardware Overview](serial-hardware/README.md)** - Overview of all serial communication hardware
+- **[Exar XR17V35X](serial-hardware/exar-xr17v35x.md)** - 8-port PCIe serial card RS-232/RS-422/RS-485 configuration and GPIO mode control
+- **[Routy USB Serial](serial-hardware/routy-usb-serial.md)** - CH341 USB-to-serial adapters via motherboard USB header and PCI bracket
+
 ## Data Infrastructure
 
 ### InfluxDB Schema
