@@ -64,11 +64,12 @@ module.exports = {
       address: 0x06,
       type: 'dds519mr',
     },
-    {
-      name: 'kitchen',
-      address: 0x07,
-      type: 'dds519mr',
-    },
+    // Disabled - device broken
+    // {
+    //   name: 'kitchen',
+    //   address: 0x07,
+    //   type: 'dds519mr',
+    // },
     {
       name: 'laundry',
       address: 0x08,
