@@ -79,6 +79,10 @@ services:
       - "1883:1883"
     volumes:
       - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   ha:
     image: ghcr.io/groupsky/homy/homeassistant:${IMAGE_TAG:-latest}
@@ -107,6 +111,10 @@ services:
       - ${HOMEASSISTANT_CONFIG}/energy.json:/config/.storage/energy:ro
       - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
       - ./docker/homeassistant/custom_components/sunseeker-lawn-mower/custom_components/sunseeker:/config/custom_components/sunseeker:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   z2m-home1:
     image: ghcr.io/groupsky/homy/zigbee2mqtt:${IMAGE_TAG:-latest}
@@ -146,6 +154,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ${Z2M_HOME1_DATA_PATH}:/app/data
     user: ${PUID}:${PGID}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mongo:
     image: ghcr.io/groupsky/homy/mongo:${IMAGE_TAG:-latest}
@@ -164,6 +176,10 @@ services:
       - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
     volumes:
       - ${MONGO_DATA_PATH}:/data
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mongo-express:
     image: ghcr.io/groupsky/homy/mongo-express:${IMAGE_TAG:-latest}
@@ -229,6 +245,10 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${MAIN_POWER_CONFIG_FILE}:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   secondary-power:
     image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
@@ -265,6 +285,10 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   tetriary-power:
     image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
@@ -302,6 +326,10 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   monitoring:
     image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
@@ -340,6 +368,10 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/monitoring.config.js:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   monitoring2:
     image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
@@ -378,6 +410,10 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/monitoring2.config.js:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   dry-switches:
     image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
@@ -415,6 +451,10 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   solar:
     image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
@@ -453,6 +493,10 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/solar.config.js:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   inverter:
     image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
@@ -490,6 +534,10 @@ services:
       - INFLUXDB_MEASUREMENT=inverter
     volumes:
       - ${CONFIG_PATH}/modbus-serial/inverter.config.js:/etc/config.js:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   influxdb:
     image: ghcr.io/groupsky/homy/influxdb:${IMAGE_TAG:-latest}
@@ -524,6 +572,10 @@ services:
       - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
       - ${DATA_PATH}/influxdb:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   grafana:
     image: ghcr.io/groupsky/homy/grafana:${IMAGE_TAG:-latest}
@@ -581,6 +633,10 @@ services:
       - TZ=${TZ}
     volumes:
       - /etc/localtime:/etc/localtime:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mqtt-mongo-history:
     image: ghcr.io/groupsky/homy/mqtt-mongo:${IMAGE_TAG:-latest}
@@ -604,6 +660,10 @@ services:
       - BROKER=mqtt://broker
       - TOPIC=/homy/br1/temp
       - MQTT_CLIENT_ID=mqtt-mongo-history
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mqtt-influx-primary:
     image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
@@ -629,6 +689,10 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"primary"}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mqtt-influx-secondary:
     image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
@@ -654,6 +718,10 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"secondary"}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mqtt-influx-tetriary:
     image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
@@ -679,6 +747,10 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   automation-events-processor:
     image: ghcr.io/groupsky/homy/automation-events-processor:${IMAGE_TAG:-latest}
@@ -704,6 +776,10 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"source":"automation_events"}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   sunseeker-monitoring:
     image: ghcr.io/groupsky/homy/sunseeker-monitoring:${IMAGE_TAG:-latest}
@@ -729,6 +805,10 @@ services:
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   dmx-driver:
     image: ghcr.io/groupsky/homy/dmx-driver:${IMAGE_TAG:-latest}
@@ -772,6 +852,10 @@ services:
       - ${CONFIG_PATH}/automations/config.js:/etc/config.js:ro
       - ${DATA_PATH}/automations/state:/app/state
     user: ${PUID}:${PGID}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   boiler-controller:
     image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
@@ -795,6 +879,10 @@ services:
       - ${CONFIG_PATH}/automations/boiler-controller-config.js:/etc/boiler-controller-config.js:ro
       - ${DATA_PATH}/automations/state:/app/state
     user: ${PUID}:${PGID}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   features:
     image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
@@ -863,6 +951,10 @@ services:
       - TOPIC=/modbus/main/{device}/history
       - MQTT_CLIENT_ID=historian-primary
       - COLLECTION=main
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Manualy run with
   # dc run historian-secondary node index.js
@@ -889,6 +981,10 @@ services:
       - TOPIC=/modbus/secondary/{device}/history
       - MQTT_CLIENT_ID=historian-secondary
       - COLLECTION=secondary
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Manually run with
   # dc run volman
