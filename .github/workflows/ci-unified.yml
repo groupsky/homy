@@ -582,27 +582,43 @@ jobs:
             echo "Artifact size: ${SIZE_MB}MB"
 
             if [ $SIZE_MB -gt $ARTIFACT_LIMIT_MB ]; then
-              echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
-              exit 1
+              echo "::warning::Image exceeds 500MB artifact limit: ${SIZE_MB}MB"
+              echo "Skipping artifact creation - downstream stages will pull from GHCR"
+
+              # Ensure image is pushed to GHCR for downstream consumption
+              if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+                echo "Image already pushed to GHCR at line 501"
+              else
+                echo "⚠️  Non-master branch: Pushing oversized image to GHCR for testing"
+                docker push "$GHCR_IMAGE" || echo "::warning::Failed to push oversized image - downstream builds may fail"
+              fi
+
+              # Clean up oversized tarball
+              rm -f "$TARBALL_PATH"
+
+              # Track oversized images for downstream stages
+              echo "$IMAGE" >> /tmp/oversized-images.txt
+
+              BUILT_IMAGES+=("$IMAGE")
+            else
+              TOTAL_SIZE=$((TOTAL_SIZE + SIZE_MB))
+              if [ $TOTAL_SIZE -gt $QUOTA_WARN_MB ]; then
+                echo "::warning::Total artifact size ${TOTAL_SIZE}MB exceeds recommended limit of ${QUOTA_WARN_MB}MB"
+              fi
+
+              # Generate SHA-256 checksum
+              echo "Generating checksum..."
+              CHECKSUM=$(sha256sum "$TARBALL_PATH" | cut -d' ' -f1)
+              echo "$CHECKSUM  ${ARTIFACT_NAME}.tar" >> /tmp/checksums.txt
+              echo "Checksum: $CHECKSUM"
+
+              # Upload artifact
+              echo "Uploading artifact..."
+              # Note: Using actions/upload-artifact@v4 here
+              # The actual upload happens in a separate step to use the action
+
+              BUILT_IMAGES+=("$IMAGE")
             fi
-
-            TOTAL_SIZE=$((TOTAL_SIZE + SIZE_MB))
-            if [ $TOTAL_SIZE -gt $QUOTA_WARN_MB ]; then
-              echo "::warning::Total artifact size ${TOTAL_SIZE}MB exceeds recommended limit of ${QUOTA_WARN_MB}MB"
-            fi
-
-            # Generate SHA-256 checksum
-            echo "Generating checksum..."
-            CHECKSUM=$(sha256sum "$TARBALL_PATH" | cut -d' ' -f1)
-            echo "$CHECKSUM  ${ARTIFACT_NAME}.tar" >> /tmp/checksums.txt
-            echo "Checksum: $CHECKSUM"
-
-            # Upload artifact
-            echo "Uploading artifact..."
-            # Note: Using actions/upload-artifact@v4 here
-            # The actual upload happens in a separate step to use the action
-
-            BUILT_IMAGES+=("$IMAGE")
 
             echo "::endgroup::"
           done
@@ -624,7 +640,7 @@ jobs:
           name: base-images
           path: /tmp/base-image-*.tar
           retention-days: 2
-          if-no-files-found: error
+          if-no-files-found: ignore  # OK if all images were oversized
 
       - name: Upload checksum manifest
         if: success()
@@ -633,7 +649,15 @@ jobs:
           name: base-images-checksums
           path: /tmp/checksums.txt
           retention-days: 2
-          if-no-files-found: error
+          if-no-files-found: ignore  # OK if all images were oversized
+
+      - name: Upload oversized images list
+        if: success() && hashFiles('/tmp/oversized-images.txt') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: oversized-base-images
+          path: /tmp/oversized-images.txt
+          retention-days: 2
 
       - name: Save Docker Hub cache
         if: success()
@@ -685,7 +709,8 @@ jobs:
       (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # NO packages permissions - cannot pull from registries
+      contents: read
+      packages: read  # Needed to pull oversized base images from GHCR
     strategy:
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.to_build) }}
@@ -704,6 +729,7 @@ jobs:
       # For fork PRs: base images must exist in GHCR already
       - name: Download base images
         if: needs.prepare-base-images.result == 'success'
+        continue-on-error: true  # May not exist if all images were oversized
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
         with:
           name: base-images
@@ -711,10 +737,28 @@ jobs:
 
       - name: Download checksums
         if: needs.prepare-base-images.result == 'success'
+        continue-on-error: true  # May not exist if all images were oversized
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
         with:
           name: base-images-checksums
           path: /tmp/checksums
+
+      - name: Download oversized images list
+        if: needs.prepare-base-images.result == 'success'
+        continue-on-error: true  # May not exist if no images were oversized
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        with:
+          name: oversized-base-images
+          path: /tmp/oversized
+
+      # Login to GHCR for pulling oversized base images
+      - name: Login to GitHub Container Registry
+        if: needs.prepare-base-images.result == 'success' && hashFiles('/tmp/oversized/oversized-images.txt') != ''
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Verify integrity and load base images
       - name: Verify and load base images
@@ -722,40 +766,69 @@ jobs:
         run: |
           echo "=== Verifying base image artifacts ==="
 
-          # Verify checksums exist
-          if [ ! -f /tmp/checksums/checksums.txt ]; then
-            echo "::error::Checksum manifest not found"
-            exit 1
+          # Check for oversized images that need to be pulled from GHCR
+          OVERSIZED_COUNT=0
+          if [ -f /tmp/oversized/oversized-images.txt ]; then
+            OVERSIZED_COUNT=$(wc -l < /tmp/oversized/oversized-images.txt)
+            echo "Found $OVERSIZED_COUNT oversized image(s) that will be pulled from GHCR"
+
+            while IFS= read -r IMAGE_NAME; do
+              # Extract version from base-images/<name>/Dockerfile
+              IMAGE_DIR="base-images/$IMAGE_NAME"
+              VERSION=$(grep "^FROM " "$IMAGE_DIR/Dockerfile" | head -1 | awk '{print $2}' | cut -d: -f2)
+              GHCR_IMAGE="ghcr.io/${{ github.repository_owner }}/homy/$IMAGE_NAME:$VERSION"
+
+              echo "Pulling oversized image: $GHCR_IMAGE"
+              if ! docker pull "$GHCR_IMAGE"; then
+                echo "::error::Failed to pull oversized base image: $GHCR_IMAGE"
+                echo "This image may need to be built on master first"
+                exit 1
+              fi
+            done < /tmp/oversized/oversized-images.txt
           fi
 
-          # Verify checksums
-          cd /tmp/base-images
-          if ! sha256sum -c /tmp/checksums/checksums.txt; then
-            echo "::error::Checksum verification failed - artifacts may be corrupted"
-            exit 1
-          fi
-          echo "✅ All checksums verified"
-
-          # Count and validate artifacts
-          TARBALL_COUNT=$(ls -1 *.tar 2>/dev/null | wc -l)
-          if [ $TARBALL_COUNT -eq 0 ]; then
-            echo "::error::No base image artifacts found"
-            exit 1
-          fi
-          echo "Found $TARBALL_COUNT base image(s)"
-
-          # Load all base images
-          for tarfile in *.tar; do
-            echo "Loading $tarfile..."
-            if ! docker load -i "$tarfile"; then
-              echo "::error::Failed to load $tarfile"
+          # Verify checksums if any artifacts exist
+          if [ -f /tmp/checksums/checksums.txt ]; then
+            # Verify checksums
+            cd /tmp/base-images
+            if ! sha256sum -c /tmp/checksums/checksums.txt 2>/dev/null; then
+              echo "::error::Checksum verification failed - artifacts may be corrupted"
               exit 1
             fi
-          done
+            echo "✅ All checksums verified"
+            cd -
+
+            # Load all base images from artifacts
+            TARBALL_COUNT=$(ls -1 /tmp/base-images/*.tar 2>/dev/null | wc -l)
+            echo "Found $TARBALL_COUNT base image artifact(s)"
+
+            for tarfile in /tmp/base-images/*.tar; do
+              [ -f "$tarfile" ] || continue
+              echo "Loading $tarfile..."
+              if ! docker load -i "$tarfile"; then
+                echo "::error::Failed to load $tarfile"
+                exit 1
+              fi
+            done
+          else
+            echo "No artifact checksums found (all images were oversized)"
+            TARBALL_COUNT=0
+          fi
+
+          # Verify at least some images are available
+          TOTAL_IMAGES=$((TARBALL_COUNT + OVERSIZED_COUNT))
+          if [ $TOTAL_IMAGES -eq 0 ]; then
+            echo "::error::No base images available (neither artifacts nor oversized images)"
+            exit 1
+          fi
 
           # Verify images are available
           echo ""
-          echo "=== Loaded base images ==="
+          echo "=== Available base images ==="
+          echo "From artifacts: $TARBALL_COUNT"
+          echo "From GHCR (oversized): $OVERSIZED_COUNT"
+          echo "Total: $TOTAL_IMAGES"
+          echo ""
           docker images 'ghcr.io/groupsky/homy/*'
 
       # For fork PRs or when Stage 2 skipped: base images must exist in GHCR
