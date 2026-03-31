@@ -601,7 +601,7 @@ jobs:
   # This enforces the critical security requirement: artifacts flow Stage 2 → 3 → 4.
   # ============================================================================
   build-app-images:
-    name: Build App Images
+    name: Build App Images (${{ matrix.build.primary_service }})
     timeout-minutes: 20
     needs: [detect-changes, prepare-base-images]
     # Only run if we have services to build AND prepare-base-images completed (success or skipped)
@@ -609,7 +609,7 @@ jobs:
     if: |
       always() &&
       needs.detect-changes.result == 'success' &&
-      needs.detect-changes.outputs.to_build != '[]' &&
+      needs.detect-changes.outputs.build_groups != '[]' &&
       (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -617,7 +617,7 @@ jobs:
       packages: write  # Required to pull base images and push app images to GHCR
     strategy:
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.to_build) }}
+        build: ${{ fromJson(needs.detect-changes.outputs.build_groups) }}
       fail-fast: false
       max-parallel: 10
 
@@ -638,26 +638,17 @@ jobs:
 
       - name: Build service image
         env:
-          SERVICE: ${{ matrix.service }}
+          BUILD_PATH: ${{ matrix.build.build_path }}
+          SERVICES: ${{ join(matrix.build.services, ' ') }}
+          PRIMARY_SERVICE: ${{ matrix.build.primary_service }}
           SHA: ${{ github.sha }}
         run: |
           SHORT_SHA=${SHA:0:12}
 
-          echo "=== Building service: $SERVICE ==="
+          echo "=== Building from: $BUILD_PATH ==="
+          echo "Services: $SERVICES"
           echo "SHA: $SHA"
           echo "Short SHA: $SHORT_SHA"
-
-          # Get build context from docker-compose.yml
-          BUILD_PATH=$(docker compose --env-file example.env config | \
-            yq eval ".services.$SERVICE.build.context // .services.$SERVICE.build" - | \
-            sed 's|^./||')
-
-          if [ -z "$BUILD_PATH" ] || [ "$BUILD_PATH" = "null" ]; then
-            echo "::error::No build configuration found for service: $SERVICE"
-            exit 1
-          fi
-
-          echo "Build context: $BUILD_PATH"
 
           # Verify Dockerfile exists in build context
           if [ ! -f "$BUILD_PATH/Dockerfile" ]; then
@@ -665,18 +656,27 @@ jobs:
             exit 1
           fi
 
+          # Build tags for all services sharing this build context
+          TAGS=""
+          for SERVICE in $SERVICES; do
+            TAGS="$TAGS --tag ghcr.io/groupsky/homy/$SERVICE:$SHA"
+            TAGS="$TAGS --tag ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA"
+          done
+
+          echo "Creating tags for services: $SERVICES"
+
           # Build with base images from GHCR
           # Base images are pulled automatically from GHCR as needed
+          # Use primary service name for cache scope
           docker buildx build \
             --file "$BUILD_PATH/Dockerfile" \
-            --tag "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
-            --tag "ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA" \
-            --cache-from type=gha,scope=$SERVICE \
-            --cache-to type=gha,mode=max,scope=$SERVICE,ignore-error=true,ghtoken=${{ github.token }} \
+            $TAGS \
+            --cache-from type=gha,scope=$PRIMARY_SERVICE \
+            --cache-to type=gha,mode=max,scope=$PRIMARY_SERVICE,ignore-error=true,ghtoken=${{ github.token }} \
             --push \
             "$BUILD_PATH"
 
-          echo "✅ Build and push successful"
+          echo "✅ Build and push successful for all services"
 
 
   # ============================================================================

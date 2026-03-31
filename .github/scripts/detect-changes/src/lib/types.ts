@@ -86,6 +86,18 @@ export interface DirectoryGHCRMapping {
 }
 
 /**
+ * Represents a group of services sharing the same build context.
+ */
+export interface BuildGroup {
+  /** Path to build directory (e.g., 'docker/automations') */
+  build_path: string;
+  /** All service names using this build context */
+  services: string[];
+  /** Primary service name (first in alphabetical order) for display */
+  primary_service: string;
+}
+
+/**
  * Detection results for change detection logic.
  */
 export interface DetectionResult {
@@ -113,6 +125,8 @@ export interface DetectionResult {
   healthcheck_services: string[];
   /** Services that need version consistency checks */
   version_check_services: string[];
+  /** Build groups for services sharing build contexts */
+  build_groups: BuildGroup[];
 }
 
 /**
