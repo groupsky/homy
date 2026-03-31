@@ -960,7 +960,7 @@ jobs:
           set -e
           echo "=== Pulling required images from GHCR ==="
 
-          # Pull all three services once (resource optimization)
+          # Pull images by service name (how they were built in Stage 3)
           for SERVICE in automations broker features; do
             IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
             echo "Pulling $IMAGE..."
@@ -972,6 +972,15 @@ jobs:
 
             echo "✅ $SERVICE pulled successfully"
           done
+
+          # Retag images to match docker-compose.yml image names
+          # broker service expects mosquitto image
+          # features service expects automations image
+          echo ""
+          echo "=== Retagging images for docker-compose compatibility ==="
+
+          docker tag "ghcr.io/groupsky/homy/broker:$SHA" "ghcr.io/groupsky/homy/mosquitto:$SHA"
+          echo "✅ Retagged broker → mosquitto"
 
           echo ""
           echo "=== Available images ==="
