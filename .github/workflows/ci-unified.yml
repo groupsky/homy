@@ -984,6 +984,15 @@ jobs:
           chmod 777 data/nodered
 
       - name: Start services with docker compose
+        env:
+          CONFIG_PATH: ./config
+          DATA_PATH: ./data
+          SECRETS_PATH: ./secrets
+          TZ: UTC
+          PUID: 1000
+          PGID: 1000
+          DOMAIN: test.local
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           echo "=== Starting Docker Compose services ==="
 
