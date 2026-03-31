@@ -454,9 +454,6 @@ jobs:
 
           # Track built images for output
           BUILT_IMAGES=()
-          TOTAL_SIZE=0
-          ARTIFACT_LIMIT_MB=500
-          QUOTA_WARN_MB=1536  # Warn at 1.5GB (75% of 2GB quota)
 
           for IMAGE in "${IMAGES[@]}"; do
             CURRENT=$((CURRENT + 1))
@@ -495,13 +492,9 @@ jobs:
                 --load \
                 "$IMAGE_DIR"
 
-              # Push to GHCR (master only)
-              if [ "${{ github.ref }}" = "refs/heads/master" ]; then
-                echo "Pushing to GHCR..."
-                docker push "$GHCR_IMAGE"
-              else
-                echo "Skipping GHCR push (not on master branch)"
-              fi
+              # Push to GHCR always (master and PRs)
+              echo "Pushing to GHCR..."
+              docker push "$GHCR_IMAGE"
 
               IMAGE_LOADED=true
 
@@ -567,40 +560,8 @@ jobs:
               exit 1
             fi
 
-            echo "Validating loaded image..."
-            docker inspect "$GHCR_IMAGE" > /dev/null
-
-            # Save image to tarball
-            ARTIFACT_NAME="base-image-${IMAGE}-${VERSION//[:\/ ]/-}"
-            TARBALL_PATH="/tmp/${ARTIFACT_NAME}.tar"
-
-            echo "Saving image to tarball..."
-            docker save "$GHCR_IMAGE" -o "$TARBALL_PATH"
-
-            # Check artifact size
-            SIZE_MB=$(du -m "$TARBALL_PATH" | cut -f1)
-            echo "Artifact size: ${SIZE_MB}MB"
-
-            if [ $SIZE_MB -gt $ARTIFACT_LIMIT_MB ]; then
-              echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
-              exit 1
-            fi
-
-            TOTAL_SIZE=$((TOTAL_SIZE + SIZE_MB))
-            if [ $TOTAL_SIZE -gt $QUOTA_WARN_MB ]; then
-              echo "::warning::Total artifact size ${TOTAL_SIZE}MB exceeds recommended limit of ${QUOTA_WARN_MB}MB"
-            fi
-
-            # Generate SHA-256 checksum
-            echo "Generating checksum..."
-            CHECKSUM=$(sha256sum "$TARBALL_PATH" | cut -d' ' -f1)
-            echo "$CHECKSUM  ${ARTIFACT_NAME}.tar" >> /tmp/checksums.txt
-            echo "Checksum: $CHECKSUM"
-
-            # Upload artifact
-            echo "Uploading artifact..."
-            # Note: Using actions/upload-artifact@v4 here
-            # The actual upload happens in a separate step to use the action
+            echo "Validating image in GHCR..."
+            docker buildx imagetools inspect "$GHCR_IMAGE" > /dev/null
 
             BUILT_IMAGES+=("$IMAGE")
 
@@ -614,26 +575,8 @@ jobs:
           echo ""
           echo "=== Summary ==="
           echo "Total images processed: ${#BUILT_IMAGES[@]}"
-          echo "Total artifact size: ${TOTAL_SIZE}MB"
           echo "Images: ${BUILT_IMAGES[*]}"
-
-      - name: Upload base image artifacts
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: base-images
-          path: /tmp/base-image-*.tar
-          retention-days: 2
-          if-no-files-found: error
-
-      - name: Upload checksum manifest
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: base-images-checksums
-          path: /tmp/checksums.txt
-          retention-days: 2
-          if-no-files-found: error
+          echo "All base images pushed to GHCR"
 
       - name: Save Docker Hub cache
         if: success()
@@ -645,24 +588,8 @@ jobs:
       - name: Cleanup on failure
         if: failure()
         run: |
-          # Clean up partial artifacts to save quota
-          echo "Cleaning up partial artifacts..."
-          rm -f /tmp/base-image-*.tar
-          rm -f /tmp/checksums.txt
-
-          # Attempt to delete any uploaded artifacts (best effort)
-          # Note: This requires GitHub CLI and may not work in all scenarios
-          if command -v gh &> /dev/null; then
-            echo "Attempting to delete partial artifacts from GitHub..."
-            gh api \
-              --method DELETE \
-              "/repos/${{ github.repository }}/actions/artifacts" \
-              -f name="base-images" || true
-            gh api \
-              --method DELETE \
-              "/repos/${{ github.repository }}/actions/artifacts" \
-              -f name="base-images-checksums" || true
-          fi
+          echo "Base image preparation failed"
+          echo "Images may be in inconsistent state in GHCR"
 
   # ============================================================================
   # Stage 3: Build App Images (Parallel Matrix)
@@ -685,7 +612,8 @@ jobs:
       (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # NO packages permissions - cannot pull from registries
+      contents: read
+      packages: write  # Required to pull base images and push app images to GHCR
     strategy:
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.to_build) }}
@@ -699,80 +627,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      # CRITICAL: Download base images from Stage 2 artifacts
-      # Only download if Stage 2 ran (non-fork PRs with base image changes)
-      # For fork PRs: base images must exist in GHCR already
-      - name: Download base images
-        if: needs.prepare-base-images.result == 'success'
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+      # Login to GHCR to pull base images and push app images
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
-          name: base-images
-          path: /tmp/base-images
-
-      - name: Download checksums
-        if: needs.prepare-base-images.result == 'success'
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
-        with:
-          name: base-images-checksums
-          path: /tmp/checksums
-
-      # Verify integrity and load base images
-      - name: Verify and load base images
-        if: needs.prepare-base-images.result == 'success'
-        run: |
-          echo "=== Verifying base image artifacts ==="
-
-          # Verify checksums exist
-          if [ ! -f /tmp/checksums/checksums.txt ]; then
-            echo "::error::Checksum manifest not found"
-            exit 1
-          fi
-
-          # Verify checksums
-          cd /tmp/base-images
-          if ! sha256sum -c /tmp/checksums/checksums.txt; then
-            echo "::error::Checksum verification failed - artifacts may be corrupted"
-            exit 1
-          fi
-          echo "✅ All checksums verified"
-
-          # Count and validate artifacts
-          TARBALL_COUNT=$(ls -1 *.tar 2>/dev/null | wc -l)
-          if [ $TARBALL_COUNT -eq 0 ]; then
-            echo "::error::No base image artifacts found"
-            exit 1
-          fi
-          echo "Found $TARBALL_COUNT base image(s)"
-
-          # Load all base images
-          for tarfile in *.tar; do
-            echo "Loading $tarfile..."
-            if ! docker load -i "$tarfile"; then
-              echo "::error::Failed to load $tarfile"
-              exit 1
-            fi
-          done
-
-          # Verify images are available
-          echo ""
-          echo "=== Loaded base images ==="
-          docker images 'ghcr.io/groupsky/homy/*'
-
-      # For fork PRs or when Stage 2 skipped: base images must exist in GHCR
-      - name: Check base image availability (fork PRs)
-        if: needs.prepare-base-images.result != 'success'
-        run: |
-          echo "⚠️  Stage 2 (prepare-base-images) was skipped"
-          echo "This is expected for:"
-          echo "  - Fork PRs (no Docker Hub secrets access)"
-          echo "  - No base image changes detected"
-          echo ""
-          echo "Base images must already exist in GHCR for builds to succeed."
-          echo "If builds fail with 'image not found', the base image needs to be"
-          echo "prepared by a maintainer first."
-
-      # NO GHCR LOGIN - enforces artifact-only builds
-      # Build will FAIL if Dockerfile tries to pull (desired behavior)
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build service image
         env:
@@ -803,200 +664,28 @@ jobs:
             exit 1
           fi
 
-          # Build with artifact-loaded base images
-          # --pull=false prevents checking for newer versions (optimization)
-          # Security boundary: NO packages:write permission blocks registry auth
-          # If Dockerfile references wrong image -> auth failure (not explicit error)
+          # Build with base images from GHCR
+          # Base images are pulled automatically from GHCR as needed
           docker buildx build \
-            --pull=false \
             --file "$BUILD_PATH/Dockerfile" \
             --tag "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
             --tag "ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA" \
             --cache-from type=gha,scope=$SERVICE \
             --cache-to type=gha,mode=max,scope=$SERVICE,ignore-error=true,ghtoken=${{ github.token }} \
-            --load \
+            --push \
             "$BUILD_PATH"
 
-          echo "✅ Build successful"
+          echo "✅ Build and push successful"
 
-      - name: Generate checksum
-        env:
-          SERVICE: ${{ matrix.service }}
-          SHA: ${{ github.sha }}
-        run: |
-          echo "=== Generating artifact ==="
-
-          # Save image to tarball
-          docker save "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
-            -o "/tmp/$SERVICE.tar"
-
-          # Generate SHA-256 checksum
-          CHECKSUM=$(sha256sum "/tmp/$SERVICE.tar" | cut -d' ' -f1)
-          echo "$CHECKSUM  $SERVICE.tar" > "/tmp/$SERVICE.tar.sha256"
-          echo "Checksum: $CHECKSUM"
-
-          # Check artifact size
-          SIZE_MB=$(du -m "/tmp/$SERVICE.tar" | cut -f1)
-          echo "Artifact size: ${SIZE_MB}MB"
-
-          if [ $SIZE_MB -gt 500 ]; then
-            echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
-            exit 1
-          fi
-
-      - name: Upload service artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: |
-            /tmp/${{ matrix.service }}.tar
-            /tmp/${{ matrix.service }}.tar.sha256
-          retention-days: 2
-          if-no-files-found: error
-
-  # ============================================================================
-  # Stage 3.5: Pull Images for Testing (Parallel Matrix)
-  # ============================================================================
-  # Pulls existing images from GHCR for services with test-only changes.
-  # These services don't need rebuilding but need images for Stage 4 tests.
-  # Saves images as artifacts with checksums for Stage 4 consumption.
-  # ============================================================================
-  pull-images-for-testing:
-    name: Pull Images for Testing
-    timeout-minutes: 10
-    needs: [detect-changes]
-    # Only run if we have services with test-only changes
-    if: |
-      needs.detect-changes.result == 'success' &&
-      needs.detect-changes.outputs.to_pull_for_testing != '[]'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read  # Required to pull from GHCR
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.to_pull_for_testing) }}
-      fail-fast: false
-      max-parallel: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Determine base SHA
-        id: base-sha
-        run: |
-          echo "=== Determining base SHA for image pull ==="
-
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            echo "Using PR base SHA: $BASE_SHA"
-          else
-            # For push events, use previous commit
-            BASE_SHA=$(git rev-parse HEAD^)
-            echo "Using previous commit SHA: $BASE_SHA"
-          fi
-
-          echo "sha=$BASE_SHA" >> $GITHUB_OUTPUT
-
-      - name: Pull image from GHCR
-        env:
-          SERVICE: ${{ matrix.service }}
-          BASE_SHA: ${{ steps.base-sha.outputs.sha }}
-          CURRENT_SHA: ${{ github.sha }}
-        run: |
-          echo "=== Pulling image for $SERVICE ==="
-          echo "Base SHA: $BASE_SHA"
-          echo "Current SHA: $CURRENT_SHA"
-
-          BASE_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$BASE_SHA"
-          CURRENT_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$CURRENT_SHA"
-
-          echo "Pulling from: $BASE_IMAGE"
-
-          # Pull with retry
-          PULLED=false
-          for attempt in 1 2 3; do
-            echo "Pull attempt $attempt/3..."
-            if docker pull "$BASE_IMAGE"; then
-              PULLED=true
-              echo "✅ Successfully pulled image"
-              break
-            fi
-            if [ $attempt -lt 3 ]; then
-              echo "⚠️ Pull failed, retrying in $((attempt * 2))s..."
-              sleep $((attempt * 2))
-            fi
-          done
-
-          if [ "$PULLED" = "false" ]; then
-            echo "::error::Failed to pull $SERVICE from GHCR after 3 attempts"
-            echo "Image: $BASE_IMAGE"
-            echo "This indicates the base image doesn't exist, which shouldn't happen for test-only changes."
-            exit 1
-          fi
-
-          # Retag to current SHA (for consistency with Stage 3 artifacts)
-          echo "Retagging to current SHA..."
-          docker tag "$BASE_IMAGE" "$CURRENT_IMAGE"
-
-          # Verify image is available
-          echo ""
-          echo "=== Loaded image ==="
-          docker images "ghcr.io/groupsky/homy/$SERVICE"
-
-      - name: Generate checksum
-        env:
-          SERVICE: ${{ matrix.service }}
-          SHA: ${{ github.sha }}
-        run: |
-          echo "=== Generating artifact ==="
-
-          # Save image to tarball
-          docker save "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
-            -o "/tmp/$SERVICE.tar"
-
-          # Generate SHA-256 checksum
-          CHECKSUM=$(sha256sum "/tmp/$SERVICE.tar" | cut -d' ' -f1)
-          echo "$CHECKSUM  $SERVICE.tar" > "/tmp/$SERVICE.tar.sha256"
-          echo "Checksum: $CHECKSUM"
-
-          # Check artifact size
-          SIZE_MB=$(du -m "/tmp/$SERVICE.tar" | cut -f1)
-          echo "Artifact size: ${SIZE_MB}MB"
-
-          if [ $SIZE_MB -gt 500 ]; then
-            echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
-            exit 1
-          fi
-
-      - name: Upload service artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: |
-            /tmp/${{ matrix.service }}.tar
-            /tmp/${{ matrix.service }}.tar.sha256
-          retention-days: 2
-          if-no-files-found: error
 
   # ============================================================================
   # Stage 4: Run Tests (Parallel)
   # ============================================================================
-  # Three independent test jobs run in parallel using artifacts from Stage 3:
+  # Three independent test jobs run in parallel using images from GHCR:
   # A) Version Consistency Check - Validates .nvmrc matches Dockerfile node version
   # B) Unit Tests - Runs test suite and uploads coverage
-  # C) Healthcheck Tests - Starts container and validates healthcheck passes
-  # All jobs have NO packages permissions (artifact-only testing).
+  # C) Healthcheck Tests - Pulls images from GHCR and validates healthcheck passes
+  # All jobs have packages:read permission to pull images from GHCR.
   # ============================================================================
 
   # Stage 4A: Version Consistency Check (Parallel Matrix)
@@ -1081,17 +770,17 @@ jobs:
   healthcheck-tests:
     name: Healthcheck Tests
     timeout-minutes: 10
-    needs: [detect-changes, build-app-images, pull-images-for-testing]
-    # Always run after both build and pull stages (one or both may be skipped)
+    needs: [detect-changes, build-app-images]
+    # Run after build stage completes
     if: |
       always() &&
       needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.healthcheck_services != '[]' &&
-      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped')
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read  # Required to pull images from GHCR
     strategy:
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.healthcheck_services) }}
@@ -1101,33 +790,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
-      - name: Download service artifact
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
-          name: service-${{ matrix.service }}
-          path: /tmp
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify and load image
+      - name: Pull image from GHCR
+        env:
+          SERVICE: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
         run: |
-          echo "=== Verifying artifact for ${{ matrix.service }} ==="
-          cd /tmp
+          echo "=== Pulling image for $SERVICE ==="
+          IMAGE="ghcr.io/${{ github.repository_owner }}/homy/$SERVICE:$SHA"
 
-          # Verify checksum
-          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-            echo "::error::Checksum verification failed for ${{ matrix.service }}"
-            exit 1
-          fi
-          echo "✅ Checksum verified"
-
-          # Load Docker image
-          echo "Loading Docker image..."
-          if ! docker load -i ${{ matrix.service }}.tar; then
-            echo "::error::Failed to load Docker image"
+          if ! docker pull "$IMAGE"; then
+            echo "::error::Failed to pull image: $IMAGE"
             exit 1
           fi
 
-          # Verify image is available
-          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
+          echo "✅ Image pulled successfully"
+          docker images "$IMAGE"
 
       - name: Parse healthcheck parameters from image
         id: healthcheck
@@ -1240,21 +924,13 @@ jobs:
   lights-integration-test:
     name: Lights Integration Test
     timeout-minutes: 10
-    needs: [detect-changes, build-app-images, pull-images-for-testing]
-    # Only run if automations, broker, or features were built (or changed)
-    # Always run after both build and pull stages (one or both may be skipped)
+    needs: [detect-changes, build-app-images]
+    # Only run if automations, broker, or features changed
     if: |
       always() &&
       needs.detect-changes.result == 'success' &&
       (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
-      (contains(fromJson(needs.detect-changes.outputs.to_build), 'automations') ||
-       contains(fromJson(needs.detect-changes.outputs.to_build), 'broker') ||
-       contains(fromJson(needs.detect-changes.outputs.to_build), 'features') ||
-       contains(fromJson(needs.detect-changes.outputs.to_pull_for_testing), 'automations') ||
-       contains(fromJson(needs.detect-changes.outputs.to_pull_for_testing), 'broker') ||
-       contains(fromJson(needs.detect-changes.outputs.to_pull_for_testing), 'features') ||
-       contains(fromJson(needs.detect-changes.outputs.changed_services), 'automations') ||
+      (contains(fromJson(needs.detect-changes.outputs.changed_services), 'automations') ||
        contains(fromJson(needs.detect-changes.outputs.changed_services), 'broker') ||
        contains(fromJson(needs.detect-changes.outputs.changed_services), 'features'))
     runs-on: ubuntu-latest
@@ -1276,106 +952,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download automations artifact
-        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'automations')
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
-        with:
-          name: service-automations
-          path: /tmp
-
-      - name: Download broker artifact
-        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'broker')
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
-        with:
-          name: service-broker
-          path: /tmp
-
-      - name: Download features artifact
-        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'features')
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
-        with:
-          name: service-features
-          path: /tmp
-
-      - name: Load or pull images
+      - name: Pull required images from GHCR
         env:
-          TO_BUILD: ${{ needs.detect-changes.outputs.to_build }}
           SHA: ${{ github.sha }}
         run: |
           set -e
-          echo "=== Loading or pulling required images ==="
-          echo "Services in to_build: $TO_BUILD"
+          echo "=== Pulling required images from GHCR ==="
 
-          # Parse to_build JSON array
-          TO_BUILD_ARRAY=($(echo "$TO_BUILD" | jq -r '.[]'))
-          echo "Parsed to_build: ${TO_BUILD_ARRAY[*]}"
-
+          # Pull all three services once (resource optimization)
           for SERVICE in automations broker features; do
-            echo ""
-            echo "Processing $SERVICE..."
+            IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
+            echo "Pulling $IMAGE..."
 
-            # Check if service is in to_build (artifact exists)
-            if echo "$TO_BUILD" | jq -e --arg svc "$SERVICE" 'index($svc) != null' > /dev/null; then
-              echo "  → Service in to_build, loading from artifact"
-              cd /tmp
-
-              # Validate artifact files exist
-              if [ ! -f "$SERVICE.tar" ]; then
-                echo "::error::Artifact tarball not found: $SERVICE.tar"
-                echo "Artifact download may have failed silently or disk is full"
-                exit 1
-              fi
-              if [ ! -f "$SERVICE.tar.sha256" ]; then
-                echo "::error::Checksum file not found: $SERVICE.tar.sha256"
-                exit 1
-              fi
-
-              # Verify checksum
-              if ! sha256sum -c $SERVICE.tar.sha256; then
-                echo "::error::Checksum verification failed for $SERVICE"
-                exit 1
-              fi
-              echo "  ✅ Checksum verified"
-
-              # Load Docker image
-              if ! docker load -i $SERVICE.tar; then
-                echo "::error::Failed to load Docker image for $SERVICE"
-                exit 1
-              fi
-              echo "  ✅ Image loaded from artifact"
-
-            else
-              echo "  → Service NOT in to_build, pulling from GHCR"
-              IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
-
-              # Pull from GHCR with retry
-              PULLED=false
-              for attempt in 1 2 3; do
-                echo "  Pulling $IMAGE (attempt $attempt/3)..."
-                if docker pull "$IMAGE"; then
-                  PULLED=true
-                  echo "  ✅ Successfully pulled from GHCR"
-                  break
-                fi
-                if [ $attempt -lt 3 ]; then
-                  echo "  ⚠️ Pull failed, retrying in $((attempt * 2))s..."
-                  sleep $((attempt * 2))
-                fi
-              done
-
-              if [ "$PULLED" = "false" ]; then
-                echo "::error::Failed to pull $SERVICE from GHCR after 3 attempts"
-                echo "Possible causes:"
-                echo "  - Image doesn't exist for SHA $SHA"
-                echo "  - GHCR service unavailable (503)"
-                echo "  - Network connectivity issue"
-                exit 1
-              fi
+            if ! docker pull "$IMAGE"; then
+              echo "::error::Failed to pull $SERVICE from GHCR"
+              exit 1
             fi
+
+            echo "✅ $SERVICE pulled successfully"
           done
 
           echo ""
-          echo "=== Loaded images ==="
+          echo "=== Available images ==="
           docker images 'ghcr.io/groupsky/homy/*:${{ github.sha }}'
 
       - name: Prepare directories
@@ -1457,9 +1055,9 @@ jobs:
 
   # Stage 5A: Push Built Images
   push-built-images:
-    name: Push Built Images
+    name: Tag Built Images
     timeout-minutes: 15
-    needs: [detect-changes, build-app-images, pull-images-for-testing, version-consistency-check, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, build-app-images, version-consistency-check, healthcheck-tests, lights-integration-test]
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
     # AND all dependencies completed successfully or were skipped
     if: |
@@ -1471,7 +1069,6 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository)) &&
       needs.detect-changes.outputs.to_build != '[]' &&
       (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
       (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
       (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
       (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
@@ -1485,34 +1082,6 @@ jobs:
       fail-fast: false
 
     steps:
-      - name: Download service artifact
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: /tmp
-
-      - name: Verify and load image
-        run: |
-          echo "=== Verifying artifact for ${{ matrix.service }} ==="
-          cd /tmp
-
-          # Verify checksum
-          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-            echo "::error::Checksum verification failed for ${{ matrix.service }}"
-            exit 1
-          fi
-          echo "✅ Checksum verified"
-
-          # Load Docker image
-          echo "Loading Docker image..."
-          if ! docker load -i ${{ matrix.service }}.tar; then
-            echo "::error::Failed to load Docker image"
-            exit 1
-          fi
-
-          # Verify image is available
-          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
-
       - name: Login to GHCR
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
@@ -1557,35 +1126,21 @@ jobs:
             echo "  - $TAG"
           done
 
-      - name: Tag and push images
+      - name: Create additional tags
         run: |
-          echo "=== Tagging and pushing images ==="
+          echo "=== Creating additional tags in GHCR ==="
 
-          # Retry function for GHCR push operations
-          push_with_retry() {
-            local TAG=$1
-            for attempt in 1 2 3; do
-              echo "Pushing $TAG (attempt $attempt/3)..."
-              if docker push "$TAG"; then
-                echo "✅ Successfully pushed $TAG"
-                return 0
-              fi
-              if [ $attempt -lt 3 ]; then
-                echo "⚠️ Push failed, retrying in $((attempt * 2))s..."
-                sleep $((attempt * 2))
-              fi
-            done
-            echo "❌ Failed to push $TAG after 3 attempts"
-            return 1
-          }
+          # Source image (already pushed by Stage 3)
+          SOURCE="ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}"
 
+          # Create all tags at once using imagetools
+          # This is more efficient than pulling/tagging/pushing
           for TAG in ${{ steps.tags.outputs.tags }}; do
-            echo "Tagging: $TAG"
-            docker tag ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} $TAG
-
-            echo "Pushing: $TAG"
-            if ! push_with_retry "$TAG"; then
-              exit 1
+            if [ "$TAG" != "$SOURCE" ]; then
+              echo "Creating tag: $TAG"
+              if ! docker buildx imagetools create --tag "$TAG" "$SOURCE"; then
+                echo "::error::Failed to create tag: $TAG"
+                exit 1
             fi
           done
 
