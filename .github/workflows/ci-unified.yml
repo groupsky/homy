@@ -234,14 +234,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Run the detection script
-          # If force_rebuild is enabled, use HEAD as base (everything changed)
+          # If force_rebuild is enabled, use empty tree to compare against nothing
           BASE_REF="${{ steps.base-ref.outputs.base_ref }}"
           if [ "${{ inputs.force_rebuild }}" == "true" ]; then
-            echo "Force rebuild enabled - using HEAD as base ref"
-            BASE_REF="HEAD"
+            echo "Force rebuild enabled - comparing against empty tree"
+            BASE_REF="4b825dc642cb6eb9a060e54bf8d69288fbee4904"  # Git empty tree hash
           fi
 
-          # Get the actual SHA for base ref
+          # Get the actual SHA for base ref (for image tag fallback)
+          # For force rebuild, this will be the empty tree SHA
           BASE_SHA=$(git rev-parse "$BASE_REF")
           echo "Base SHA for image tags: $BASE_SHA"
 
