@@ -147,6 +147,8 @@ jobs:
       version_check_services: ${{ steps.detect.outputs.version_check_services }}
       # Base images that are not referenced by any service (should be removed)
       unused_base_images: ${{ steps.detect.outputs.unused_base_images }}
+      # Build groups for services sharing build contexts
+      build_groups: ${{ steps.detect.outputs.build_groups }}
 
     steps:
       - name: Checkout code
