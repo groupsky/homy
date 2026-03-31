@@ -992,25 +992,24 @@ jobs:
           mkdir -p data/nodered
           chmod 777 data/nodered
 
+      - name: Prepare environment file
+        run: |
+          # Create a test.env file with all defaults from example.env plus IMAGE_TAG override
+          cp example.env test.env
+          echo "" >> test.env
+          echo "# CI overrides" >> test.env
+          echo "IMAGE_TAG=${{ github.sha }}" >> test.env
+
       - name: Start services with docker compose
-        env:
-          CONFIG_PATH: ./config
-          DATA_PATH: ./data
-          SECRETS_PATH: ./secrets
-          TZ: UTC
-          PUID: 1000
-          PGID: 1000
-          DOMAIN: test.local
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           echo "=== Starting Docker Compose services ==="
 
           # Start three services needed for lights test
-          docker compose --env-file example.env up --force-recreate -d automations features broker
+          docker compose --env-file test.env up --force-recreate -d automations features broker
 
           echo ""
           echo "=== Container status ==="
-          docker compose ps
+          docker compose --env-file test.env ps
           docker ps
 
       - name: Wait for services to stabilize
@@ -1021,7 +1020,7 @@ jobs:
 
           echo ""
           echo "=== Service logs after startup ==="
-          docker compose logs
+          docker compose --env-file test.env logs
 
       - name: Setup Node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -1048,21 +1047,21 @@ jobs:
         if: failure()
         run: |
           echo "=== Broker Logs ==="
-          docker compose logs broker || true
+          docker compose --env-file test.env logs broker || true
 
           echo ""
           echo "=== Automations Logs ==="
-          docker compose logs automations || true
+          docker compose --env-file test.env logs automations || true
 
           echo ""
           echo "=== Features Logs ==="
-          docker compose logs features || true
+          docker compose --env-file test.env logs features || true
 
       - name: Cleanup
         if: always()
         run: |
           echo "Cleaning up..."
-          docker compose down -v || true
+          docker compose --env-file test.env down -v || true
   # ============================================================================
   # Stage 5: Push and Tag Images
   # ============================================================================
