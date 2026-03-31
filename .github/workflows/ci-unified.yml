@@ -1141,23 +1141,23 @@ jobs:
               if ! docker buildx imagetools create --tag "$TAG" "$SOURCE"; then
                 echo "::error::Failed to create tag: $TAG"
                 exit 1
+              fi
             fi
           done
 
-          echo "✅ All tags pushed successfully"
+          echo "✅ All tags created successfully"
 
   # Stage 5B: Retag Unchanged Images
   retag-unchanged-images:
     name: Retag Unchanged Images
     timeout-minutes: 5
-    needs: [detect-changes, pull-images-for-testing, version-consistency-check, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, version-consistency-check, healthcheck-tests, lights-integration-test]
     # Only retag if all test dependencies completed successfully or were skipped
     if: |
       always() &&
       needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.to_retag != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (needs.pull-images-for-testing.result == 'success' || needs.pull-images-for-testing.result == 'skipped') &&
       (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
       (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
       (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
