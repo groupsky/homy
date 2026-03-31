@@ -1248,7 +1248,6 @@ jobs:
       - validate-base-images
       - prepare-base-images
       - build-app-images
-      - pull-images-for-testing
       - version-consistency-check
       - healthcheck-tests
       - lights-integration-test
@@ -1278,9 +1277,7 @@ jobs:
             echo "validate=skipped" >> $GITHUB_OUTPUT
             echo "prepare=skipped" >> $GITHUB_OUTPUT
             echo "build=skipped" >> $GITHUB_OUTPUT
-            echo "pull=skipped" >> $GITHUB_OUTPUT
             echo "version=skipped" >> $GITHUB_OUTPUT
-            echo "test=skipped" >> $GITHUB_OUTPUT
             echo "health=skipped" >> $GITHUB_OUTPUT
             echo "lights=skipped" >> $GITHUB_OUTPUT
             echo "push=skipped" >> $GITHUB_OUTPUT
@@ -1293,7 +1290,6 @@ jobs:
           VALIDATE_STATUS="${{ needs.validate-base-images.result }}"
           PREPARE_STATUS="${{ needs.prepare-base-images.result }}"
           BUILD_STATUS="${{ needs.build-app-images.result }}"
-          PULL_STATUS="${{ needs.pull-images-for-testing.result }}"
           VERSION_STATUS="${{ needs.version-consistency-check.result }}"
           HEALTH_STATUS="${{ needs.healthcheck-tests.result }}"
           LIGHTS_STATUS="${{ needs.lights-integration-test.result }}"
@@ -1304,9 +1300,7 @@ jobs:
           echo "validate=$VALIDATE_STATUS" >> $GITHUB_OUTPUT
           echo "prepare=$PREPARE_STATUS" >> $GITHUB_OUTPUT
           echo "build=$BUILD_STATUS" >> $GITHUB_OUTPUT
-          echo "pull=$PULL_STATUS" >> $GITHUB_OUTPUT
           echo "version=$VERSION_STATUS" >> $GITHUB_OUTPUT
-          echo "test=$TEST_STATUS" >> $GITHUB_OUTPUT
           echo "health=$HEALTH_STATUS" >> $GITHUB_OUTPUT
           echo "lights=$LIGHTS_STATUS" >> $GITHUB_OUTPUT
           echo "push=$PUSH_STATUS" >> $GITHUB_OUTPUT
@@ -1315,16 +1309,14 @@ jobs:
           # Determine overall status
           if [[ "$DETECT_STATUS" == "failure" || "$VALIDATE_STATUS" == "failure" || \
                 "$PREPARE_STATUS" == "failure" || "$BUILD_STATUS" == "failure" || \
-                "$PULL_STATUS" == "failure" || \
-                "$VERSION_STATUS" == "failure" || "$TEST_STATUS" == "failure" || \
+                "$VERSION_STATUS" == "failure" || \
                 "$HEALTH_STATUS" == "failure" || "$LIGHTS_STATUS" == "failure" || \
                 "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
             echo "overall=failure" >> $GITHUB_OUTPUT
             exit 1
           elif [[ "$DETECT_STATUS" == "cancelled" || "$VALIDATE_STATUS" == "cancelled" || \
                   "$PREPARE_STATUS" == "cancelled" || "$BUILD_STATUS" == "cancelled" || \
-                  "$PULL_STATUS" == "cancelled" || \
-                  "$VERSION_STATUS" == "cancelled" || "$TEST_STATUS" == "cancelled" || \
+                  "$VERSION_STATUS" == "cancelled" || \
                   "$HEALTH_STATUS" == "cancelled" || "$LIGHTS_STATUS" == "cancelled" || \
                   "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" ]]; then
             echo "overall=cancelled" >> $GITHUB_OUTPUT
@@ -1352,9 +1344,7 @@ jobs:
           | 1️⃣.5️⃣ Validate Base Images | ${{ steps.status.outputs.validate }} |
           | 2️⃣ Prepare Base Images | ${{ steps.status.outputs.prepare }} |
           | 3️⃣ Build App Images | ${{ steps.status.outputs.build }} |
-          | 3️⃣.5️⃣ Pull Images for Testing | ${{ steps.status.outputs.pull }} |
           | 4️⃣A Version Checks | ${{ steps.status.outputs.version }} |
-          | 4️⃣B Unit Tests | ${{ steps.status.outputs.test }} |
           | 4️⃣C Healthcheck Tests | ${{ steps.status.outputs.health }} |
           | 4️⃣D Lights Integration Test | ${{ steps.status.outputs.lights }} |
           | 5️⃣A Push Images | ${{ steps.status.outputs.push }} |
