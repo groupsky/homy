@@ -704,14 +704,14 @@ jobs:
       # For fork PRs: base images must exist in GHCR already
       - name: Download base images
         if: needs.prepare-base-images.result == 'success'
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4.6.2
         with:
           name: base-images
           path: /tmp/base-images
 
       - name: Download checksums
         if: needs.prepare-base-images.result == 'success'
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4.6.2
         with:
           name: base-images-checksums
           path: /tmp/checksums
@@ -1102,7 +1102,7 @@ jobs:
         uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
       - name: Download service artifact
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4.6.2
         with:
           name: service-${{ matrix.service }}
           path: /tmp
@@ -1278,21 +1278,21 @@ jobs:
 
       - name: Download automations artifact
         if: contains(fromJson(needs.detect-changes.outputs.to_build), 'automations')
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4.6.2
         with:
           name: service-automations
           path: /tmp
 
       - name: Download broker artifact
         if: contains(fromJson(needs.detect-changes.outputs.to_build), 'broker')
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4.6.2
         with:
           name: service-broker
           path: /tmp
 
       - name: Download features artifact
         if: contains(fromJson(needs.detect-changes.outputs.to_build), 'features')
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4.6.2
         with:
           name: service-features
           path: /tmp
@@ -1486,7 +1486,7 @@ jobs:
 
     steps:
       - name: Download service artifact
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4.6.2
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4.6.2
         with:
           name: service-${{ matrix.service }}
           path: /tmp
