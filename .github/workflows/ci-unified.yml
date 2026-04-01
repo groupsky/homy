@@ -964,27 +964,45 @@ jobs:
           echo "Current SHA: $SHA"
           echo ""
 
-          # Pull images by service name (how they were built in Stage 3)
-          # Try current SHA first, fallback to :latest for unchanged services
+          # Pull images for lights test dependencies
+          # Try current SHA first (for changed services)
+          # Fallback to :latest using the actual image name from docker-compose.yml
           for SERVICE in automations broker features; do
             CURRENT_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
-            LATEST_IMAGE="ghcr.io/groupsky/homy/$SERVICE:latest"
 
             echo "Pulling $SERVICE..."
 
-            # Try current SHA first (for changed services)
+            # Try current SHA first (service might have been built)
             if docker pull "$CURRENT_IMAGE" 2>/dev/null; then
               echo "✅ $SERVICE pulled from current SHA"
-            # Fallback to :latest (for unchanged services)
-            elif docker pull "$LATEST_IMAGE" 2>/dev/null; then
-              echo "⚠️  $SERVICE not at current SHA, pulling from :latest"
+              continue
+            fi
+
+            # Fallback: extract actual image name from docker-compose.yml and pull :latest
+            echo "⚠️  $SERVICE not at current SHA, trying :latest fallback"
+
+            # Extract the image name from docker-compose.yml (e.g., broker -> mosquitto)
+            # Parse: "image: ghcr.io/groupsky/homy/mosquitto:${IMAGE_TAG:-latest}" -> "mosquitto"
+            IMAGE_NAME=$(grep -A 1 "^  $SERVICE:" docker-compose.yml | \
+              grep "image:" | \
+              sed 's/.*ghcr.io\/groupsky\/homy\///' | \
+              sed 's/:.*$//')
+
+            if [ -z "$IMAGE_NAME" ]; then
+              echo "::error::Could not determine image name for service: $SERVICE"
+              exit 1
+            fi
+
+            LATEST_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:latest"
+            echo "Image name for $SERVICE: $IMAGE_NAME (pulling $LATEST_IMAGE)"
+
+            if docker pull "$LATEST_IMAGE" 2>/dev/null; then
               docker tag "$LATEST_IMAGE" "$CURRENT_IMAGE"
-              echo "✅ $SERVICE retagged from :latest to current SHA"
+              echo "✅ $SERVICE retagged from $IMAGE_NAME:latest to $SERVICE:$SHA"
             else
               echo "::error::Failed to pull $SERVICE from either current SHA or :latest"
               echo "Current: $CURRENT_IMAGE"
               echo "Latest: $LATEST_IMAGE"
-              echo "This indicates the service doesn't exist in GHCR"
               exit 1
             fi
           done
