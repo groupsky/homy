@@ -958,33 +958,33 @@ jobs:
       - name: Pull required images from GHCR
         env:
           SHA: ${{ github.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -e
           echo "=== Pulling required images from GHCR ==="
           echo "Current SHA: $SHA"
-          echo "Base SHA: $BASE_SHA"
           echo ""
 
           # Pull images by service name (how they were built in Stage 3)
-          # Try current SHA first, fallback to base SHA for unchanged services
+          # Try current SHA first, fallback to :latest for unchanged services
           for SERVICE in automations broker features; do
-            IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
-            BASE_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$BASE_SHA"
+            CURRENT_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
+            LATEST_IMAGE="ghcr.io/groupsky/homy/$SERVICE:latest"
 
             echo "Pulling $SERVICE..."
 
             # Try current SHA first (for changed services)
-            if docker pull "$IMAGE" 2>/dev/null; then
+            if docker pull "$CURRENT_IMAGE" 2>/dev/null; then
               echo "✅ $SERVICE pulled from current SHA"
-            # Fallback to base SHA (for unchanged services)
-            elif docker pull "$BASE_IMAGE" 2>/dev/null; then
-              echo "⚠️  $SERVICE not at current SHA, pulling from base SHA"
-              docker tag "$BASE_IMAGE" "$IMAGE"
-              echo "✅ $SERVICE retagged from base SHA to current SHA"
+            # Fallback to :latest (for unchanged services)
+            elif docker pull "$LATEST_IMAGE" 2>/dev/null; then
+              echo "⚠️  $SERVICE not at current SHA, pulling from :latest"
+              docker tag "$LATEST_IMAGE" "$CURRENT_IMAGE"
+              echo "✅ $SERVICE retagged from :latest to current SHA"
             else
-              echo "::error::Failed to pull $SERVICE from either current SHA ($SHA) or base SHA ($BASE_SHA)"
-              echo "This indicates the service doesn't exist in GHCR at either SHA"
+              echo "::error::Failed to pull $SERVICE from either current SHA or :latest"
+              echo "Current: $CURRENT_IMAGE"
+              echo "Latest: $LATEST_IMAGE"
+              echo "This indicates the service doesn't exist in GHCR"
               exit 1
             fi
           done
