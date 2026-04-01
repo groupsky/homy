@@ -19,7 +19,7 @@ import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
-import type { DetectionResult, GitHubActionsOutputs, Service } from './lib/types.js';
+import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
 
 interface CliOptions {
   baseRef: string;
@@ -145,6 +145,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     to_build: JSON.stringify(result.to_build),
     to_retag: JSON.stringify(result.to_retag),
     to_pull_for_testing: JSON.stringify(result.to_pull_for_testing),
+    build_groups: JSON.stringify(result.build_groups),
 
     // Test and verification outputs
     testable_services: JSON.stringify(result.testable_services),
@@ -272,6 +273,34 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   console.error(`Test-only changes: ${toPullForTesting.length}`);
 
+  console.error('Step 10.6: Grouping services by build context...');
+  // Group services that share the same build context
+  const buildGroupsMap = new Map<string, string[]>();
+
+  for (const serviceName of toBuild) {
+    const service = services.find((s) => s.service_name === serviceName);
+    if (!service) {
+      continue;
+    }
+
+    const buildPath = service.build_context;
+    if (!buildGroupsMap.has(buildPath)) {
+      buildGroupsMap.set(buildPath, []);
+    }
+    buildGroupsMap.get(buildPath)!.push(serviceName);
+  }
+
+  // Convert to BuildGroup array
+  const buildGroups: BuildGroup[] = Array.from(buildGroupsMap.entries())
+    .map(([buildPath, serviceList]) => ({
+      build_path: buildPath,
+      services: serviceList.sort(),
+      primary_service: serviceList.sort()[0],
+    }))
+    .sort((a, b) => a.build_path.localeCompare(b.build_path));
+
+  console.error(`Build groups: ${buildGroups.length} (from ${toBuild.length} services)`);
+
   console.error('Step 11: Detecting testable services...');
   // Tests should run for all changed services, not just ones being built
   const testableServices = services
@@ -328,6 +357,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     testable_services: testableServices,
     healthcheck_services: healthcheckServices,
     version_check_services: versionCheckServices,
+    build_groups: buildGroups,
   };
 }
 
