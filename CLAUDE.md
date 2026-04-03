@@ -97,7 +97,7 @@ For detailed testing documentation, see `scripts/tests/README.md`.
 
 **Why:**
 - Eliminates Docker Hub rate limits (200 pulls/6h) that cause CI failures
-- Enables two-step dependency upgrade workflow with Dependabot
+- Enables two-step dependency upgrade workflow with Renovate
 - Provides centralized control over base image versions
 
 **Usage:**
@@ -176,7 +176,7 @@ The system integrates with:
 
 ### CI/CD and Infrastructure
 - **Unified CI Pipeline**: `.github/workflows/CLAUDE.md` - Complete guide to the 6-stage Docker build pipeline with artifact-based security, test-gated promotion, and troubleshooting
-- **Base Images**: `base-images/CLAUDE.md` - Base image management, Dependabot workflow, and GHCR 503 handling
+- **Base Images**: `base-images/CLAUDE.md` - Base image management, Renovate workflow, and GHCR 503 handling
 
 **Workflow Execution Strategy** (Migration Complete):
 
