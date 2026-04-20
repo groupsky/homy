@@ -1,0 +1,173 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for homy home automation system using Mend Renovate App. Base images check weekly for Docker Hub updates; services check daily for GHCR base image updates.",
+  "extends": [
+    "config:recommended"
+  ],
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "📋 Dependency Updates Dashboard",
+  "labels": ["dependencies"],
+  "assignees": ["groupsky"],
+  "timezone": "UTC",
+  "ignorePresets": [":prHourlyLimit2"],
+  "prConcurrentLimit": 10,
+  "prCreation": "immediate",
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "packageRules": [
+    {
+      "description": "Base Images - Automerge patch and minor updates",
+      "matchPaths": ["base-images/**"],
+      "matchManagers": ["dockerfile"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "base-images",
+      "schedule": ["before 3am on Monday"],
+      "automerge": true,
+      "commitMessagePrefix": "chore(base-images):",
+      "commitMessageTopic": "{{depName}}",
+      "commitMessageExtra": "to {{newVersion}}"
+    },
+    {
+      "description": "Base Images - Manual review for major updates",
+      "matchPaths": ["base-images/**"],
+      "matchManagers": ["dockerfile"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "base-images-major",
+      "schedule": ["before 3am on Monday"],
+      "automerge": false,
+      "commitMessagePrefix": "chore(base-images):",
+      "commitMessageTopic": "{{depName}}",
+      "commitMessageExtra": "to {{newVersion}}"
+    },
+    {
+      "description": "Ignore Node.js major version updates for base images",
+      "matchPaths": ["base-images/node-*/**"],
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["node"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Infrastructure Services - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/nginx/**",
+        "docker/mosquitto/**",
+        "docker/influxdb/**",
+        "docker/grafana/**",
+        "docker/mongo/**",
+        "docker/mongo-express/**",
+        "docker/wireguard/**",
+        "docker/zigbee2mqtt/**",
+        "docker/dockergen/**",
+        "docker/volman/**"
+      ],
+      "groupName": "infrastructure",
+      "schedule": ["before 3am on Monday"],
+      "automerge": false
+    },
+    {
+      "description": "MQTT Services - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/automations/**",
+        "docker/automation-events-processor/**",
+        "docker/mqtt-influx/**",
+        "docker/mqtt-mongo/**"
+      ],
+      "groupName": "mqtt-services",
+      "schedule": ["before 3am on Monday"],
+      "automerge": false
+    },
+    {
+      "description": "Hardware Integration - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/modbus-serial/**",
+        "docker/dmx-driver/**",
+        "docker/telegram-bridge/**"
+      ],
+      "groupName": "hardware-integration",
+      "schedule": ["before 3am on Monday"],
+      "automerge": false
+    },
+    {
+      "description": "Monitoring Services - Docker and npm dependencies",
+      "matchPaths": [
+        "docker/historian/**",
+        "docker/sunseeker-monitoring/**"
+      ],
+      "groupName": "monitoring",
+      "schedule": ["before 3am on Monday"],
+      "automerge": false
+    },
+    {
+      "description": "Home Assistant - Docker updates",
+      "matchPaths": ["docker/homeassistant/**"],
+      "groupName": "home-automation",
+      "schedule": ["before 3am on Monday"],
+      "automerge": false
+    },
+    {
+      "description": "Development and Testing - npm dependencies",
+      "matchPaths": ["docker/test/**"],
+      "groupName": "development",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "GitHub Actions - Automerge patch and minor updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "github-actions",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": true
+    },
+    {
+      "description": "GitHub Actions - Manual review for major updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "github-actions-major",
+      "schedule": ["before 3am on the first day of the month"],
+      "automerge": false
+    },
+    {
+      "description": "npm devDependencies - Automerge all updates",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "dev-dependencies",
+      "automerge": true
+    },
+    {
+      "description": "Automatically sync .nvmrc when Dockerfile Node.js version changes",
+      "matchPaths": ["docker/**"],
+      "matchManagers": ["dockerfile"],
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["node"],
+      "postUpgradeTasks": {
+        "commands": [
+          "bash scripts/sync-nvmrc.sh {{{packageFile}}} {{{packageFileDir}}}"
+        ],
+        "fileFilters": ["**/.nvmrc"],
+        "executionMode": "update"
+      }
+    }
+  ],
+  "dockerfile": {
+    "enabled": true
+  },
+  "npm": {
+    "enabled": true,
+    "rangeStrategy": "pin"
+  },
+  "github-actions": {
+    "enabled": true
+  },
+  "git-submodules": {
+    "enabled": true
+  },
+  "nvm": {
+    "enabled": true
+  },
+  "platformAutomerge": false,
+  "rebaseWhen": "conflicted"
+}

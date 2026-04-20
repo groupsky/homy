@@ -59,7 +59,7 @@ The workflow uses:
 **Key feature**: Versions are extracted automatically from Dockerfiles, so Dependabot PRs work without manual intervention.
 
 **How it works:**
-1. Dependabot updates `base-images/node-18-alpine/Dockerfile`:
+1. Renovate updates `base-images/node-18-alpine/Dockerfile`:
    ```diff
    - FROM node:18.20.8-alpine
    + FROM node:18.20.9-alpine
@@ -76,13 +76,13 @@ The workflow uses:
    ghcr.io/groupsky/homy/node:18.20.9-alpine
    ```
 
-4. Services' Dependabot detects the new GHCR tag and creates PRs
+4. Services' Renovate detects the new GHCR tag and creates PRs
 
 **No manual updates to `docker-bake.hcl` needed!** ✅
 
-## Dependabot Updates
+## Renovate Updates
 
-Dependabot monitors each base image directory for upstream image updates weekly. Updates are grouped under the `base-images` group for easy review.
+Renovate monitors all base images for upstream image updates weekly (Monday 3 AM UTC). Updates are grouped under the `base-images` group and patch/minor updates are automatically merged after CI validation.
 
 ## Using Base Images
 

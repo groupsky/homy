@@ -4,7 +4,7 @@
 # extracted from each Dockerfile. This ensures tags always match the
 # actual upstream image version without manual updates.
 #
-# Dependabot updates Dockerfiles → CI extracts versions → Tags applied automatically
+# Renovate updates Dockerfiles → CI extracts versions → Tags applied automatically
 
 group "default" {
   targets = [
