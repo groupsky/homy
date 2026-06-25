@@ -286,7 +286,17 @@ module.exports = (name, {
                 if (verbose) {
                     console.log(`[${name}] lock changed`, payload)
                 }
+                const lockStateChanged = lockState !== payload.state
                 lockState = payload.state
+                // Ignore redundant re-published lock states. All dry-switch
+                // features on a Modbus DI module re-publish together whenever any
+                // single input on that module changes, so an unrelated door
+                // elsewhere causes this lock's last state to be re-emitted
+                // unchanged. Only a genuine lock/unlock transition should drive
+                // the light - otherwise a re-published "unlocked" arms a spurious
+                // unlock timer that the matching "door open" re-publish then turns
+                // into a bogus 'don-unl' off command.
+                if (!lockStateChanged) return
                 if (payload.state) {
                     if (verbose) {
                         console.log(`[${name}] turning on lights`)
@@ -322,8 +332,15 @@ module.exports = (name, {
                 doorState = payload.state
                 
                 if (payload.state) {
-                    // Door opened
-                    if (unlockedTimer) {
+                    // Door opened. Only react to a genuine closed->open
+                    // transition. A re-published "still open" status (Modbus DI
+                    // module republishing all inputs when an unrelated door
+                    // changes) must not be treated as the user opening the door,
+                    // otherwise it spuriously fires 'don-unl' while an unlock
+                    // timer is pending and turns the light off.
+                    if (!doorStateChanged) {
+                        // no-op: redundant re-publish of the current open state
+                    } else if (unlockedTimer) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights`)
                         }
@@ -333,7 +350,7 @@ module.exports = (name, {
                         }
                         clearTimeout(unlockedTimer)
                         unlockedTimer = null
-                    } else if (doorStateChanged) {
+                    } else {
                         if (verbose) {
                             console.log(`[${name}] turning on lights`)
                         }

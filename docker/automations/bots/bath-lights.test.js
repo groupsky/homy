@@ -2249,6 +2249,96 @@ describe('bath-lights', () => {
         })
     })
 
+    describe('redundant re-publish handling (Modbus DI republish storm)', () => {
+        // All dry-switch features on a Modbus DI module re-publish their current
+        // state together whenever any single input on that module changes. So an
+        // unrelated door elsewhere on the module causes this bathroom's lock and
+        // door statuses to be re-emitted unchanged. The controller must ignore
+        // those redundant re-publishes and only react to genuine transitions.
+
+        test('should not turn off lights when unchanged lock+door states are re-published', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                timeouts: {unlocked: 180000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Establish steady state via genuine transitions: unlocked, door open,
+            // light on, and no unlock timer pending (the unlock timer was already
+            // consumed by the genuine door-open below).
+            publish('lock/status', {state: false})   // genuine unlock -> arms unlock timer
+            publish('door/status', {state: true})     // genuine open while unlock pending -> don-unl, clears timer
+            publish('lights/status', {state: true})   // user turns the light back on
+            mockPublish.mockClear()
+
+            // Modbus republish storm: this bathroom's lock and door are re-emitted
+            // with their unchanged values. This is the exact prod sequence that
+            // (before the fix) armed an unlock timer on the re-published "unlocked"
+            // and then immediately fired 'don-unl' on the re-published "open".
+            publish('lock/status', {state: false})   // redundant unlocked
+            publish('door/status', {state: true})     // redundant open
+
+            expect(mockPublish).not.toHaveBeenCalled()
+
+            // And no delayed unlock-timeout off either: nothing was armed.
+            jest.advanceTimersByTime(180000)
+            expect(mockPublish).not.toHaveBeenCalled()
+        })
+
+        test('should not re-fire lock command when unchanged locked state is re-published', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                timeouts: {closed: 120000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Genuine lock - turns lights on once.
+            publish('lock/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true, r: 'lck'}))
+            mockPublish.mockClear()
+
+            // Redundant re-publish of the same locked state must be a no-op.
+            publish('lock/status', {state: true})
+            expect(mockPublish).not.toHaveBeenCalled()
+        })
+
+        test('should still react to a genuine transition that follows a redundant re-publish', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                timeouts: {unlocked: 180000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Steady state: unlocked + door open + light on, no pending timer.
+            publish('lock/status', {state: false})
+            publish('door/status', {state: true})
+            publish('lights/status', {state: true})
+            mockPublish.mockClear()
+
+            // Redundant re-publishes (ignored).
+            publish('lock/status', {state: false})
+            publish('door/status', {state: true})
+            expect(mockPublish).not.toHaveBeenCalled()
+
+            // A genuine lock now must still turn the lights on (and the fix did not
+            // leave the controller's change-tracking in a broken state).
+            publish('lock/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true, r: 'lck'}))
+        })
+    })
+
     describe('message ordering and duplicate handling', () => {
         test('should not turn off lights from door close timeout when toggle timer is set after door close', () => {
             // Bug scenario: door closes first (closedTimer set), then user presses toggle
@@ -2630,8 +2720,11 @@ describe('bath-lights', () => {
                 jest.advanceTimersByTime(10)
             }
 
-            // System should still be responsive
+            // System should still be responsive. Drive a genuine unlock->lock
+            // transition (the controller now ignores redundant same-state locks,
+            // so re-locking an already-locked door is intentionally a no-op).
             mockPublish.mockClear()
+            publish('lock/status', {state: false})
             publish('lock/status', {state: true})
             expect(mockPublish).toHaveBeenCalled()
         })
@@ -2865,8 +2958,10 @@ describe('bath-lights', () => {
             // Should handle message storm within reasonable time
             expect(endTime - startTime).toBeLessThan(5000)
             
-            // System should still be responsive after storm
+            // System should still be responsive after storm. Drive a genuine
+            // unlock->lock transition (redundant same-state locks are now a no-op).
             mockPublish.mockClear()
+            publish('lock/status', {state: false})
             publish('lock/status', {state: true})
             expect(mockPublish).toHaveBeenCalled()
         })
