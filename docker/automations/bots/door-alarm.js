@@ -124,13 +124,14 @@ module.exports = (name, config) => {
         }
       }
 
-      // Restore timers if door was left open during restart
-      if (persistedCache.doorState === true && persistedCache.doorOpenTime) {
+      // Re-arm escalation timers from persisted state, relative to the
+      // original door-open time. Steps whose scheduled time has already passed
+      // fire immediately. Invoked ONLY after a live sensor reading confirms the
+      // door is still open (see restart confirmation in the handler below).
+      const restorePendingAlarms = () => {
         const elapsed = Date.now() - persistedCache.doorOpenTime
+        log(`resuming escalation, door has been open for ${elapsed/60000} minutes`)
 
-        log(`restoring timers, door has been open for ${elapsed/60000} minutes`)
-
-        // Restore or trigger pending alarms
         persistedCache.pendingAlarms.forEach((alarm) => {
           if (alarm.triggered) {
             return  // Already triggered, skip
@@ -182,8 +183,20 @@ module.exports = (name, config) => {
               })
           }
         })
+      }
 
-        doorState = true
+      // If the service restarted while the door was recorded as open, do NOT
+      // act on that persisted state yet. A transient glitch or a stuck sensor
+      // can set doorState=true before a restart, so the persisted "open" may be
+      // false. Wait for the first live sensor reading to confirm the door is
+      // still open before resuming the escalation. This prevents the siren from
+      // sounding on a stale/false "open" after a restart.
+      let awaitingRestartConfirmation =
+        persistedCache.doorState === true && persistedCache.doorOpenTime != null
+
+      if (awaitingRestartConfirmation) {
+        const elapsed = Date.now() - persistedCache.doorOpenTime
+        log(`door recorded open before restart (${elapsed/60000} min); waiting for a live reading to confirm before resuming alarms`)
       }
 
       await mqtt.subscribe(doorSensor.statusTopic, async (payload) => {
@@ -199,6 +212,27 @@ module.exports = (name, config) => {
         }
 
         const newDoorState = payload.state
+
+        // First valid reading after a restart that happened while the door was
+        // open: confirm the live state before resuming any escalation. This is
+        // the guard that stops a stale/false persisted "open" from triggering
+        // the siren on startup.
+        if (awaitingRestartConfirmation) {
+          awaitingRestartConfirmation = false
+          if (newDoorState) {
+            log('restart confirmation: door still open, resuming escalation')
+            doorState = true
+            persistedCache.doorState = true
+            restorePendingAlarms()
+          } else {
+            log('restart confirmation: door is closed, discarding stale open state')
+            doorState = false
+            persistedCache.doorState = false
+            persistedCache.doorOpenTime = null
+            persistedCache.pendingAlarms = []
+          }
+          return
+        }
 
         // Handle duplicate messages - only process state changes
         if (newDoorState === doorState) {

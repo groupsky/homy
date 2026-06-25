@@ -12,6 +12,7 @@ The mqtt-influx service bridges MQTT messages to InfluxDB time-series storage. M
 - **mqtt-influx-primary**: Primary electrical monitoring bus (`/modbus/main/+/+`)
 - **mqtt-influx-secondary**: Secondary circuits and boiler monitoring (`/modbus/secondary/+/+`)
 - **mqtt-influx-tetriary**: Additional power monitoring points (`/modbus/tetriary/+/+`)
+- **mqtt-influx-dry-switches**: Digital I/O bus (`/modbus/dry-switches/+/reading`) — decomposes packed input/output words into per-bit boolean fields for contact-sensor and RS485 bus-health diagnostics
 - **Water System Integration**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, boiler, and heat pump energy monitoring
 
 ### Data Flow
@@ -44,9 +45,11 @@ module.exports = (data) => {
 ```
 
 ### Existing Converters
+- **aspar-mod-16ro**: Aspar MOD-16RO relay module — per-relay boolean states + RS485 packet counters (`dry_switch_relay`)
 - **dds024mr**: DDS024MR energy meter data
 - **dds519mr**: DDS519MR energy meter data  
 - **ex9em**: EX9EM energy meter data
+- **mbsl32di**: MBSL32DI digital-input module — raw word + per-input boolean fields (`dry_switch_input`)
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data
 

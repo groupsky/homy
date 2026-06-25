@@ -98,7 +98,7 @@ Using the default configuration:
 
 - **Rapid open/close cycles**: Timers reset on each door state change
 - **Duplicate messages**: Duplicate door state messages are ignored to prevent multiple timer sets
-- **Service restart with door open**: Timers are restored from persisted state, expired alarms trigger immediately
+- **Service restart with door open**: Restoration is deferred until the first live sensor reading confirms the door is still open (see State Persistence below). Only then are timers restored / expired alarms triggered. This prevents a stale or false persisted "open" from sounding the siren on startup.
 - **Door already open on startup**: Starts monitoring from first state message received
 - **Door closes after some alarms**: Only cancels pending alarms, doesn't stop currently sounding alarm
 
@@ -110,10 +110,26 @@ The bot persists door state and pending alarms to survive service restarts:
 - **Door open time**: Timestamp when door was opened
 - **Pending alarms**: Array of scheduled alarms with trigger status
 
-On service restart with door still open:
-- Alarms that haven't triggered yet are restored with remaining time
-- Alarms that should have triggered during downtime fire immediately
-- Already-triggered alarms are not repeated
+On service restart with door recorded as open, restoration is **gated on a live
+sensor reading** to avoid acting on a stale/false persisted state:
+
+- The bot waits for the first valid reading on `doorSensor.statusTopic` before
+  doing anything (the feature status topic is retained, so this normally arrives
+  immediately on subscribe).
+- If the live reading confirms the door is **still open**:
+  - Alarms that haven't triggered yet are restored with remaining time
+  - Alarms that should have triggered during downtime fire immediately
+  - Already-triggered alarms are not repeated
+- If the live reading reports the door is **closed**, the stale "open" state is
+  discarded and no alarm sounds.
+
+This guard prevents a glitch or a stuck sensor that set the persisted state to
+"open" before a restart from triggering the siren on startup.
+
+> **Note:** The bot cannot distinguish a genuinely-open door from a sensor that
+> is *stuck reporting open*. If the live reading still says "open" (e.g. a
+> failed-open contact circuit), escalation resumes as designed — fix the
+> underlying sensor/wiring fault at the hardware level.
 
 ## MQTT Topics
 

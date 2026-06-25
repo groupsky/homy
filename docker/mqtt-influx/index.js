@@ -20,9 +20,11 @@ const writeApi = new InfluxDB({url: influxUrl, token: influxToken})
         defaultTags: tags
     })
 const converters = {
+    'aspar-mod-16ro': require('./converters/aspar-mod-16ro'),
     dds024mr: require('./converters/dds024mr'),
     dds519mr: require('./converters/dds519mr'),
     ex9em: require('./converters/ex9em'),
+    mbsl32di: require('./converters/mbsl32di'),
     'or-we-514': require('./converters/or-we-514'),
     sdm630: require('./converters/sdm630'),
 }

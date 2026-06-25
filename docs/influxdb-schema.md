@@ -61,6 +61,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB (bridges main bus MQTT to InfluxDB)
 - **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
+- **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Specialized Monitoring
@@ -137,11 +138,31 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - Additional inverter metrics: power output, system status
 **Use Cases**: Solar PV production monitoring, grid integration analysis
 
-#### `dry_switches` Measurement
-**Source**: modbus-serial-dry-switches → Digital I/O monitoring
-**Tag Structure**: `bus: "dry_switches"`
-**Fields**: Digital switch states, relay positions
+#### `switches` Measurement
+**Source**: modbus-serial-dry-switches → Digital I/O monitoring (direct InfluxDB write)
+**Tag Structure**: `bus: "switches"`, `device.name`, `device.type`, `device.addr`
+**Fields**: Raw packed words as float fields — `inputs` (mbsl32di digital-input modules) and `outputs`/`switches`/RS485 packet counters (aspar-mod-16ro relay modules)
+**Note**: Configured via `INFLUXDB_MEASUREMENT=switches` (not `dry_switches` as previously documented). The packed `inputs`/`outputs` words are stored as floats here, which cannot be bit-decoded with InfluxQL — use the `dry_switch_input` / `dry_switch_relay` measurements below for per-bit access.
 **Use Cases**: System state monitoring, automation feedback
+
+#### `dry_switch_input` Measurement
+**Source**: mqtt-influx-dry-switches → `/modbus/dry-switches/+/reading` (mbsl32di devices)
+**Tag Structure**: `bus: "dry-switches"`, `device.name`, `device.type`, `device.addr`
+**Fields**:
+- `inputs` (int): Raw 32-bit input word (for whole-word glitch detection)
+- `bit0`..`bit31` (boolean): Per-input electrical state (e.g. mbsl32di1 `bit0` is the front-door contact; the feature layer inverts this into door open/closed)
+- `read_ms` (int): Modbus read duration
+**Use Cases**: Diagnosing flaky/stuck contact sensors and false door-open events — plot or alert on an individual bit directly without bitwise math
+
+#### `dry_switch_relay` Measurement
+**Source**: mqtt-influx-dry-switches → `/modbus/dry-switches/+/reading` (aspar-mod-16ro devices)
+**Tag Structure**: `bus: "dry-switches"`, `device.name`, `device.type`, `device.addr`
+**Fields**:
+- `outputs` (int), `out0`..`out15` (boolean): Raw and per-relay output state
+- `switches` (int): Onboard switch register
+- `received_packets` / `incorrect_packets` / `sent_packets` (int): RS485 bus-health counters — a rising `incorrect_packets` indicates serial-bus problems that can corrupt readings for every device on the bus
+- `read_ms` (int): Modbus read duration
+**Use Cases**: Relay state history and RS485 bus-health diagnostics
 
 ### Automation System Monitoring
 
