@@ -62,6 +62,14 @@ module.exports = (name, config) => {
       let timers = []
       let doorState = persistedCache.doorState
 
+      // Defensive: an "open" without an open-time is an inconsistent persisted
+      // state that the normal open/close paths never produce. Treat it as
+      // unknown so the next live reading is handled as a fresh transition
+      // instead of being silently deduplicated (which would never re-arm).
+      if (doorState === true && persistedCache.doorOpenTime == null) {
+        doorState = null
+      }
+
       const clearAllTimers = () => {
         timers.forEach(timer => clearTimeout(timer))
         timers = []

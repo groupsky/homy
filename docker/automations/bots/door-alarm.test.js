@@ -629,6 +629,53 @@ describe('door-alarm bot', () => {
       expect(persistedCache.pendingAlarms).toHaveLength(0)
     })
 
+    it('should treat inconsistent persisted open (no open-time) as a fresh transition', async () => {
+      // doorState=true but doorOpenTime=null is an inconsistent state the normal
+      // paths never produce; a live open reading must still schedule alarms.
+      persistedCache.doorState = true
+      persistedCache.doorOpenTime = null
+      persistedCache.pendingAlarms = []
+
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      jest.advanceTimersByTime(60000)
+
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        expect.objectContaining({ volume: 'low' })
+      )
+    })
+
+    it('should cancel alarms when door closes after a confirmed-open restart', async () => {
+      const doorOpenTime = Date.now() - 30000
+      persistedCache.doorState = true
+      persistedCache.doorOpenTime = doorOpenTime
+      persistedCache.pendingAlarms = [
+        { stepIndex: 0, scheduledTime: doorOpenTime + 60000, triggered: false },
+        { stepIndex: 1, scheduledTime: doorOpenTime + 120000, triggered: false },
+        { stepIndex: 2, scheduledTime: doorOpenTime + 180000, triggered: false }
+      ]
+
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      // Confirm still open, then door closes before any step fires
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
+      jest.advanceTimersByTime(180000)
+
+      // Only the alarm-OFF command should have been sent; no escalation steps
+      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      expect(mockMqtt.publish).toHaveBeenCalledWith(
+        'z2m/house1/floor1-alarm/set',
+        { alarm: false }
+      )
+      expect(persistedCache.doorState).toBe(false)
+    })
+
     it('should defer alarms on restart until a live reading confirms door open', async () => {
       const doorOpenTime = Date.now() - 300000
       persistedCache.doorState = true

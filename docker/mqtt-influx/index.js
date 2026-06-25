@@ -60,14 +60,19 @@ client.on('offline', function () {
 })
 
 client.on('message', function (topic, message) {
-    const data = JSON.parse(message)
+    try {
+        const data = JSON.parse(message)
 
-    if (!(data._type in converters)) {
-        console.warn('Unhandled type', data._type, data)
-        return
+        if (!(data._type in converters)) {
+            console.warn('Unhandled type', data._type, data)
+            return
+        }
+
+        const points = converters[data._type](data)
+
+        writeApi.writePoints(points)
+    } catch (err) {
+        // Log and skip a malformed message rather than crashing the bridge
+        console.error('Failed to process message on', topic, err)
     }
-
-    const points = converters[data._type](data)
-
-    writeApi.writePoints(points)
 })

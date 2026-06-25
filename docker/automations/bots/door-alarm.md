@@ -131,6 +131,13 @@ This guard prevents a glitch or a stuck sensor that set the persisted state to
 > failed-open contact circuit), escalation resumes as designed — fix the
 > underlying sensor/wiring fault at the hardware level.
 
+> **Note:** Confirmation relies on the door status topic being retained (it is,
+> via the feature layer) so the current state is redelivered immediately on
+> subscribe. If the broker's retained value is ever lost (e.g. broker restart
+> with cleared persistence) and the door state does not change, a
+> genuinely-open door will not re-arm until the next state transition. This
+> fails toward silence, which is the intended safe direction.
+
 ## MQTT Topics
 
 ### Input Topics
