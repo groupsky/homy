@@ -76,12 +76,25 @@ export interface Service {
 
 /**
  * Bidirectional mapping between base image directories and GHCR tags.
+ * Maps both raw versions (as published) and normalized versions (for matching).
  */
 export interface DirectoryGHCRMapping {
-  /** Maps directory name to GHCR tag */
+  /** Maps directory name to GHCR tag (normalized for comparison) */
   dir_to_ghcr: Record<string, string>;
-  /** Maps GHCR tag to directory name */
+  /** Maps GHCR tag (both raw and normalized) to directory name */
   ghcr_to_dir: Record<string, string>;
+}
+
+/**
+ * Represents a group of services sharing the same build context.
+ */
+export interface BuildGroup {
+  /** Path to build directory (e.g., 'docker/automations') */
+  build_path: string;
+  /** All service names using this build context */
+  services: string[];
+  /** Primary service name (first in alphabetical order) for display */
+  primary_service: string;
 }
 
 /**
@@ -94,6 +107,8 @@ export interface DetectionResult {
   changed_base_images: string[];
   /** Base images that need to be built */
   base_images_needed: string[];
+  /** Base images not referenced by any service */
+  unused_base_images: string[];
   /** Services that have changed */
   changed_services: string[];
   /** Services affected by base image changes */
@@ -102,12 +117,16 @@ export interface DetectionResult {
   to_build: string[];
   /** Services that can be retagged */
   to_retag: string[];
+  /** Services that need testing but can use existing images from GHCR */
+  to_pull_for_testing: string[];
   /** Services with tests that should be run */
   testable_services: string[];
   /** Services with healthchecks that should be validated */
   healthcheck_services: string[];
   /** Services that need version consistency checks */
   version_check_services: string[];
+  /** Build groups for services sharing build contexts */
+  build_groups: BuildGroup[];
 }
 
 /**

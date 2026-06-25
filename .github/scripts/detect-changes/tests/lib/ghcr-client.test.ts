@@ -532,6 +532,94 @@ describe('TestGHCRClientEdgeCases', () => {
   });
 });
 
+describe('TestGHCRClientBugFixes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('test_service_with_latest_tag_should_check_base_sha_not_latest', () => {
+    test('Should check image at baseSha, not :latest tag, when service has image field', async () => {
+      // Bug reproduction: Service has image: ghcr.io/groupsky/homy/sunseeker-monitoring:latest
+      // but the code should check ghcr.io/groupsky/homy/sunseeker-monitoring:abc123 (baseSha)
+      // If :latest exists but :abc123 doesn't, service should be in toBuild, not toRetag
+
+      mockedExecFileSync.mockImplementation(((_cmd: any, args: any) => {
+        const imageTag = args[args.length - 1];
+        if (imageTag.endsWith(':latest')) {
+          // :latest exists (previous build)
+          return 'Manifest: sha256:abc123...';
+        } else if (imageTag.endsWith(':abc123')) {
+          // :abc123 doesn't exist (needs build)
+          const error = new Error('manifest unknown') as Error & { status?: number };
+          error.status = 1;
+          throw error;
+        }
+        throw new Error('Unexpected image tag checked');
+      }) as any);
+
+      const services: Service[] = [
+        {
+          service_name: 'sunseeker-monitoring',
+          image: 'ghcr.io/groupsky/homy/sunseeker-monitoring:latest',
+          build_context: './docker/sunseeker-monitoring',
+          dockerfile_path: './docker/sunseeker-monitoring/Dockerfile',
+        },
+      ];
+
+      const result = await checkAllServices(services, 'abc123');
+
+      // BUG: Currently returns toRetag=['sunseeker-monitoring'] (checking :latest)
+      // FIX: Should return toBuild=['sunseeker-monitoring'] (checking :abc123)
+      expect(result.toBuild).toEqual(['sunseeker-monitoring']);
+      expect(result.toRetag).toEqual([]);
+
+      // Verify it checked the correct image tag (with baseSha, not :latest)
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['buildx', 'imagetools', 'inspect', 'ghcr.io/groupsky/homy/sunseeker-monitoring:abc123'],
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('test_service_with_image_tag_variable_should_use_base_sha', () => {
+    test('Should construct image tag with baseSha when service image uses ${IMAGE_TAG} variable', async () => {
+      // Services defined with image: ghcr.io/groupsky/homy/service:${IMAGE_TAG:-latest}
+      // get resolved to :latest by docker compose config
+      // But we need to check if :baseSha exists, not :latest
+
+      mockedExecFileSync.mockImplementation(((_cmd: any, args: any) => {
+        const imageTag = args[args.length - 1];
+        if (imageTag.endsWith(':abc123')) {
+          const error = new Error('manifest unknown') as Error & { status?: number };
+          error.status = 1;
+          throw error;
+        }
+        return 'Manifest: sha256:def456...';
+      }) as any);
+
+      const services: Service[] = [
+        {
+          service_name: 'automations',
+          image: 'ghcr.io/groupsky/homy/automations:latest', // Resolved by docker compose
+          build_context: './docker/automations',
+          dockerfile_path: './docker/automations/Dockerfile',
+        },
+      ];
+
+      const result = await checkAllServices(services, 'abc123');
+
+      // Should check with :abc123 (baseSha), not :latest
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        'docker',
+        ['buildx', 'imagetools', 'inspect', 'ghcr.io/groupsky/homy/automations:abc123'],
+        expect.any(Object)
+      );
+      expect(result.toBuild).toEqual(['automations']);
+    });
+  });
+});
+
 describe('TestGHCRClientIntegration', () => {
   beforeEach(() => {
     jest.clearAllMocks();

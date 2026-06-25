@@ -34,12 +34,12 @@ describe('buildReverseDependencyMap', () => {
 
       const baseImageMapping: DirectoryGHCRMapping = {
         dir_to_ghcr: {
-          'node-18-alpine': 'ghcr.io/groupsky/homy/node:18.20.8-alpine',
-          grafana: 'ghcr.io/groupsky/homy/grafana:9.5.21',
+          'node-18-alpine': 'node:18.20.8-alpine',
+          grafana: 'grafana:9.5.21',
         },
         ghcr_to_dir: {
-          'ghcr.io/groupsky/homy/node:18.20.8-alpine': 'node-18-alpine',
-          'ghcr.io/groupsky/homy/grafana:9.5.21': 'grafana',
+          'node:18.20.8-alpine': 'node-18-alpine',
+          'grafana:9.5.21': 'grafana',
         },
       };
 
@@ -61,10 +61,10 @@ describe('buildReverseDependencyMap', () => {
 
       const baseImageMapping: DirectoryGHCRMapping = {
         dir_to_ghcr: {
-          'node-18-alpine': 'ghcr.io/groupsky/homy/node:18.20.8-alpine',
+          'node-18-alpine': 'node:18.20.8-alpine',
         },
         ghcr_to_dir: {
-          'ghcr.io/groupsky/homy/node:18.20.8-alpine': 'node-18-alpine',
+          'node:18.20.8-alpine': 'node-18-alpine',
         },
       };
 
@@ -129,10 +129,10 @@ describe('buildReverseDependencyMap', () => {
 
       const baseImageMapping: DirectoryGHCRMapping = {
         dir_to_ghcr: {
-          'node-18-alpine': 'ghcr.io/groupsky/homy/node:18.20.8-alpine',
+          'node-18-alpine': 'node:18.20.8-alpine',
         },
         ghcr_to_dir: {
-          'ghcr.io/groupsky/homy/node:18.20.8-alpine': 'node-18-alpine',
+          'node:18.20.8-alpine': 'node-18-alpine',
         },
       };
 
@@ -172,10 +172,10 @@ describe('buildReverseDependencyMap', () => {
       // Mapping doesn't include node-18-alpine
       const baseImageMapping: DirectoryGHCRMapping = {
         dir_to_ghcr: {
-          grafana: 'ghcr.io/groupsky/homy/grafana:9.5.21',
+          grafana: 'grafana:9.5.21',
         },
         ghcr_to_dir: {
-          'ghcr.io/groupsky/homy/grafana:9.5.21': 'grafana',
+          'grafana:9.5.21': 'grafana',
         },
       };
 
@@ -205,10 +205,10 @@ describe('buildReverseDependencyMap', () => {
 
       const baseImageMapping: DirectoryGHCRMapping = {
         dir_to_ghcr: {
-          'node-18-alpine': 'ghcr.io/groupsky/homy/node:18.20.8-alpine',
+          'node-18-alpine': 'node:18.20.8-alpine',
         },
         ghcr_to_dir: {
-          'ghcr.io/groupsky/homy/node:18.20.8-alpine': 'node-18-alpine',
+          'node:18.20.8-alpine': 'node-18-alpine',
         },
       };
 

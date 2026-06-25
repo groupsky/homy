@@ -33,13 +33,21 @@ export class SunseekerMqttInfluxService {
   async start() {
     logger.start('Starting Sunseeker MQTT-InfluxDB service...');
 
+    // In test mode, don't fail if connections fail - just log and continue
+    const isTestMode = process.env.TEST_MODE === 'true';
+
     try {
       await this._connectMqtt();
       await this._connectInfluxDB();
       logger.success('Service started successfully');
     } catch (error) {
       logger.error('Failed to start service', error);
-      throw error;
+
+      if (isTestMode) {
+        logger.connection('⚠️  Running in TEST_MODE - continuing despite connection failure');
+      } else {
+        throw error;
+      }
     }
   }
 

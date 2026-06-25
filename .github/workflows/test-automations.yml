@@ -1,0 +1,47 @@
+name: Test Automations
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docker/automations/**'
+      - '.github/workflows/test-automations.yml'
+  pull_request:
+    paths:
+      - 'docker/automations/**'
+      - '.github/workflows/test-automations.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test automations
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version-file: 'docker/automations/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/automations/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docker/automations
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/automations
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        continue-on-error: true
+        with:
+          directory: docker/automations/coverage
+          flags: automations

@@ -104,9 +104,6 @@ jobs:
                 node-18-alpine|node-22-alpine)
                   ghcr_name="ghcr.io/groupsky/homy/node:$version"
                   ;;
-                node-ubuntu)
-                  ghcr_name="ghcr.io/groupsky/homy/node-ubuntu:$version"
-                  ;;
                 *)
                   ghcr_name="ghcr.io/groupsky/homy/$image_name:$version"
                   ;;

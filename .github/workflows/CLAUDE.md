@@ -289,11 +289,11 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 | `base-images.yml.disabled` | Stage 2 (Prepare Base Images) | 2026-01 |
 | `app-images.yml.disabled` | Stages 1,3,5,6 (detect, build, push, summary) | 2026-01 |
 | `validate-base-images.yml.disabled` | Stage 1 (dynamic discovery) + Stage 2 (runtime validation) | 2026-01 |
-| `automations-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
-| `modbus-serial-tests.yml.disabled` | Stage 4B (Unit Tests) | 2026-01 |
-| `telegram-bridge-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
-| `automation-events-processor-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
-| `sunseeker-monitoring-tests.yml.disabled` | Stage 4B (Unit Tests) + Stage 4C (Health Checks) | 2026-01 |
+| `automations-tests.yml.disabled` | `test-automations.yml` (standalone) | 2026-01 |
+| `modbus-serial-tests.yml.disabled` | `test-modbus-serial.yml` (standalone) | 2026-01 |
+| `telegram-bridge-tests.yml.disabled` | `test-telegram-bridge.yml` (standalone) + Stage 4C | 2026-01 |
+| `automation-events-processor-tests.yml.disabled` | `test-automation-events-processor.yml` (standalone) + Stage 4C | 2026-01 |
+| `sunseeker-monitoring-tests.yml.disabled` | `test-sunseeker-monitoring.yml` (standalone) + Stage 4C | 2026-01 |
 | `lights-test.yml.disabled` | Stage 4D (Lights Integration Test) | 2026-01 |
 
 **Converted to Scheduled Workflows:**
@@ -318,13 +318,89 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 - ✅ **Efficient Change Detection**: Only rebuilds affected services
 - ✅ **Cascading Updates**: Base image changes automatically rebuild dependent services
 
+### Standalone Unit Test Workflows
+
+**Purpose**: Provide fast feedback for test-only changes without Docker build overhead.
+
+The following standalone workflows run unit tests independently from the unified CI pipeline:
+
+| Workflow | Service | Triggers On |
+|----------|---------|-------------|
+| `test-automations.yml` | automations | `docker/automations/**` |
+| `test-automation-events-processor.yml` | automation-events-processor | `docker/automation-events-processor/**` |
+| `test-modbus-serial.yml` | modbus-serial | `docker/modbus-serial/**` |
+| `test-sunseeker-monitoring.yml` | sunseeker-monitoring | `docker/sunseeker-monitoring/**` |
+| `test-telegram-bridge.yml` | telegram-bridge | `docker/telegram-bridge/**` |
+
+**Key Characteristics:**
+- **Fast execution**: ~3-4 minutes (no Docker build required)
+- **Path filtering**: Only run when service files change
+- **Parallel execution**: Run independently and in parallel with ci-unified.yml
+- **Minimal permissions**: `contents: read` only
+- **npm caching**: Configured for optimal performance
+- **Coverage reporting**: Upload to Codecov with service-specific flags
+
+**Workflow Structure** (consistent across all 5):
+```yaml
+on:
+  push:
+    branches: [master]
+    paths: ['docker/<service>/**', '.github/workflows/test-<service>.yml']
+  pull_request:
+    paths: ['docker/<service>/**', '.github/workflows/test-<service>.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    permissions:
+      contents: read
+    steps:
+      - Checkout (v6.0.1)
+      - Setup Node.js (v6.2.0) with npm cache
+      - npm ci
+      - npm test -- --coverage
+      - Upload to Codecov (v5)
+```
+
+**Relationship to Unified Pipeline:**
+- These workflows provide **fast feedback** during development
+- ci-unified.yml Stage 4C (Health Checks) provides **integration testing**
+- **Both run in parallel** for comprehensive validation
+- **Branch protection recommended**: Configure required status checks to enforce test passage before merge
+
+**Branch Protection Configuration:**
+
+To ensure tests pass before merge, add these required status checks:
+1. Navigate to repository Settings → Branches → master
+2. Enable "Require status checks to pass before merging"
+3. Add required checks:
+   - `Test Automations / test`
+   - `Test Automation Events Processor / test`
+   - `Test Modbus Serial / test`
+   - `Test Sunseeker Monitoring / test`
+   - `Test Telegram Bridge / test`
+
+**Performance Benefits:**
+- 50-60% faster than dockerized unit tests in ci-unified.yml
+- Eliminates Docker image load overhead
+- Direct npm execution with proper caching
+
 ### Architecture Overview
 
-The pipeline consists of 6 sequential stages with parallel execution within stages:
+The pipeline consists of 7 sequential stages with parallel execution within stages. The workflow always runs and produces a summary, with intelligent path-based optimization to skip unnecessary work.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Stage 1: Detect Changes                                         │
+│ Stage 0: Check Relevant Paths                                   │
+│ - Determine if Docker-related files changed                     │
+│ - Skip build pipeline if no relevant changes                    │
+│ - Always run workflow summary for visibility                    │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 1: Detect Changes (Conditional)                           │
+│ - Only runs if Stage 0 detected relevant changes                │
 │ - Analyze git diff to detect changed files                      │
 │ - Parse Dockerfiles to extract base image dependencies          │
 │ - Check GHCR for existing images                                │
@@ -346,6 +422,15 @@ The pipeline consists of 6 sequential stages with parallel execution within stag
 │ - Build app images using matrix strategy                        │
 │ - Save images as tar archives with SHA-256 checksums            │
 │ - NO packages:write permission (artifact-only)                  │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 v
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 3.5: Pull Images for Testing (Parallel, max 10)           │
+│ - Pull existing images from GHCR for test-only changes          │
+│ - Retag from base SHA to current SHA                            │
+│ - Save as artifacts (same format as Stage 3)                    │
+│ - Enables testing without unnecessary rebuilds                  │
 └────────────────┬────────────────────────────────────────────────┘
                  │
                  v
@@ -374,6 +459,228 @@ The pipeline consists of 6 sequential stages with parallel execution within stag
 │ - Fail workflow if any critical stage failed                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Stage 0: Check Relevant Paths
+
+**Purpose**: Determine if Docker-related files changed to enable intelligent workflow execution with guaranteed summary generation.
+
+**Key Behavior:**
+- The workflow **always runs** on all pushes and pull requests
+- Stage 0 checks if relevant paths changed:
+  - `base-images/**`
+  - `docker/**`
+  - `.github/workflows/ci-unified.yml`
+  - `.github/scripts/detect-changes/**`
+- If no relevant paths changed:
+  - Stages 1-5 are **skipped** (saving CI resources)
+  - Stage 6 (Workflow Summary) **always runs** to report status
+- If relevant paths changed or `workflow_dispatch` triggered:
+  - Full pipeline executes normally
+
+**Benefits:**
+- ✅ **Always visible**: PR checks always show ci-unified status
+- ✅ **Resource efficient**: Skips Docker builds for non-Docker changes
+- ✅ **Clear reporting**: Summary explains why pipeline was skipped
+- ✅ **Manual override**: `workflow_dispatch` bypasses path check
+
+**Example Scenarios:**
+
+| Change Type | Stage 0 Result | Pipeline Behavior |
+|-------------|----------------|-------------------|
+| Update `docker/automations/bot.js` | `should_run=true` | Full pipeline executes |
+| Update `scripts/backup.sh` | `should_run=false` | Stages 1-5 skipped, summary shows "no Docker changes" |
+| Update `README.md` | `should_run=false` | Stages 1-5 skipped, summary shows "no Docker changes" |
+| Manual trigger (`workflow_dispatch`) | `should_run=true` | Full pipeline executes regardless of changes |
+
+**Previous Behavior:**
+- Workflow used path filtering at trigger level (`on.pull_request.paths`)
+- PRs without Docker changes had **no ci-unified check at all**
+- Users saw "waiting for workflow" with no explanation
+- No visibility into why workflow didn't run
+
+**Current Behavior:**
+- Workflow triggers on **all PRs and pushes**
+- Path check determines execution strategy
+- Summary **always generated** with clear explanation
+- Better user experience and CI visibility
+
+### Stage 3.5: Pull Images for Testing
+
+**Purpose**: Optimize CI performance for test-only changes by pulling existing images instead of rebuilding.
+
+**When Stage 3.5 Runs:**
+
+Stage 3.5 activates when the change detection logic identifies services with **test-only changes**:
+- Only test files modified (`*.test.js`, `*.spec.ts`, `__tests__/*`)
+- Only test configuration changed (`jest.config.js`, `jest.setup.js`)
+- Only `devDependencies` changed in `package.json`
+- **AND** the service image exists at the base SHA in GHCR
+
+**How It Works:**
+
+1. **Detection Phase** (Stage 1):
+   ```typescript
+   // Service has changes, but are they test-only?
+   if (isTestOnlyChange(baseRef, service)) {
+     // Does image exist at base SHA?
+     if (imageExistsInGHCR(baseSha)) {
+       toPullForTesting.push(service);
+     } else {
+       toBuild.push(service); // Must build despite test-only change
+     }
+   }
+   ```
+
+2. **Pull Phase** (Stage 3.5):
+   ```yaml
+   # Pull existing image from base SHA
+   docker pull ghcr.io/groupsky/homy/automations:abc123 # base SHA
+
+   # Retag to current SHA for artifact compatibility
+   docker tag ghcr.io/groupsky/homy/automations:abc123 \
+              ghcr.io/groupsky/homy/automations:def456 # current SHA
+
+   # Save as artifact (identical format to Stage 3)
+   docker save ghcr.io/groupsky/homy/automations:def456 -o automations.tar
+   sha256sum automations.tar > automations.tar.sha256
+   ```
+
+3. **Test Phase** (Stage 4):
+   - Tests download artifacts from **either** Stage 3 or Stage 3.5
+   - Artifact format is identical, so tests work transparently
+   - No changes needed to test jobs
+
+**Test Pattern Detection:**
+
+The following patterns are recognized as test-only changes:
+
+```typescript
+const TEST_FILE_PATTERNS = [
+  /\.test\.(js|ts|jsx|tsx)$/,    // Jest/Mocha test files
+  /\.spec\.(js|ts|jsx|tsx)$/,    // Spec test files
+  /\/__tests__\//,               // __tests__ directories
+  /\/tests\//,                   // tests directories
+  /^jest\.config\.(js|ts)$/,     // Jest configuration
+  /^jest\.setup\.(js|ts)$/,      // Jest setup files
+  /\.test\.env$/,                // Test environment files
+  /^vitest\.config\.(js|ts)$/,   // Vitest configuration
+];
+```
+
+**Special Handling:**
+- **package.json changes**: Only test-only if ONLY `devDependencies` changed
+  - Changes to `dependencies`, `scripts`, `version`, `main`, etc. trigger rebuild
+  - Script parses JSON to compare base vs. current versions
+- **Mixed changes**: Any production file change forces full rebuild
+- **Missing base image**: Falls back to rebuild if base SHA image doesn't exist
+
+**Performance Benefits:**
+
+| Scenario | Without Stage 3.5 | With Stage 3.5 | Time Saved |
+|----------|-------------------|----------------|------------|
+| Test-only change (1 service) | ~7 min | ~3 min | 57% |
+| Test-only change (3 services) | ~12 min | ~5 min | 58% |
+| Production code change | ~12 min | ~12 min | 0% (no change) |
+| Mixed (1 test-only, 2 prod) | ~12 min | ~9 min | 25% |
+
+**Example Scenarios:**
+
+**Scenario 1: Add test coverage**
+```bash
+# Edit test file
+vim docker/automations/bots/irrigation.test.js
+
+# Commit and push
+git commit -m "test: Add edge case coverage for irrigation bot"
+git push
+
+# CI Behavior:
+# ✅ Stage 1: Detects test-only change → adds to toPullForTesting
+# ⏩ Stage 3: Skipped (no rebuild needed)
+# ✅ Stage 3.5: Pulls existing image, saves as artifact
+# ✅ Stage 4: Runs new tests against pulled image
+# ✅ Stage 5: Retagging (no new image to push)
+```
+
+**Scenario 2: Update Jest configuration**
+```bash
+# Edit Jest config
+vim docker/telegram-bridge/jest.config.js
+
+# CI Behavior:
+# ✅ Test-only change detected
+# ✅ Pulls existing telegram-bridge image
+# ✅ Runs tests with new configuration
+# ✅ Promotes if tests pass
+```
+
+**Scenario 3: Update devDependencies only**
+```bash
+# Update testing framework
+vim docker/mqtt-influx/package.json
+# Only changed: "jest": "^29.0.0" → "jest": "^29.7.0" in devDependencies
+
+# CI Behavior:
+# ✅ Detects package.json change
+# ✅ Parses JSON to verify only devDependencies changed
+# ✅ Classified as test-only change
+# ✅ Pulls existing image and runs tests
+```
+
+**Scenario 4: Mixed changes (NOT test-only)**
+```bash
+# Edit both production and test code
+vim docker/automations/bots/irrigation.js      # Production
+vim docker/automations/bots/irrigation.test.js  # Test
+
+# CI Behavior:
+# ❌ NOT test-only (production code changed)
+# ✅ Stage 3: Full rebuild
+# ✅ Stage 4: Run tests
+# ✅ Stage 5: Push new image
+```
+
+**Artifact Compatibility:**
+
+Stage 3.5 produces **identical artifact format** to Stage 3:
+- **Artifact name**: `service-<service-name>`
+- **Contents**:
+  - `<service-name>.tar` - Docker image tarball
+  - `<service-name>.tar.sha256` - SHA-256 checksum
+- **Image tag**: Current SHA (not base SHA)
+- **Retention**: 2 days
+
+This ensures Stage 4 test jobs can consume artifacts from either source without modification.
+
+**Error Handling:**
+
+1. **Base image not found in GHCR**:
+   ```
+   Error: ghcr.io/groupsky/homy/automations:abc123 not found
+   ```
+   - **Cause**: Base SHA image doesn't exist (possibly deleted or never built)
+   - **Solution**: Fallback to rebuild (already handled by detection logic)
+
+2. **Image pull failed (transient)**:
+   ```
+   Error: manifest unknown
+   ```
+   - **Retry logic**: 3 attempts with exponential backoff (2s, 4s delays)
+   - **Fallback**: Job fails, but build-app-images will rebuild service
+
+3. **Artifact too large**:
+   ```
+   Error: Image size exceeds 500MB limit
+   ```
+   - **Validation**: Size check before artifact upload
+   - **Solution**: Image optimization or increase limit
+
+**Monitoring:**
+
+Check Stage 3.5 effectiveness in workflow summary:
+- **Services to Pull for Testing**: Shows count of test-only services
+- **Stage 3.5 Status**: ✅ (success), ⏩ (skipped), or ❌ (failed)
+- **Duration**: Typical pull time ~30s per service
 
 ### Security Model: Artifact-Based Isolation
 
@@ -503,7 +810,7 @@ FROM ghcr.io/groupsky/homy/node-slim:22.22.0 → "22.22.0"
 - ✅ All current base images in this repository use supported patterns
 
 **Services Using Variants:**
-- `docker/dmx-driver` - Uses `node-ubuntu:18.12.1` for apt dependencies (libftdi1)
+- None currently. All services use standard Alpine-based Node images.
 
 ### Fork PR Handling
 

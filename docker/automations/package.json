@@ -10,10 +10,10 @@
     "test": "jest"
   },
   "dependencies": {
-    "@vue/reactivity": "^3.5.27",
+    "@vue/reactivity": "^3.5.29",
     "cron-parser": "^5.5.0",
     "fast-json-stable-stringify": "^2.1.0",
-    "mqtt": "^5.14.1",
+    "mqtt": "^5.15.0",
     "suncalc": "^1.9.0"
   },
   "devDependencies": {

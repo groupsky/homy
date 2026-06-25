@@ -3,6 +3,10 @@
 /.env
 node_modules/
 
+# Test coverage
+.coverage
+coverage/
+
 # Deployment state files
 .deployed-version
 .previous-version

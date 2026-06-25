@@ -3,17 +3,7 @@ name: CI - Unified Docker Build Pipeline
 on:
   push:
     branches: [master]
-    paths:
-      - 'base-images/**'
-      - 'docker/**'
-      - '.github/workflows/ci-unified.yml'
-      - '.github/scripts/detect-changes/**'
   pull_request:
-    paths:
-      - 'base-images/**'
-      - 'docker/**'
-      - '.github/workflows/ci-unified.yml'
-      - '.github/scripts/detect-changes/**'
   workflow_dispatch:
     inputs:
       force_rebuild:
@@ -42,6 +32,79 @@ permissions:
 
 jobs:
   # ============================================================================
+  # Stage 0: Check Relevant Paths
+  # ============================================================================
+  # Determines if Docker-related paths changed to skip unnecessary work
+  # ============================================================================
+  check-relevant-paths:
+    name: Check Relevant Paths
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant path changes
+        id: check
+        run: |
+          # Always run on workflow_dispatch or force_rebuild
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || [[ "${{ github.event.inputs.force_rebuild }}" == "true" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Running due to manual trigger"
+            exit 0
+          fi
+
+          # For push events, check against previous commit
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          # For pull_request events, check against base branch
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Unknown event type, running pipeline"
+            exit 0
+          fi
+
+          echo "Checking for changes between $BASE_SHA and $HEAD_SHA"
+
+          # Check if any relevant paths changed
+          RELEVANT_PATHS=(
+            "base-images/"
+            "docker/"
+            ".github/workflows/ci-unified.yml"
+            ".github/scripts/detect-changes/"
+          )
+
+          CHANGED=false
+          for path in "${RELEVANT_PATHS[@]}"; do
+            # Use grep -E with proper anchoring to avoid false positives
+            # Matches paths that start with the pattern, followed by end-of-line or /
+            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE "^${path}(/|$)"; then
+              echo "✅ Changes detected in: $path"
+              CHANGED=true
+              break
+            fi
+          done
+
+          if [[ "$CHANGED" == "true" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Relevant Docker paths changed - running full pipeline"
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "⏩ No Docker-related changes - skipping build pipeline"
+          fi
+
+  # ============================================================================
   # Stage 1: Detect Changes
   # ============================================================================
   # Analyzes file changes and determines:
@@ -53,6 +116,8 @@ jobs:
   detect-changes:
     name: Detect Changes
     timeout-minutes: 10
+    needs: [check-relevant-paths]
+    if: needs.check-relevant-paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,22 +137,28 @@ jobs:
       to_build: ${{ steps.detect.outputs.to_build }}
       # Services that can be retagged (existing image in GHCR)
       to_retag: ${{ steps.detect.outputs.to_retag }}
+      # Services with test-only changes (pull existing image for testing)
+      to_pull_for_testing: ${{ steps.detect.outputs.to_pull_for_testing }}
       # Services with real test scripts in package.json
       testable_services: ${{ steps.detect.outputs.testable_services }}
       # Services with HEALTHCHECK in Dockerfile
       healthcheck_services: ${{ steps.detect.outputs.healthcheck_services }}
       # Services with .nvmrc + node base (need version consistency check)
       version_check_services: ${{ steps.detect.outputs.version_check_services }}
+      # Base images that are not referenced by any service (should be removed)
+      unused_base_images: ${{ steps.detect.outputs.unused_base_images }}
+      # Build groups for services sharing build contexts
+      build_groups: ${{ steps.detect.outputs.build_groups }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
         with:
           # Need full history for git diff
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version-file: '.github/scripts/detect-changes/.nvmrc'
           cache: 'npm'
@@ -111,21 +182,32 @@ jobs:
         id: base-ref
         run: |
           # Determine the git reference to compare against
-          # PR: compare to base SHA
-          # Master push: compare to previous commit (HEAD^)
-          # Other branches: compare to merge-base with master
+          # PR: use merge-base to handle rebases correctly
+          # Master push: use first parent (HEAD^1) to handle merge commits
+          # Other branches: use merge-base with master
 
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE_REF="${{ github.event.pull_request.base.sha }}"
-            echo "Using PR base SHA: $BASE_REF"
+            # Use merge-base for PRs to handle rebases correctly
+            # This ensures we compare against the actual divergence point
+            git fetch origin ${{ github.event.pull_request.base.ref }}
+            BASE_REF=$(git merge-base HEAD origin/${{ github.event.pull_request.base.ref }})
+            echo "Using PR merge-base: $BASE_REF"
           elif [ "${{ github.ref }}" == "refs/heads/master" ]; then
-            BASE_REF="HEAD^"
-            echo "Using previous commit on master: $BASE_REF"
+            # For master pushes, use first parent (^1) to handle merge commits
+            # This ensures we get the previous master commit, not the merged branch
+            BASE_REF=$(git rev-parse HEAD^1)
+            echo "Using previous commit on master (first parent): $BASE_REF"
           else
             # For non-master branches (manual trigger), use merge-base with master
             git fetch origin master
             BASE_REF=$(git merge-base HEAD origin/master)
             echo "Using merge-base with master: $BASE_REF"
+          fi
+
+          # Validate SHA format (40-character hexadecimal)
+          if [[ ! "$BASE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid SHA format: $BASE_REF"
+            exit 1
           fi
 
           echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
@@ -154,14 +236,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Run the detection script
-          # If force_rebuild is enabled, use HEAD as base (everything changed)
+          # If force_rebuild is enabled, use empty tree to compare against nothing
           BASE_REF="${{ steps.base-ref.outputs.base_ref }}"
           if [ "${{ inputs.force_rebuild }}" == "true" ]; then
-            echo "Force rebuild enabled - using HEAD as base ref"
-            BASE_REF="HEAD"
+            echo "Force rebuild enabled - comparing against empty tree"
+            BASE_REF="4b825dc642cb6eb9a060e54bf8d69288fbee4904"  # Git empty tree hash
           fi
 
-          # Get the actual SHA for base ref
+          # Get the actual SHA for base ref (for image tag fallback)
+          # For force rebuild, this will be the empty tree SHA
           BASE_SHA=$(git rev-parse "$BASE_REF")
           echo "Base SHA for image tags: $BASE_SHA"
 
@@ -188,11 +271,14 @@ jobs:
           echo "Affected services: ${{ steps.detect.outputs.affected_services }}"
           echo ""
           echo "To build: ${{ steps.detect.outputs.to_build }}"
+          echo "To pull for testing: ${{ steps.detect.outputs.to_pull_for_testing }}"
           echo "To retag: ${{ steps.detect.outputs.to_retag }}"
           echo ""
           echo "Testable services: ${{ steps.detect.outputs.testable_services }}"
           echo "Healthcheck services: ${{ steps.detect.outputs.healthcheck_services }}"
           echo "Version check services: ${{ steps.detect.outputs.version_check_services }}"
+          echo ""
+          echo "⚠️  Unused base images: ${{ steps.detect.outputs.unused_base_images }}"
           echo ""
           echo "=== Build Context ==="
           echo "Event: ${{ github.event_name }}"
@@ -200,6 +286,58 @@ jobs:
           echo "Is fork: ${{ steps.fork.outputs.is_fork }}"
           echo "Force rebuild: ${{ inputs.force_rebuild }}"
           echo "Base ref: ${{ steps.base-ref.outputs.base_ref }}"
+
+  # ============================================================================
+  # Stage 1.5: Validate Base Images
+  # ============================================================================
+  # Validates that all base images in the repository are actually used by services.
+  # Runs as a separate check that fails the workflow if unused base images are found.
+  # This prevents base image proliferation and ensures clean repository state.
+  # ============================================================================
+  validate-base-images:
+    name: Validate Unused Base Images
+    timeout-minutes: 2
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Always run - unused base images should block ALL builds (including master)
+    if: always()
+
+    steps:
+      - name: Check for unused base images
+        run: |
+          UNUSED='${{ needs.detect-changes.outputs.unused_base_images }}'
+
+          echo "=== Base Image Validation ==="
+          echo "Unused base images: $UNUSED"
+
+          # Parse JSON array and check if empty
+          UNUSED_COUNT=$(echo "$UNUSED" | jq '. | length')
+
+          if [ "$UNUSED_COUNT" -gt 0 ]; then
+            echo ""
+            echo "❌ ERROR: Unused base images detected!"
+            echo ""
+            echo "The following base image directories are not referenced by any service:"
+            echo "$UNUSED" | jq -r '.[]' | while read -r dir; do
+              echo "  - $dir"
+            done
+            echo ""
+            echo "Action required:"
+            echo "  1. Remove the unused base image directories from base-images/"
+            echo "  2. If a service no longer uses a base image, remove the base image directory"
+            echo "  3. This prevents base image proliferation and keeps the repository clean"
+            echo ""
+            echo "Why this matters:"
+            echo "  - Unused base images waste CI quota and storage"
+            echo "  - They create confusion about which images are actually in use"
+            echo "  - Dependabot will continue updating unused images"
+            echo ""
+            exit 1
+          fi
+
+          echo "✅ All base images are referenced by at least one service"
 
   # ============================================================================
   # Stage 2: Prepare Base Images (Sequential)
@@ -212,31 +350,33 @@ jobs:
   prepare-base-images:
     name: Prepare Base Images
     timeout-minutes: 30
-    needs: detect-changes
+    needs: [detect-changes, validate-base-images]
     runs-on: ubuntu-latest
     # Only run for non-fork PRs or master pushes
     # Skip if both changed_base_images and base_images_needed are empty
+    # AND validate-base-images completed successfully or was skipped
     # For workflow_dispatch: require non-fork PR when publish_pr_images=true
     if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
       (github.event_name == 'push' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository) ||
        (github.event_name == 'workflow_dispatch' &&
         (inputs.publish_pr_images != true || github.event.pull_request.head.repo.full_name == github.repository))) &&
       (needs.detect-changes.outputs.changed_base_images != '[]' ||
-       needs.detect-changes.outputs.base_images_needed != '[]')
+       needs.detect-changes.outputs.base_images_needed != '[]') &&
+      (needs.validate-base-images.result == 'success' || needs.validate-base-images.result == 'skipped')
     permissions:
       contents: read
       packages: write  # CRITICAL: Only this stage can push to GHCR
     env:
       BASE_IMAGES: ${{ needs.detect-changes.outputs.changed_base_images }}
       BASE_IMAGES_NEEDED: ${{ needs.detect-changes.outputs.base_images_needed }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -283,12 +423,12 @@ jobs:
           printf '  - %s\n' "${ALL_IMAGES[@]}"
 
           # Save as JSON array for iteration
-          IMAGES_JSON=$(printf '%s\n' "${ALL_IMAGES[@]}" | jq -R . | jq -s .)
+          IMAGES_JSON=$(printf '%s\n' "${ALL_IMAGES[@]}" | jq -R . | jq -sc .)
           echo "images=$IMAGES_JSON" >> $GITHUB_OUTPUT
           echo "count=${#ALL_IMAGES[@]}" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Hub upstream cache
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache@b7e8d49f17405cc70c1c120101943203c98d3a4b # v4.2.0
         with:
           path: /tmp/docker-cache
           # Cache key includes runner OS, base image directory, and version
@@ -299,6 +439,9 @@ jobs:
 
       - name: Process base images sequentially
         id: process
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           # Process each base image one at a time to:
           # - Avoid Docker Hub rate limits (sequential pulls)
@@ -314,9 +457,6 @@ jobs:
 
           # Track built images for output
           BUILT_IMAGES=()
-          TOTAL_SIZE=0
-          ARTIFACT_LIMIT_MB=500
-          QUOTA_WARN_MB=1536  # Warn at 1.5GB (75% of 2GB quota)
 
           for IMAGE in "${IMAGES[@]}"; do
             CURRENT=$((CURRENT + 1))
@@ -355,13 +495,9 @@ jobs:
                 --load \
                 "$IMAGE_DIR"
 
-              # Push to GHCR (master only)
-              if [ "${{ github.ref }}" = "refs/heads/master" ]; then
-                echo "Pushing to GHCR..."
-                docker push "$GHCR_IMAGE"
-              else
-                echo "Skipping GHCR push (not on master branch)"
-              fi
+              # Push to GHCR always (master and PRs)
+              echo "Pushing to GHCR..."
+              docker push "$GHCR_IMAGE"
 
               IMAGE_LOADED=true
 
@@ -427,40 +563,8 @@ jobs:
               exit 1
             fi
 
-            echo "Validating loaded image..."
-            docker inspect "$GHCR_IMAGE" > /dev/null
-
-            # Save image to tarball
-            ARTIFACT_NAME="base-image-${IMAGE}-${VERSION//[:\/ ]/-}"
-            TARBALL_PATH="/tmp/${ARTIFACT_NAME}.tar"
-
-            echo "Saving image to tarball..."
-            docker save "$GHCR_IMAGE" -o "$TARBALL_PATH"
-
-            # Check artifact size
-            SIZE_MB=$(du -m "$TARBALL_PATH" | cut -f1)
-            echo "Artifact size: ${SIZE_MB}MB"
-
-            if [ $SIZE_MB -gt $ARTIFACT_LIMIT_MB ]; then
-              echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
-              exit 1
-            fi
-
-            TOTAL_SIZE=$((TOTAL_SIZE + SIZE_MB))
-            if [ $TOTAL_SIZE -gt $QUOTA_WARN_MB ]; then
-              echo "::warning::Total artifact size ${TOTAL_SIZE}MB exceeds recommended limit of ${QUOTA_WARN_MB}MB"
-            fi
-
-            # Generate SHA-256 checksum
-            echo "Generating checksum..."
-            CHECKSUM=$(sha256sum "$TARBALL_PATH" | cut -d' ' -f1)
-            echo "$CHECKSUM  ${ARTIFACT_NAME}.tar" >> /tmp/checksums.txt
-            echo "Checksum: $CHECKSUM"
-
-            # Upload artifact
-            echo "Uploading artifact..."
-            # Note: Using actions/upload-artifact@v4 here
-            # The actual upload happens in a separate step to use the action
+            echo "Validating image in GHCR..."
+            docker buildx imagetools inspect "$GHCR_IMAGE" > /dev/null
 
             BUILT_IMAGES+=("$IMAGE")
 
@@ -468,36 +572,18 @@ jobs:
           done
 
           # Save built images list as JSON
-          BUILT_JSON=$(printf '%s\n' "${BUILT_IMAGES[@]}" | jq -R . | jq -s .)
+          BUILT_JSON=$(printf '%s\n' "${BUILT_IMAGES[@]}" | jq -R . | jq -sc .)
           echo "built_images=$BUILT_JSON" >> $GITHUB_OUTPUT
 
           echo ""
           echo "=== Summary ==="
           echo "Total images processed: ${#BUILT_IMAGES[@]}"
-          echo "Total artifact size: ${TOTAL_SIZE}MB"
           echo "Images: ${BUILT_IMAGES[*]}"
-
-      - name: Upload base image artifacts
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607270d # v4.6.2
-        with:
-          name: base-images
-          path: /tmp/base-image-*.tar
-          retention-days: 2
-          if-no-files-found: error
-
-      - name: Upload checksum manifest
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607270d # v4.6.2
-        with:
-          name: base-images-checksums
-          path: /tmp/checksums.txt
-          retention-days: 2
-          if-no-files-found: error
+          echo "All base images pushed to GHCR"
 
       - name: Save Docker Hub cache
         if: success()
-        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache/save@b7e8d49f17405cc70c1c120101943203c98d3a4b # v4.2.0
         with:
           path: /tmp/docker-cache
           key: docker-upstream-${{ runner.os }}-base-images-${{ hashFiles('base-images/**/Dockerfile') }}
@@ -505,24 +591,8 @@ jobs:
       - name: Cleanup on failure
         if: failure()
         run: |
-          # Clean up partial artifacts to save quota
-          echo "Cleaning up partial artifacts..."
-          rm -f /tmp/base-image-*.tar
-          rm -f /tmp/checksums.txt
-
-          # Attempt to delete any uploaded artifacts (best effort)
-          # Note: This requires GitHub CLI and may not work in all scenarios
-          if command -v gh &> /dev/null; then
-            echo "Attempting to delete partial artifacts from GitHub..."
-            gh api \
-              --method DELETE \
-              "/repos/${{ github.repository }}/actions/artifacts" \
-              -f name="base-images" || true
-            gh api \
-              --method DELETE \
-              "/repos/${{ github.repository }}/actions/artifacts" \
-              -f name="base-images-checksums" || true
-          fi
+          echo "Base image preparation failed"
+          echo "Images may be in inconsistent state in GHCR"
 
   # ============================================================================
   # Stage 3: Build App Images (Parallel Matrix)
@@ -533,179 +603,92 @@ jobs:
   # This enforces the critical security requirement: artifacts flow Stage 2 → 3 → 4.
   # ============================================================================
   build-app-images:
-    name: Build App Images
+    name: Build App Images (${{ matrix.build.primary_service }})
     timeout-minutes: 20
     needs: [detect-changes, prepare-base-images]
-    # Only run if we have services to build
+    # Only run if we have services to build AND prepare-base-images completed (success or skipped)
     # Check JSON array != '[]' before matrix evaluation (prevents workflow crash)
-    if: needs.detect-changes.outputs.to_build != '[]'
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.build_groups != '[]' &&
+      (needs.prepare-base-images.result == 'success' || needs.prepare-base-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # NO packages permissions - cannot pull from registries
+      contents: read
+      packages: write  # Required to pull base images and push app images to GHCR
     strategy:
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.to_build) }}
+        build: ${{ fromJson(needs.detect-changes.outputs.build_groups) }}
       fail-fast: false
       max-parallel: 10
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      # CRITICAL: Download base images from Stage 2 artifacts
-      # Only download if Stage 2 ran (non-fork PRs with base image changes)
-      # For fork PRs: base images must exist in GHCR already
-      - name: Download base images
-        if: needs.prepare-base-images.result == 'success'
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
+      # Login to GHCR to pull base images and push app images
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
-          name: base-images
-          path: /tmp/base-images
-
-      - name: Download checksums
-        if: needs.prepare-base-images.result == 'success'
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
-        with:
-          name: base-images-checksums
-          path: /tmp/checksums
-
-      # Verify integrity and load base images
-      - name: Verify and load base images
-        if: needs.prepare-base-images.result == 'success'
-        run: |
-          echo "=== Verifying base image artifacts ==="
-
-          # Verify checksums exist
-          if [ ! -f /tmp/checksums/checksums.txt ]; then
-            echo "::error::Checksum manifest not found"
-            exit 1
-          fi
-
-          # Verify checksums
-          cd /tmp/base-images
-          if ! sha256sum -c /tmp/checksums/checksums.txt; then
-            echo "::error::Checksum verification failed - artifacts may be corrupted"
-            exit 1
-          fi
-          echo "✅ All checksums verified"
-
-          # Count and validate artifacts
-          TARBALL_COUNT=$(ls -1 *.tar 2>/dev/null | wc -l)
-          if [ $TARBALL_COUNT -eq 0 ]; then
-            echo "::error::No base image artifacts found"
-            exit 1
-          fi
-          echo "Found $TARBALL_COUNT base image(s)"
-
-          # Load all base images
-          for tarfile in *.tar; do
-            echo "Loading $tarfile..."
-            if ! docker load -i "$tarfile"; then
-              echo "::error::Failed to load $tarfile"
-              exit 1
-            fi
-          done
-
-          # Verify images are available
-          echo ""
-          echo "=== Loaded base images ==="
-          docker images 'ghcr.io/groupsky/homy/*'
-
-      # For fork PRs or when Stage 2 skipped: base images must exist in GHCR
-      - name: Check base image availability (fork PRs)
-        if: needs.prepare-base-images.result != 'success'
-        run: |
-          echo "⚠️  Stage 2 (prepare-base-images) was skipped"
-          echo "This is expected for:"
-          echo "  - Fork PRs (no Docker Hub secrets access)"
-          echo "  - No base image changes detected"
-          echo ""
-          echo "Base images must already exist in GHCR for builds to succeed."
-          echo "If builds fail with 'image not found', the base image needs to be"
-          echo "prepared by a maintainer first."
-
-      # NO GHCR LOGIN - enforces artifact-only builds
-      # Build will FAIL if Dockerfile tries to pull (desired behavior)
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build service image
         env:
-          SERVICE: ${{ matrix.service }}
+          BUILD_PATH: ${{ matrix.build.build_path }}
+          SERVICES: ${{ join(matrix.build.services, ' ') }}
+          PRIMARY_SERVICE: ${{ matrix.build.primary_service }}
           SHA: ${{ github.sha }}
         run: |
           SHORT_SHA=${SHA:0:12}
 
-          echo "=== Building service: $SERVICE ==="
+          echo "=== Building from: $BUILD_PATH ==="
+          echo "Services: $SERVICES"
           echo "SHA: $SHA"
           echo "Short SHA: $SHORT_SHA"
 
-          # Verify Dockerfile exists
-          if [ ! -f "docker/$SERVICE/Dockerfile" ]; then
-            echo "::error::Dockerfile not found for service: $SERVICE"
+          # Verify Dockerfile exists in build context
+          if [ ! -f "$BUILD_PATH/Dockerfile" ]; then
+            echo "::error::Dockerfile not found at: $BUILD_PATH/Dockerfile"
             exit 1
           fi
 
-          # Build with artifact-loaded base images
-          # --pull=false prevents checking for newer versions (optimization)
-          # Security boundary: NO packages:write permission blocks registry auth
-          # If Dockerfile references wrong image -> auth failure (not explicit error)
+          # Build tags for all services sharing this build context
+          TAGS=""
+          for SERVICE in $SERVICES; do
+            TAGS="$TAGS --tag ghcr.io/groupsky/homy/$SERVICE:$SHA"
+            TAGS="$TAGS --tag ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA"
+          done
+
+          echo "Creating tags for services: $SERVICES"
+
+          # Build with base images from GHCR
+          # Base images are pulled automatically from GHCR as needed
+          # Use primary service name for cache scope
           docker buildx build \
-            --pull=false \
-            --file "docker/$SERVICE/Dockerfile" \
-            --tag "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
-            --tag "ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA" \
-            --cache-from type=gha,scope=$SERVICE \
-            --cache-to type=gha,mode=max,scope=$SERVICE,ignore-error=true,ghtoken=${{ github.token }} \
-            --load \
-            "docker/$SERVICE"
+            --file "$BUILD_PATH/Dockerfile" \
+            $TAGS \
+            --cache-from type=gha,scope=$PRIMARY_SERVICE \
+            --cache-to type=gha,mode=max,scope=$PRIMARY_SERVICE,ignore-error=true,ghtoken=${{ github.token }} \
+            --push \
+            "$BUILD_PATH"
 
-          echo "✅ Build successful"
+          echo "✅ Build and push successful for all services"
 
-      - name: Generate checksum
-        env:
-          SERVICE: ${{ matrix.service }}
-          SHA: ${{ github.sha }}
-        run: |
-          echo "=== Generating artifact ==="
-
-          # Save image to tarball
-          docker save "ghcr.io/groupsky/homy/$SERVICE:$SHA" \
-            -o "/tmp/$SERVICE.tar"
-
-          # Generate SHA-256 checksum
-          CHECKSUM=$(sha256sum "/tmp/$SERVICE.tar" | cut -d' ' -f1)
-          echo "$CHECKSUM  $SERVICE.tar" > "/tmp/$SERVICE.tar.sha256"
-          echo "Checksum: $CHECKSUM"
-
-          # Check artifact size
-          SIZE_MB=$(du -m "/tmp/$SERVICE.tar" | cut -f1)
-          echo "Artifact size: ${SIZE_MB}MB"
-
-          if [ $SIZE_MB -gt 500 ]; then
-            echo "::error::Artifact exceeds 500MB limit: ${SIZE_MB}MB"
-            exit 1
-          fi
-
-      - name: Upload service artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607270d # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: |
-            /tmp/${{ matrix.service }}.tar
-            /tmp/${{ matrix.service }}.tar.sha256
-          retention-days: 2
-          if-no-files-found: error
 
   # ============================================================================
   # Stage 4: Run Tests (Parallel)
   # ============================================================================
-  # Three independent test jobs run in parallel using artifacts from Stage 3:
+  # Three independent test jobs run in parallel using images from GHCR:
   # A) Version Consistency Check - Validates .nvmrc matches Dockerfile node version
   # B) Unit Tests - Runs test suite and uploads coverage
-  # C) Healthcheck Tests - Starts container and validates healthcheck passes
-  # All jobs have NO packages permissions (artifact-only testing).
+  # C) Healthcheck Tests - Pulls images from GHCR and validates healthcheck passes
+  # All jobs have packages:read permission to pull images from GHCR.
   # ============================================================================
 
   # Stage 4A: Version Consistency Check (Parallel Matrix)
@@ -714,7 +697,9 @@ jobs:
     timeout-minutes: 3
     needs: [detect-changes]
     # Run even if build-app-images is skipped (version check doesn't need built images)
-    if: needs.detect-changes.outputs.version_check_services != '[]'
+    if: |
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.version_check_services != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -725,7 +710,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
       - name: Check .nvmrc and Dockerfile versions match
         working-directory: docker/${{ matrix.service }}
@@ -784,103 +769,21 @@ jobs:
           echo "✅ Versions match: $NVMRC_VERSION"
 
   # Stage 4B: Unit Tests (Parallel Matrix)
-  unit-tests:
-    name: Unit Tests
-    timeout-minutes: 10
-    needs: [detect-changes, build-app-images]
-    if: needs.detect-changes.outputs.testable_services != '[]'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.testable_services) }}
-      fail-fast: false
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-
-      - name: Download service artifact
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: /tmp
-
-      - name: Verify and load image
-        run: |
-          echo "=== Verifying artifact for ${{ matrix.service }} ==="
-          cd /tmp
-
-          # Verify checksum
-          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-            echo "::error::Checksum verification failed for ${{ matrix.service }}"
-            exit 1
-          fi
-          echo "✅ Checksum verified"
-
-          # Load Docker image
-          echo "Loading Docker image..."
-          if ! docker load -i ${{ matrix.service }}.tar; then
-            echo "::error::Failed to load Docker image"
-            exit 1
-          fi
-
-          # Verify image is available
-          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
-
-      - name: Detect test command
-        id: test-cmd
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          echo "=== Detecting test command ==="
-
-          # Check if package.json exists
-          if [ ! -f package.json ]; then
-            echo "::error::package.json not found"
-            exit 1
-          fi
-
-          # Check for test:coverage script (preferred)
-          if jq -e '.scripts["test:coverage"]' package.json > /dev/null 2>&1; then
-            echo "command=npm run test:coverage" >> $GITHUB_OUTPUT
-            echo "Using: npm run test:coverage"
-          else
-            # Fallback to npm test with coverage flag
-            echo "command=npm test -- --coverage" >> $GITHUB_OUTPUT
-            echo "Using: npm test -- --coverage"
-          fi
-
-      - name: Run tests
-        working-directory: docker/${{ matrix.service }}
-        run: |
-          echo "=== Running tests for ${{ matrix.service }} ==="
-
-          # Run tests inside the built Docker image
-          # This ensures tests run in the exact same environment as production
-          docker run --rm \
-            -v "$(pwd):/app" \
-            -w /app \
-            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} \
-            ${{ steps.test-cmd.outputs.command }}
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
-        continue-on-error: true
-        with:
-          directory: docker/${{ matrix.service }}/coverage
-          flags: ${{ matrix.service }}
-          fail_ci_if_error: false
-
   # Stage 4C: Healthcheck Tests (Parallel Matrix)
   healthcheck-tests:
     name: Healthcheck Tests
     timeout-minutes: 10
     needs: [detect-changes, build-app-images]
-    if: needs.detect-changes.outputs.healthcheck_services != '[]'
+    # Run after build stage completes
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.healthcheck_services != '[]' &&
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read  # Required to pull images from GHCR
     strategy:
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.healthcheck_services) }}
@@ -888,35 +791,30 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
-      - name: Download service artifact
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
-          name: service-${{ matrix.service }}
-          path: /tmp
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify and load image
+      - name: Pull image from GHCR
+        env:
+          SERVICE: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
         run: |
-          echo "=== Verifying artifact for ${{ matrix.service }} ==="
-          cd /tmp
+          echo "=== Pulling image for $SERVICE ==="
+          IMAGE="ghcr.io/${{ github.repository_owner }}/homy/$SERVICE:$SHA"
 
-          # Verify checksum
-          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-            echo "::error::Checksum verification failed for ${{ matrix.service }}"
-            exit 1
-          fi
-          echo "✅ Checksum verified"
-
-          # Load Docker image
-          echo "Loading Docker image..."
-          if ! docker load -i ${{ matrix.service }}.tar; then
-            echo "::error::Failed to load Docker image"
+          if ! docker pull "$IMAGE"; then
+            echo "::error::Failed to pull image: $IMAGE"
             exit 1
           fi
 
-          # Verify image is available
-          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
+          echo "✅ Image pulled successfully"
+          docker images "$IMAGE"
 
       - name: Parse healthcheck parameters from image
         id: healthcheck
@@ -1030,12 +928,12 @@ jobs:
     name: Lights Integration Test
     timeout-minutes: 10
     needs: [detect-changes, build-app-images]
-    # Only run if automations, broker, or features were built (or changed)
+    # Only run if automations, broker, or features changed
     if: |
-      (contains(fromJson(needs.detect-changes.outputs.to_build), 'automations') ||
-       contains(fromJson(needs.detect-changes.outputs.to_build), 'broker') ||
-       contains(fromJson(needs.detect-changes.outputs.to_build), 'features') ||
-       contains(fromJson(needs.detect-changes.outputs.changed_services), 'automations') ||
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
+      (contains(fromJson(needs.detect-changes.outputs.changed_services), 'automations') ||
        contains(fromJson(needs.detect-changes.outputs.changed_services), 'broker') ||
        contains(fromJson(needs.detect-changes.outputs.changed_services), 'features'))
     runs-on: ubuntu-latest
@@ -1045,7 +943,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -1057,106 +955,69 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download automations artifact
-        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'automations')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
-        with:
-          name: service-automations
-          path: /tmp
-
-      - name: Download broker artifact
-        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'broker')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
-        with:
-          name: service-broker
-          path: /tmp
-
-      - name: Download features artifact
-        if: contains(fromJson(needs.detect-changes.outputs.to_build), 'features')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
-        with:
-          name: service-features
-          path: /tmp
-
-      - name: Load or pull images
+      - name: Pull required images from GHCR
         env:
-          TO_BUILD: ${{ needs.detect-changes.outputs.to_build }}
           SHA: ${{ github.sha }}
         run: |
           set -e
-          echo "=== Loading or pulling required images ==="
-          echo "Services in to_build: $TO_BUILD"
+          echo "=== Pulling required images from GHCR ==="
+          echo "Current SHA: $SHA"
+          echo ""
 
-          # Parse to_build JSON array
-          TO_BUILD_ARRAY=($(echo "$TO_BUILD" | jq -r '.[]'))
-          echo "Parsed to_build: ${TO_BUILD_ARRAY[*]}"
-
+          # Pull images for lights test dependencies
+          # Try current SHA first (for changed services)
+          # Fallback to :latest using the actual image name from docker-compose.yml
           for SERVICE in automations broker features; do
-            echo ""
-            echo "Processing $SERVICE..."
+            CURRENT_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
 
-            # Check if service is in to_build (artifact exists)
-            if echo "$TO_BUILD" | jq -e --arg svc "$SERVICE" 'index($svc) != null' > /dev/null; then
-              echo "  → Service in to_build, loading from artifact"
-              cd /tmp
+            echo "Pulling $SERVICE..."
 
-              # Validate artifact files exist
-              if [ ! -f "$SERVICE.tar" ]; then
-                echo "::error::Artifact tarball not found: $SERVICE.tar"
-                echo "Artifact download may have failed silently or disk is full"
-                exit 1
-              fi
-              if [ ! -f "$SERVICE.tar.sha256" ]; then
-                echo "::error::Checksum file not found: $SERVICE.tar.sha256"
-                exit 1
-              fi
+            # Try current SHA first (service might have been built)
+            if docker pull "$CURRENT_IMAGE" 2>/dev/null; then
+              echo "✅ $SERVICE pulled from current SHA"
+              continue
+            fi
 
-              # Verify checksum
-              if ! sha256sum -c $SERVICE.tar.sha256; then
-                echo "::error::Checksum verification failed for $SERVICE"
-                exit 1
-              fi
-              echo "  ✅ Checksum verified"
+            # Fallback: extract actual image name from docker-compose.yml and pull :latest
+            echo "⚠️  $SERVICE not at current SHA, trying :latest fallback"
 
-              # Load Docker image
-              if ! docker load -i $SERVICE.tar; then
-                echo "::error::Failed to load Docker image for $SERVICE"
-                exit 1
-              fi
-              echo "  ✅ Image loaded from artifact"
+            # Extract the image name from docker-compose.yml (e.g., broker -> mosquitto)
+            # Parse: "image: ghcr.io/groupsky/homy/mosquitto:${IMAGE_TAG:-latest}" -> "mosquitto"
+            IMAGE_NAME=$(grep -A 1 "^  $SERVICE:" docker-compose.yml | \
+              grep "image:" | \
+              sed 's/.*ghcr.io\/groupsky\/homy\///' | \
+              sed 's/:.*$//')
 
+            if [ -z "$IMAGE_NAME" ]; then
+              echo "::error::Could not determine image name for service: $SERVICE"
+              exit 1
+            fi
+
+            LATEST_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:latest"
+            echo "Image name for $SERVICE: $IMAGE_NAME (pulling $LATEST_IMAGE)"
+
+            if docker pull "$LATEST_IMAGE" 2>/dev/null; then
+              docker tag "$LATEST_IMAGE" "$CURRENT_IMAGE"
+              echo "✅ $SERVICE retagged from $IMAGE_NAME:latest to $SERVICE:$SHA"
             else
-              echo "  → Service NOT in to_build, pulling from GHCR"
-              IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
-
-              # Pull from GHCR with retry
-              PULLED=false
-              for attempt in 1 2 3; do
-                echo "  Pulling $IMAGE (attempt $attempt/3)..."
-                if docker pull "$IMAGE"; then
-                  PULLED=true
-                  echo "  ✅ Successfully pulled from GHCR"
-                  break
-                fi
-                if [ $attempt -lt 3 ]; then
-                  echo "  ⚠️ Pull failed, retrying in $((attempt * 2))s..."
-                  sleep $((attempt * 2))
-                fi
-              done
-
-              if [ "$PULLED" = "false" ]; then
-                echo "::error::Failed to pull $SERVICE from GHCR after 3 attempts"
-                echo "Possible causes:"
-                echo "  - Image doesn't exist for SHA $SHA"
-                echo "  - GHCR service unavailable (503)"
-                echo "  - Network connectivity issue"
-                exit 1
-              fi
+              echo "::error::Failed to pull $SERVICE from either current SHA or :latest"
+              echo "Current: $CURRENT_IMAGE"
+              echo "Latest: $LATEST_IMAGE"
+              exit 1
             fi
           done
 
+          # Retag images to match docker-compose.yml image names
+          # broker service expects mosquitto image
+          # features service expects automations image
           echo ""
-          echo "=== Loaded images ==="
+          echo "=== Retagging images for docker-compose compatibility ==="
+
+          docker tag "ghcr.io/groupsky/homy/broker:$SHA" "ghcr.io/groupsky/homy/mosquitto:$SHA"
+          echo "✅ Retagged broker → mosquitto"
+
+          echo ""
+          echo "=== Available images ==="
           docker images 'ghcr.io/groupsky/homy/*:${{ github.sha }}'
 
       - name: Prepare directories
@@ -1165,16 +1026,24 @@ jobs:
           mkdir -p data/nodered
           chmod 777 data/nodered
 
+      - name: Prepare environment file
+        run: |
+          # Create a test.env file with all defaults from example.env plus IMAGE_TAG override
+          cp example.env test.env
+          echo "" >> test.env
+          echo "# CI overrides" >> test.env
+          echo "IMAGE_TAG=${{ github.sha }}" >> test.env
+
       - name: Start services with docker compose
         run: |
           echo "=== Starting Docker Compose services ==="
 
           # Start three services needed for lights test
-          docker compose --env-file example.env up --force-recreate -d automations features broker
+          docker compose --env-file test.env up --force-recreate -d automations features broker
 
           echo ""
           echo "=== Container status ==="
-          docker compose ps
+          docker compose --env-file test.env ps
           docker ps
 
       - name: Wait for services to stabilize
@@ -1185,10 +1054,10 @@ jobs:
 
           echo ""
           echo "=== Service logs after startup ==="
-          docker compose logs
+          docker compose --env-file test.env logs
 
       - name: Setup Node.js
-        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version-file: 'docker/test/.nvmrc'
           cache: 'npm'
@@ -1212,21 +1081,21 @@ jobs:
         if: failure()
         run: |
           echo "=== Broker Logs ==="
-          docker compose logs broker || true
+          docker compose --env-file test.env logs broker || true
 
           echo ""
           echo "=== Automations Logs ==="
-          docker compose logs automations || true
+          docker compose --env-file test.env logs automations || true
 
           echo ""
           echo "=== Features Logs ==="
-          docker compose logs features || true
+          docker compose --env-file test.env logs features || true
 
       - name: Cleanup
         if: always()
         run: |
           echo "Cleaning up..."
-          docker compose down -v || true
+          docker compose --env-file test.env down -v || true
   # ============================================================================
   # Stage 5: Push and Tag Images
   # ============================================================================
@@ -1238,16 +1107,23 @@ jobs:
 
   # Stage 5A: Push Built Images
   push-built-images:
-    name: Push Built Images
+    name: Tag Built Images
     timeout-minutes: 15
-    needs: [detect-changes, build-app-images, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, build-app-images, version-consistency-check, healthcheck-tests, lights-integration-test]
     # Run if not a fork PR OR if workflow_dispatch with publish_pr_images
+    # AND all dependencies completed successfully or were skipped
     if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
       (github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository)) &&
-      needs.detect-changes.outputs.to_build != '[]'
+      needs.detect-changes.outputs.to_build != '[]' &&
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
+      (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
+      (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
+      (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1258,34 +1134,6 @@ jobs:
       fail-fast: false
 
     steps:
-      - name: Download service artifact
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.6.2
-        with:
-          name: service-${{ matrix.service }}
-          path: /tmp
-
-      - name: Verify and load image
-        run: |
-          echo "=== Verifying artifact for ${{ matrix.service }} ==="
-          cd /tmp
-
-          # Verify checksum
-          if ! sha256sum -c ${{ matrix.service }}.tar.sha256; then
-            echo "::error::Checksum verification failed for ${{ matrix.service }}"
-            exit 1
-          fi
-          echo "✅ Checksum verified"
-
-          # Load Docker image
-          echo "Loading Docker image..."
-          if ! docker load -i ${{ matrix.service }}.tar; then
-            echo "::error::Failed to load Docker image"
-            exit 1
-          fi
-
-          # Verify image is available
-          docker images "ghcr.io/groupsky/homy/${{ matrix.service }}"
-
       - name: Login to GHCR
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
@@ -1330,48 +1178,41 @@ jobs:
             echo "  - $TAG"
           done
 
-      - name: Tag and push images
+      - name: Create additional tags
         run: |
-          echo "=== Tagging and pushing images ==="
+          echo "=== Creating additional tags in GHCR ==="
 
-          # Retry function for GHCR push operations
-          push_with_retry() {
-            local TAG=$1
-            for attempt in 1 2 3; do
-              echo "Pushing $TAG (attempt $attempt/3)..."
-              if docker push "$TAG"; then
-                echo "✅ Successfully pushed $TAG"
-                return 0
-              fi
-              if [ $attempt -lt 3 ]; then
-                echo "⚠️ Push failed, retrying in $((attempt * 2))s..."
-                sleep $((attempt * 2))
-              fi
-            done
-            echo "❌ Failed to push $TAG after 3 attempts"
-            return 1
-          }
+          # Source image (already pushed by Stage 3)
+          SOURCE="ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}"
 
+          # Create all tags at once using imagetools
+          # This is more efficient than pulling/tagging/pushing
           for TAG in ${{ steps.tags.outputs.tags }}; do
-            echo "Tagging: $TAG"
-            docker tag ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }} $TAG
-
-            echo "Pushing: $TAG"
-            if ! push_with_retry "$TAG"; then
-              exit 1
+            if [ "$TAG" != "$SOURCE" ]; then
+              echo "Creating tag: $TAG"
+              if ! docker buildx imagetools create --tag "$TAG" "$SOURCE"; then
+                echo "::error::Failed to create tag: $TAG"
+                exit 1
+              fi
             fi
           done
 
-          echo "✅ All tags pushed successfully"
+          echo "✅ All tags created successfully"
 
   # Stage 5B: Retag Unchanged Images
   retag-unchanged-images:
     name: Retag Unchanged Images
     timeout-minutes: 5
-    needs: [detect-changes, version-consistency-check, unit-tests, healthcheck-tests, lights-integration-test]
+    needs: [detect-changes, version-consistency-check, healthcheck-tests, lights-integration-test]
+    # Only retag if all test dependencies completed successfully or were skipped
     if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.to_retag != '[]' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
+      (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
+      (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1383,7 +1224,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
         with:
           fetch-depth: 2
 
@@ -1454,11 +1295,12 @@ jobs:
     # Always run at the end to summarize all stages
     # Depend on all final-stage jobs to ensure proper sequencing
     needs:
+      - check-relevant-paths
       - detect-changes
+      - validate-base-images
       - prepare-base-images
       - build-app-images
       - version-consistency-check
-      - unit-tests
       - healthcheck-tests
       - lights-integration-test
       - push-built-images
@@ -1472,40 +1314,63 @@ jobs:
       - name: Determine workflow status
         id: status
         run: |
+          # Check if pipeline was skipped due to no relevant path changes
+          SHOULD_RUN="${{ needs.check-relevant-paths.outputs.should_run }}"
+          PATH_CHECK_STATUS="${{ needs.check-relevant-paths.result }}"
+
+          echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+          echo "path_check=$PATH_CHECK_STATUS" >> $GITHUB_OUTPUT
+
+          if [[ "$SHOULD_RUN" != "true" ]]; then
+            echo "✅ Pipeline skipped - no Docker-related changes detected"
+            echo "overall=skipped" >> $GITHUB_OUTPUT
+            # Set all stage statuses to skipped
+            echo "detect=skipped" >> $GITHUB_OUTPUT
+            echo "validate=skipped" >> $GITHUB_OUTPUT
+            echo "prepare=skipped" >> $GITHUB_OUTPUT
+            echo "build=skipped" >> $GITHUB_OUTPUT
+            echo "version=skipped" >> $GITHUB_OUTPUT
+            echo "health=skipped" >> $GITHUB_OUTPUT
+            echo "lights=skipped" >> $GITHUB_OUTPUT
+            echo "push=skipped" >> $GITHUB_OUTPUT
+            echo "retag=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # Check if any previous job failed
           DETECT_STATUS="${{ needs.detect-changes.result }}"
+          VALIDATE_STATUS="${{ needs.validate-base-images.result }}"
           PREPARE_STATUS="${{ needs.prepare-base-images.result }}"
           BUILD_STATUS="${{ needs.build-app-images.result }}"
           VERSION_STATUS="${{ needs.version-consistency-check.result }}"
-          TEST_STATUS="${{ needs.unit-tests.result }}"
           HEALTH_STATUS="${{ needs.healthcheck-tests.result }}"
           LIGHTS_STATUS="${{ needs.lights-integration-test.result }}"
           PUSH_STATUS="${{ needs.push-built-images.result }}"
           RETAG_STATUS="${{ needs.retag-unchanged-images.result }}"
 
           echo "detect=$DETECT_STATUS" >> $GITHUB_OUTPUT
+          echo "validate=$VALIDATE_STATUS" >> $GITHUB_OUTPUT
           echo "prepare=$PREPARE_STATUS" >> $GITHUB_OUTPUT
           echo "build=$BUILD_STATUS" >> $GITHUB_OUTPUT
           echo "version=$VERSION_STATUS" >> $GITHUB_OUTPUT
-          echo "test=$TEST_STATUS" >> $GITHUB_OUTPUT
           echo "health=$HEALTH_STATUS" >> $GITHUB_OUTPUT
           echo "lights=$LIGHTS_STATUS" >> $GITHUB_OUTPUT
           echo "push=$PUSH_STATUS" >> $GITHUB_OUTPUT
           echo "retag=$RETAG_STATUS" >> $GITHUB_OUTPUT
 
           # Determine overall status
-          if [[ "$DETECT_STATUS" == "failure" || "$PREPARE_STATUS" == "failure" || \
-                "$BUILD_STATUS" == "failure" || "$VERSION_STATUS" == "failure" || \
-                "$TEST_STATUS" == "failure" || "$HEALTH_STATUS" == "failure" || \
-                "$LIGHTS_STATUS" == "failure" || "$PUSH_STATUS" == "failure" || \
-                "$RETAG_STATUS" == "failure" ]]; then
+          if [[ "$DETECT_STATUS" == "failure" || "$VALIDATE_STATUS" == "failure" || \
+                "$PREPARE_STATUS" == "failure" || "$BUILD_STATUS" == "failure" || \
+                "$VERSION_STATUS" == "failure" || \
+                "$HEALTH_STATUS" == "failure" || "$LIGHTS_STATUS" == "failure" || \
+                "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
             echo "overall=failure" >> $GITHUB_OUTPUT
             exit 1
-          elif [[ "$DETECT_STATUS" == "cancelled" || "$PREPARE_STATUS" == "cancelled" || \
-                  "$BUILD_STATUS" == "cancelled" || "$VERSION_STATUS" == "cancelled" || \
-                  "$TEST_STATUS" == "cancelled" || "$HEALTH_STATUS" == "cancelled" || \
-                  "$LIGHTS_STATUS" == "cancelled" || "$PUSH_STATUS" == "cancelled" || \
-                  "$RETAG_STATUS" == "cancelled" ]]; then
+          elif [[ "$DETECT_STATUS" == "cancelled" || "$VALIDATE_STATUS" == "cancelled" || \
+                  "$PREPARE_STATUS" == "cancelled" || "$BUILD_STATUS" == "cancelled" || \
+                  "$VERSION_STATUS" == "cancelled" || \
+                  "$HEALTH_STATUS" == "cancelled" || "$LIGHTS_STATUS" == "cancelled" || \
+                  "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" ]]; then
             echo "overall=cancelled" >> $GITHUB_OUTPUT
             exit 1
           else
@@ -1517,29 +1382,46 @@ jobs:
           cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           # CI Workflow Summary
 
+          ## Path Check
+
+          - **Should Run**: ${{ steps.status.outputs.should_run }}
+          - **Reason**: ${{ steps.status.outputs.should_run == 'true' && 'Docker-related files changed' || 'No Docker-related changes detected' }}
+
           ## Stage Results
 
           | Stage | Status |
           |-------|--------|
+          | 0️⃣ Check Relevant Paths | ${{ steps.status.outputs.path_check }} |
           | 1️⃣ Detect Changes | ${{ steps.status.outputs.detect }} |
+          | 1️⃣.5️⃣ Validate Base Images | ${{ steps.status.outputs.validate }} |
           | 2️⃣ Prepare Base Images | ${{ steps.status.outputs.prepare }} |
           | 3️⃣ Build App Images | ${{ steps.status.outputs.build }} |
           | 4️⃣A Version Checks | ${{ steps.status.outputs.version }} |
-          | 4️⃣B Unit Tests | ${{ steps.status.outputs.test }} |
           | 4️⃣C Healthcheck Tests | ${{ steps.status.outputs.health }} |
           | 4️⃣D Lights Integration Test | ${{ steps.status.outputs.lights }} |
           | 5️⃣A Push Images | ${{ steps.status.outputs.push }} |
           | 5️⃣B Retag Images | ${{ steps.status.outputs.retag }} |
 
+          EOF
+
+          # Only show detection results if pipeline ran
+          if [[ "${{ steps.status.outputs.should_run }}" == "true" ]]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ## Detection Results
 
           - **Base Images Changed**: ${{ needs.detect-changes.outputs.changed_base_images }}
           - **Services Changed**: ${{ needs.detect-changes.outputs.changed_services }}
           - **Services Affected**: ${{ needs.detect-changes.outputs.affected_services }}
           - **Services to Build**: ${{ needs.detect-changes.outputs.to_build }}
+          - **Services to Pull for Testing**: ${{ needs.detect-changes.outputs.to_pull_for_testing }}
           - **Services to Retag**: ${{ needs.detect-changes.outputs.to_retag }}
           - **Testable Services**: ${{ needs.detect-changes.outputs.testable_services }}
           - **Healthcheck Services**: ${{ needs.detect-changes.outputs.healthcheck_services }}
+          - **Unused Base Images**: ${{ needs.detect-changes.outputs.unused_base_images }}
 
+          EOF
+          fi
+
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ## Overall Status: ${{ steps.status.outputs.overall }}
           EOF

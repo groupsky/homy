@@ -165,6 +165,31 @@ const haAutomationSwitch = (
   }
 })
 
+const haButton = (
+  {
+    name,
+    feature,
+    config
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          command_topic: `${featuresPrefix}/button/${feature}/trigger`,
+          payload_press: JSON.stringify({ _src: 'ha' }),
+          unique_id: `homy_button_${feature}`,
+          ...config,
+          ...(config.object_id && { default_entity_id: `button.${config.object_id}` })
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/button/${feature}/config`, retain: true } }
+  }
+})
+
 /**
  * @param {string} name
  * @param {string} feature
@@ -1080,6 +1105,39 @@ const config = {
         device: devices.irrigation,
         object_id: 'automation_irrigation_grass_west_center',
         icon: 'mdi:robot',
+      }
+    }),
+
+    ...haButton({
+      name: 'tvLivingVolumeUp',
+      feature: 'tv_living_volume_up',
+      config: {
+        name: 'TV Volume Up',
+        device: devices.livingroom,
+        object_id: 'tv_living_volume_up',
+        icon: 'mdi:volume-plus',
+      }
+    }),
+
+    ...haButton({
+      name: 'tvLivingVolumeDown',
+      feature: 'tv_living_volume_down',
+      config: {
+        name: 'TV Volume Down',
+        device: devices.livingroom,
+        object_id: 'tv_living_volume_down',
+        icon: 'mdi:volume-minus',
+      }
+    }),
+
+    ...haButton({
+      name: 'tvLivingPower',
+      feature: 'tv_living_power',
+      config: {
+        name: 'TV Power',
+        device: devices.livingroom,
+        object_id: 'tv_living_power',
+        icon: 'mdi:power',
       }
     }),
   },

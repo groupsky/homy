@@ -44,11 +44,12 @@ module.exports = {
       address: 0x02,
       type: 'or-we-514',
     },
-    {
-      name: 'waste_pump',
-      address: 0x03,
-      type: 'ex9em',
-    },
+    // Disabled - device not responding, likely broken
+    // {
+    //   name: 'waste_pump',
+    //   address: 0x03,
+    //   type: 'ex9em',
+    // },
     {
       name: 'oven',
       address: 0x04,
@@ -64,11 +65,12 @@ module.exports = {
       address: 0x06,
       type: 'dds519mr',
     },
-    {
-      name: 'kitchen',
-      address: 0x07,
-      type: 'dds519mr',
-    },
+    // Disabled - device broken
+    // {
+    //   name: 'kitchen',
+    //   address: 0x07,
+    //   type: 'dds519mr',
+    // },
     {
       name: 'laundry',
       address: 0x08,

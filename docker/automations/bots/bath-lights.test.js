@@ -896,24 +896,27 @@ describe('bath-lights', () => {
             // lights off
             publish('lights/status', {state: false})
 
-            // first toggle
+            // first toggle (press + release)
             publish('switch/status', {state: true})
+            publish('switch/status', {state: false})
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
             mockPublish.mockClear()
 
             // simulate lights turning on
             publish('lights/status', {state: true})
 
-            // second toggle (should turn off, no timeout)
+            // second toggle (press + release - should turn off, no timeout)
             publish('switch/status', {state: true})
+            publish('switch/status', {state: false})
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
             mockPublish.mockClear()
 
             // simulate lights turning off
             publish('lights/status', {state: false})
 
-            // third toggle (should turn on and create new timeout)
+            // third toggle (press + release - should turn on and create new timeout)
             publish('switch/status', {state: true})
+            publish('switch/status', {state: false})
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
             mockPublish.mockClear()
 
@@ -1568,7 +1571,8 @@ describe('bath-lights', () => {
             publish('lights/status', {state: true})
             consoleSpy.mockClear()
 
-            // toggle to turn off lights 
+            // toggle to turn off lights (release first, then press again)
+            publish('switch/status', {state: false})
             publish('switch/status', {state: true})
 
             // should log with interpolated name, not literal string
@@ -2009,8 +2013,9 @@ describe('bath-lights', () => {
             jest.advanceTimersByTime(500)
             expect(mockPublish).not.toHaveBeenCalled()
             
-            // Test that the system still works after null state
+            // Test that the system still works after null state (release then press again)
             publish('lights/status', {state: false})
+            publish('switch/status', {state: false})  // release
             publish('switch/status', {state: true})
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
         })
@@ -2088,20 +2093,23 @@ describe('bath-lights', () => {
 
             bathLights.start({mqtt})
 
-            // First toggle - creates timer
+            // First toggle (press + release) - creates timer
             publish('lights/status', {state: false})
             publish('switch/status', {state: true})
+            publish('switch/status', {state: false})  // release
             publish('lights/status', {state: true})
             mockPublish.mockClear()
 
-            // Second toggle while timer active - should turn off lights but not create new timer
+            // Second toggle (press + release) while timer active - should turn off lights but not create new timer
             publish('switch/status', {state: true})
+            publish('switch/status', {state: false})  // release
             expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
             mockPublish.mockClear()
 
-            // Turn lights back on
+            // Turn lights back on (press + release)
             publish('lights/status', {state: false})
             publish('switch/status', {state: true})
+            publish('switch/status', {state: false})  // release
             publish('lights/status', {state: true})
             mockPublish.mockClear()
 
@@ -2237,6 +2245,161 @@ describe('bath-lights', () => {
             jest.advanceTimersByTime(1)
             
             // Should not fire unlock timer since door opening cancelled it
+            expect(mockPublish).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('message ordering and duplicate handling', () => {
+        test('should not turn off lights from door close timeout when toggle timer is set after door close', () => {
+            // Bug scenario: door closes first (closedTimer set), then user presses toggle
+            // (toggledTimer set). The closedTimer fires and should respect the active toggledTimer.
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+                timeouts: {closed: 2000, toggled: 10000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Door closes first - sets closedTimer (no toggledTimer at this point)
+            publish('door/status', {state: false})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true, r: 'doff'}))
+            mockPublish.mockClear()
+
+            // User presses toggle AFTER door close but BEFORE light status arrives
+            // lightState is still null (falsy), so toggle turns on lights and sets toggledTimer
+            publish('switch/status', {state: true})
+            publish('switch/status', {state: false})  // release
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true, r: 'tgl-loff'}))
+            mockPublish.mockClear()
+
+            // Light status arrives (light is on) - both closedTimer and toggledTimer are now running
+            publish('lights/status', {state: true})
+
+            // Wait past close timeout (2s) but before toggle timeout (10s)
+            jest.advanceTimersByTime(2000)
+
+            // Lights should NOT turn off - toggledTimer is still active
+            expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+
+            // Wait for toggle timeout (8s more = 10s total)
+            jest.advanceTimersByTime(8000)
+
+            // Lights should turn off from toggle timeout only
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false, r: 'tgl-tout'}))
+        })
+
+        test('should not turn off lights from door open timeout when toggle timer is set after door open', () => {
+            // Bug scenario: door opens first (openedTimer set), then user presses toggle
+            // before light status arrives. openedTimer fires and should respect active toggledTimer.
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+                timeouts: {opened: 2000, toggled: 10000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Door closes then opens - sets openedTimer (no toggledTimer at this point)
+            publish('door/status', {state: false})
+            publish('door/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true, r: 'don'}))
+            mockPublish.mockClear()
+
+            // User presses toggle AFTER door open but BEFORE light status arrives
+            // lightState is still null (falsy), so toggle turns on lights and sets toggledTimer
+            publish('switch/status', {state: true})
+            publish('switch/status', {state: false})  // release
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true, r: 'tgl-loff'}))
+            mockPublish.mockClear()
+
+            // Light status arrives - both openedTimer and toggledTimer are now running
+            publish('lights/status', {state: true})
+
+            // Wait past open timeout (2s) but before toggle timeout (10s)
+            jest.advanceTimersByTime(2000)
+
+            // Lights should NOT turn off - toggledTimer is still active
+            expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+
+            // Wait for toggle timeout (8s more = 10s total)
+            jest.advanceTimersByTime(8000)
+
+            // Lights should turn off from toggle timeout only
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false, r: 'tgl-tout'}))
+        })
+
+        test('should not turn off lights from unlock timeout when toggle timer is set after unlock', () => {
+            // Bug scenario: door unlocks first (unlockedTimer set), then user presses toggle
+            // (toggledTimer set). The unlockedTimer fires and should respect active toggledTimer.
+            const bathLights = BathLights('test-bath-lights', {
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+                timeouts: {unlocked: 2000, toggled: 10000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Light starts off, then unlock event sets unlockedTimer
+            publish('lights/status', {state: false})
+            publish('lock/status', {state: false})
+            expect(mockPublish).not.toHaveBeenCalled()  // no immediate action on unlock
+
+            // User presses toggle AFTER unlock - lightState is false, so toggle turns on lights
+            publish('switch/status', {state: true})
+            publish('switch/status', {state: false})  // release
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true, r: 'tgl-loff'}))
+            mockPublish.mockClear()
+
+            // Light status arrives - both unlockedTimer and toggledTimer are now running
+            publish('lights/status', {state: true})
+
+            // Wait past unlock timeout (2s) but before toggle timeout (10s)
+            jest.advanceTimersByTime(2000)
+
+            // Lights should NOT turn off - toggledTimer is still active
+            expect(mockPublish).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+
+            // Wait for toggle timeout (8s more = 10s total)
+            jest.advanceTimersByTime(8000)
+
+            // Lights should turn off from toggle timeout only
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false, r: 'tgl-tout'}))
+        })
+
+        test('should not double-toggle lights on duplicate button message (MQTT QoS 1)', () => {
+            // Bug scenario: MQTT QoS 1 delivers the same {state: true} message twice.
+            // The second delivery should be ignored, not cause an unwanted light toggle.
+            const bathLights = BathLights('test-bath-lights', {
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                toggle: {statusTopic: 'switch/status', type: 'button'},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Lights are off initially
+            publish('lights/status', {state: false})
+
+            // Button pressed - turns on lights
+            publish('switch/status', {state: true})
+            expect(mockPublish).toHaveBeenCalledTimes(1)
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: true}))
+
+            // Simulate lights turning on
+            publish('lights/status', {state: true})
+            mockPublish.mockClear()
+
+            // DUPLICATE: same {state: true} message received again (MQTT QoS 1 re-delivery)
+            publish('switch/status', {state: true})
+
+            // Should NOT turn off lights - duplicate message should be ignored
             expect(mockPublish).not.toHaveBeenCalled()
         })
     })

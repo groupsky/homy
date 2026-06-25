@@ -15,11 +15,11 @@ import * as path from 'path';
 import { discoverBaseImages, buildDirectoryToGhcrMapping } from './lib/base-images.js';
 import { discoverServicesFromCompose, filterGhcrServices } from './lib/services.js';
 import { buildReverseDependencyMap, detectAffectedServices } from './lib/dependency-graph.js';
-import { detectChangedBaseImages, detectChangedServices } from './lib/change-detection.js';
+import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
-import type { DetectionResult, GitHubActionsOutputs, Service } from './lib/types.js';
+import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
 
 interface CliOptions {
   baseRef: string;
@@ -134,6 +134,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     base_images: JSON.stringify(result.base_images),
     changed_base_images: JSON.stringify(result.changed_base_images),
     base_images_needed: JSON.stringify(result.base_images_needed),
+    unused_base_images: JSON.stringify(result.unused_base_images),
 
     // Service outputs
     services: JSON.stringify([...result.changed_services, ...result.affected_services].sort()),
@@ -143,6 +144,8 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     // Build strategy outputs
     to_build: JSON.stringify(result.to_build),
     to_retag: JSON.stringify(result.to_retag),
+    to_pull_for_testing: JSON.stringify(result.to_pull_for_testing),
+    build_groups: JSON.stringify(result.build_groups),
 
     // Test and verification outputs
     testable_services: JSON.stringify(result.testable_services),
@@ -199,6 +202,28 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   const baseImagesNeeded = extractBaseImagesNeeded(servicesToBuild, services, baseImageMapping);
   console.error(`Base images needed: ${baseImagesNeeded.length}`);
 
+  console.error('Step 8.5: Detecting unused base images...');
+  // Find base images that are not referenced by any service
+  const allBaseDirs = baseImages.map((img) => img.directory);
+  const referencedBaseDirs = new Set(reverseDeps.keys());
+  const unusedBaseImages = allBaseDirs.filter((dir) => !referencedBaseDirs.has(dir)).sort();
+  console.error(`Unused base images: ${unusedBaseImages.length}`);
+
+  if (unusedBaseImages.length > 0) {
+    console.error('');
+    console.error('⚠️  WARNING: Unused base images detected!');
+    console.error('');
+    console.error('The following base image directories are not referenced by any service:');
+    for (const dir of unusedBaseImages) {
+      console.error(`  - ${dir}`);
+    }
+    console.error('');
+    console.error('These base images should be removed from the base-images/ directory.');
+    console.error('If a service no longer uses a base image, remove the base image directory.');
+    console.error('');
+    console.error('Note: This check will be enforced in a separate validation job.');
+  }
+
   // Step 9: Fork PR validation (if applicable)
   if (options.isFork) {
     console.error('Step 9: Validating fork PR base images...');
@@ -215,6 +240,66 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   const toBuild = checkResult.toBuild;
   const toRetag = checkResult.toRetag;
   console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
+
+  // Step 10.5: Detect test-only changes
+  console.error('Step 10.5: Detecting test-only changes...');
+  const toPullForTesting: string[] = [];
+
+  for (const serviceName of changedServices) {
+    // Skip if already marked for building
+    if (toBuild.includes(serviceName)) {
+      continue;
+    }
+
+    // Find service object
+    const service = services.find((s) => s.service_name === serviceName);
+    if (!service) {
+      continue;
+    }
+
+    // Check if this is a test-only change
+    if (isTestOnlyChange(options.baseRef, service)) {
+      // Verify that image exists in toRetag (already checked by Step 10)
+      // If image exists at base SHA, we can pull it for testing
+      if (toRetag.includes(serviceName)) {
+        toPullForTesting.push(serviceName);
+      } else {
+        // Image doesn't exist, must build despite test-only change
+        // This can happen if base image changed (service is in affectedServices)
+        toBuild.push(serviceName);
+      }
+    }
+  }
+
+  console.error(`Test-only changes: ${toPullForTesting.length}`);
+
+  console.error('Step 10.6: Grouping services by build context...');
+  // Group services that share the same build context
+  const buildGroupsMap = new Map<string, string[]>();
+
+  for (const serviceName of toBuild) {
+    const service = services.find((s) => s.service_name === serviceName);
+    if (!service) {
+      continue;
+    }
+
+    const buildPath = service.build_context;
+    if (!buildGroupsMap.has(buildPath)) {
+      buildGroupsMap.set(buildPath, []);
+    }
+    buildGroupsMap.get(buildPath)!.push(serviceName);
+  }
+
+  // Convert to BuildGroup array
+  const buildGroups: BuildGroup[] = Array.from(buildGroupsMap.entries())
+    .map(([buildPath, serviceList]) => ({
+      build_path: buildPath,
+      services: serviceList.sort(),
+      primary_service: serviceList.sort()[0],
+    }))
+    .sort((a, b) => a.build_path.localeCompare(b.build_path));
+
+  console.error(`Build groups: ${buildGroups.length} (from ${toBuild.length} services)`);
 
   console.error('Step 11: Detecting testable services...');
   // Tests should run for all changed services, not just ones being built
@@ -263,13 +348,16 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     base_images: baseImages.map((img) => img.directory).sort(),
     changed_base_images: changedBaseImages.sort(),
     base_images_needed: baseImagesNeeded,
+    unused_base_images: unusedBaseImages,
     changed_services: changedServices.sort(),
     affected_services: affectedServices,
     to_build: toBuild,
     to_retag: toRetag,
+    to_pull_for_testing: toPullForTesting.sort(),
     testable_services: testableServices,
     healthcheck_services: healthcheckServices,
     version_check_services: versionCheckServices,
+    build_groups: buildGroups,
   };
 }
 
@@ -313,6 +401,7 @@ program
       console.error('');
       console.error('=== Detection Summary ===');
       console.error(`Base images changed: ${result.changed_base_images.length}`);
+      console.error(`Base images unused: ${result.unused_base_images.length}`);
       console.error(`Services changed: ${result.changed_services.length}`);
       console.error(`Services affected: ${result.affected_services.length}`);
       console.error(`Total to build: ${result.to_build.length}`);
