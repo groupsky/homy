@@ -20,9 +20,11 @@ const writeApi = new InfluxDB({url: influxUrl, token: influxToken})
         defaultTags: tags
     })
 const converters = {
+    'aspar-mod-16ro': require('./converters/aspar-mod-16ro'),
     dds024mr: require('./converters/dds024mr'),
     dds519mr: require('./converters/dds519mr'),
     ex9em: require('./converters/ex9em'),
+    mbsl32di: require('./converters/mbsl32di'),
     'or-we-514': require('./converters/or-we-514'),
     sdm630: require('./converters/sdm630'),
 }
@@ -58,14 +60,19 @@ client.on('offline', function () {
 })
 
 client.on('message', function (topic, message) {
-    const data = JSON.parse(message)
+    try {
+        const data = JSON.parse(message)
 
-    if (!(data._type in converters)) {
-        console.warn('Unhandled type', data._type, data)
-        return
+        if (!(data._type in converters)) {
+            console.warn('Unhandled type', data._type, data)
+            return
+        }
+
+        const points = converters[data._type](data)
+
+        writeApi.writePoints(points)
+    } catch (err) {
+        // Log and skip a malformed message rather than crashing the bridge
+        console.error('Failed to process message on', topic, err)
     }
-
-    const points = converters[data._type](data)
-
-    writeApi.writePoints(points)
 })
