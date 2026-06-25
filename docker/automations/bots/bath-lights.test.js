@@ -2310,6 +2310,40 @@ describe('bath-lights', () => {
             expect(mockPublish).not.toHaveBeenCalled()
         })
 
+        test('should not re-arm the closed timeout when an unchanged closed state is re-published', () => {
+            const bathLights = BathLights('test-bath-lights', {
+                door: {statusTopic: 'door/status'},
+                lock: {statusTopic: 'lock/status'},
+                light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+                timeouts: {closed: 120000},
+            })
+            const mockPublish = jest.fn()
+            const mqtt = {subscribe, publish: mockPublish}
+            bathLights.start({mqtt})
+
+            // Genuine close: turns light on ('doff') and arms the closed timer.
+            publish('door/status', {state: false})
+            publish('lights/status', {state: true})
+
+            // Closed timer fires once -> light off, timer cleared.
+            jest.advanceTimersByTime(120000)
+            expect(mockPublish).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false, r: 'doff-tout'}))
+            publish('lights/status', {state: false})
+
+            // Light is turned back on (door still closed, no timer pending).
+            publish('lights/status', {state: true})
+            mockPublish.mockClear()
+
+            // Modbus republish storm re-emits this door's unchanged "closed"
+            // state. It must not re-arm the closed timer (before the fix it did,
+            // turning the intentionally-on light off again after the timeout).
+            publish('door/status', {state: false})
+            expect(mockPublish).not.toHaveBeenCalled()
+
+            jest.advanceTimersByTime(120000)
+            expect(mockPublish).not.toHaveBeenCalled()
+        })
+
         test('should still react to a genuine transition that follows a redundant re-publish', () => {
             const bathLights = BathLights('test-bath-lights', {
                 door: {statusTopic: 'door/status'},

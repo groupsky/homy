@@ -331,16 +331,20 @@ module.exports = (name, {
                 const doorStateChanged = doorState !== payload.state
                 doorState = payload.state
                 
+                // Only react to genuine transitions. A re-published "still
+                // open"/"still closed" status (all dry-switch features on a
+                // Modbus DI module re-publish together whenever any single input
+                // on that module changes) must not be treated as the user
+                // operating this door, otherwise it spuriously fires 'don-unl'
+                // (while an unlock timer is pending) or re-arms the closed
+                // timeout and turns an intentionally-on light off.
+                if (!doorStateChanged) {
+                    return
+                }
+
                 if (payload.state) {
-                    // Door opened. Only react to a genuine closed->open
-                    // transition. A re-published "still open" status (Modbus DI
-                    // module republishing all inputs when an unrelated door
-                    // changes) must not be treated as the user opening the door,
-                    // otherwise it spuriously fires 'don-unl' while an unlock
-                    // timer is pending and turns the light off.
-                    if (!doorStateChanged) {
-                        // no-op: redundant re-publish of the current open state
-                    } else if (unlockedTimer) {
+                    // Door opened
+                    if (unlockedTimer) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights`)
                         }
@@ -373,12 +377,10 @@ module.exports = (name, {
                     }
                 } else {
                     // Door closed
-                    if (doorStateChanged) {
-                        if (verbose) {
-                            console.log(`[${name}] turning on lights`)
-                        }
-                        smartPublish(light.commandTopic, {state: true, r: 'doff'})
+                    if (verbose) {
+                        console.log(`[${name}] turning on lights`)
                     }
+                    smartPublish(light.commandTopic, {state: true, r: 'doff'})
                     if (timeouts?.closed && !closedTimer && !lockState && !toggledTimer) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights in ${timeouts.closed / 60000} minutes from closed timeout`)
