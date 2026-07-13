@@ -47,27 +47,16 @@ groups:
             datasourceUid: P3C6603E967DC8568
             model:
               alias: "min V"
-              groupBy:
-                - params: ["$__interval"]
-                  type: time
-                - params: ["null"]
-                  type: fill
+              # Exclude kitchen (faulty 0V device) AND dead phases (v=0 during an
+              # outage) so a phase dropping to 0V no longer trips this generic
+              # "voltage out of range" alert — that is now covered by the dedicated
+              # phase-power-loss / total-power-outage alerts. Genuine brown-outs
+              # (a phase sagging to e.g. 150V, still > 0) are still caught.
+              query: 'SELECT min("v") FROM "current_power" WHERE "device.name" != ''kitchen'' AND "v" > 0 AND time >= now() - 300s'
+              rawQuery: true
+              resultFormat: time_series
               intervalMs: 1000
               maxDataPoints: 43200
-              measurement: current_power
-              orderByTime: ASC
-              policy: default
-              resultFormat: time_series
-              select:
-                - - params: ["v"]
-                    type: field
-                  - params: []
-                    type: min
-              tags:
-                # Exclude kitchen meter - faulty device that occasionally returns 0V readings
-                - key: "device.name"
-                  operator: "!="
-                  value: kitchen
           - refId: A
             queryType: ''
             relativeTimeRange:
