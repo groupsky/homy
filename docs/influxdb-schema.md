@@ -73,9 +73,27 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 
 #### `main` Measurement
 **Source**: modbus-serial-main → Main electrical panel (SDM630)
-**Tag Structure**: `bus: "main"`, `device: "main"`
+**Note**: per-phase instantaneous voltage/current/power for the mains is in the `current_power` measurement (`bus: "primary"`, `device.name: "main"`), not here — see below.
 **Fields**: 3-phase power system metrics - voltage, current, power, frequency, power factor
 **Use Cases**: Whole-house energy consumption, electrical system monitoring
+
+#### `current_power` Measurement (from mqtt-influx bridges)
+**Source**: `mqtt-influx-primary` / `-secondary` / `-tetriary` bridges convert
+`/modbus/<bus>/<device>/reading` MQTT messages into instantaneous readings.
+**Tag Structure**: `bus` (`primary` | `secondary` | `tetriary`),
+`device.name` (e.g. `main`, `boiler`, `heat_pump`, …), `device.type`,
+`device.addr`, and `phase` (`A` | `B` | `C`, on 3-phase meters).
+**Fields** (float): `v` (phase voltage), `c` (phase current), `p` (phase power).
+
+**Mains identification**: the whole-house grid meter is `bus = primary`,
+`device.name = main` (SDM630), publishing per-phase `v`/`c`/`p` tagged
+`phase = A/B/C` at ~1 Hz.
+
+**Consumers**: the per-phase power-loss and total-power-outage alerts
+(`config/grafana/provisioning/alerting/phase-power-loss-alert.yaml`,
+`total-power-outage-alert.yaml`) and the AC voltage-range alert (`ac-alert.yaml`)
+query this measurement's `v` field. See
+`docs/superpowers/specs/2026-07-12-per-phase-power-outage-alerting-design.md`.
 
 #### `raw` Measurement (from modbus-serial-secondary)
 **Source**: modbus-serial-secondary → Individual appliance monitoring
