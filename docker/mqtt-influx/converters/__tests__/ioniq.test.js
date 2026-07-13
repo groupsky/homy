@@ -61,9 +61,10 @@ describe('ioniq converter', () => {
     it('skips null/undefined leaves', () => {
         const frame = { _type: 'ioniq', group: 'x', state: 'parked', ts: 1720000000004, a: null, b: undefined, c: 1 }
         const lp = ioniq(frame)[0].toLineProtocol()
-        expect(lp).toContain('c=1')
-        expect(lp).not.toContain('a=')
-        expect(lp).not.toContain('b=')
+        // line protocol is `measurement,tags<space>fields<space>timestamp`; the
+        // fields segment must contain only `c` — a and b were dropped entirely.
+        const fields = lp.split(' ')[1]
+        expect(fields).toBe('c=1')
     })
 
     it('does not throw on a payload with no numeric/decodable fields', () => {
