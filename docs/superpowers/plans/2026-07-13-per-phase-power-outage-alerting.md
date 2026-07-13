@@ -42,6 +42,14 @@ Each task validates its YAML and confirms Grafana provisions it without error; a
 - Consumes: InfluxDB measurement `current_power`, field `v`, tags `device.name=main`, `phase`. Datasource UID `P3C6603E967DC8568`.
 - Produces: Grafana alert rule uid `webhook-phaseloss01`, one firing instance per dead phase carrying a `phase` label.
 
+> **Post-implementation correction (verified against live Grafana 9.5):** the
+> `classic_conditions` condition shown below does NOT preserve the `phase` label —
+> it collapses the per-phase series into one unlabeled instance, so
+> `{{ $labels.phase }}` renders blank. The committed rule instead uses a
+> `reduce` (refId B, `last`) → `threshold` (refId C, `< 50`) expression chain,
+> which fires one labeled instance per dead phase. See commit `e2dc575` and the
+> in-file comment.
+
 - [ ] **Step 1: Create the alert file**
 
 Create `config/grafana/provisioning/alerting/phase-power-loss-alert.yaml` with exactly:

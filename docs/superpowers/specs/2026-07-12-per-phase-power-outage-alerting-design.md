@@ -103,9 +103,12 @@ New file: `config/grafana/provisioning/alerting/phase-power-loss-alert.yaml`.
   measurement `current_power`, `SELECT last("v")`, `GROUP BY time($__interval),
   "phase" fill(none)`, tag filter `"device.name" = main`, `alias: "$tag_phase"`,
   `relativeTimeRange.from: 180` (3 min lookback). One series per phase A/B/C.
-- **Condition (refId `B`, `classic_conditions`):** `last(A) < 50` → firing. Because
-  the data is grouped by the `phase` tag, Grafana produces **one alert instance per
-  phase**, each carrying a `phase` label.
+- **Condition (reduce `B` → threshold `C`):** `reduce(last, A)` then threshold
+  `B < 50` → firing. This expression chain (NOT `classic_conditions`) is required
+  so Grafana produces **one alert instance per phase**, each carrying a `phase`
+  label. Verified against live Grafana 9.5: `classic_conditions` collapses the
+  per-phase series into a single unlabeled instance, making `{{ $labels.phase }}`
+  render blank; reduce+threshold preserves the per-series `phase` label.
 - **`for`:** `2m`. **`noDataState`:** `OK` (total blackout is Rule 2's job; Rule 1
   must stay quiet when the meter is silent). **`execErrState`:** `OK`.
 - **Message:** summary `⚡ Phase power lost`, description
