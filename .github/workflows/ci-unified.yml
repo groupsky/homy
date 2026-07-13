@@ -77,12 +77,17 @@ jobs:
 
           echo "Checking for changes between $BASE_SHA and $HEAD_SHA"
 
-          # Check if any relevant paths changed
+          # Check if any relevant paths changed.
+          # NOTE: entries must NOT have a trailing slash. The anchoring below
+          # appends `(/|$)`, so a trailing slash (e.g. "docker/") would produce
+          # `^docker/(/|$)`, which only matches the literal "docker/" or
+          # "docker//" and never a nested file like "docker/mqtt-influx/x.js" —
+          # silently skipping every Docker build. Directory names go here bare.
           RELEVANT_PATHS=(
-            "base-images/"
-            "docker/"
+            "base-images"
+            "docker"
             ".github/workflows/ci-unified.yml"
-            ".github/scripts/detect-changes/"
+            ".github/scripts/detect-changes"
           )
 
           CHANGED=false
