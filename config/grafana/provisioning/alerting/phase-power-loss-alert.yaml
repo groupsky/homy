@@ -8,7 +8,14 @@ groups:
     rules:
       - uid: webhook-phaseloss01
         title: Phase Power Loss (Webhook)
-        condition: B
+        # Uses the reduce (B) + threshold (C) expression chain rather than
+        # classic_conditions ON PURPOSE: classic_conditions collapses the
+        # per-phase series into one unlabeled instance, which drops the `phase`
+        # tag and makes `{{ $labels.phase }}` render blank. reduce+threshold
+        # preserves per-series labels, so the alert fires one instance per dead
+        # phase, each carrying phase=A/B/C. Verified against live Grafana 9.5.
+        # Do NOT "simplify" this back to classic_conditions.
+        condition: C
         data:
           - refId: A
             queryType: ''
@@ -17,7 +24,6 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              alias: "$tag_phase"
               groupBy:
                 - params: ["$__interval"]
                   type: time
@@ -47,22 +53,32 @@ groups:
               to: 0
             datasourceUid: __expr__
             model:
+              type: reduce
+              expression: A
+              reducer: last
               datasource:
                 type: __expr__
                 uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
               conditions:
                 - evaluator:
                     params: [50]
                     type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [A]
-                  reducer:
-                    type: last
+              datasource:
+                type: __expr__
+                uid: __expr__
               intervalMs: 1000
               maxDataPoints: 43200
-              type: classic_conditions
         noDataState: OK
         execErrState: OK
         for: 2m
