@@ -4,6 +4,7 @@
 const mqtt = require('mqtt')
 
 const { MongoClient } = require('mongodb')
+const { buildRecord } = require('./record')
 const mqttUrl = process.env.BROKER
 const mongoUrl = process.env.MONGODB_URL
 const collection = process.env.COLLECTION
@@ -84,14 +85,7 @@ client.on('connect', function () {
             const col = db.collection(collection)
 
             client.on('message', async function (topic, message) {
-                const payload = JSON.parse(message)
-                if (!payload._tz) {
-                    payload._tz = Date.now()
-                }
-                const record = {
-                    topic,
-                    payload
-                }
+                const record = buildRecord(topic, message)
                 try {
                     await col.insertOne(record)
                 } catch (err) {

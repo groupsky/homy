@@ -62,6 +62,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
 - **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
+- **mqtt-influx-ioniq**: `ioniq/parsed/#` → InfluxDB (`ioniq` measurement; decoded Hyundai Ioniq OBD telemetry, tags `group`/`state`)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Specialized Monitoring
@@ -181,6 +182,23 @@ query this measurement's `v` field. See
 - `received_packets` / `incorrect_packets` / `sent_packets` (int): RS485 bus-health counters — a rising `incorrect_packets` indicates serial-bus problems that can corrupt readings for every device on the bus
 - `read_ms` (int): Modbus read duration
 **Use Cases**: Relay state history and RS485 bus-health diagnostics
+
+### Vehicle Telemetry
+
+#### `ioniq` Measurement
+**Source**: `mqtt-influx-ioniq` → `ioniq/parsed/#` (converter `converters/ioniq.js`, `_type: "ioniq"`)
+**Tag Structure**:
+- `group`: decoded frame group (e.g. `bms/2101`, `tpms`), from `payload.group`
+- `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by
+**Timestamp**: `payload.ts` (epoch ms), written at `ms` precision
+**Fields**: every payload key except `_type`, `group`, `state`, `ts`:
+- numbers → float (uniformly, even integers, to avoid InfluxDB int/float type conflicts)
+- booleans → boolean; strings → string
+- nested objects → recursively flattened into dotted field keys (e.g. `relays.main`)
+- arrays → JSON-stringified into a single string field
+- Representative fields: `soc`, `hv_v`, `hv_a`, `12v`, `speed`, `relays.main`, `dtc`
+**Retention**: kept indefinitely (compact numeric data). The bulky raw archive lives separately in MongoDB (`ioniq` collection, 90-day TTL on `_ts`) — see `docker/mqtt-mongo/CLAUDE.md`.
+**Use Cases**: Hyundai Ioniq OBD time-series (SoC, HV pack, speed, temps, TPMS) for Grafana and InfluxQL trip/charging analysis
 
 ### Automation System Monitoring
 
