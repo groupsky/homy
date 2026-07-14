@@ -190,6 +190,10 @@ query this measurement's `v` field. See
 **Tag Structure**:
 - `group`: decoded frame group (e.g. `bms/2101`, `tpms`), from `payload.group`
 - `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by
+- **`derived/dtc_count`** (tag `group`) — produced by the `ioniq-dtc` automations bot, not the
+  logger. Field `value` = count of active DTCs (union of `dtc/stored` + `dtc/pending`); field
+  `codes` = JSON-stringified array of the code strings. Grafana's `ioniq-dtc-present` rule alerts
+  on `value > 0`.
 **Timestamp**: `payload.ts` (epoch ms), written at `ms` precision
 **Fields**: every payload key except `_type`, `group`, `state`, `ts`:
 - numbers → float (uniformly, even integers, to avoid InfluxDB int/float type conflicts)
