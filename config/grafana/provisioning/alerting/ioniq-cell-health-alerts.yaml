@@ -1,0 +1,155 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Ioniq Cell Health Alerts
+    folder: Ioniq EV
+    interval: 1m
+    rules:
+      - uid: ioniq-cell-spread-warning
+        title: "🚗 Ioniq Cell Spread High (warning)"
+        condition: A
+        data:
+          - refId: spread
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/cell_spread_mv' AND time >= now() - 30m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [50] }
+                  operator: { type: and }
+                  query: { params: [spread] }
+                  reducer: { type: last }
+                  type: query
+              expression: spread
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels: { severity: warning, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Cell voltage spread {{ $values.spread.Value }} mV at rest (> 50 mV)"
+          description: "Rest cell-voltage spread is elevated (baseline ~20 mV). A widening spread points to a weakening cell; check the outlier cell index on the derived/cell_spread_mv series."
+
+      - uid: ioniq-cell-spread-critical
+        title: "🚗 Ioniq Cell Spread Critical"
+        condition: A
+        data:
+          - refId: spread
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/cell_spread_mv' AND time >= now() - 30m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [100] }
+                  operator: { type: and }
+                  query: { params: [spread] }
+                  reducer: { type: last }
+                  type: query
+              expression: spread
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels: { severity: critical, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Cell voltage spread {{ $values.spread.Value }} mV at rest (> 100 mV)"
+          description: "Rest cell-voltage spread is critically high. A cell is likely failing — inspect the outlier cell and have the pack serviced."
+
+      - uid: ioniq-module-temp-spread-warning
+        title: "🚗 Ioniq Module Temp Spread High (warning)"
+        condition: A
+        data:
+          - refId: spread
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/module_temp_spread_c' AND time >= now() - 30m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [spread] }
+                  reducer: { type: last }
+                  type: query
+              expression: spread
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels: { severity: warning, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 8 °C)"
+          description: "Module temperatures are diverging (baseline ~2 °C). Uneven cooling or a hot module — watch for a rising trend."
+
+      - uid: ioniq-module-temp-spread-critical
+        title: "🚗 Ioniq Module Temp Spread Critical"
+        condition: A
+        data:
+          - refId: spread
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/module_temp_spread_c' AND time >= now() - 30m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [15] }
+                  operator: { type: and }
+                  query: { params: [spread] }
+                  reducer: { type: last }
+                  type: query
+              expression: spread
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels: { severity: critical, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 15 °C)"
+          description: "Module temperature spread is critically high. Risk of a thermal fault in one module — stop charging/driving and have the battery inspected."
