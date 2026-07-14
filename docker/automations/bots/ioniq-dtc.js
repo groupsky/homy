@@ -12,6 +12,12 @@ module.exports = function createIoniqDtc (name, config) {
   const storedTopic = config.storedTopic || 'ioniq/parsed/dtc/stored'
   const pendingTopic = config.pendingTopic || 'ioniq/parsed/dtc/pending'
   const outputTopic = config.outputTopic || 'ioniq/parsed/derived/dtc_count'
+  const telegramWebhookUrl = config.telegramWebhookUrl || 'http://telegram-bridge:3000/webhook'
+  const flagOnEdge = config.flagOnEdge !== false
+  const httpPost = config.httpPost || defaultHttpPost
+  const log = (...args) => { if (config.verbose) console.log(`[${name}]`, ...args) }
+
+  const keyOf = (codes) => codes.slice().sort().join(',')
 
   return {
     persistedCache: {
@@ -20,7 +26,7 @@ module.exports = function createIoniqDtc (name, config) {
     },
 
     start: async ({ mqtt, persistedCache }) => {
-      const handle = (which) => (payload) => {
+      const handle = (which) => async (payload) => {
         const codes = Array.isArray(payload && payload.codes) ? payload.codes : []
         persistedCache[which] = codes
 
@@ -33,6 +39,24 @@ module.exports = function createIoniqDtc (name, config) {
           value: union.length,
           codes: union
         })
+
+        if (union.length === 0) {
+          persistedCache.flaggedKey = ''
+          return
+        }
+
+        const key = keyOf(union)
+        if (flagOnEdge && key !== persistedCache.flaggedKey) {
+          persistedCache.flaggedKey = key
+          const parts = union.map((code) =>
+            `${code} (${persistedCache.stored.includes(code) ? 'stored' : 'pending'})`)
+          const message = `🚗 <b>DTC present</b>: ${parts.join(', ')}`
+          try {
+            await httpPost(telegramWebhookUrl, { message })
+          } catch (err) {
+            log('direct-flag POST failed:', err && err.message)
+          }
+        }
       }
 
       await mqtt.subscribe(storedTopic, handle('stored'))

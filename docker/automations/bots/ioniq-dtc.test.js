@@ -78,3 +78,66 @@ describe('ioniq-dtc bot — derived signal', () => {
     expect(mqtt.publish).toHaveBeenLastCalledWith(OUTPUT, expect.objectContaining({ value: 0, codes: [] }))
   })
 })
+
+describe('ioniq-dtc bot — direct flag', () => {
+  let mqtt, persistedCache, bot
+  beforeEach(() => {
+    mqtt = makeMqtt()
+    persistedCache = makeCache()
+    config.httpPost = jest.fn().mockResolvedValue({ ok: true })
+    config.telegramWebhookUrl = 'http://telegram-bridge:3000/webhook'
+    bot = createIoniqDtc('ioniq-dtc', config)
+  })
+
+  it('flags once when a DTC appears, naming the code and source', async () => {
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['P0AA6'] })
+    expect(config.httpPost).toHaveBeenCalledTimes(1)
+    expect(config.httpPost).toHaveBeenCalledWith(
+      'http://telegram-bridge:3000/webhook',
+      { message: '🚗 <b>DTC present</b>: P0AA6 (stored)' }
+    )
+  })
+
+  it('does not re-flag the same code set on repeated samples', async () => {
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['P0AA6'] })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 2, codes: ['P0AA6'] })
+    expect(config.httpPost).toHaveBeenCalledTimes(1)
+  })
+
+  it('flags again after the codes clear and a new DTC appears', async () => {
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['P0AA6'] })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 2, codes: [] })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 3, codes: ['P0AA6'] })
+    expect(config.httpPost).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not re-flag a code set already flagged before restart', async () => {
+    persistedCache.stored = ['P0AA6']
+    persistedCache.flaggedKey = 'P0AA6'
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 5, codes: ['P0AA6'] })
+    expect(config.httpPost).not.toHaveBeenCalled()
+  })
+
+  it('still publishes the derived signal when the HTTP flag fails', async () => {
+    config.httpPost = jest.fn().mockRejectedValue(new Error('bridge down'))
+    bot = createIoniqDtc('ioniq-dtc', config)
+    await bot.start({ mqtt, persistedCache })
+    await expect(
+      mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['P0AA6'] })
+    ).resolves.not.toThrow()
+    expect(mqtt.publish).toHaveBeenCalledWith(OUTPUT, expect.objectContaining({ value: 1 }))
+  })
+
+  it('never flags when flagOnEdge is false', async () => {
+    config.flagOnEdge = false
+    bot = createIoniqDtc('ioniq-dtc', config)
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['P0AA6'] })
+    expect(config.httpPost).not.toHaveBeenCalled()
+    delete config.flagOnEdge
+  })
+})
