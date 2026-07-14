@@ -1,0 +1,636 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Ioniq TPMS Alerts
+    folder: Ioniq EV
+    interval: 1m
+    rules:
+      - uid: ioniq-tpms-fl-psi-low
+        title: "🚗 Ioniq Tire Low — FL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fl_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [30] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FL (front-left) tire cold-pressure below 30 psi"
+          description: "Cold-normalized front-left tire pressure is under 30 psi (placard 36). Inflate before the next drive; check for a slow leak."
+
+      - uid: ioniq-tpms-fl-psi-crit
+        title: "🚗 Ioniq Tire Critical — FL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fl_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [26] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FL (front-left) tire cold-pressure below 26 psi"
+          description: "Cold-normalized front-left tire pressure is critically low (under 26 psi). Do not drive far — inflate or replace now to avoid tire damage."
+
+      - uid: ioniq-tpms-fl-overinflated
+        title: "🚗 Ioniq Tire Over-inflated — FL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fl_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [42] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: info, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FL (front-left) tire cold-pressure above 42 psi"
+          description: "Cold-normalized front-left tire pressure is high (over 42 psi). Consider bleeding down toward the 36 psi placard for ride and wear."
+
+      - uid: ioniq-tpms-fl-temp-excess
+        title: "🚗 Ioniq Tire Hot — FL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fl_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FL (front-left) tire running hot vs the other wheels"
+          description: "front-left tire is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
+
+      - uid: ioniq-tpms-fr-psi-low
+        title: "🚗 Ioniq Tire Low — FR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fr_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [30] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FR (front-right) tire cold-pressure below 30 psi"
+          description: "Cold-normalized front-right tire pressure is under 30 psi (placard 36). Inflate before the next drive; check for a slow leak."
+
+      - uid: ioniq-tpms-fr-psi-crit
+        title: "🚗 Ioniq Tire Critical — FR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fr_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [26] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FR (front-right) tire cold-pressure below 26 psi"
+          description: "Cold-normalized front-right tire pressure is critically low (under 26 psi). Do not drive far — inflate or replace now to avoid tire damage."
+
+      - uid: ioniq-tpms-fr-overinflated
+        title: "🚗 Ioniq Tire Over-inflated — FR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fr_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [42] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: info, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FR (front-right) tire cold-pressure above 42 psi"
+          description: "Cold-normalized front-right tire pressure is high (over 42 psi). Consider bleeding down toward the 36 psi placard for ride and wear."
+
+      - uid: ioniq-tpms-fr-temp-excess
+        title: "🚗 Ioniq Tire Hot — FR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fr_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 FR (front-right) tire running hot vs the other wheels"
+          description: "front-right tire is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
+
+      - uid: ioniq-tpms-rl-psi-low
+        title: "🚗 Ioniq Tire Low — RL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rl_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [30] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RL (rear-left) tire cold-pressure below 30 psi"
+          description: "Cold-normalized rear-left tire pressure is under 30 psi (placard 36). Inflate before the next drive; check for a slow leak."
+
+      - uid: ioniq-tpms-rl-psi-crit
+        title: "🚗 Ioniq Tire Critical — RL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rl_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [26] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RL (rear-left) tire cold-pressure below 26 psi"
+          description: "Cold-normalized rear-left tire pressure is critically low (under 26 psi). Do not drive far — inflate or replace now to avoid tire damage."
+
+      - uid: ioniq-tpms-rl-overinflated
+        title: "🚗 Ioniq Tire Over-inflated — RL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rl_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [42] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: info, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RL (rear-left) tire cold-pressure above 42 psi"
+          description: "Cold-normalized rear-left tire pressure is high (over 42 psi). Consider bleeding down toward the 36 psi placard for ride and wear."
+
+      - uid: ioniq-tpms-rl-temp-excess
+        title: "🚗 Ioniq Tire Hot — RL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rl_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RL (rear-left) tire running hot vs the other wheels"
+          description: "rear-left tire is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
+
+      - uid: ioniq-tpms-rr-psi-low
+        title: "🚗 Ioniq Tire Low — RR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rr_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [30] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RR (rear-right) tire cold-pressure below 30 psi"
+          description: "Cold-normalized rear-right tire pressure is under 30 psi (placard 36). Inflate before the next drive; check for a slow leak."
+
+      - uid: ioniq-tpms-rr-psi-crit
+        title: "🚗 Ioniq Tire Critical — RR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rr_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [26] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RR (rear-right) tire cold-pressure below 26 psi"
+          description: "Cold-normalized rear-right tire pressure is critically low (under 26 psi). Do not drive far — inflate or replace now to avoid tire damage."
+
+      - uid: ioniq-tpms-rr-overinflated
+        title: "🚗 Ioniq Tire Over-inflated — RR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rr_psi_cold' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [42] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: info, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RR (rear-right) tire cold-pressure above 42 psi"
+          description: "Cold-normalized rear-right tire pressure is high (over 42 psi). Consider bleeding down toward the 36 psi placard for ride and wear."
+
+      - uid: ioniq-tpms-rr-temp-excess
+        title: "🚗 Ioniq Tire Hot — RR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rr_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 RR (rear-right) tire running hot vs the other wheels"
+          description: "rear-right tire is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
+
+      - uid: ioniq-tpms-spread-high
+        title: "🚗 Ioniq Tire Pressure Spread High"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_spread_psi' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [3] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        annotations:
+          summary: "🚗 Tire cold-pressure spread above 3 psi across wheels"
+          description: "The cold-normalized pressures of the four tires differ by more than 3 psi. Even out inflation and check the lowest wheel for a leak."
