@@ -13,6 +13,7 @@
 ## Global Constraints
 
 - **Grafana alert rules:** `classic_conditions` only (never `threshold`); explicit `WHERE … AND time >= now() - <window>` in every InfluxQL query (never `$timeFilter`); datasource UID `P3C6603E967DC8568`; queries written as YAML block scalars (`query: |`) so inner `"…"`/`'…'` are literal; `noDataState: OK` on every rule; `execErrState: Alerting`; group `interval: 1m`; group header `folder: Ioniq EV`; `🚗` prefix in every `title` and `summary`; labels `severity` + `device: ioniq` + `subsystem`; no annotation may reference `{{ $labels.* }}` (classic_conditions drops GROUP BY labels — all rules here are single-series so use static text or `{{ $values.<refId>.Value }}`).
+- **Expression-node shape (proven repo shape — every working rule includes these):** each `__expr__` `refId: A` node's `model` MUST include `datasource: { type: __expr__, uid: __expr__ }`, `intervalMs: 1000`, `maxDataPoints: 43200`, `refId: A`, `hide: false`, alongside `type: classic_conditions`, `conditions`, and `expression`. Omitting them parses fine but can fail at provisioning (the YAML validators won't catch it) — copy the block verbatim from the rules below.
 - **Verified prod facts (2026-07-14):** InfluxDB measurement `ioniq`, tags `group` + `state` (values `active`/`charging`/`parked`). Fields (bms/2101): `isolation_kohm`, `cell_min_v`, `cell_max_v`, `temp_max`, `avail_dis`, `soc`, `aux_12v`. Field (bms/2105): `soh`. DTC topics: `ioniq/parsed/dtc/stored`, `ioniq/parsed/dtc/pending`, each payload `{_type:'ioniq', group, state, ts, codes:[]}`.
 - **Bot pattern:** `module.exports = (name, config) => ({ persistedCache?, start })`; `start: async ({ mqtt, persistedCache })`; `mqtt.subscribe(topic, cb)` delivers already-parsed objects; `mqtt.publish(topic, obj)` takes an object (framework adds `_bot`/`_tz` and serializes). Bot subscriptions are **exact-match** (no wildcards). Derived publishes MUST include `_type:'ioniq'` so the `mqtt-influx-ioniq` bridge accepts them.
 - **Tests:** Jest via `cd docker/automations && npm test`; import globals from `@jest/globals`; mock MQTT with the `_triggerMessage`/`_callbacks` harness (see `bots/stateful-counter.test.js`); no real credentials/URLs beyond the internal service name.
@@ -476,6 +477,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [500] }
                   operator: { type: and }
@@ -508,6 +514,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [100] }
                   operator: { type: and }
@@ -540,6 +551,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [3.0] }
                   operator: { type: and }
@@ -572,6 +588,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [2.5] }
                   operator: { type: and }
@@ -604,6 +625,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: gt, params: [4.15] }
                   operator: { type: and }
@@ -636,6 +662,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: gt, params: [45] }
                   operator: { type: and }
@@ -668,6 +699,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: gt, params: [55] }
                   operator: { type: and }
@@ -700,6 +736,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [98] }
                   operator: { type: and }
@@ -732,6 +773,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [85] }
                   operator: { type: and }
@@ -773,6 +819,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [70] }
                   operator: { type: and }
@@ -812,6 +863,9 @@ for r in rules:
     assert r['labels']['device']=='ioniq', r['uid']
     assert r['condition']=='A', r['uid']
     assert r['title'].startswith('🚗'), r['uid']
+    amodel=[d for d in r['data'] if d['refId']=='A'][0]['model']
+    assert amodel['datasource']=={'type':'__expr__','uid':'__expr__'}, r['uid']
+    assert amodel['intervalMs']==1000 and amodel['maxDataPoints']==43200, r['uid']
 uids={r['uid'] for r in rules}
 assert 'ioniq-avail-dis-derate' in uids
 # multi-condition rule has two conditions
@@ -881,6 +935,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [12.2] }
                   operator: { type: and }
@@ -913,6 +972,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: lt, params: [11.8] }
                   operator: { type: and }
@@ -1007,6 +1071,11 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
               conditions:
                 - evaluator: { type: gt, params: [0] }
                   operator: { type: and }
@@ -1219,7 +1288,7 @@ MSG
 - [ ] Run the full automations test suite: `cd docker/automations && npm test` — all pass.
 - [ ] Confirm all 4 new/modified Grafana YAML files parse (Tasks 4–7 validation steps).
 - [ ] `git log --oneline` shows one commit per task, all on `feat/ioniq-monitoring-phase2`.
-- [ ] Optional live smoke test (needs a running Grafana): provision the folder and confirm the multi-condition `ioniq-avail-dis-derate` rule loads without a "condition must not be empty" error, since multi-condition `classic_conditions` is new to this repo.
+- [ ] **Strongly recommended before deploy** — live Grafana smoke test: provision the `Ioniq EV` folder and confirm **all** rule files load without a "condition must not be empty" / datasource error. Pay special attention to the multi-condition `ioniq-avail-dis-derate` rule (multi-condition `classic_conditions` is new to this repo) and confirm the expression-node `datasource`/`intervalMs`/`maxDataPoints` fields provision cleanly. This is the one risk the offline YAML validators cannot catch.
 
 ## Notes for the executor
 
