@@ -33,7 +33,7 @@ services:
       - ${INGRESSGEN_TEMPLATE_NGINX_FILE}:/etc/docker-gen/templates/nginx.tmpl:ro
 
   vpn:
-    image: ghcr.io/groupsky/homy/wireguard:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/vpn:${IMAGE_TAG:-latest}
     build: docker/wireguard
     restart: unless-stopped
     networks:
