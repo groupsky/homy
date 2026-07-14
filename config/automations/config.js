@@ -489,6 +489,18 @@ module.exports = {
       tpmsTopic: 'ioniq/parsed/tpms',
       ambientTopic: 'ioniq/parsed/ambient',
     },
+    ioniqCellHealth: {
+      type: 'ioniq-cell-health',
+      cellTopics: [
+        'ioniq/parsed/cells/1',
+        'ioniq/parsed/cells/33',
+        'ioniq/parsed/cells/65',
+      ],
+      moduleTemp1Topic: 'ioniq/parsed/bms/2101',
+      moduleTemp2Topic: 'ioniq/parsed/bms/2105',
+      cellSpreadOutputTopic: 'ioniq/parsed/derived/cell_spread_mv',
+      moduleTempSpreadOutputTopic: 'ioniq/parsed/derived/module_temp_spread_c',
+    },
   },
   gates: {
     mqtt: {

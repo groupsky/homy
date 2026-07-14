@@ -204,6 +204,17 @@ query this measurement's `v` field. See
   - `derived/tire_<w>_temp_excess` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: `value` = wheel
     temperature minus the mean temperature of the other three wheels (°C). Grafana
     `ioniq-tpms-<w>-temp-excess` alerts on `value > 8`.
+  - `derived/cell_spread_mv` — a bot-produced `group` value (not from the logger): the
+    `ioniq-cell-health` automations bot reassembles the 96-cell pack (from `cells/1`, `cells/33`,
+    `cells/65`) and publishes field `value` = `(max − min) · 1000` in mV (rest spread; emitted only
+    when `state` is `parked`/`charging`, skipped while `active`), plus field `outlierIndex` = the
+    1-based cell index (1–96) furthest from the pack mean. Grafana's `ioniq-cell-spread-*` rules alert
+    on `value > 50` (warning) / `> 100` (critical).
+  - `derived/module_temp_spread_c` — a bot-produced `group` value (not from the logger): the
+    `ioniq-cell-health` automations bot merges the 12 battery module temperatures (`module_temps`[5]
+    from `bms/2101` + `module_temps_6_12`[7] from `bms/2105`) and publishes field `value` =
+    `max − min` in °C. Grafana's `ioniq-module-temp-spread-*` rules alert on `value > 8` (warning) /
+    `> 15` (critical).
 - `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by
 **Timestamp**: `payload.ts` (epoch ms), written at `ms` precision
 **Fields**: every payload key except `_type`, `group`, `state`, `ts`:
