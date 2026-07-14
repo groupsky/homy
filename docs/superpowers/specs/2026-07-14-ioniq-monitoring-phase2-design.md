@@ -10,7 +10,7 @@ lowest-effort slice — Grafana-native alerts, the thin DTC bot, the `Ioniq EV` 
 and Ioniq-scoped notification routing.
 
 **In scope**
-- Grafana alert rules for §4.1 (non-derived battery), §4.2 (parked 12 V), §4.5 (data-liveness).
+- Grafana alert rules for §4.1 (non-derived battery) and §4.2 (parked 12 V).
 - `ioniq-dtc` automations bot (§5, thin) publishing `derived/dtc_count` and direct-flagging DTCs.
 - Grafana `derived/dtc_count > 0` rule (§4.4).
 - `Ioniq EV` Grafana folder + Ioniq-scoped severity notification routing (§3).
@@ -18,10 +18,34 @@ and Ioniq-scoped notification routing.
 **Out of scope (deferred to later branches / other owners)**
 - P0 prerequisites: raw→parsed promotion (`ioniq-logger` #7/#5), Mongo TTL fix and InfluxDB
   retention (prod ops). These are external and do not block this branch's deliverables.
+- **Connectivity / data-liveness (§4.5) — deferred to phase 3 as a stateful bot.** Grafana
+  cannot distinguish "logger died" from "car parked and powered off by design" without
+  session-aware state: a `count()`-based rule returns *no row* (not `0`) over an empty window so
+  it can only fire via the NoData path, and a NoData alert would notify on every normal park.
+  Correct liveness needs a bot that tracks last-known `state` and emits a real
+  `derived/telemetry_stale` signal only when data stops *while the car was active/charging*.
+  See §4.3.
 - Computation bots: `ioniq-cell-health`, `ioniq-12v-ldc`, `ioniq-tpms`, `ioniq-charge-guard`
   (spec §4.1 derived rows, §4.2 LDC/fast-delta, §4.3 tires, §4.6 usage) — phase 3.
 - Dashboards (§7) — phase 4.
 - Any alert whose signal is Mongo-only (see §2 findings) or not yet decoded.
+
+## 2a. Grafana correctness rules baked into this design (from review gate)
+
+These were confirmed during the design review and MUST hold for every rule in this branch:
+- **`noDataState: OK` on every threshold rule.** For a car that sleeps, "no matching data in the
+  window" is normal, not an alert. Grafana routes `DatasourceNoData` as a notification (the
+  `telegram-bridge` even formats it), so `NoData` would fire on every park / every drive for the
+  state-filtered rules. Absence-of-data detection is the deferred connectivity bot's job, not a
+  side effect of battery/12 V rules.
+- **`execErrState: Alerting`** stays (a real query error is worth surfacing).
+- **Explicit query window on every `last()` rule** (`WHERE … AND time >= now() - <window>`), since
+  `relativeTimeRange` does not filter InfluxQL (repo gotcha).
+- **Group `interval` must be ≤ each rule's `for:`** or `for:` is meaningless. Ioniq groups use
+  `interval: 1m` (responsive enough for `for: 1m` cell/12 V rules; longer `for:` values like 10m/1h
+  still work under a 1m interval).
+- **`count()` over an empty window returns no row, not `0`** — do not write liveness/threshold
+  rules that depend on `count(...) < 1` evaluating with data. (This is why connectivity is a bot.)
 
 ## 2. Prod verification findings (2026-07-14, read-only queries on routy)
 
@@ -62,7 +86,8 @@ ioniq-dtc bot ─MQTT─> ioniq/parsed/derived/dtc_count ─> InfluxDB ───
 Location: `config/grafana/provisioning/alerting/`. All rules follow the canonical
 `sunseeker-*` shape: `classic_conditions` (never `threshold`), explicit
 `WHERE time >= now() - <window>` (never `$timeFilter`), datasource UID `P3C6603E967DC8568`,
-group header `folder: Ioniq EV`, `🚗` prefix in `title`/`summary`, labels
+group header `folder: Ioniq EV` + `interval: 1m`, `noDataState: OK` (see §2a),
+`execErrState: Alerting`, `🚗` prefix in `title`/`summary`, labels
 `severity` / `device: ioniq` / `subsystem`. Each warn/crit pair is two separate rules.
 
 ### 4.1 `ioniq-battery-alerts.yaml` (subsystem: battery) — §4.1 non-derived only
@@ -80,46 +105,89 @@ group header `folder: Ioniq EV`, `🚗` prefix in `title`/`summary`, labels
 | ioniq-soh-critical | `last(soh)` bms/2105 | `< 85` | critical | 1h |
 | ioniq-avail-dis-derate | `last(avail_dis)` AND `last(soc)` bms/2101 | `avail_dis < 70` AND `soc > 30` | warning | 15m |
 
-SoH uses the v1 **static** baseline (spec §4.1 note); rolling baseline is deferred. The
-`avail-dis-derate` rule uses two data queries (`avail_dis`, `soc`, both in bms/2101) combined in
-one `classic_conditions` with two ANDed conditions.
+SoH uses the v1 **static** baseline (spec §4.1 note); rolling baseline is deferred.
+
+The `avail-dis-derate` rule is the one **multi-condition** rule: two data queries
+(`disq` = `last(avail_dis)`, `socq` = `last(soc)`, both bms/2101, both always-present so no
+NoData trap) combined in a single `classic_conditions` block with two ANDed conditions. This
+construct has no existing precedent in the repo, so it must be implemented from a fully-worked,
+validated example. Canonical shape:
+
+```yaml
+- refId: disq   # SELECT last("avail_dis") FROM "ioniq" WHERE "group"='bms/2101' AND time >= now() - 15m
+- refId: socq   # SELECT last("soc")       FROM "ioniq" WHERE "group"='bms/2101' AND time >= now() - 15m
+- refId: A
+  datasourceUid: __expr__
+  model:
+    type: classic_conditions
+    conditions:
+      - evaluator: { type: lt, params: [70] }
+        operator: { type: and }
+        query:    { params: [disq] }
+        reducer:  { type: last }
+        type: query
+      - evaluator: { type: gt, params: [30] }
+        operator: { type: and }   # ANDs with the previous condition
+        query:    { params: [socq] }
+        reducer:  { type: last }
+        type: query
+    expression: disq
+# condition: A
+```
+
+Because `classic_conditions` drops `GROUP BY` tag labels, no rule here may reference
+`{{ $labels.* }}` in annotations — all Ioniq rules are single-series (one car), so this is
+satisfied; annotations use static text (and `{{ $values.<refId>.Value }}` where a number helps).
 
 ### 4.2 `ioniq-12v-alerts.yaml` (subsystem: 12v) — §4.2 parked only
 
-| uid | Query | Condition | Sev | for |
-|---|---|---|---|---|
-| ioniq-12v-low-parked | `last(aux_12v)` bms/2101, `WHERE "state"='parked'` | `< 12.2` | warning | 30s |
-| ioniq-12v-critical-parked | `last(aux_12v)` bms/2101, `WHERE "state"='parked'` | `< 11.8` | critical | 30s |
+Query template (both rules): `SELECT last("aux_12v") FROM "ioniq" WHERE "group"='bms/2101' AND
+"state"='parked' AND time >= now() - 15m`.
 
-State filter is an InfluxQL `AND "state"='parked'` in the WHERE clause. This suppresses the
-"12.9 V float under heavy traction is normal" false positive (only evaluates parked samples).
+| uid | Condition | Sev | for |
+|---|---|---|---|
+| ioniq-12v-low-parked | `< 12.2` | warning | 1m |
+| ioniq-12v-critical-parked | `< 11.8` | critical | 1m |
+
+State filter is an InfluxQL `AND "state"='parked'` in the WHERE clause (`state` is a tag; single
+quotes). This suppresses the "12.9 V float under heavy traction is normal" false positive (only
+parked samples are evaluated). While driving, the window has no parked rows → NoData → **no
+alert** (`noDataState: OK`). `for: 1m` matches the 1m group interval (parent spec's 30s isn't
+meaningfully expressible below the eval interval; a sustained 1m dip is the practical equivalent).
 LDC-not-charging and fast-delta (§4.2 bot rows) are deferred to phase 3.
 
-### 4.3 `ioniq-connectivity-alerts.yaml` (subsystem: connectivity) — §4.5
+### 4.3 Connectivity / data-liveness (§4.5) — DEFERRED to phase 3
 
-TPMS "box powers off ~60 s after lock" means a naive silence alert fires on every park. The
-liveness rules use a **two-window** query so they only fire when telemetry *should* be flowing
-(recent activity present) but the fast tier has gone silent:
+Not implemented in this branch. Rationale (confirmed at the design review gate):
 
-| uid | Logic | Sev | for |
-|---|---|---|---|
-| ioniq-telemetry-gap | `count(hv_v)` in last 15m `< 1` AND `count(hv_v)` in prior 15–45m window `> 0` | warning | 15m |
-| ioniq-telemetry-silent | `count(hv_v)` in last 30m `< 1` AND prior 30–90m window `> 0` | warning | 30m |
+- A `count(hv_v) < 1` Grafana rule **cannot work**: InfluxQL `count()` over an empty window
+  returns *no row*, not a `0`, so the condition never evaluates true-with-data — the rule could
+  only ever fire through the NoData path.
+- Relying on NoData would notify on **every normal park** (the box powers off ~60 s after lock by
+  design), which is exactly the false-alarm the parent spec set out to avoid.
+- Distinguishing "logger died" from "car parked and powered off" needs **session-aware state**
+  (was the car `active`/`charging` when telemetry stopped?) — stateful/edge logic that belongs in
+  a bot, not a Grafana threshold.
+- The parent spec's status-flapping rule is additionally impossible in Grafana because
+  `ioniq/status` is **Mongo-only** (§2).
 
-Both use `count()` over `bms/2101`; the "prior window" is a second data query with
-`WHERE time >= now() - Xm AND time <= now() - Ym`. `noDataState: NoData` (no data at all ≠ alert;
-the gate query going empty means the car was already parked, correctly no alert). The
-status-flapping rule is dropped (§2: `status` is Mongo-only). Thresholds/windows are tunable.
+Phase-3 plan: a liveness bot (candidate: `timeout-emit` gated on last-known `state`, or a small
+bespoke bot) emits `derived/telemetry_stale` (0/1) only when data stops while the car was
+active/charging; Grafana then alerts on that real numeric signal with a trivial threshold.
 
 ### 4.4 `ioniq-dtc-alerts.yaml` (subsystem: dtc) — §4.4
 
-| uid | Query | Condition | Sev | for |
-|---|---|---|---|---|
-| ioniq-dtc-present | `last(value)` `WHERE "group"='derived/dtc_count'` | `> 0` | critical | 0s |
+Query: `SELECT last("value") FROM "ioniq" WHERE "group"='derived/dtc_count' AND time >= now() - 1h`.
 
-Reads the bot's derived signal. Fires immediately (`for: 0`). Per the "both notify" decision,
-this Grafana notification fires **in addition to** the bot's direct-flag; the Grafana message
-carries the count, the bot's message names the codes.
+| uid | Condition | Sev | for |
+|---|---|---|---|
+| ioniq-dtc-present | `> 0` | critical | 0s |
+
+Reads the bot's derived signal. Fires immediately (`for: 0`). `noDataState: OK` — when the car is
+asleep the bot publishes nothing, so an empty window must not alert; real-time detection of a DTC
+edge is covered by the bot's direct-flag regardless. Per the "both notify" decision, this Grafana
+notification fires **in addition to** the bot's direct-flag; the Grafana message carries the
+count, the bot's message names the codes.
 
 ## 5. Component B — `ioniq-dtc` bot
 
@@ -129,7 +197,11 @@ registered in `config/automations/config.js`.
 **Signature:** `module.exports = (name, config) => ({ persistedCache, start })` (repo pattern).
 
 **Subscribes** (exact topics — bot routing is exact-match, wildcards don't work):
-`ioniq/parsed/dtc/stored` and `ioniq/parsed/dtc/pending`.
+`ioniq/parsed/dtc/stored` and `ioniq/parsed/dtc/pending`. These strings are inferred from the
+InfluxDB `group` tags (`dtc/stored`, `dtc/pending`) + the parent spec's `ioniq/parsed/dtc/#`
+pattern; **verify the exact live topic strings with `mosquitto_sub` at implementation time**
+(a wrong string silently no-ops under exact-match routing). Topics are configurable so a
+correction is config-only.
 
 **State:** holds last-known `codes` array for each of stored/pending (combined =
 `stored.codes ∪ pending.codes`). `persistedCache` (version 1) persists the last-emitted code set
@@ -140,11 +212,16 @@ so a restart doesn't re-flag an already-known DTC.
 2. **Publish** `ioniq/parsed/derived/dtc_count` as
    `{_type:'ioniq', group:'derived/dtc_count', state, ts, value: count, codes: [...]}`
    (`_type:'ioniq'` is required for the mqtt-influx bridge to accept it; `value` is the numeric
-   alert input; `codes` passes the list through for history/dashboards).
+   alert input; `codes` passes the list through for history/dashboards). Note the framework's
+   `mqtt.publish` also injects `_bot` and `_tz`, so the converter will additionally write
+   `_bot.name`/`_bot.type`/`_tz` fields on this series — harmless, and the Grafana rule only reads
+   `value`.
 3. **Direct-flag on 0→N edge** (new codes appear vs. persisted set): HTTP `POST` to
-   `config.telegramWebhookUrl` (default `http://telegram-bridge:3000/webhook`) with
-   `{message: "🚗 DTC present: <code>, <code> (stored/pending)"}`. Edge-triggered + persisted-set
-   dedupe so it flags on appearance, not on every sample. Message uses HTML (`<b>`) per bridge.
+   `config.telegramWebhookUrl` (default `http://telegram-bridge:3000/webhook`) with a `{message}`
+   body naming the concrete codes, e.g. `{message: "🚗 <b>DTC present</b>: P0AA6, P1B76 (stored)"}`.
+   The message is built by interpolating the actual code strings (never a literal `<code>` token,
+   which the bridge's HTML `parse_mode` would treat as markup). Edge-triggered + persisted-set
+   dedupe so it flags on appearance, not on every sample.
 
 **Config fields:** `storedTopic`, `pendingTopic`, `outputTopic`, `telegramWebhookUrl`,
 `flagOnEdge` (bool, default true), plus standard `enabled`/`verbose`.
@@ -183,7 +260,9 @@ v1 differentiates via the `🚗` prefix in every rule summary and the bot's mess
 
 - **Bot:** `cd docker/automations && npm test` — full TDD per §5, red-green-refactor.
 - **Grafana YAML:** validated for structure against the canonical `sunseeker-*` shape;
-  provisioning correctness is verified by rule-file structure review (no live Grafana in CI).
+  provisioning correctness is verified by rule-file structure review (no live Grafana in CI). The
+  multi-condition `avail-dis-derate` rule (novel construct) should additionally be smoke-tested
+  against a live Grafana before relying on it. Every rule carries `noDataState: OK` (§2a).
 - **Subagent reviews:** each component (bot, each alert file group, routing) gets an independent
   subagent code review before merge, per the repo's requesting-code-review flow.
 - **InfluxDB queries** were pre-validated against prod data shapes (§2) so no rule silently
@@ -193,7 +272,6 @@ v1 differentiates via the `🚗` prefix in every rule summary and the bot's mess
 
 - [ ] `config/grafana/provisioning/alerting/ioniq-battery-alerts.yaml`
 - [ ] `config/grafana/provisioning/alerting/ioniq-12v-alerts.yaml`
-- [ ] `config/grafana/provisioning/alerting/ioniq-connectivity-alerts.yaml`
 - [ ] `config/grafana/provisioning/alerting/ioniq-dtc-alerts.yaml`
 - [ ] `config/grafana/provisioning/alerting/notification-policies.yaml` (Ioniq routes added)
 - [ ] `docker/automations/bots/ioniq-dtc.js` + `.test.js`
