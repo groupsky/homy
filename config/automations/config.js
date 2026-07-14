@@ -476,6 +476,14 @@ module.exports = {
       outputTopic: tvLivingIrTopic,
       outputContent: 'plain',
     },
+
+    ioniqDtc: {
+      type: 'ioniq-dtc',
+      storedTopic: 'ioniq/parsed/dtc/stored',
+      pendingTopic: 'ioniq/parsed/dtc/pending',
+      outputTopic: 'ioniq/parsed/derived/dtc_count',
+      telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
+    },
   },
   gates: {
     mqtt: {
