@@ -5,6 +5,7 @@ const mqtt = require('mqtt')
 
 const { MongoClient } = require('mongodb')
 const { buildRecord } = require('./record')
+const { ttlIndexArgsFromEnv } = require('./ttl')
 const mqttUrl = process.env.BROKER
 const mongoUrl = process.env.MONGODB_URL
 const collection = process.env.COLLECTION
@@ -79,10 +80,24 @@ client.on('connect', function () {
         }
         console.log('subscribed to', topic)
 
-        mongoPromise.then((mongoClient) => {
+        mongoPromise.then(async (mongoClient) => {
             console.log('connected to', mongoUrl)
             const db = mongoClient.db()
             const col = db.collection(collection)
+
+            // Ensure the retention (TTL) index when configured. Idempotent, so
+            // it is safe on every (re)connect. A failure here must not stop
+            // archiving, so it is logged rather than fatal.
+            const ttlArgs = ttlIndexArgsFromEnv(process.env)
+            if (ttlArgs) {
+                try {
+                    await col.createIndex(...ttlArgs)
+                    console.log('ensured TTL index', ttlArgs[1].name,
+                        'expireAfterSeconds', ttlArgs[1].expireAfterSeconds)
+                } catch (err) {
+                    console.error('Failure ensuring TTL index (archiving continues)', err)
+                }
+            }
 
             client.on('message', async function (topic, message) {
                 const record = buildRecord(topic, message)

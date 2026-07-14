@@ -24,24 +24,38 @@ payload with two ingest timestamps when absent:
 
 The logger's own event time remains available in `payload.ts`.
 
-## Retention — one-time TTL index (mqtt-mongo-ioniq)
+## Retention — automatic TTL index
 
-The Ioniq raw archive is capped at 90 days. Create the TTL index once against the
-Mongo database (`MONGO_DATABASE`, default `power`). Mongo silently ignores
-re-creation of an identical index, so this is safe to re-run:
+Retention is opt-in via the `TTL_EXPIRE_SECONDS` environment variable. When set to
+a positive integer, the service ensures a TTL index at startup (idempotent, re-run
+safe on every reconnect); when unset, the archive is kept indefinitely (this is how
+`mqtt-mongo-history` behaves). The Ioniq archive sets `TTL_EXPIRE_SECONDS=7776000`
+(90 days) in `docker-compose.yml`.
+
+**The index is created on `payload._ts`, not top-level `_ts`.** Because every
+document is stored as `{ topic, payload }`, the BSON `Date` that `record.js` stamps
+lives at `payload._ts`. A TTL index on top-level `_ts` matches no document and
+Mongo never expires anything — this was a real production bug. `ttl.js` derives the
+index path from `record.js`'s `TS_FIELD` constant so the two cannot drift, and
+`__tests__/ttl.test.js` guards the alignment. TTL uses ingest time (`payload._ts`);
+the logger's event time stays in `payload.ts`. InfluxDB (`homy.ioniq`) is the
+long-term compact store and is kept indefinitely.
+
+Verify the index after deploy:
 
     docker compose exec -T mongo mongosh \
       "mongodb://localhost:27017/${MONGO_DATABASE:-power}?authSource=admin" \
       -u "$(cat secrets/mongo_root_username)" -p "$(cat secrets/mongo_root_password)" \
-      --eval 'db.ioniq.createIndex({ _ts: 1 }, { expireAfterSeconds: 7776000, name: "ttl__ts" })'
+      --eval 'db.ioniq.getIndexes()'
 
-Verify:
+You should see `ttl_payload__ts` on `{ "payload._ts": 1 }` with
+`expireAfterSeconds: 7776000`.
 
-    ... --eval 'db.ioniq.getIndexes()'
+**One-time cleanup of the stale index:** production created a broken
+`ttl__ts` index on top-level `{ _ts: 1 }` (never expired anything). After deploying
+this fix, drop it:
 
-`expireAfterSeconds: 7776000` = 90 days. TTL uses ingest time (`_ts`); event time
-stays in `payload.ts`. InfluxDB (`homy.ioniq`) is the long-term compact store and is
-kept indefinitely.
+    ... --eval 'db.ioniq.dropIndex("ttl__ts")'
 
 ## Testing
 
