@@ -484,6 +484,11 @@ module.exports = {
       outputTopic: 'ioniq/parsed/derived/dtc_count',
       telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
     },
+    ioniqTpms: {
+      type: 'ioniq-tpms',
+      tpmsTopic: 'ioniq/parsed/tpms',
+      ambientTopic: 'ioniq/parsed/ambient',
+    },
   },
   gates: {
     mqtt: {

@@ -193,6 +193,17 @@ query this measurement's `v` field. See
     automations bot publishes it with field `value` = count of active DTCs (union of `dtc/stored`
     + `dtc/pending`) and field `codes` = JSON-stringified array of the code strings. Grafana's
     `ioniq-dtc-present` rule alerts on `value > 0`.
+  - `derived/tire_<w>_psi_cold` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — bot-produced by the `ioniq-tpms`
+    automations bot: per-wheel tire pressure temperature-compensated to a 15 °C cold reference
+    (`value = psi − 0.18·(temp − 15)` psi, using the wheel's own `.c` temp, falling back to
+    `ambient.c`). Extra fields `psi` (raw psi) and `temp` (temperature used). Only emitted for fresh
+    `state='active'` samples, de-duplicated against frozen readings. Grafana `ioniq-tpms-*-psi-low`
+    (`< 30` warn) / `-psi-crit` (`< 26` crit) / `-overinflated` (`> 42` info) rules alert on it.
+  - `derived/tire_spread_psi` — `ioniq-tpms`: `value` = max − min of the four cold-normalized
+    pressures (psi). Grafana `ioniq-tpms-spread-high` alerts on `value > 3`.
+  - `derived/tire_<w>_temp_excess` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: `value` = wheel
+    temperature minus the mean temperature of the other three wheels (°C). Grafana
+    `ioniq-tpms-<w>-temp-excess` alerts on `value > 8`.
 - `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by
 **Timestamp**: `payload.ts` (epoch ms), written at `ms` precision
 **Fields**: every payload key except `_type`, `group`, `state`, `ts`:
