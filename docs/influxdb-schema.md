@@ -215,6 +215,16 @@ query this measurement's `v` field. See
     from `bms/2101` + `module_temps_6_12`[7] from `bms/2105`) and publishes field `value` =
     `max − min` in °C. Grafana's `ioniq-module-temp-spread-*` rules alert on `value > 8` (warning) /
     `> 15` (critical).
+  - `derived/ldc_ok` — a bot-produced `group` value (not from the logger): the `ioniq-12v-ldc`
+    automations bot publishes it from `bms/2101` with field `value` ∈ {0,1}. `0` means the LDC
+    (DC-DC converter) is not charging the 12 V battery — `aux_12v` held below 13.2 V for ≥60 s while
+    ignition on AND HV load stayed low (the low-voltage judgement is suppressed under heavy traction,
+    where a sagging rail is normal load-priority). `1` = OK. Grafana's `ioniq-ldc-not-charging` rule
+    alerts on `value < 1`.
+  - `derived/aux12v_drop` — a bot-produced `group` value (not from the logger): the `ioniq-12v-ldc`
+    bot publishes it from `bms/2101` with field `value` ∈ {0,1}. `1` marks a 12 V sag edge —
+    `aux_12v` fell ≥0.8 V within 5 s, or drifted ≥0.3 V/min while parked — latched high for 60 s so a
+    1 m Grafana poll catches the pulse. Grafana's `ioniq-12v-sag` rule alerts on `value > 0`.
 - `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by
 **Timestamp**: `payload.ts` (epoch ms), written at `ms` precision
 **Fields**: every payload key except `_type`, `group`, `state`, `ts`:

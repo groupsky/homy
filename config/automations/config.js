@@ -501,6 +501,12 @@ module.exports = {
       cellSpreadOutputTopic: 'ioniq/parsed/derived/cell_spread_mv',
       moduleTempSpreadOutputTopic: 'ioniq/parsed/derived/module_temp_spread_c',
     },
+    ioniq12vLdc: {
+      type: 'ioniq-12v-ldc',
+      inputTopic: 'ioniq/parsed/bms/2101',
+      ldcOkTopic: 'ioniq/parsed/derived/ldc_ok',
+      auxDropTopic: 'ioniq/parsed/derived/aux12v_drop',
+    },
   },
   gates: {
     mqtt: {
