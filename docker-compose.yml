@@ -211,7 +211,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   main-power:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/main-power:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -251,7 +251,7 @@ services:
         max-file: "3"
 
   secondary-power:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/secondary-power:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -291,7 +291,7 @@ services:
         max-file: "3"
 
   tetriary-power:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/tetriary-power:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -332,7 +332,7 @@ services:
         max-file: "3"
 
   monitoring:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/monitoring:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -374,7 +374,7 @@ services:
         max-file: "3"
 
   monitoring2:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/monitoring2:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -416,7 +416,7 @@ services:
         max-file: "3"
 
   dry-switches:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/dry-switches:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -457,7 +457,7 @@ services:
         max-file: "3"
 
   solar:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/solar:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -499,7 +499,7 @@ services:
         max-file: "3"
 
   inverter:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/inverter:${IMAGE_TAG:-latest}
     build: docker/modbus-serial
     depends_on:
       - broker
@@ -639,7 +639,7 @@ services:
         max-file: "3"
 
   mqtt-mongo-history:
-    image: ghcr.io/groupsky/homy/mqtt-mongo:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/mqtt-mongo-history:${IMAGE_TAG:-latest}
     build: docker/mqtt-mongo
     depends_on:
       - broker
@@ -666,7 +666,7 @@ services:
         max-file: "3"
 
   mqtt-mongo-ioniq:
-    image: ghcr.io/groupsky/homy/mqtt-mongo:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/mqtt-mongo-ioniq:${IMAGE_TAG:-latest}
     build: docker/mqtt-mongo
     depends_on:
       - broker
@@ -695,7 +695,7 @@ services:
         max-file: "3"
 
   mqtt-influx-primary:
-    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/mqtt-influx-primary:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -724,7 +724,7 @@ services:
         max-file: "3"
 
   mqtt-influx-secondary:
-    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/mqtt-influx-secondary:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -753,7 +753,7 @@ services:
         max-file: "3"
 
   mqtt-influx-tetriary:
-    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/mqtt-influx-tetriary:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -782,7 +782,7 @@ services:
         max-file: "3"
 
   mqtt-influx-dry-switches:
-    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/mqtt-influx-dry-switches:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -807,7 +807,7 @@ services:
       - TAGS={"bus":"dry-switches"}
 
   mqtt-influx-ioniq:
-    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/mqtt-influx-ioniq:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
     depends_on:
       - broker
@@ -940,7 +940,7 @@ services:
         max-file: "3"
 
   boiler-controller:
-    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/boiler-controller:${IMAGE_TAG:-latest}
     build: docker/automations
     depends_on:
       - broker
@@ -967,7 +967,7 @@ services:
         max-file: "3"
 
   features:
-    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/features:${IMAGE_TAG:-latest}
     build: docker/automations
     depends_on:
       - broker
@@ -988,7 +988,7 @@ services:
       - ${CONFIG_PATH}/automations/features.js:/etc/config.js:ro
 
   ha_discovery:
-    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/ha_discovery:${IMAGE_TAG:-latest}
     build: docker/automations
     depends_on:
       - broker
@@ -1011,7 +1011,7 @@ services:
   # Manualy run with
   # dc run historian-primary node index.js
   historian-primary:
-    image: ghcr.io/groupsky/homy/historian:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/historian-primary:${IMAGE_TAG:-latest}
     build: docker/historian
     depends_on:
       - broker
@@ -1041,7 +1041,7 @@ services:
   # Manualy run with
   # dc run historian-secondary node index.js
   historian-secondary:
-    image: ghcr.io/groupsky/homy/historian:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/historian-secondary:${IMAGE_TAG:-latest}
     build: docker/historian
     depends_on:
       - broker
