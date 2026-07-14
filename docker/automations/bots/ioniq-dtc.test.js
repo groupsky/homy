@@ -20,7 +20,7 @@ function makeMqtt () {
 }
 
 function makeCache () {
-  return { stored: [], pending: [], flaggedKey: '' }
+  return { stored: [], pending: [], flagged: [] }
 }
 
 const config = {
@@ -116,10 +116,51 @@ describe('ioniq-dtc bot — direct flag', () => {
 
   it('does not re-flag a code set already flagged before restart', async () => {
     persistedCache.stored = ['P0AA6']
-    persistedCache.flaggedKey = 'P0AA6'
+    persistedCache.flagged = ['P0AA6']
     await bot.start({ mqtt, persistedCache })
     await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 5, codes: ['P0AA6'] })
     expect(config.httpPost).not.toHaveBeenCalled()
+  })
+
+  it('flags only the newly-appeared code, not the whole set', async () => {
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['P0AA6'] })
+    await mqtt._trigger(PENDING, { group: 'dtc/pending', state: 'active', ts: 2, codes: ['C1611'] })
+    expect(config.httpPost).toHaveBeenCalledTimes(2)
+    expect(config.httpPost).toHaveBeenNthCalledWith(1,
+      'http://telegram-bridge:3000/webhook',
+      { message: '🚗 <b>DTC present</b>: P0AA6 (stored)' })
+    expect(config.httpPost).toHaveBeenNthCalledWith(2,
+      'http://telegram-bridge:3000/webhook',
+      { message: '🚗 <b>DTC present</b>: C1611 (pending)' })
+  })
+
+  it('does not spuriously flag when one code clears while another persists', async () => {
+    await bot.start({ mqtt, persistedCache })
+    // stored A persists; pending B flaps in and out
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['A'] })
+    await mqtt._trigger(PENDING, { group: 'dtc/pending', state: 'active', ts: 2, codes: ['B'] })
+    await mqtt._trigger(PENDING, { group: 'dtc/pending', state: 'active', ts: 3, codes: [] })
+    await mqtt._trigger(PENDING, { group: 'dtc/pending', state: 'active', ts: 4, codes: ['B'] })
+    // Exactly two flags: A on appearance, B on appearance. No flag on B's
+    // removal (ts 3) and no re-flag of B on reappearance while A persists (ts 4).
+    expect(config.httpPost).toHaveBeenCalledTimes(2)
+  })
+
+  it('escapes HTML-special characters in codes so the message cannot be broken', async () => {
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['<b>&x'] })
+    expect(config.httpPost).toHaveBeenCalledWith(
+      'http://telegram-bridge:3000/webhook',
+      { message: '🚗 <b>DTC present</b>: &lt;b&gt;&amp;x (stored)' }
+    )
+  })
+
+  it('accepts codes delivered as a JSON string', async () => {
+    await bot.start({ mqtt, persistedCache })
+    await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: '["P0AA6"]' })
+    expect(mqtt.publish).toHaveBeenLastCalledWith(OUTPUT, expect.objectContaining({ value: 1, codes: ['P0AA6'] }))
+    expect(config.httpPost).toHaveBeenCalledTimes(1)
   })
 
   it('still publishes the derived signal when the HTTP flag fails', async () => {
