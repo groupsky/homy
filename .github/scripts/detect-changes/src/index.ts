@@ -13,7 +13,7 @@ import { Command } from 'commander';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import { discoverBaseImages, buildDirectoryToGhcrMapping } from './lib/base-images.js';
-import { discoverServicesFromCompose, filterGhcrServices } from './lib/services.js';
+import { discoverServicesFromCompose, filterGhcrServices, getImageName } from './lib/services.js';
 import { buildReverseDependencyMap, detectAffectedServices } from './lib/dependency-graph.js';
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
@@ -146,6 +146,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     to_retag: JSON.stringify(result.to_retag),
     to_pull_for_testing: JSON.stringify(result.to_pull_for_testing),
     build_groups: JSON.stringify(result.build_groups),
+    service_image_names: JSON.stringify(result.service_image_names),
 
     // Test and verification outputs
     testable_services: JSON.stringify(result.testable_services),
@@ -292,11 +293,20 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   // Convert to BuildGroup array
   const buildGroups: BuildGroup[] = Array.from(buildGroupsMap.entries())
-    .map(([buildPath, serviceList]) => ({
-      build_path: buildPath,
-      services: serviceList.sort(),
-      primary_service: serviceList.sort()[0],
-    }))
+    .map(([buildPath, serviceList]) => {
+      const sortedServices = serviceList.sort();
+      const primary = sortedServices[0];
+      // All services in a group share the same build context and image field,
+      // so the primary service is representative for the group's GHCR image name.
+      const primaryService = services.find((s) => s.service_name === primary);
+      const imageName = primaryService ? getImageName(primaryService) : primary;
+      return {
+        build_path: buildPath,
+        services: sortedServices,
+        primary_service: primary,
+        image_name: imageName,
+      };
+    })
     .sort((a, b) => a.build_path.localeCompare(b.build_path));
 
   console.error(`Build groups: ${buildGroups.length} (from ${toBuild.length} services)`);
@@ -358,6 +368,9 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     healthcheck_services: healthcheckServices,
     version_check_services: versionCheckServices,
     build_groups: buildGroups,
+    // Map every GHCR service to its compose image name so CI can publish/pull/tag
+    // by shared image name (services sharing an image share the GHCR package).
+    service_image_names: Object.fromEntries(services.map((s) => [s.service_name, getImageName(s)])),
   };
 }
 
