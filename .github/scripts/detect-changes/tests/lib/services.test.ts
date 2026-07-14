@@ -24,7 +24,7 @@ jest.unstable_mockModule('child_process', () => ({
 }));
 
 // Import after mocking
-const { discoverServicesFromCompose, extractServiceMetadata, filterGhcrServices } = await import(
+const { discoverServicesFromCompose, extractServiceMetadata, filterGhcrServices, getImageName } = await import(
   '../../src/lib/services.js'
 );
 
@@ -562,6 +562,112 @@ describe('TestFilterGhcrServices', () => {
       expect(filtered).toHaveLength(1);
       expect(filtered[0].build_args).toEqual({
         GF_INSTALL_IMAGE_RENDERER_PLUGIN: 'false',
+      });
+    });
+  });
+});
+
+describe('TestGetImageName', () => {
+  describe('test_ghcr_image_with_tag', () => {
+    test('Should return image basename for GHCR image with explicit tag', () => {
+      const service: Service = {
+        service_name: 'mqtt-mongo-history',
+        image: 'ghcr.io/groupsky/homy/mqtt-mongo:latest',
+        build_context: 'docker/mqtt-mongo',
+        dockerfile_path: 'docker/mqtt-mongo/Dockerfile',
+      };
+
+      expect(getImageName(service)).toBe('mqtt-mongo');
+    });
+  });
+
+  describe('test_ghcr_image_with_variable_tag', () => {
+    test('Should strip a variable-style tag from GHCR image', () => {
+      const service: Service = {
+        service_name: 'broker',
+        image: 'ghcr.io/groupsky/homy/mosquitto:${IMAGE_TAG:-latest}',
+        build_context: 'docker/mosquitto',
+        dockerfile_path: 'docker/mosquitto/Dockerfile',
+      };
+
+      expect(getImageName(service)).toBe('mosquitto');
+    });
+  });
+
+  describe('test_ghcr_image_without_tag', () => {
+    test('Should return basename when GHCR image has no tag', () => {
+      const service: Service = {
+        service_name: 'automations',
+        image: 'ghcr.io/groupsky/homy/automations',
+        build_context: 'docker/automations',
+        dockerfile_path: 'docker/automations/Dockerfile',
+      };
+
+      expect(getImageName(service)).toBe('automations');
+    });
+  });
+
+  describe('test_no_image_field', () => {
+    test('Should fall back to service_name when image is undefined', () => {
+      const service: Service = {
+        service_name: 'local-service',
+        build_context: 'docker/local-service',
+        dockerfile_path: 'docker/local-service/Dockerfile',
+      };
+
+      expect(getImageName(service)).toBe('local-service');
+    });
+  });
+
+  describe('test_non_homy_image', () => {
+    test('Should fall back to service_name for non-homy images', () => {
+      const service: Service = {
+        service_name: 'external-db',
+        image: 'postgres:15',
+        build_context: 'docker/external-db',
+        dockerfile_path: 'docker/external-db/Dockerfile',
+      };
+
+      expect(getImageName(service)).toBe('external-db');
+    });
+  });
+
+  describe('test_shared_image_across_services', () => {
+    test('Should map multiple services to their shared GHCR image names', () => {
+      const services: Service[] = [
+        {
+          service_name: 'mqtt-mongo-ioniq',
+          image: 'ghcr.io/groupsky/homy/mqtt-mongo:${IMAGE_TAG:-latest}',
+          build_context: 'docker/mqtt-mongo',
+          dockerfile_path: 'docker/mqtt-mongo/Dockerfile',
+        },
+        {
+          service_name: 'mqtt-mongo-history',
+          image: 'ghcr.io/groupsky/homy/mqtt-mongo:${IMAGE_TAG:-latest}',
+          build_context: 'docker/mqtt-mongo',
+          dockerfile_path: 'docker/mqtt-mongo/Dockerfile',
+        },
+        {
+          service_name: 'main-power',
+          image: 'ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}',
+          build_context: 'docker/modbus-serial',
+          dockerfile_path: 'docker/modbus-serial/Dockerfile',
+        },
+        {
+          service_name: 'broker',
+          image: 'ghcr.io/groupsky/homy/mosquitto:${IMAGE_TAG:-latest}',
+          build_context: 'docker/mosquitto',
+          dockerfile_path: 'docker/mosquitto/Dockerfile',
+        },
+      ];
+
+      const map = Object.fromEntries(services.map((s) => [s.service_name, getImageName(s)]));
+
+      expect(map).toEqual({
+        'mqtt-mongo-ioniq': 'mqtt-mongo',
+        'mqtt-mongo-history': 'mqtt-mongo',
+        'main-power': 'modbus-serial',
+        broker: 'mosquitto',
       });
     });
   });

@@ -95,6 +95,8 @@ export interface BuildGroup {
   services: string[];
   /** Primary service name (first in alphabetical order) for display */
   primary_service: string;
+  /** GHCR image name from the compose `image:` field; shared by all services in this build context */
+  image_name: string;
 }
 
 /**
@@ -127,6 +129,8 @@ export interface DetectionResult {
   version_check_services: string[];
   /** Build groups for services sharing build contexts */
   build_groups: BuildGroup[];
+  /** Map of service name -> GHCR image name (basename of the compose image field) */
+  service_image_names: Record<string, string>;
 }
 
 /**

@@ -154,6 +154,37 @@ export function extractServiceMetadata(
 }
 
 /**
+ * Derives the GHCR image name (basename of the compose `image:` field) for a service.
+ *
+ * Services can share a single GHCR package by using the same `image:` field even when
+ * they have distinct compose service names (e.g. `mqtt-mongo-history` and
+ * `mqtt-mongo-ioniq` both use `ghcr.io/groupsky/homy/mqtt-mongo`). CI must publish,
+ * pull, tag, and retag by this image name so shared services share the package.
+ *
+ * For images under `ghcr.io/groupsky/homy/`, the registry prefix and tag are stripped
+ * to yield the bare image name. Any other image (or a missing image field) falls back
+ * to the compose service name.
+ *
+ * @param service Service metadata from docker-compose discovery
+ * @returns GHCR image name, or the service name when no homy image applies
+ *
+ * @example
+ * ```typescript
+ * getImageName({ service_name: 'broker', image: 'ghcr.io/groupsky/homy/mosquitto:latest', ... }); // 'mosquitto'
+ * getImageName({ service_name: 'external-db', image: 'postgres:15', ... }); // 'external-db'
+ * ```
+ */
+export function getImageName(service: Service): string {
+  const img = service.image;
+  const prefix = 'ghcr.io/groupsky/homy/';
+  if (img && img.startsWith(prefix)) {
+    const name = img.slice(prefix.length).split(':')[0];
+    if (name) return name;
+  }
+  return service.service_name;
+}
+
+/**
  * Filters services to only those using GHCR base images or with build directives.
  *
  * This function filters the services array to include only:
