@@ -1,8 +1,8 @@
-FROM ghcr.io/groupsky/homy/wireguard:v1.0.20210914-ls1
+FROM ghcr.io/groupsky/homy/wireguard:1.0.20260223-r0-ls117
 
-# This linuxserver image (2021) only writes a [Peer] block for peers whose name
-# matches ^[[:alnum:]]+$, silently skipping any name containing '-' or '_'. Our
-# peers use hyphens (geno-laptop, tania-phone, ...), so every generate_confs run
+# This linuxserver image only writes a [Peer] block for peers whose name matches
+# ^[[:alnum:]]+$ (still true as of ls117), silently skipping any name containing
+# '-' or '_'. Our peers use hyphens (geno-laptop, tania-phone, ...), so every generate_confs run
 # (triggered by any PEERS change) rebuilt wg0.conf with ONLY the alphanumeric
 # peers, dropping the rest and breaking their VPN. Relax the guard to allow '-'
 # and '_'. The grep assertion fails the build if a future base-image bump moves
