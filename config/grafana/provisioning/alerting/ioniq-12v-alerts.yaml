@@ -1,0 +1,81 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Ioniq 12V Alerts
+    folder: Ioniq EV
+    interval: 1m
+    rules:
+      - uid: ioniq-12v-low-parked
+        title: "🚗 Ioniq 12V Low (parked)"
+        condition: A
+        data:
+          - refId: v12
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("aux_12v") FROM "ioniq"
+                WHERE "group"='bms/2101' AND "state"='parked' AND time >= now() - 15m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [12.2] }
+                  operator: { type: and }
+                  query: { params: [v12] }
+                  reducer: { type: last }
+                  type: query
+              expression: v12
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        labels: { severity: warning, device: ioniq, subsystem: 12v }
+        annotations:
+          summary: "🚗 12V battery below 12.2 V while parked"
+          description: "Aux 12V is dropping at rest. Charge/replace before the next lock cycle — a dead 12V strands the car."
+
+      - uid: ioniq-12v-critical-parked
+        title: "🚗 Ioniq 12V Critical (parked)"
+        condition: A
+        data:
+          - refId: v12
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("aux_12v") FROM "ioniq"
+                WHERE "group"='bms/2101' AND "state"='parked' AND time >= now() - 15m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [11.8] }
+                  operator: { type: and }
+                  query: { params: [v12] }
+                  reducer: { type: last }
+                  type: query
+              expression: v12
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        labels: { severity: critical, device: ioniq, subsystem: 12v }
+        annotations:
+          summary: "🚗 12V battery below 11.8 V while parked"
+          description: "Aux 12V critically low at rest. Charge/replace now to avoid stranding."
