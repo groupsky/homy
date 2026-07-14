@@ -57,6 +57,16 @@ this fix, drop it:
 
     ... --eval 'db.ioniq.dropIndex("ttl__ts")'
 
+**Changing the retention period later:** the index name is fixed, so re-running
+`createIndex` with a different `TTL_EXPIRE_SECONDS` throws `IndexOptionsConflict`
+(MongoDB does not update a TTL via `createIndex`) and the service logs it and
+carries on with the *old* period. To actually change retention, update the value
+in place with `collMod`:
+
+    ... --eval 'db.runCommand({ collMod: "ioniq", index: { name: "ttl_payload__ts", expireAfterSeconds: <new> } })'
+
+(or drop `ttl_payload__ts` and let the service recreate it on next restart).
+
 ## Testing
 
 Unit tests cover `record.js#buildRecord` (Jest, minimal mocking):
