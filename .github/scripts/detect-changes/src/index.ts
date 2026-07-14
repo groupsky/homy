@@ -18,6 +18,7 @@ import { buildReverseDependencyMap, detectAffectedServices } from './lib/depende
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
+import { partitionBuildStrategy } from './lib/build-strategy.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
 import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
 
@@ -236,9 +237,32 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   // Step 10: GHCR existence checks
   console.error('Step 10: Checking GHCR for existing images...');
-  const servicesForCheck = services.filter((s) => servicesToBuild.includes(s.service_name));
+
+  // Precompute test-only status for each changed service (reused in Step 10.5).
+  const testOnlyByService = new Map<string, boolean>();
+  for (const serviceName of changedServices) {
+    const service = services.find((s) => s.service_name === serviceName);
+    testOnlyByService.set(
+      serviceName,
+      service ? isTestOnlyChange(options.baseRef, service) : false
+    );
+  }
+
+  // A directly-changed service whose changes are NOT test-only must ALWAYS
+  // rebuild — its own source changed, so any existing base-SHA image is stale
+  // and reusing it would ship an image missing the new/changed source. Only
+  // affected services (own source unchanged) and changed test-only services are
+  // retag-eligible and handed to the GHCR existence check.
+  const { mustBuild, retagEligible } = partitionBuildStrategy({
+    changedServices,
+    affectedServices,
+    isTestOnly: (name) => testOnlyByService.get(name) ?? false,
+  });
+
+  const servicesForCheck = services.filter((s) => retagEligible.includes(s.service_name));
   const checkResult = await checkAllServices(servicesForCheck, options.baseSha);
-  const toBuild = checkResult.toBuild;
+  // Force-build directly-changed non-test services regardless of GHCR existence.
+  const toBuild = Array.from(new Set([...mustBuild, ...checkResult.toBuild]));
   const toRetag = checkResult.toRetag;
   console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
 
@@ -252,14 +276,8 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
       continue;
     }
 
-    // Find service object
-    const service = services.find((s) => s.service_name === serviceName);
-    if (!service) {
-      continue;
-    }
-
-    // Check if this is a test-only change
-    if (isTestOnlyChange(options.baseRef, service)) {
+    // Check if this is a test-only change (reuse precomputed status)
+    if (testOnlyByService.get(serviceName)) {
       // Verify that image exists in toRetag (already checked by Step 10)
       // If image exists at base SHA, we can pull it for testing
       if (toRetag.includes(serviceName)) {
