@@ -8,6 +8,9 @@
 // TPMS refreshes only on wheel rotation: parked/charging samples are stale and the
 // sensor repeats its last reading verbatim. So we evaluate only fresh `active`
 // samples and de-duplicate identical consecutive raw readings.
+//
+// The frame nests per-wheel values (payload.fl.psi); this bot normalizes them to
+// an internal flat tuple for dedupe before deriving.
 
 const stringify = require('fast-json-stable-stringify')
 
@@ -17,6 +20,15 @@ const REF_TEMP_C = 15 // cold reference temperature
 
 const isFiniteNum = (x) => typeof x === 'number' && Number.isFinite(x)
 const round2 = (x) => Math.round(x * 100) / 100
+
+// The tpms frame nests each wheel: {"fl":{"psi":37,"c":37}, ...}. (The flat
+// "fl.psi" fields visible in InfluxDB are produced by the mqtt-influx converter
+// flattening at write time — they are not what this bot receives.) Returns an
+// empty object for a missing or non-object wheel so callers can destructure.
+const wheelOf = (payload, w) => {
+  const v = payload[w]
+  return (v && typeof v === 'object') ? v : {}
+}
 
 module.exports = function createIoniqTpms (name, config = {}) {
   const tpmsTopic = config.tpmsTopic || 'ioniq/parsed/tpms'
@@ -53,10 +65,12 @@ module.exports = function createIoniqTpms (name, config = {}) {
         if (!payload || payload.state !== 'active') return
 
         // Extract the raw wheel tuple in a fixed key order for stable dedupe.
+        // Keys stay flat ("fl.psi") purely as an internal fingerprint shape.
         const raw = {}
         for (const w of WHEELS) {
-          raw[`${w}.psi`] = payload[`${w}.psi`]
-          raw[`${w}.c`] = payload[`${w}.c`]
+          const { psi, c } = wheelOf(payload, w)
+          raw[`${w}.psi`] = psi
+          raw[`${w}.c`] = c
         }
         const rawKey = stringify(raw)
         if (persistedCache.lastRaw && stringify(persistedCache.lastRaw) === rawKey) {
@@ -75,12 +89,12 @@ module.exports = function createIoniqTpms (name, config = {}) {
         const compTemp = {}
         const cold = {}
         for (const w of WHEELS) {
-          const wt = payload[`${w}.c`]
+          const wt = raw[`${w}.c`]
           if (isFiniteNum(wt)) ownTemp[w] = wt
           const t = isFiniteNum(wt) ? wt : (isFiniteNum(ambientC) ? ambientC : null)
           if (t !== null) compTemp[w] = t
 
-          const psi = payload[`${w}.psi`]
+          const psi = raw[`${w}.psi`]
           if (isFiniteNum(psi) && t !== null) {
             cold[w] = psi - TEMP_COEFF * (t - REF_TEMP_C)
           }
@@ -90,7 +104,7 @@ module.exports = function createIoniqTpms (name, config = {}) {
         for (const w of WHEELS) {
           if (cold[w] === undefined) continue
           publish(`tire_${w}_psi_cold`, payload, cold[w], {
-            psi: payload[`${w}.psi`], temp: compTemp[w]
+            psi: raw[`${w}.psi`], temp: compTemp[w]
           })
         }
 
