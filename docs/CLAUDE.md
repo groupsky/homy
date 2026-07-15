@@ -9,6 +9,9 @@ This directory contains technical documentation for the home automation system.
   - **[Water System Diagram](water_system_diagram.mermaid)** - Visual flow diagram of water circuits and components
   - **IMPORTANT**: Always keep the specification and diagram synchronized when making changes
 
+### Vehicle Telemetry
+- **[Ioniq EV Monitoring & Alerting](ioniq-monitoring-alerting-spec.md)** - Monitoring and alerting specification for the Hyundai Ioniq Electric (battery / 12 V / tires / DTC alerts, Grafana rules, and automations bots over the OBD-logger telemetry)
+
 ### Component Documentation
 
 #### HVAC and Climate Control

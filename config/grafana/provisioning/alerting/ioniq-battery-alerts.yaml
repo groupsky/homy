@@ -1,0 +1,391 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Ioniq Battery Alerts
+    folder: Ioniq EV
+    interval: 1m
+    rules:
+      - uid: ioniq-isolation-low
+        title: "🚗 Ioniq HV Isolation Low"
+        condition: A
+        data:
+          - refId: iso
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("isolation_kohm") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 10m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [500] }
+                  operator: { type: and }
+                  query: { params: [iso] }
+                  reducer: { type: last }
+                  type: query
+              expression: iso
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels: { severity: warning, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 HV isolation resistance below 500 kΩ"
+          description: "Possible HV leak to chassis. Investigate before driving if it keeps falling."
+
+      - uid: ioniq-isolation-critical
+        title: "🚗 Ioniq HV Isolation Critical"
+        condition: A
+        data:
+          - refId: iso
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("isolation_kohm") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 10m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [100] }
+                  operator: { type: and }
+                  query: { params: [iso] }
+                  reducer: { type: last }
+                  type: query
+              expression: iso
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels: { severity: critical, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 HV isolation resistance below 100 kΩ"
+          description: "HV isolation at/under the rated minimum. Do not fast-charge; book HV inspection."
+
+      - uid: ioniq-cell-min-low
+        title: "🚗 Ioniq Min Cell Voltage Low"
+        condition: A
+        data:
+          - refId: cmin
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("cell_min_v") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 5m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [3.0] }
+                  operator: { type: and }
+                  query: { params: [cmin] }
+                  reducer: { type: last }
+                  type: query
+              expression: cmin
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        labels: { severity: warning, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Minimum cell voltage below 3.0 V"
+          description: "A cell is running low. Monitor; read a full cell dump if it persists."
+
+      - uid: ioniq-cell-min-critical
+        title: "🚗 Ioniq Min Cell Voltage Critical"
+        condition: A
+        data:
+          - refId: cmin
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("cell_min_v") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 5m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [2.5] }
+                  operator: { type: and }
+                  query: { params: [cmin] }
+                  reducer: { type: last }
+                  type: query
+              expression: cmin
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        labels: { severity: critical, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Minimum cell voltage below 2.5 V"
+          description: "Cell under-voltage. Stop charging/driving; read DTC + cell dump; service."
+
+      - uid: ioniq-cell-max-critical
+        title: "🚗 Ioniq Max Cell Voltage Critical"
+        condition: A
+        data:
+          - refId: cmax
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("cell_max_v") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 5m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [4.15] }
+                  operator: { type: and }
+                  query: { params: [cmax] }
+                  reducer: { type: last }
+                  type: query
+              expression: cmax
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        labels: { severity: critical, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Maximum cell voltage above 4.15 V"
+          description: "Cell over-voltage. Stop charging; read DTC + cell dump; service."
+
+      - uid: ioniq-pack-temp-high
+        title: "🚗 Ioniq Pack Temperature High"
+        condition: A
+        data:
+          - refId: tmax
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("temp_max") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 10m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [45] }
+                  operator: { type: and }
+                  query: { params: [tmax] }
+                  reducer: { type: last }
+                  type: query
+              expression: tmax
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        labels: { severity: warning, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Pack temperature above 45 °C"
+          description: "Battery running hot. Avoid fast-charging until it cools."
+
+      - uid: ioniq-pack-temp-critical
+        title: "🚗 Ioniq Pack Temperature Critical"
+        condition: A
+        data:
+          - refId: tmax
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("temp_max") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 10m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [55] }
+                  operator: { type: and }
+                  query: { params: [tmax] }
+                  reducer: { type: last }
+                  type: query
+              expression: tmax
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        labels: { severity: critical, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Pack temperature above 55 °C"
+          description: "Pack over-temp. Stop charging/driving; investigate cooling."
+
+      - uid: ioniq-soh-step
+        title: "🚗 Ioniq State of Health Reduced"
+        condition: A
+        data:
+          - refId: soh
+            relativeTimeRange: { from: 86400, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("soh") FROM "ioniq"
+                WHERE "group"='bms/2105' AND time >= now() - 24h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [98] }
+                  operator: { type: and }
+                  query: { params: [soh] }
+                  reducer: { type: last }
+                  type: query
+              expression: soh
+        noDataState: OK
+        execErrState: Alerting
+        for: 1h
+        labels: { severity: warning, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Battery SoH dropped below 98%"
+          description: "Capacity fade step. Log and compare against warranty threshold over time."
+
+      - uid: ioniq-soh-critical
+        title: "🚗 Ioniq State of Health Critical"
+        condition: A
+        data:
+          - refId: soh
+            relativeTimeRange: { from: 86400, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("soh") FROM "ioniq"
+                WHERE "group"='bms/2105' AND time >= now() - 24h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [85] }
+                  operator: { type: and }
+                  query: { params: [soh] }
+                  reducer: { type: last }
+                  type: query
+              expression: soh
+        noDataState: OK
+        execErrState: Alerting
+        for: 1h
+        labels: { severity: critical, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Battery SoH below 85%"
+          description: "Significant capacity fade. Compare to warranty replacement threshold."
+
+      - uid: ioniq-avail-dis-derate
+        title: "🚗 Ioniq Available Discharge Derated"
+        condition: A
+        data:
+          - refId: disq
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("avail_dis") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 15m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: socq
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("soc") FROM "ioniq"
+                WHERE "group"='bms/2101' AND time >= now() - 15m
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: lt, params: [70] }
+                  operator: { type: and }
+                  query: { params: [disq] }
+                  reducer: { type: last }
+                  type: query
+                - evaluator: { type: gt, params: [30] }
+                  operator: { type: and }
+                  query: { params: [socq] }
+                  reducer: { type: last }
+                  type: query
+              expression: disq
+        noDataState: OK
+        execErrState: Alerting
+        for: 15m
+        labels: { severity: warning, device: ioniq, subsystem: battery }
+        annotations:
+          summary: "🚗 Available discharge power derated below 70 kW"
+          description: "BMS is limiting discharge while SoC is healthy (>30%). Watch for a developing pack fault."

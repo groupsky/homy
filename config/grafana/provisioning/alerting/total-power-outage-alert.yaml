@@ -1,0 +1,56 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Total power outage webhook
+    folder: Webhook Alerting
+    interval: 1m
+    rules:
+      - uid: webhook-totalout01
+        title: Total Power Outage (Webhook)
+        condition: B
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 90
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT last("v") FROM "current_power" WHERE time >= now() - 90s'
+              rawQuery: true
+              resultFormat: time_series
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    params: [-1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: classic_conditions
+        noDataState: Alerting
+        execErrState: OK
+        for: 1m
+        annotations:
+          summary: "🚨 TOTAL POWER OUTAGE"
+          description: "All meters have gone silent — every phase is down (full blackout). Server running on UPS/battery."
+        labels:
+          rule_uid: webhook-totalout01
+          alert_type: webhook

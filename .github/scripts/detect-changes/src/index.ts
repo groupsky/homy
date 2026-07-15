@@ -13,11 +13,12 @@ import { Command } from 'commander';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import { discoverBaseImages, buildDirectoryToGhcrMapping } from './lib/base-images.js';
-import { discoverServicesFromCompose, filterGhcrServices } from './lib/services.js';
+import { discoverServicesFromCompose, filterGhcrServices, getImageName } from './lib/services.js';
 import { buildReverseDependencyMap, detectAffectedServices } from './lib/dependency-graph.js';
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
+import { partitionBuildStrategy } from './lib/build-strategy.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
 import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
 
@@ -146,6 +147,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     to_retag: JSON.stringify(result.to_retag),
     to_pull_for_testing: JSON.stringify(result.to_pull_for_testing),
     build_groups: JSON.stringify(result.build_groups),
+    service_image_names: JSON.stringify(result.service_image_names),
 
     // Test and verification outputs
     testable_services: JSON.stringify(result.testable_services),
@@ -235,9 +237,32 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   // Step 10: GHCR existence checks
   console.error('Step 10: Checking GHCR for existing images...');
-  const servicesForCheck = services.filter((s) => servicesToBuild.includes(s.service_name));
+
+  // Precompute test-only status for each changed service (reused in Step 10.5).
+  const testOnlyByService = new Map<string, boolean>();
+  for (const serviceName of changedServices) {
+    const service = services.find((s) => s.service_name === serviceName);
+    testOnlyByService.set(
+      serviceName,
+      service ? isTestOnlyChange(options.baseRef, service) : false
+    );
+  }
+
+  // A directly-changed service whose changes are NOT test-only must ALWAYS
+  // rebuild — its own source changed, so any existing base-SHA image is stale
+  // and reusing it would ship an image missing the new/changed source. Only
+  // affected services (own source unchanged) and changed test-only services are
+  // retag-eligible and handed to the GHCR existence check.
+  const { mustBuild, retagEligible } = partitionBuildStrategy({
+    changedServices,
+    affectedServices,
+    isTestOnly: (name) => testOnlyByService.get(name) ?? false,
+  });
+
+  const servicesForCheck = services.filter((s) => retagEligible.includes(s.service_name));
   const checkResult = await checkAllServices(servicesForCheck, options.baseSha);
-  const toBuild = checkResult.toBuild;
+  // Force-build directly-changed non-test services regardless of GHCR existence.
+  const toBuild = Array.from(new Set([...mustBuild, ...checkResult.toBuild]));
   const toRetag = checkResult.toRetag;
   console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
 
@@ -251,14 +276,8 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
       continue;
     }
 
-    // Find service object
-    const service = services.find((s) => s.service_name === serviceName);
-    if (!service) {
-      continue;
-    }
-
-    // Check if this is a test-only change
-    if (isTestOnlyChange(options.baseRef, service)) {
+    // Check if this is a test-only change (reuse precomputed status)
+    if (testOnlyByService.get(serviceName)) {
       // Verify that image exists in toRetag (already checked by Step 10)
       // If image exists at base SHA, we can pull it for testing
       if (toRetag.includes(serviceName)) {
@@ -292,11 +311,20 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
   // Convert to BuildGroup array
   const buildGroups: BuildGroup[] = Array.from(buildGroupsMap.entries())
-    .map(([buildPath, serviceList]) => ({
-      build_path: buildPath,
-      services: serviceList.sort(),
-      primary_service: serviceList.sort()[0],
-    }))
+    .map(([buildPath, serviceList]) => {
+      const sortedServices = serviceList.sort();
+      const primary = sortedServices[0];
+      // All services in a group share the same build context and image field,
+      // so the primary service is representative for the group's GHCR image name.
+      const primaryService = services.find((s) => s.service_name === primary);
+      const imageName = primaryService ? getImageName(primaryService) : primary;
+      return {
+        build_path: buildPath,
+        services: sortedServices,
+        primary_service: primary,
+        image_name: imageName,
+      };
+    })
     .sort((a, b) => a.build_path.localeCompare(b.build_path));
 
   console.error(`Build groups: ${buildGroups.length} (from ${toBuild.length} services)`);
@@ -358,6 +386,9 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     healthcheck_services: healthcheckServices,
     version_check_services: versionCheckServices,
     build_groups: buildGroups,
+    // Map every GHCR service to its compose image name so CI can publish/pull/tag
+    // by shared image name (services sharing an image share the GHCR package).
+    service_image_names: Object.fromEntries(services.map((s) => [s.service_name, getImageName(s)])),
   };
 }
 

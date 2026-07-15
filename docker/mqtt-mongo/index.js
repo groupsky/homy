@@ -4,6 +4,7 @@
 const mqtt = require('mqtt')
 
 const { MongoClient } = require('mongodb')
+const { startArchiving } = require('./archive')
 const mqttUrl = process.env.BROKER
 const mongoUrl = process.env.MONGODB_URL
 const collection = process.env.COLLECTION
@@ -80,25 +81,8 @@ client.on('connect', function () {
 
         mongoPromise.then((mongoClient) => {
             console.log('connected to', mongoUrl)
-            const db = mongoClient.db()
-            const col = db.collection(collection)
-
-            client.on('message', async function (topic, message) {
-                const payload = JSON.parse(message)
-                if (!payload._tz) {
-                    payload._tz = Date.now()
-                }
-                const record = {
-                    topic,
-                    payload
-                }
-                try {
-                    await col.insertOne(record)
-                } catch (err) {
-                    console.error('Failure writing to mongo', err)
-                    process.exit(1)
-                }
-            })
+            const col = mongoClient.db().collection(collection)
+            startArchiving({ client, collection: col })
         })
     })
 })

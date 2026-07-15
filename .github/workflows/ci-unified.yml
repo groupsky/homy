@@ -77,12 +77,17 @@ jobs:
 
           echo "Checking for changes between $BASE_SHA and $HEAD_SHA"
 
-          # Check if any relevant paths changed
+          # Check if any relevant paths changed.
+          # NOTE: entries must NOT have a trailing slash. The anchoring below
+          # appends `(/|$)`, so a trailing slash (e.g. "docker/") would produce
+          # `^docker/(/|$)`, which only matches the literal "docker/" or
+          # "docker//" and never a nested file like "docker/mqtt-influx/x.js" —
+          # silently skipping every Docker build. Directory names go here bare.
           RELEVANT_PATHS=(
-            "base-images/"
-            "docker/"
+            "base-images"
+            "docker"
             ".github/workflows/ci-unified.yml"
-            ".github/scripts/detect-changes/"
+            ".github/scripts/detect-changes"
           )
 
           CHANGED=false
@@ -149,6 +154,8 @@ jobs:
       unused_base_images: ${{ steps.detect.outputs.unused_base_images }}
       # Build groups for services sharing build contexts
       build_groups: ${{ steps.detect.outputs.build_groups }}
+      # Map of service name -> GHCR image name (basename of the compose image field)
+      service_image_names: ${{ steps.detect.outputs.service_image_names }}
 
     steps:
       - name: Checkout code
@@ -658,14 +665,12 @@ jobs:
             exit 1
           fi
 
-          # Build tags for all services sharing this build context
-          TAGS=""
-          for SERVICE in $SERVICES; do
-            TAGS="$TAGS --tag ghcr.io/groupsky/homy/$SERVICE:$SHA"
-            TAGS="$TAGS --tag ghcr.io/groupsky/homy/$SERVICE:$SHORT_SHA"
-          done
-
-          echo "Creating tags for services: $SERVICES"
+          # Build once and tag by the group's shared GHCR image name.
+          # Services sharing a build context share a compose image field, so
+          # publishing by image name lets them share a single GHCR package.
+          IMAGE_NAME="${{ matrix.build.image_name }}"
+          TAGS="--tag ghcr.io/groupsky/homy/$IMAGE_NAME:$SHA --tag ghcr.io/groupsky/homy/$IMAGE_NAME:$SHORT_SHA"
+          echo "Creating tags for image $IMAGE_NAME (services: $SERVICES)"
 
           # Build with base images from GHCR
           # Base images are pulled automatically from GHCR as needed
@@ -803,10 +808,11 @@ jobs:
       - name: Pull image from GHCR
         env:
           SERVICE: ${{ matrix.service }}
+          IMAGE_NAME: ${{ fromJson(needs.detect-changes.outputs.service_image_names)[matrix.service] }}
           SHA: ${{ github.sha }}
         run: |
-          echo "=== Pulling image for $SERVICE ==="
-          IMAGE="ghcr.io/${{ github.repository_owner }}/homy/$SERVICE:$SHA"
+          echo "=== Pulling image for $SERVICE ($IMAGE_NAME) ==="
+          IMAGE="ghcr.io/${{ github.repository_owner }}/homy/$IMAGE_NAME:$SHA"
 
           if ! docker pull "$IMAGE"; then
             echo "::error::Failed to pull image: $IMAGE"
@@ -823,7 +829,7 @@ jobs:
 
           # Use docker inspect to get healthcheck params (robust method)
           HEALTHCHECK=$(docker inspect --format='{{json .Config.Healthcheck}}' \
-            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
+            ghcr.io/groupsky/homy/${{ fromJson(needs.detect-changes.outputs.service_image_names)[matrix.service] }}:${{ github.sha }})
 
           if [ -z "$HEALTHCHECK" ] || [ "$HEALTHCHECK" = "null" ]; then
             echo "::error::No HEALTHCHECK found in Dockerfile"
@@ -869,7 +875,7 @@ jobs:
           # Start container with healthcheck
           CONTAINER_ID=$(docker run -d \
             --env-file "$ENV_FILE" \
-            ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }})
+            ghcr.io/groupsky/homy/${{ fromJson(needs.detect-changes.outputs.service_image_names)[matrix.service] }}:${{ github.sha }})
 
           echo "container_id=$CONTAINER_ID" >> $GITHUB_OUTPUT
           echo "Container started: $CONTAINER_ID"
@@ -964,57 +970,33 @@ jobs:
           echo "Current SHA: $SHA"
           echo ""
 
-          # Pull images for lights test dependencies
-          # Try current SHA first (for changed services)
-          # Fallback to :latest using the actual image name from docker-compose.yml
+          # Pull images for lights test dependencies by their compose IMAGE NAME.
+          # Images are published by image name (e.g. broker -> mosquitto,
+          # features -> automations), so pull ghcr.io/.../<image-name>:$SHA directly
+          # and fall back to :latest (retagged to :$SHA) when the SHA isn't present.
+          # docker compose up (with IMAGE_TAG=$SHA) then resolves these image names.
           for SERVICE in automations broker features; do
-            CURRENT_IMAGE="ghcr.io/groupsky/homy/$SERVICE:$SHA"
-
-            echo "Pulling $SERVICE..."
-
-            # Try current SHA first (service might have been built)
-            if docker pull "$CURRENT_IMAGE" 2>/dev/null; then
-              echo "✅ $SERVICE pulled from current SHA"
-              continue
-            fi
-
-            # Fallback: extract actual image name from docker-compose.yml and pull :latest
-            echo "⚠️  $SERVICE not at current SHA, trying :latest fallback"
-
             # Extract the image name from docker-compose.yml (e.g., broker -> mosquitto)
             # Parse: "image: ghcr.io/groupsky/homy/mosquitto:${IMAGE_TAG:-latest}" -> "mosquitto"
             IMAGE_NAME=$(grep -A 1 "^  $SERVICE:" docker-compose.yml | \
               grep "image:" | \
               sed 's/.*ghcr.io\/groupsky\/homy\///' | \
               sed 's/:.*$//')
+            [ -z "$IMAGE_NAME" ] && { echo "::error::Could not determine image name for $SERVICE"; exit 1; }
 
-            if [ -z "$IMAGE_NAME" ]; then
-              echo "::error::Could not determine image name for service: $SERVICE"
-              exit 1
-            fi
-
+            SHA_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:$SHA"
             LATEST_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:latest"
-            echo "Image name for $SERVICE: $IMAGE_NAME (pulling $LATEST_IMAGE)"
 
-            if docker pull "$LATEST_IMAGE" 2>/dev/null; then
-              docker tag "$LATEST_IMAGE" "$CURRENT_IMAGE"
-              echo "✅ $SERVICE retagged from $IMAGE_NAME:latest to $SERVICE:$SHA"
+            echo "Pulling $SERVICE ($IMAGE_NAME)..."
+            if docker pull "$SHA_IMAGE" 2>/dev/null; then
+              echo "✅ $SERVICE ($IMAGE_NAME) at SHA"
+            elif docker pull "$LATEST_IMAGE" 2>/dev/null; then
+              docker tag "$LATEST_IMAGE" "$SHA_IMAGE"
+              echo "✅ $SERVICE ($IMAGE_NAME) from :latest"
             else
-              echo "::error::Failed to pull $SERVICE from either current SHA or :latest"
-              echo "Current: $CURRENT_IMAGE"
-              echo "Latest: $LATEST_IMAGE"
-              exit 1
+              echo "::error::Failed to pull $IMAGE_NAME for $SERVICE"; exit 1
             fi
           done
-
-          # Retag images to match docker-compose.yml image names
-          # broker service expects mosquitto image
-          # features service expects automations image
-          echo ""
-          echo "=== Retagging images for docker-compose compatibility ==="
-
-          docker tag "ghcr.io/groupsky/homy/broker:$SHA" "ghcr.io/groupsky/homy/mosquitto:$SHA"
-          echo "✅ Retagged broker → mosquitto"
 
           echo ""
           echo "=== Available images ==="
@@ -1143,31 +1125,36 @@ jobs:
 
       - name: Determine tags
         id: tags
+        env:
+          # Resolve the shared GHCR image name (basename of the compose image field).
+          # Multiple services sharing an image name run this job redundantly with
+          # identical tags; imagetools create is idempotent, so this is acceptable.
+          IMAGE_NAME: ${{ fromJson(needs.detect-changes.outputs.service_image_names)[matrix.service] }}
         run: |
-          echo "=== Determining tags for ${{ matrix.service }} ==="
+          echo "=== Determining tags for ${{ matrix.service }} (image: $IMAGE_NAME) ==="
 
           # Base tags: full SHA and short SHA
-          TAGS="ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}"
+          TAGS="ghcr.io/groupsky/homy/$IMAGE_NAME:${{ github.sha }}"
           SHORT_SHA="${{ github.sha }}"
-          TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:${SHORT_SHA:0:12}"
+          TAGS="$TAGS ghcr.io/groupsky/homy/$IMAGE_NAME:${SHORT_SHA:0:12}"
 
           # Add branch or latest tag
           if [ "${{ github.ref }}" == "refs/heads/master" ]; then
-            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:latest"
+            TAGS="$TAGS ghcr.io/groupsky/homy/$IMAGE_NAME:latest"
             echo "Adding :latest tag (master branch)"
           else
             # Sanitize branch name for tag
             BRANCH=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///' | sed 's/[^a-zA-Z0-9_.-]/-/g' | cut -c1-100)
-            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:$BRANCH"
+            TAGS="$TAGS ghcr.io/groupsky/homy/$IMAGE_NAME:$BRANCH"
             echo "Adding :$BRANCH tag"
           fi
 
           # Add PR tag if applicable
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:pr-${{ github.event.pull_request.number }}"
+            TAGS="$TAGS ghcr.io/groupsky/homy/$IMAGE_NAME:pr-${{ github.event.pull_request.number }}"
             echo "Adding :pr-${{ github.event.pull_request.number }} tag"
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.pr_number }}" ]; then
-            TAGS="$TAGS ghcr.io/groupsky/homy/${{ matrix.service }}:pr-${{ github.event.inputs.pr_number }}"
+            TAGS="$TAGS ghcr.io/groupsky/homy/$IMAGE_NAME:pr-${{ github.event.inputs.pr_number }}"
             echo "Adding :pr-${{ github.event.inputs.pr_number }} tag (manual trigger)"
           fi
 
@@ -1182,8 +1169,8 @@ jobs:
         run: |
           echo "=== Creating additional tags in GHCR ==="
 
-          # Source image (already pushed by Stage 3)
-          SOURCE="ghcr.io/groupsky/homy/${{ matrix.service }}:${{ github.sha }}"
+          # Source image (already pushed by Stage 3), addressed by shared image name
+          SOURCE="ghcr.io/groupsky/homy/${{ fromJson(needs.detect-changes.outputs.service_image_names)[matrix.service] }}:${{ github.sha }}"
 
           # Create all tags at once using imagetools
           # This is more efficient than pulling/tagging/pushing
@@ -1255,10 +1242,13 @@ jobs:
           echo "sha=$BASE_SHA" >> $GITHUB_OUTPUT
 
       - name: Retag existing image
+        env:
+          # Retag by shared GHCR image name (services sharing an image share the package).
+          IMAGE_NAME: ${{ fromJson(needs.detect-changes.outputs.service_image_names)[matrix.service] }}
         run: |
-          echo "=== Retagging existing image for ${{ matrix.service }} ==="
+          echo "=== Retagging existing image for ${{ matrix.service }} (image: $IMAGE_NAME) ==="
 
-          BASE_IMAGE="ghcr.io/groupsky/homy/${{ matrix.service }}:${{ steps.base-sha.outputs.sha }}"
+          BASE_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:${{ steps.base-sha.outputs.sha }}"
           echo "Base image: $BASE_IMAGE"
 
           # Determine new tag
@@ -1270,7 +1260,7 @@ jobs:
             NEW_TAG="$BRANCH"
           fi
 
-          NEW_IMAGE="ghcr.io/groupsky/homy/${{ matrix.service }}:$NEW_TAG"
+          NEW_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:$NEW_TAG"
           echo "New tag: $NEW_IMAGE"
 
           # Use imagetools create for manifest-only retag (no egress)

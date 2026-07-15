@@ -33,7 +33,7 @@ services:
       - ${INGRESSGEN_TEMPLATE_NGINX_FILE}:/etc/docker-gen/templates/nginx.tmpl:ro
 
   vpn:
-    image: ghcr.io/groupsky/homy/wireguard:${IMAGE_TAG:-latest}
+    image: ghcr.io/groupsky/homy/vpn:${IMAGE_TAG:-latest}
     build: docker/wireguard
     restart: unless-stopped
     networks:
@@ -665,6 +665,35 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  mqtt-mongo-ioniq:
+    image: ghcr.io/groupsky/homy/mqtt-mongo:${IMAGE_TAG:-latest}
+    build: docker/mqtt-mongo
+    depends_on:
+      - broker
+      - mongo
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
+      - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
+      - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
+      - COLLECTION=ioniq
+      - BROKER=mqtt://broker
+      - TOPIC=ioniq/#
+      - MQTT_CLIENT_ID=mqtt-mongo-ioniq
+      # 90-day retention: the service ensures a TTL index on payload._ts at startup
+      - TTL_EXPIRE_SECONDS=7776000
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   mqtt-influx-primary:
     image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
     build: docker/mqtt-influx
@@ -747,6 +776,59 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mqtt-influx-dry-switches:
+    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    build: docker/mqtt-influx
+    depends_on:
+      - broker
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/dry-switches/+/reading
+      - MQTT_CLIENT_ID=mqtt-influx-dry-switches
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - TAGS={"bus":"dry-switches"}
+
+  mqtt-influx-ioniq:
+    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    build: docker/mqtt-influx
+    depends_on:
+      - broker
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=ioniq/parsed/#
+      - MQTT_CLIENT_ID=mqtt-influx-ioniq
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
     logging:
       options:
         max-size: "10m"

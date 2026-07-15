@@ -61,6 +61,8 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB (bridges main bus MQTT to InfluxDB)
 - **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
+- **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
+- **mqtt-influx-ioniq**: `ioniq/parsed/#` → InfluxDB (`ioniq` measurement; decoded Hyundai Ioniq OBD telemetry, tags `group`/`state`)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Specialized Monitoring
@@ -72,9 +74,27 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 
 #### `main` Measurement
 **Source**: modbus-serial-main → Main electrical panel (SDM630)
-**Tag Structure**: `bus: "main"`, `device: "main"`
+**Note**: per-phase instantaneous voltage/current/power for the mains is in the `current_power` measurement (`bus: "primary"`, `device.name: "main"`), not here — see below.
 **Fields**: 3-phase power system metrics - voltage, current, power, frequency, power factor
 **Use Cases**: Whole-house energy consumption, electrical system monitoring
+
+#### `current_power` Measurement (from mqtt-influx bridges)
+**Source**: `mqtt-influx-primary` / `-secondary` / `-tetriary` bridges convert
+`/modbus/<bus>/<device>/reading` MQTT messages into instantaneous readings.
+**Tag Structure**: `bus` (`primary` | `secondary` | `tetriary`),
+`device.name` (e.g. `main`, `boiler`, `heat_pump`, …), `device.type`,
+`device.addr`, and `phase` (`A` | `B` | `C`, on 3-phase meters).
+**Fields** (float): `v` (phase voltage), `c` (phase current), `p` (phase power).
+
+**Mains identification**: the whole-house grid meter is `bus = primary`,
+`device.name = main` (SDM630), publishing per-phase `v`/`c`/`p` tagged
+`phase = A/B/C` at ~1 Hz.
+
+**Consumers**: the per-phase power-loss and total-power-outage alerts
+(`config/grafana/provisioning/alerting/phase-power-loss-alert.yaml`,
+`total-power-outage-alert.yaml`) and the AC voltage-range alert (`ac-alert.yaml`)
+query this measurement's `v` field. See
+`docs/superpowers/specs/2026-07-12-per-phase-power-outage-alerting-design.md`.
 
 #### `raw` Measurement (from modbus-serial-secondary)
 **Source**: modbus-serial-secondary → Individual appliance monitoring
@@ -137,11 +157,84 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - Additional inverter metrics: power output, system status
 **Use Cases**: Solar PV production monitoring, grid integration analysis
 
-#### `dry_switches` Measurement
-**Source**: modbus-serial-dry-switches → Digital I/O monitoring
-**Tag Structure**: `bus: "dry_switches"`
-**Fields**: Digital switch states, relay positions
+#### `switches` Measurement
+**Source**: modbus-serial-dry-switches → Digital I/O monitoring (direct InfluxDB write)
+**Tag Structure**: `bus: "switches"`, `device.name`, `device.type`, `device.addr`
+**Fields**: Raw packed words as float fields — `inputs` (mbsl32di digital-input modules) and `outputs`/`switches`/RS485 packet counters (aspar-mod-16ro relay modules)
+**Note**: Configured via `INFLUXDB_MEASUREMENT=switches` (not `dry_switches` as previously documented). The packed `inputs`/`outputs` words are stored as floats here, which cannot be bit-decoded with InfluxQL — use the `dry_switch_input` / `dry_switch_relay` measurements below for per-bit access.
 **Use Cases**: System state monitoring, automation feedback
+
+#### `dry_switch_input` Measurement
+**Source**: mqtt-influx-dry-switches → `/modbus/dry-switches/+/reading` (mbsl32di devices)
+**Tag Structure**: `bus: "dry-switches"`, `device.name`, `device.type`, `device.addr`
+**Fields**:
+- `inputs` (int): Raw 32-bit input word (for whole-word glitch detection)
+- `bit0`..`bit31` (boolean): Per-input electrical state (e.g. mbsl32di1 `bit0` is the front-door contact; the feature layer inverts this into door open/closed)
+- `read_ms` (int): Modbus read duration
+**Use Cases**: Diagnosing flaky/stuck contact sensors and false door-open events — plot or alert on an individual bit directly without bitwise math
+
+#### `dry_switch_relay` Measurement
+**Source**: mqtt-influx-dry-switches → `/modbus/dry-switches/+/reading` (aspar-mod-16ro devices)
+**Tag Structure**: `bus: "dry-switches"`, `device.name`, `device.type`, `device.addr`
+**Fields**:
+- `outputs` (int), `out0`..`out15` (boolean): Raw and per-relay output state
+- `switches` (int): Onboard switch register
+- `received_packets` / `incorrect_packets` / `sent_packets` (int): RS485 bus-health counters — a rising `incorrect_packets` indicates serial-bus problems that can corrupt readings for every device on the bus
+- `read_ms` (int): Modbus read duration
+**Use Cases**: Relay state history and RS485 bus-health diagnostics
+
+### Vehicle Telemetry
+
+#### `ioniq` Measurement
+**Source**: `mqtt-influx-ioniq` → `ioniq/parsed/#` (converter `converters/ioniq.js`, `_type: "ioniq"`)
+**Tag Structure**:
+- `group`: decoded frame group (e.g. `bms/2101`, `tpms`), from `payload.group`
+  - `derived/dtc_count` — a bot-produced `group` value (not from the logger): the `ioniq-dtc`
+    automations bot publishes it with field `value` = count of active DTCs (union of `dtc/stored`
+    + `dtc/pending`) and field `codes` = JSON-stringified array of the code strings. Grafana's
+    `ioniq-dtc-present` rule alerts on `value > 0`.
+  - `derived/tire_<w>_psi_cold` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — bot-produced by the `ioniq-tpms`
+    automations bot: per-wheel tire pressure temperature-compensated to a 15 °C cold reference
+    (`value = psi − 0.18·(temp − 15)` psi, using the wheel's own `.c` temp, falling back to
+    `ambient.c`). Extra fields `psi` (raw psi) and `temp` (temperature used). Only emitted for fresh
+    `state='active'` samples, de-duplicated against frozen readings. Grafana `ioniq-tpms-*-psi-low`
+    (`< 30` warn) / `-psi-crit` (`< 26` crit) / `-overinflated` (`> 42` info) rules alert on it.
+  - `derived/tire_spread_psi` — `ioniq-tpms`: `value` = max − min of the four cold-normalized
+    pressures (psi). Grafana `ioniq-tpms-spread-high` alerts on `value > 3`.
+  - `derived/tire_<w>_temp_excess` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: `value` = wheel
+    temperature minus the mean temperature of the other three wheels (°C). Grafana
+    `ioniq-tpms-<w>-temp-excess` alerts on `value > 8`.
+  - `derived/cell_spread_mv` — a bot-produced `group` value (not from the logger): the
+    `ioniq-cell-health` automations bot reassembles the 96-cell pack (from `cells/1`, `cells/33`,
+    `cells/65`) and publishes field `value` = `(max − min) · 1000` in mV (rest spread; emitted only
+    when `state` is `parked`/`charging`, skipped while `active`), plus field `outlierIndex` = the
+    1-based cell index (1–96) furthest from the pack mean. Grafana's `ioniq-cell-spread-*` rules alert
+    on `value > 50` (warning) / `> 100` (critical).
+  - `derived/module_temp_spread_c` — a bot-produced `group` value (not from the logger): the
+    `ioniq-cell-health` automations bot merges the 12 battery module temperatures (`module_temps`[5]
+    from `bms/2101` + `module_temps_6_12`[7] from `bms/2105`) and publishes field `value` =
+    `max − min` in °C. Grafana's `ioniq-module-temp-spread-*` rules alert on `value > 8` (warning) /
+    `> 15` (critical).
+  - `derived/ldc_ok` — a bot-produced `group` value (not from the logger): the `ioniq-12v-ldc`
+    automations bot publishes it from `bms/2101` with field `value` ∈ {0,1}. `0` means the LDC
+    (DC-DC converter) is not charging the 12 V battery — `aux_12v` held below 13.2 V for ≥60 s while
+    ignition on AND HV load stayed low (the low-voltage judgement is suppressed under heavy traction,
+    where a sagging rail is normal load-priority). `1` = OK. Grafana's `ioniq-ldc-not-charging` rule
+    alerts on `value < 1`.
+  - `derived/aux12v_drop` — a bot-produced `group` value (not from the logger): the `ioniq-12v-ldc`
+    bot publishes it from `bms/2101` with field `value` ∈ {0,1}. `1` marks a 12 V sag edge —
+    `aux_12v` fell ≥0.8 V within 5 s, or drifted ≥0.3 V/min while parked — latched high for 60 s so a
+    1 m Grafana poll catches the pulse. Grafana's `ioniq-12v-sag` rule alerts on `value > 0`.
+- `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by
+**Timestamp**: `payload.ts` (epoch ms), written at `ms` precision
+**Fields**: every payload key except `_type`, `group`, `state`, `ts`:
+- numbers → float (uniformly, even integers, to avoid InfluxDB int/float type conflicts)
+- booleans → boolean; strings → string
+- nested objects → recursively flattened into dotted field keys (e.g. `relays.main`)
+- arrays → JSON-stringified into a single string field
+- Representative fields: `soc`, `hv_v`, `hv_a`, `12v`, `speed`, `relays.main`, `dtc`
+**Retention**: kept indefinitely (compact numeric data). The bulky raw archive lives separately in MongoDB (`ioniq` collection, 90-day TTL on `_ts`) — see `docker/mqtt-mongo/CLAUDE.md`.
+**Use Cases**: Hyundai Ioniq OBD time-series (SoC, HV pack, speed, temps, TPMS) for Grafana and InfluxQL trip/charging analysis
 
 ### Automation System Monitoring
 
