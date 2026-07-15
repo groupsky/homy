@@ -23,8 +23,16 @@ Every task's requirements implicitly include this section. These are **verified 
 - **`km` is overloaded.** `odometer`.`km` = 174650 (lifetime) vs `range_est`.`km` = ~145.6 (remaining range) —
   same field, same measurement. **Every `km` query MUST filter `"group"='odometer'`.** Verified 2026-07-15: an
   unscoped `SELECT last("km")` returns **145.6 (range_est)**, not the odometer.
-- **Never use `count()` for liveness.** An empty window returns **no row at all** while the car sleeps.
-  Liveness is `last()` + timestamp.
+- **Never use `count()` for liveness.** Liveness is `last()` + timestamp.
+  ⚠️ **Second correction to the brief:** the brief justifies this with *"`count()` over an empty window
+  returns NO row while the car sleeps"*. The **conclusion is right but the stated reason is not** — verified
+  against prod, `last()` returns no row over an empty window either (both return `{"statement_id":0}` over a
+  deliberately empty 5-minute window). The real reason to prefer `last()` is that it reports the **age** of
+  the newest sample, whereas `count()` reports only presence and cannot distinguish 5-minutes-stale from
+  20-hours-stale. Do not propagate the blank-resistance rationale into PR2.
+  Because *neither* function survives an empty window, a liveness panel must **not** be bounded by
+  `$timeFilter`: use an explicit wide lookback (`time > now() - 30d`) so the age stays meaningful no matter
+  what time range the viewer selects.
 - **Gauge:** unit is `"percent"` (0–100 scale; `percentunit` is for 0.0–1.0). `minVizWidth`, `minVizHeight`
   and `sizing` **do not exist in 9.5.21** — including them is an error.
 - **Alertlist:** filters by folder **TITLE** (`"folder": {"title": "Ioniq EV"}`); `sortOrder` is a numeric
@@ -774,7 +782,7 @@ labels the gauge**.
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Auxiliary 12 V battery (bms/2101 aux_12v). Bands mirror the shipped Ioniq 12 V alert rules: red below 11.8 V (critical), orange below 12.2 V (low), green above. Readings near 13.5 V mean the LDC is actively charging the 12 V battery — that is healthy.",
+      "description": "Auxiliary 12 V battery (bms/2101 aux_12v), latest reading in any state. Bands use the same thresholds as the shipped Ioniq 12 V alerts (red below 11.8 V critical, orange below 12.2 V low), but those alerts only evaluate readings where state='parked', whereas this tile shows the latest reading whatever the state. A dip while driving can therefore colour this tile without raising an alert. Readings near 13.5 V mean the LDC is actively charging the 12 V battery — that is healthy.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1035,7 +1043,7 @@ breaking if the `influxdbBackendMigration` feature toggle is ever enabled.
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Age of the newest BMS telemetry sample, from the timestamp of last(soc) on bms/2101. The car only reports while awake, so an age of hours is normal while it sleeps and does NOT mean the pipeline is broken. Liveness is deliberately derived from last() plus its timestamp rather than count(): an empty window returns no row at all, so a count()-based panel would go blank exactly when the car is asleep.",
+      "description": "Age of the newest BMS telemetry sample (the timestamp of last(soc) on bms/2101). The car only reports while awake, so an age of hours is normal while it sleeps and does NOT mean the pipeline is broken. Uses a fixed 30-day lookback rather than $timeFilter so the age stays meaningful regardless of the dashboard's time range — a liveness panel that reads \"No data\" as soon as the car sleeps past the selected window would defeat its own purpose. last() is used rather than count() because last() reports the AGE of the newest sample, whereas count() reports only presence and cannot tell 5-minutes-stale from 20-hours-stale. (Over a fully empty window both return no row at all.)",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1083,7 +1091,7 @@ breaking if the `influxdbBackendMigration` feature toggle is ever enabled.
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"soc\") FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
+          "query": "SELECT last(\"soc\") FROM \"ioniq\" WHERE \"group\"='bms/2101' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
@@ -1212,9 +1220,12 @@ The odometer unit is "suffix: km" rather than Grafana's lengthkm, which is
 an SI-prefixed metre unit and rescales 174650 km to an unreadable "175 Mm".
 
 Last-seen reduces the frame's Time field with unit dateTimeFromNow rather
-than counting samples: count() over an empty window returns no row at all,
-so a count()-based liveness panel goes blank precisely when the car sleeps,
-which is when liveness matters most. graphMode/colorMode are pinned to none
+than counting samples: last() reports the AGE of the newest sample, whereas
+count() reports only presence and cannot tell 5-minutes-stale from
+20-hours-stale. It uses a fixed 30-day lookback rather than $timeFilter
+because neither function survives an empty window, so a liveness panel bound
+to the dashboard range would read "No data" the moment the car sleeps past
+it — defeating its own purpose. graphMode/colorMode are pinned to none
 because the reduced value is an epoch — it would otherwise plot Time against
 Time and colour the text permanently red.
 
@@ -1240,9 +1251,19 @@ dashboard's `derived/tire_*` signals depend on that bot fix.
 
 - [ ] **Step 1: Append panels 9–12**
 
-Bands mirror the shipped tpms alert rules: critical `< 26`, low `< 30`, over-inflated `> 42`.
-Grafana threshold steps are ascending lower bounds, so `red(null) → orange(26) → green(30) → red(42)` yields
-red below 26, orange 26–30, green 30–42, red above 42.
+Bands reuse the tpms alert numbers — critical `< 26`, low `< 30`, over-inflated `> 42`. Grafana threshold
+steps are ascending lower bounds, so `red(null) → orange(26) → green(30) → red(42)` yields red below 26,
+orange 26–30, green 30–42, red above 42.
+
+⚠️ **These bands are a rough sanity guide, NOT a mirror of the alerts — do not describe them as one.**
+The panel shows **raw** psi; the shipped TPMS alerts evaluate **cold-normalised** psi
+(`derived/tire_<w>_psi_cold` = `psi − 0.18 × (tempC − 15)`, per `docker/automations/bots/ioniq-tpms.js:18,19,99`).
+Measured live against prod: `fl` raw 37 psi @ 37 °C ⇒ psi_cold **33.04** — a systematic **~4 psi** offset. So
+a raw 34 psi @ 40 °C paints a **green** tile while `psi_cold` 29.5 fires "Tire Low". Tile colour and alert
+state can legitimately disagree; the panel descriptions must say so.
+
+**PR2 note:** the `ioniq-tires` dashboard plots `psi_cold`, where these same bands **are** a true mirror.
+Clone the numbers there, not this caveat.
 
 Known cosmetic edge: the alert is `gt 42` (strict) while a Grafana step at 42 colours `>= 42`, so exactly
 42.0 psi shows red without alerting. Accepted — a one-sided boundary at an exact tenth is not worth a
@@ -1254,7 +1275,7 @@ threshold fudge, and the conservative direction (colour before alert) is the rig
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-left tire pressure (tpms \"fl.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "description": "Front-left tire pressure — RAW, temperature-uncompensated (tpms \"fl.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1328,7 +1349,7 @@ threshold fudge, and the conservative direction (colour before alert) is the rig
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-right tire pressure (tpms \"fr.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "description": "Front-right tire pressure — RAW, temperature-uncompensated (tpms \"fr.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1402,7 +1423,7 @@ threshold fudge, and the conservative direction (colour before alert) is the rig
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-left tire pressure (tpms \"rl.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "description": "Rear-left tire pressure — RAW, temperature-uncompensated (tpms \"rl.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1476,7 +1497,7 @@ threshold fudge, and the conservative direction (colour before alert) is the rig
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-right tire pressure (tpms \"rr.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "description": "Rear-right tire pressure — RAW, temperature-uncompensated (tpms \"rr.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1581,8 +1602,11 @@ in-flight tpms bot fix — only the PR2 tires dashboard's derived/tire_*
 signals do.
 
 Each dotted field is quoted as a single whole identifier; bare fl.psi would
-parse as measurement-dot-field. Bands mirror the shipped tpms alert rules
-(critical < 26, low < 30, over-inflated > 42).
+parse as measurement-dot-field. Bands reuse the tpms alert numbers
+(critical < 26, low < 30, over-inflated > 42) as a rough sanity guide only:
+the alerts evaluate cold-normalised psi, which runs ~4 psi below raw, so
+tile colour and alert state can legitimately disagree. The descriptions
+say so.
 
 Pressures stay frozen while parked because TPMS only transmits while the
 wheels turn; the panel descriptions say so, so a frozen reading is not
