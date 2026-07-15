@@ -580,6 +580,302 @@
       ],
       "title": "Odometer",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Front-left tire pressure (tpms \"fl.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 12,
+        "y": 3
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"fl.psi\") AS \"fl_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire FL",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Front-right tire pressure (tpms \"fr.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 15,
+        "y": 3
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"fr.psi\") AS \"fr_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire FR",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Rear-left tire pressure (tpms \"rl.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 18,
+        "y": 3
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"rl.psi\") AS \"rl_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire RL",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Rear-right tire pressure (tpms \"rr.psi\"), via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. Bands mirror the shipped Ioniq TPMS alerts: red below 26 psi (critical) or above 42 psi (over-inflated), orange below 30 psi (low), green 30–42 psi.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 21,
+        "y": 3
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"rr.psi\") AS \"rr_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire RR",
+      "type": "stat"
     }
   ],
   "refresh": "1m",
