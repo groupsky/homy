@@ -25,7 +25,8 @@ function makeCache () {
 
 const config = { tpmsTopic: TPMS, ambientTopic: AMBIENT }
 
-// Realistic prod-derived sample (2026-07-14 routy). Cold-normalize to 15 °C @ 0.18 psi/°C.
+// Realistic prod-derived sample (2026-07-15 routy). The real tpms frame nests each
+// wheel: {"fl":{"psi":37,"c":37}, ...}. Cold-normalize to 15 °C @ 0.18 psi/°C.
 // fl: 36.6 - 0.18*(35-15) = 33.0 ; fr: 35.2 - 0.18*(36-15) = 31.42
 // rl: 35.6 - 0.18*(37-15) = 31.64 ; rr: 36.2 - 0.18*(37-15) = 32.24
 function sample (overrides = {}) {
@@ -34,10 +35,10 @@ function sample (overrides = {}) {
     group: 'tpms',
     state: 'active',
     ts: 1000,
-    'fl.psi': 36.6, 'fl.c': 35,
-    'fr.psi': 35.2, 'fr.c': 36,
-    'rl.psi': 35.6, 'rl.c': 37,
-    'rr.psi': 36.2, 'rr.c': 37,
+    fl: { psi: 36.6, c: 35 },
+    fr: { psi: 35.2, c: 36 },
+    rl: { psi: 35.6, c: 37 },
+    rr: { psi: 36.2, c: 37 },
     ...overrides
   }
 }
@@ -102,7 +103,7 @@ describe('ioniq-tpms bot', () => {
 
   it('falls back to ambient temp when a wheel temp is missing', async () => {
     await mqtt._trigger(AMBIENT, { c: 25 })
-    await mqtt._trigger(TPMS, sample({ 'fl.c': undefined }))
+    await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
     // fl uses ambient 25: 36.6 - 0.18*(25-15) = 36.6 - 1.8 = 34.8
     expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(34.8)
     expect(published(mqtt, 'tire_fl_psi_cold').temp).toBe(25)
@@ -127,7 +128,7 @@ describe('ioniq-tpms bot', () => {
     it('re-emits when any reading changes', async () => {
       await mqtt._trigger(TPMS, sample({ ts: 1 }))
       const after = mqtt.publish.mock.calls.length
-      await mqtt._trigger(TPMS, sample({ ts: 2, 'fl.psi': 30.0 }))
+      await mqtt._trigger(TPMS, sample({ ts: 2, fl: { psi: 30.0, c: 35 } }))
       expect(mqtt.publish.mock.calls.length).toBeGreaterThan(after)
     })
 
@@ -147,31 +148,31 @@ describe('ioniq-tpms bot', () => {
 
   describe('partial payloads', () => {
     it('omits a wheel with missing psi but still emits the others', async () => {
-      await mqtt._trigger(TPMS, sample({ 'fl.psi': undefined }))
+      await mqtt._trigger(TPMS, sample({ fl: { c: 35 } }))
       expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()
       expect(published(mqtt, 'tire_fr_psi_cold')).toBeDefined()
     })
 
     it('excludes a psi-less wheel from spread', async () => {
-      await mqtt._trigger(TPMS, sample({ 'fl.psi': undefined }))
+      await mqtt._trigger(TPMS, sample({ fl: { c: 35 } }))
       // remaining cold: fr 31.42, rl 31.64, rr 32.24 → spread 32.24-31.42 = 0.82
       expect(published(mqtt, 'tire_spread_psi').value).toBe(0.82)
     })
 
     it('still counts a psi-less-but-temp-present wheel in others temp_excess', async () => {
       // fl has temp 35 but no psi. fr temp_excess still uses fl's temp in the mean.
-      await mqtt._trigger(TPMS, sample({ 'fl.psi': undefined }))
+      await mqtt._trigger(TPMS, sample({ fl: { c: 35 } }))
       expect(published(mqtt, 'tire_fr_temp_excess').value).toBe(-0.33)
     })
 
     it('emits no psi_cold for a wheel missing both its temp and any ambient', async () => {
-      await mqtt._trigger(TPMS, sample({ 'fl.c': undefined }))
+      await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
       expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()
     })
 
     it('does not emit spread when fewer than two wheels are valid', async () => {
       await mqtt._trigger(TPMS, sample({
-        'fr.psi': undefined, 'rl.psi': undefined, 'rr.psi': undefined
+        fr: { c: 36 }, rl: { c: 37 }, rr: { c: 37 }
       }))
       expect(published(mqtt, 'tire_fl_psi_cold')).toBeDefined()
       expect(published(mqtt, 'tire_spread_psi')).toBeUndefined()
@@ -179,15 +180,14 @@ describe('ioniq-tpms bot', () => {
 
     it('does not emit temp_excess for a lone-temp wheel', async () => {
       await mqtt._trigger(TPMS, sample({
-        'fr.c': undefined, 'rl.c': undefined, 'rr.c': undefined,
-        'fr.psi': undefined, 'rl.psi': undefined, 'rr.psi': undefined
+        fr: {}, rl: {}, rr: {}
       }))
       expect(publishedTopics(mqtt)).not.toContain(P('tire_fl_temp_excess'))
     })
 
     it('does not emit temp_excess for a wheel using only ambient fallback temp', async () => {
       await mqtt._trigger(AMBIENT, { c: 25 })
-      await mqtt._trigger(TPMS, sample({ 'fl.c': undefined }))
+      await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
       // fl still gets a cold pressure (via ambient) but no temp_excess (no own temp)
       expect(published(mqtt, 'tire_fl_psi_cold')).toBeDefined()
       expect(published(mqtt, 'tire_fl_temp_excess')).toBeUndefined()
@@ -195,16 +195,74 @@ describe('ioniq-tpms bot', () => {
 
     it('excludes an ambient-fallback wheel from the others temp_excess mean', async () => {
       await mqtt._trigger(AMBIENT, { c: 25 })
-      await mqtt._trigger(TPMS, sample({ 'fl.c': undefined }))
+      await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
       // fr excess uses only fr,rl,rr real temps: 36 - mean(37,37) = 36 - 37 = -1
       expect(published(mqtt, 'tire_fr_temp_excess').value).toBe(-1)
     })
 
     it('ignores a non-finite ambient temp', async () => {
       await mqtt._trigger(AMBIENT, { c: 'n/a' })
-      await mqtt._trigger(TPMS, sample({ 'fl.c': undefined }))
+      await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
       // no valid temp for fl → no psi_cold
       expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()
+    })
+
+    it('tolerates a wheel key that is absent entirely', async () => {
+      await mqtt._trigger(TPMS, sample({ fl: undefined }))
+      expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()
+      expect(published(mqtt, 'tire_fr_psi_cold')).toBeDefined()
+    })
+
+    it('tolerates a wheel value that is not an object', async () => {
+      await mqtt._trigger(TPMS, sample({ fl: 'n/a' }))
+      expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()
+      expect(published(mqtt, 'tire_fr_psi_cold')).toBeDefined()
+    })
+  })
+
+  // Regression: the bot originally read flat `payload['fl.psi']` while the real
+  // frame nests each wheel, so it never published anything. This fixture is a
+  // verbatim prod payload (routy, 2026-07-15) — keep it byte-faithful.
+  describe('real prod payload', () => {
+    const PROD = {
+      _type: 'ioniq',
+      group: 'tpms',
+      state: 'active',
+      ts: 1784140447039,
+      seq: 11057,
+      boot_id: '2b68df09-135e-43df-be6e-da17127c9725',
+      fl: { psi: 37, c: 37 },
+      fr: { psi: 35.4, c: 38 },
+      rr: { psi: 36.2, c: 38 },
+      rl: { psi: 35.8, c: 38 },
+      raw: '62C00BFFFF0000B9570100B1580100B5580100B3580100',
+      hdr: '7A0',
+      req: '22C00B',
+      _tz: 1784140447137,
+      _ts: '2026-07-15T18:34:07.137Z'
+    }
+
+    it('emits all four cold pressures from a verbatim prod frame', async () => {
+      await mqtt._trigger(TPMS, PROD)
+      // fl: 37 - 0.18*(37-15) = 33.04 ; fr: 35.4 - 0.18*(38-15) = 31.26
+      // rl: 35.8 - 0.18*(38-15) = 31.66 ; rr: 36.2 - 0.18*(38-15) = 32.06
+      expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(33.04)
+      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.26)
+      expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(31.66)
+      expect(published(mqtt, 'tire_rr_psi_cold').value).toBe(32.06)
+    })
+
+    it('emits spread and temp_excess from a verbatim prod frame', async () => {
+      await mqtt._trigger(TPMS, PROD)
+      // max 33.04 (fl) - min 31.26 (fr) = 1.78
+      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.78)
+      // fl: 37 - mean(38,38,38) = -1
+      expect(published(mqtt, 'tire_fl_temp_excess').value).toBe(-1)
+    })
+
+    it('does not mistake the payload hex `raw` string for wheel data', async () => {
+      await mqtt._trigger(TPMS, PROD)
+      expect(published(mqtt, 'tire_fl_psi_cold').psi).toBe(37)
     })
   })
 })
