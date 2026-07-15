@@ -1936,16 +1936,21 @@ orchestrator verdict: rendered folder title, per-panel values, nav dropdown.
 - **`km` is overloaded**: `odometer`.km = 174650 vs `range_est`.km = ~145.6, same field, same measurement.
   Verified against prod: an unscoped `last("km")` returns **145.6** — the range estimate, not the odometer.
   The panel is scoped `"group"='odometer'`.
-- **Liveness never uses `count()`**: an empty window returns *no row* while the car sleeps, so a
-  count()-based panel goes blank exactly when liveness matters. Last-seen reduces the `Time` field with
-  `unit: dateTimeFromNow`.
+- **Liveness never uses `count()`**: last-seen reduces the `Time` field with `unit: dateTimeFromNow`, because
+  `last()` reports the sample's *age* while `count()` reports only presence and cannot tell 5-minutes-stale
+  from 20-hours-stale. Since *neither* survives an empty window, the panel uses a fixed 30-day lookback rather
+  than `$timeFilter` — otherwise it would read "No data" the moment the car sleeps past the dashboard range.
 - **InfluxQL series naming**: the 9.5.21 frontend parser names series `<measurement>.<column>` unless the
   column is literally `value`, so `byName` overrides on an aliased column silently never match. Display
   names use the target `alias` field instead. (`sunseeker-overview.json`'s `byName: "battery"` override is
   dead code for this reason — deliberately not copied.)
 - Dotted TPMS fields are quoted as whole identifiers (`"fl.psi"`); `"group"` is quoted (reserved word).
-- Threshold bands mirror the shipped alert rules exactly (12 V 11.8/12.2; tires 26/30/42; DTC >0) so the
-  dashboard and the alerts can never disagree.
+- **Threshold bands are honest about what they are.** 12 V (11.8/12.2) and DTC (>0) use the shipped alert
+  numbers; note the 12 V alerts only evaluate `state='parked'` while the tile shows any state. The **tire**
+  bands (26/30/42) are a *rough sanity guide only*: the panel shows raw psi, but the TPMS alerts evaluate
+  cold-normalised psi (`≈ psi − 0.18 × (tempC − 15)`) which measures ~4 psi lower — so tile colour and alert
+  state can legitimately disagree. The panel descriptions say so rather than implying a mirror that does not
+  exist.
 
 ## Out of scope
 
