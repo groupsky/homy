@@ -876,6 +876,38 @@
       ],
       "title": "Tire RR",
       "type": "stat"
+    },
+    {
+      "description": "Alerts currently firing, pending or erroring from the \"Ioniq EV\" alert folder (the Phase-2/3 battery, 12 V, cell-health, DTC and TPMS rules). Filtering is by folder title, which stays stable across environments regardless of the provisioned folder's database id. An empty list is the healthy state — it means nothing is firing.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 13,
+      "options": {
+        "alertInstanceLabelFilter": "",
+        "alertName": "",
+        "dashboardAlerts": false,
+        "folder": {
+          "title": "Ioniq EV"
+        },
+        "groupBy": [],
+        "groupMode": "default",
+        "maxItems": 20,
+        "sortOrder": 3,
+        "stateFilter": {
+          "error": true,
+          "firing": true,
+          "noData": false,
+          "normal": false,
+          "pending": true
+        },
+        "viewMode": "list"
+      },
+      "title": "Active Alerts",
+      "type": "alertlist"
     }
   ],
   "refresh": "1m",
