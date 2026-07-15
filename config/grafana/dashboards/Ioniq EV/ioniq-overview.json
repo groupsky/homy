@@ -1,0 +1,934 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Hyundai Ioniq Electric — at-a-glance status: state of charge, HV pack V/A/kW, 12 V auxiliary battery, diagnostic trouble codes, telemetry last-seen, odometer, tire pressures and active alerts.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "ioniq"
+      ],
+      "targetBlank": false,
+      "title": "Ioniq EV",
+      "tooltip": "Other Ioniq EV dashboards",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Traction battery state of charge. \"SoC (BMS)\" is the true pack SoC (bms/2101); \"SoC (dash)\" is the driver-facing value (bms/2105) and normally reads a few percent higher — that offset is expected, not an error.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "alias": "SoC (BMS)",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"soc\") AS \"soc\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        },
+        {
+          "alias": "SoC (dash)",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"soc_display\") AS \"soc_display\" FROM \"ioniq\" WHERE \"group\"='bms/2105' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "B"
+        }
+      ],
+      "title": "State of Charge",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "High-voltage traction pack voltage (bms/2101 hv_v).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "volt"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"hv_v\") AS \"hv_v\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pack Voltage",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "High-voltage pack current (bms/2101 hv_a).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "amp"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"hv_a\") AS \"hv_a\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pack Current",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Instantaneous HV pack power (bms/2101 hv_kw), equal to hv_v × hv_a / 1000.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatt"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"hv_kw\") AS \"hv_kw\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pack Power",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Auxiliary 12 V battery (bms/2101 aux_12v), latest reading in any state. Bands use the same thresholds as the shipped Ioniq 12 V alerts (red below 11.8 V critical, orange below 12.2 V low), but those alerts only evaluate readings where state='parked', whereas this tile shows the latest reading whatever the state. A dip while driving can therefore colour this tile without raising an alert. Readings near 13.5 V mean the LDC is actively charging the 12 V battery — that is healthy.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 11.8
+              },
+              {
+                "color": "green",
+                "value": 12.2
+              }
+            ]
+          },
+          "unit": "volt"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 3
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"aux_12v\") AS \"aux_12v\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "12 V Battery",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Number of active diagnostic trouble codes (derived/dtc_count). 0 = healthy, and a green \"No DTCs\" is the normal steady state. Any value above 0 also raises the Ioniq DTC alert.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "No DTCs"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 3
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"value\") AS \"dtc_count\" FROM \"ioniq\" WHERE \"group\"='derived/dtc_count' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "DTC Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Age of the newest BMS telemetry sample (the timestamp of last(soc) on bms/2101). The car only reports while awake, so an age of hours is normal while it sleeps and does NOT mean the pipeline is broken. Uses a fixed 30-day lookback rather than $timeFilter so the age stays meaningful regardless of the dashboard's time range — a liveness panel that reads \"No data\" as soon as the car sleeps past the selected window would defeat its own purpose. last() is used rather than count() because last() reports the AGE of the newest sample, whereas count() reports only presence and cannot tell 5-minutes-stale from 20-hours-stale. (Over a fully empty window both return no row at all.)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "dateTimeFromNow"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 3
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^[Tt]ime$/",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"soc\") FROM \"ioniq\" WHERE \"group\"='bms/2101' AND time > now() - 30d",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Last Seen",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Lifetime distance travelled (odometer km). NOTE: the km field is overloaded in this measurement — range_est also carries a km field (~146, the remaining-range estimate). This query is scoped to \"group\"='odometer' for that reason; verified 2026-07-15, an unscoped last(\"km\") returns range_est's 145.6 rather than the odometer's 174650.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix: km"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"km\") AS \"odometer\" FROM \"ioniq\" WHERE \"group\"='odometer' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Odometer",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Front-left tire pressure — RAW, temperature-uncompensated (tpms \"fl.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 6
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"fl.psi\") AS \"fl_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire FL",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Front-right tire pressure — RAW, temperature-uncompensated (tpms \"fr.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 12,
+        "y": 6
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"fr.psi\") AS \"fr_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire FR",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Rear-left tire pressure — RAW, temperature-uncompensated (tpms \"rl.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 16,
+        "y": 6
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"rl.psi\") AS \"rl_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire RL",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Rear-right tire pressure — RAW, temperature-uncompensated (tpms \"rr.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 42
+              }
+            ]
+          },
+          "unit": "pressurepsi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 20,
+        "y": 6
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"rr.psi\") AS \"rr_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tire RR",
+      "type": "stat"
+    },
+    {
+      "description": "Alerts currently firing, pending or erroring from the \"Ioniq EV\" alert folder (the Phase-2/3 battery, 12 V, cell-health, DTC and TPMS rules). Filtering is by folder title, which stays stable across environments regardless of the provisioned folder's database id. An empty list is the healthy state — it means nothing is firing.",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 13,
+      "options": {
+        "alertInstanceLabelFilter": "",
+        "alertName": "",
+        "dashboardAlerts": false,
+        "folder": {
+          "title": "Ioniq EV"
+        },
+        "groupBy": [],
+        "groupMode": "default",
+        "maxItems": 20,
+        "sortOrder": 3,
+        "stateFilter": {
+          "error": true,
+          "firing": true,
+          "noData": false,
+          "normal": false,
+          "pending": true
+        },
+        "viewMode": "list"
+      },
+      "title": "Active Alerts",
+      "type": "alertlist"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": [
+    "ioniq",
+    "ev",
+    "vehicle"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "🚗 Ioniq EV – Overview",
+  "uid": "ioniq-overview",
+  "version": 1,
+  "weekStart": ""
+}
