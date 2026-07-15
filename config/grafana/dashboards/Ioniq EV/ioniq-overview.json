@@ -586,13 +586,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-left tire pressure — RAW, temperature-uncompensated (tpms \"fl.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Front-left tire pressure — RAW, temperature-uncompensated (tpms \"fl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -603,19 +603,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -647,7 +647,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"fl.psi\") AS \"fl_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"fl.psi\") * 0.0689476 AS \"fl_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -660,13 +660,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-right tire pressure — RAW, temperature-uncompensated (tpms \"fr.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Front-right tire pressure — RAW, temperature-uncompensated (tpms \"fr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -677,19 +677,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -721,7 +721,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"fr.psi\") AS \"fr_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"fr.psi\") * 0.0689476 AS \"fr_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -734,13 +734,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-left tire pressure — RAW, temperature-uncompensated (tpms \"rl.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Rear-left tire pressure — RAW, temperature-uncompensated (tpms \"rl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rl_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -751,19 +751,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -795,7 +795,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"rl.psi\") AS \"rl_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"rl.psi\") * 0.0689476 AS \"rl_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
@@ -808,13 +808,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-right tire pressure — RAW, temperature-uncompensated (tpms \"rr.psi\") via last(). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <26, orange <30, green 30-42, red >42 psi) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~4 psi BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Rear-right tire pressure — RAW, temperature-uncompensated (tpms \"rr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rr_psi_cold, approximately psi - 0.18 x (tempC - 15)), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -825,19 +825,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -869,7 +869,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"rr.psi\") AS \"rr_psi\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"rr.psi\") * 0.0689476 AS \"rr_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
           "rawQuery": true,
           "refId": "A"
         }
