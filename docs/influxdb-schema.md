@@ -224,7 +224,8 @@ query this measurement's `v` field. See
   - `derived/aux12v_drop` — a bot-produced `group` value (not from the logger): the `ioniq-12v-ldc`
     bot publishes it from `bms/2101` with field `value` ∈ {0,1}. `1` marks a 12 V sag edge —
     `aux_12v` fell ≥0.8 V within 5 s, or drifted ≥0.3 V/min while parked — latched high for 60 s so a
-    1 m Grafana poll catches the pulse. Grafana's `ioniq-12v-sag` rule alerts on `value > 0`.
+    1 m Grafana poll catches the pulse. Feeds the 12 V/LDC dashboard; it has no alert rule — the former
+    `ioniq-12v-sag` rule fired mostly on normal driving-load swings and was removed as unreliable.
 - `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by
 **Timestamp**: `payload.ts` (epoch ms), written at `ms` precision
 **Fields**: every payload key except `_type`, `group`, `state`, `ts`:
