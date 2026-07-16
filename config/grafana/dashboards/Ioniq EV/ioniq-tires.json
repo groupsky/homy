@@ -609,7 +609,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Cold-equivalent pressure trend for all four wheels (derived/tire_*_psi_cold). Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. Dashed reference lines are the alert thresholds (26 critical / 30 low / 42 over-inflated); the 36 psi cold placard is the target inside the green band. Over a 6 h parked window expect flat lines at the last known pressures.",
+      "description": "Cold-equivalent pressure trend for all four wheels (derived/tire_*_psi_cold). Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. Dashed reference lines are the alert thresholds (26 critical / 30 low / 42 over-inflated); the 36 psi cold placard is the target inside the green band. However, fill(previous) only carries a value forward from within the queried window: if the window opens before the most recent sample (a fully-parked 6 h stretch with no new reading), this panel can render completely EMPTY rather than flat — that is expected, not a broken feed. The per-wheel last()+30d \"psi (cold)\" stat tiles above are the authoritative current-value source even when this panel shows nothing.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -742,7 +742,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Per-wheel temperature-excess trend (derived/tire_*_temp_excess). Healthy near 0 °C; the dashed line at 8 °C is the \"tire hot\" alert threshold. One wheel diverging upward points at that corner (brake drag or low pressure). Driving-gated + fill(previous), so flat segments while parked are expected.",
+      "description": "Per-wheel temperature-excess trend (derived/tire_*_temp_excess). Healthy near 0 °C; the dashed line at 8 °C is the \"tire hot\" alert threshold. One wheel diverging upward points at that corner (brake drag or low pressure). Driving-gated + fill(previous): fill(previous) only carries a value forward from within the queried window, so a fully-parked 6 h window can render this panel completely EMPTY rather than flat — that is expected, not a broken feed; the per-wheel temp-excess stat tiles above show the last known value via a 30-day lookback.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -867,7 +867,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Largest cold-pressure difference between any two wheels (derived/tire_spread_psi). Lower is better — a healthy set sits within ~2-3 psi. NOTE: there is no shipped alert on this signal; the 3/5 psi bands are a rough sanity guide only, not a mirror of an alert rule. Driving-gated + fill(previous); flat while parked is expected.",
+      "description": "Largest cold-pressure difference between any two wheels (derived/tire_spread_psi). Lower is better — a healthy set sits within ~2-3 psi. NOTE: there is no shipped alert on this signal; the 3/5 psi bands are a rough sanity guide only, not a mirror of an alert rule. Driving-gated + fill(previous): fill(previous) only carries a value forward from within the queried window, so a fully-parked 6 h window can render this panel completely EMPTY rather than flat — that is expected, not a broken feed.",
       "fieldConfig": {
         "defaults": {
           "color": {

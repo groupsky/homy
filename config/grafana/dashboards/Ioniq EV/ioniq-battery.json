@@ -185,7 +185,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "decimals": 3,
@@ -209,7 +209,38 @@
           },
           "unit": "volt"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cell max"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 4.15
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "line"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -261,7 +292,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Max-minus-min cell voltage at rest (derived/cell_spread_mv). GENUINELY SPARSE: emitted only when the car is at rest (state charging/parked) — historically only a handful of points all-time — so over a 6 h daytime window this panel is often EMPTY. That is expected, not a broken feed; widen the range to a rest window to see points. Axis is pinned to 0-150 mV: a known bot edge case can emit an impossible ~3800 mV when a cell frame arrives all-zeros, and this panel deliberately does NOT auto-scale to that spike (it clips off-scale instead). Alerts: warning >50 mV, critical >100 mV.",
+      "description": "Max-minus-min cell voltage at rest (derived/cell_spread_mv). GENUINELY SPARSE: emitted only when the car is at rest (state charging/parked) — historically only a handful of points all-time — so over a 6 h daytime window this panel is often EMPTY. That is expected, not a broken feed; widen the range to a rest window to see points. Axis is pinned to 0-150 mV: a known bot edge case can emit an impossible ~3800 mV when a cell frame arrives all-zeros, and this panel deliberately does NOT auto-scale to that spike (it clips off-scale instead). Alerts: warning >50 mV, critical >100 mV. A second \"Outlier cell #\" series (right axis, 1-96, no threshold coloring) marks which cell index drove a spread spike; like the spread value, it holds its last known reading while the car is at rest.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -320,7 +351,34 @@
           },
           "unit": "mvolt"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outlier cell #"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "cell #"
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "off"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -352,6 +410,16 @@
           "query": "SELECT last(\"value\") AS \"cell_spread_mv\" FROM \"ioniq\" WHERE \"group\"='derived/cell_spread_mv' AND $timeFilter GROUP BY time($__interval) fill(none)",
           "rawQuery": true,
           "refId": "A"
+        },
+        {
+          "alias": "Outlier cell #",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"outlierIndex\") FROM \"ioniq\" WHERE \"group\"='derived/cell_spread_mv' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "B"
         }
       ],
       "title": "Cell Voltage Spread",
@@ -395,7 +463,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "decimals": 0,
@@ -604,7 +672,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "decimals": 0,
@@ -703,7 +771,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "decimals": 0,
@@ -883,7 +951,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"cum_chg_ah\") AS \"Charge (Ah)\", last(\"cum_dis_ah\") AS \"Discharge (Ah)\", last(\"cum_in_kwh\") AS \"Energy In (kWh)\", last(\"cum_out_kwh\") AS \"Energy Out (kWh)\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
+          "query": "SELECT last(\"cum_chg_ah\") AS \"Charge (Ah)\", last(\"cum_dis_ah\") AS \"Discharge (Ah)\", last(\"cum_in_kwh\") AS \"Energy In (kWh)\", last(\"cum_out_kwh\") AS \"Energy Out (kWh)\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
