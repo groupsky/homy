@@ -1,0 +1,29 @@
+apiVersion: 1
+
+# Removes the parked-12V and 12V-sag alert rules. Verified against 45 days of
+# prod data (2026-07-16): these rules false-fire on shutdown transients, not
+# real faults.
+#
+# The OBD logger powers off ~30 s after the car locks, so parked readings arrive
+# as a 2-4 sample burst captured while the 12V rail is still collapsing from its
+# LDC-held driving level (~13-14 V) toward rest and under the lock/shutdown load.
+# The true resting voltage is never sampled. Of 33 parked samples in 45 days, 14
+# breached the 12.2 V warning and 4 the 11.8 V critical (including a garbage 0 V
+# read), while the battery is healthy (driving mean 13.28 V, settled park ~12.6 V).
+# `last()` over a 15 m window then latches that one transient for the whole window.
+#
+# The 12V-sag rule (derived/aux12v_drop) fired 1002x/45d, 994 of them while
+# DRIVING — normal regen/traction voltage swings, not faults.
+#
+# The LDC-not-charging rule (derived/ldc_ok) is correctly ignition-gated and is
+# retained in ioniq-12v-ldc-alerts.yaml (0 false fires in prod).
+#
+# Keep this deletion file in git as the permanent record (per grafana runbook).
+
+deleteRules:
+  - orgId: 1
+    uid: ioniq-12v-low-parked
+  - orgId: 1
+    uid: ioniq-12v-critical-parked
+  - orgId: 1
+    uid: ioniq-12v-sag
