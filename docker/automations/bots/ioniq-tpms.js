@@ -17,6 +17,7 @@ const stringify = require('fast-json-stable-stringify')
 const WHEELS = ['fl', 'fr', 'rl', 'rr']
 const TEMP_COEFF = 0.18 // psi per °C
 const REF_TEMP_C = 15 // cold reference temperature
+const AMBIENT_MAX_AGE_MS = 30 * 60 * 1000 // ambient older than this is not a reasonable reference
 
 const isFiniteNum = (x) => typeof x === 'number' && Number.isFinite(x)
 const round2 = (x) => Math.round(x * 100) / 100
@@ -34,6 +35,7 @@ module.exports = function createIoniqTpms (name, config = {}) {
   const tpmsTopic = config.tpmsTopic || 'ioniq/parsed/tpms'
   const ambientTopic = config.ambientTopic || 'ioniq/parsed/ambient'
   const prefix = config.outputTopicPrefix || 'ioniq/parsed/derived/'
+  const ambientMaxAgeMs = config.ambientMaxAgeMs || AMBIENT_MAX_AGE_MS
   const log = (...args) => { if (config.verbose) console.log(`[${name}]`, ...args) }
 
   return {
@@ -48,7 +50,13 @@ module.exports = function createIoniqTpms (name, config = {}) {
     start: async ({ mqtt, persistedCache }) => {
       // Latest ambient temperature, used as a per-wheel fallback when a wheel's
       // own temperature is missing. Not persisted — it refills on the next sample.
+      // ambientAtMs bounds how long a cached reading stays usable: the car may not
+      // report ambient temp again for hours after it sleeps, and compensating a
+      // fresh, real psi reading against a stale (e.g. yesterday-afternoon-warm)
+      // ambient temp silently skews psi_cold low — any reasonable reference beats
+      // none, but a many-hours-old one is not reasonable.
       let ambientC = null
+      let ambientAtMs = null
 
       const publish = (signal, base, value, extra) => {
         mqtt.publish(prefix + signal, {
@@ -85,13 +93,16 @@ module.exports = function createIoniqTpms (name, config = {}) {
         //  - compTemp: ownTemp, else the cached ambient temp. Used only to
         //    temperature-compensate pressure (psi_cold), where any reasonable
         //    reference temperature is better than none.
+        const ambientFresh = isFiniteNum(ambientC) && ambientAtMs !== null &&
+          (Date.now() - ambientAtMs) <= ambientMaxAgeMs
+
         const ownTemp = {}
         const compTemp = {}
         const cold = {}
         for (const w of WHEELS) {
           const wt = raw[`${w}.c`]
           if (isFiniteNum(wt)) ownTemp[w] = wt
-          const t = isFiniteNum(wt) ? wt : (isFiniteNum(ambientC) ? ambientC : null)
+          const t = isFiniteNum(wt) ? wt : (ambientFresh ? ambientC : null)
           if (t !== null) compTemp[w] = t
 
           const psi = raw[`${w}.psi`]
@@ -128,7 +139,10 @@ module.exports = function createIoniqTpms (name, config = {}) {
       }
 
       await mqtt.subscribe(ambientTopic, (payload) => {
-        ambientC = payload && isFiniteNum(payload.c) ? payload.c : ambientC
+        if (payload && isFiniteNum(payload.c)) {
+          ambientC = payload.c
+          ambientAtMs = Date.now()
+        }
         log('ambient', ambientC)
       })
       await mqtt.subscribe(tpmsTopic, onTpms)
