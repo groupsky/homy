@@ -207,6 +207,31 @@ describe('ioniq-tpms bot', () => {
       expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()
     })
 
+    it('ignores an ambient reading older than 30 minutes', async () => {
+      jest.useFakeTimers()
+      try {
+        await mqtt._trigger(AMBIENT, { c: 25 })
+        jest.advanceTimersByTime(30 * 60 * 1000 + 1)
+        await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
+        // ambient is stale → no valid temp for fl → no psi_cold
+        expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('still uses ambient just under the 30 minute staleness bound', async () => {
+      jest.useFakeTimers()
+      try {
+        await mqtt._trigger(AMBIENT, { c: 25 })
+        jest.advanceTimersByTime(30 * 60 * 1000 - 1)
+        await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
+        expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(34.8)
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
     it('tolerates a wheel key that is absent entirely', async () => {
       await mqtt._trigger(TPMS, sample({ fl: undefined }))
       expect(published(mqtt, 'tire_fl_psi_cold')).toBeUndefined()

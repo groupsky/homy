@@ -92,7 +92,10 @@ Rationale for 6 h (not longer): the derived signals are only trustworthy for the
 after the car sleeps for hours the reading is stale and would false-alarm on a cooled tire, so we
 deliberately let it age out (the driver's own dash TPMS light is the primary safety indicator; this
 alert is a backstop that fires while data is fresh). Every rule MUST set both `noDataState: OK` and
-`execErrState: Alerting`. Every `__expr__` node: `datasource:{type:__expr__,uid:__expr__}`,
+`execErrState: OK` (updated 2026-07-17: a brand-new/sparse derived signal queried over a still-empty
+window can surface as a Grafana query error rather than clean no-data; `execErrState: Alerting`
+paged on that error exactly like a real sub-threshold reading — see the fix on
+`fix/ioniq-tpms-nodata-false-alarm`). Every `__expr__` node: `datasource:{type:__expr__,uid:__expr__}`,
 `intervalMs:1000`, `maxDataPoints:43200`, `refId:A`, `hide:false`. Datasource UID `P3C6603E967DC8568`,
 folder `Ioniq EV`, group `interval: 1m`. `🚗` prefix; labels `severity`/`device: ioniq`/`subsystem: tpms`.
 Static annotations. Rules (17 total):
