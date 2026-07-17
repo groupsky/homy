@@ -324,6 +324,16 @@ contactPoints:
 - Implement escalation for critical alerts
 - Use mute timings for maintenance windows
 
+## Database Configuration
+
+Grafana's own internal state (users, dashboard metadata, alert rule state, ngalert scheduler bookkeeping) lives in its own SQLite store (`grafana.db`, under `GRAFANA_DATA_PATH`) -- this is separate from InfluxDB, which only holds time-series sensor data.
+
+**WAL mode (`config.ini` `[database]` section):**
+- `wal = true` enables SQLite Write-Ahead Logging so the ngalert scheduler's reads aren't blocked by concurrent writes (alert state, annotations, session cleanup).
+- Without it, Grafana 9.5.21's default rollback-journal mode takes an exclusive lock on the whole file per write, which intermittently produced "database is locked" errors and silently missed rule evaluations (issue #1404).
+- `cache_mode` and the `max_open_conn` / `max_idle_conn` / `conn_max_lifetime` pool settings are intentionally left at Grafana defaults -- see the comment in `config.ini` for why they wouldn't help here.
+- **Requires a restart**: `[database]` settings, including `wal`, are read only at Grafana startup and are not hot-reloadable. Recreate/restart the `grafana` container (e.g. `docker compose up -d --build grafana`) for the change to take effect -- editing `config.ini` alone does nothing until the process restarts.
+
 ## Development Workflow
 
 ### Dashboard Development
@@ -408,6 +418,12 @@ contactPoints:
 - **GitHub Issues**: Known problems documented in issues #77466 and #8195
 - **Testing**: Use data source query editor to validate syntax before provisioning
 - **Verification**: Check alert instances via `/api/alertmanager/grafana/api/v2/alerts` for error details
+
+**"database is locked" Errors (ngalert scheduler):**
+- **Symptoms**: Grafana logs show `database is locked` errors, alert rule evaluations silently missed
+- **Cause**: SQLite (`grafana.db`) in default rollback-journal mode takes an exclusive whole-file lock per write, blocking the ngalert scheduler's concurrent reads
+- **Fix**: Enable WAL mode via `[database] wal = true` in `config.ini` (see "Database Configuration" above), then restart/recreate the `grafana` container -- the setting is not hot-reloadable
+- **If it recurs after WAL is enabled**: Confirm `GRAFANA_DATA_PATH` is a local filesystem, not a network mount (NFS/SMB) -- WAL relies on shared-memory locking that networked filesystems don't support correctly
 
 **$timeFilter Variable Limitations:**
 - **Grafana 9.5+ Alerting**: `$timeFilter` gets stripped or causes evaluation failures
