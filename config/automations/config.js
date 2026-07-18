@@ -507,6 +507,38 @@ module.exports = {
       ldcOkTopic: 'ioniq/parsed/derived/ldc_ok',
       auxDropTopic: 'ioniq/parsed/derived/aux12v_drop',
     },
+    ioniqSessions: {
+      type: 'ioniq-sessions',
+      bmsTopic: 'ioniq/parsed/bms/2101',        // ignition, speed_kph, soc, hv_kw, aux_12v, cum_* counters, ts
+      vmcuTopic: 'ioniq/parsed/vmcu',           // gear (P/N/D/R string), speed_kph — gear is HERE, not bms/2101
+      gearParkValue: 'P',                       // verified string 'P' = parked
+      odometerTopic: 'ioniq/parsed/odometer',   // km (sparse ~1/82min)
+      connectorTopic: 'ioniq/parsed/bcm_b00e',  // charge_connector (sparse corroborator / awake-charge bound)
+      ambientTopic: 'ioniq/parsed/ambient',     // optional; ambient_c best-effort
+      chargerMeterTopic: '/modbus/monitoring/charger/reading', // charger or-we-526; fields ap(W), act(kWh); home-charge bound + AC kWh
+      tripTopic: 'ioniq/derived/trip',
+      chargeTopic: 'ioniq/derived/charge',
+      parkTopic: 'ioniq/derived/park',
+      // thresholds (PROVISIONAL — re-tune after ~2 weeks of history, spec §11)
+      speedMovingKph: 3,           // > this = moving (rejects standstill jitter)
+      minRestSplitMs: 180000,      // 3 min OBSERVED stationary-awake splits a trip
+      restGapMs: 300000,           // 5 min gap = sleep/rest boundary (above the 1-3 min reboot band + 1 min slow cadence)
+      rebootMaxGapMs: 300000,      // gaps below this with ignition on both sides = reboot, NOT a rest
+      silenceTimeoutMs: 300000,    // 5 min silence closes a trailing session (> reboot band)
+      minTripDurationMs: 60000,
+      minTripSamples: 3,           // reject degenerate single-sample jitter "trips"
+      chargeMinKwh: 0.3,
+      chargeMinAh: 1,
+      chargeMinSocPct: 2,          // any ⇒ the rest contained a charge
+      chargerMeterOnW: 150,        // >150W sustained = charging (0W baseline + 3 tiers 1.2/1.9/2.6kW verified over 2yr)
+      chargerMeterOnMinMs: 60000,  // on: >150W sustained >60s
+      chargerMeterOffMinMs: 120000, // off: <150W for >2min (rides the multi-step end taper)
+      drainMinDurationMs: 3600000, // 1 h min park before %/day drain is meaningful
+      maxPlausibleStepKwh: 40,
+      maxPlausibleStepKm: 400,
+      maxPlausibleStepAh: 150,     // corruption ceilings ONLY (above a full-range trip / bulk charge / above the ~120 Ah pack nominal)
+      socField: 'soc',            // 'soc' (dense, default) vs 'soc_display' (dash) — documented switch, §4.1
+    },
   },
   gates: {
     mqtt: {

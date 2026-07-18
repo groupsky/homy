@@ -25,6 +25,7 @@ const converters = {
     dds519mr: require('./converters/dds519mr'),
     ex9em: require('./converters/ex9em'),
     ioniq: require('./converters/ioniq'),
+    'ioniq-session': require('./converters/ioniq-session'),
     mbsl32di: require('./converters/mbsl32di'),
     'or-we-514': require('./converters/or-we-514'),
     sdm630: require('./converters/sdm630'),

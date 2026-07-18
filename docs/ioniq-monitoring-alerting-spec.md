@@ -164,7 +164,9 @@ Keying: use ingest `time` (Influx) / `_ts` (Mongo) for liveness — the LWT payl
 | AC charge power | reduced-rate charge | `ac_port=1 & |hv_kw|<3 kW` sustained (this session was ~1 kW granny) | info | 10m | **Bot** → `derived/charge_reduced_rate` |
 | SoC slope while parked | parasitic drain | `> 2%/day` across parked spans | warning | — | **Bot**/Grafana `derivative` |
 
-Cross-reference: AC-side charge energy is available from the household **`charger` ORNO meter** (monitoring bus) — verify it's live (see Open Items) and, if so, use it for charge kWh/efficiency rather than decoding the OBC AC side.
+Cross-reference: AC-side charge energy is available from the household **`charger` ORNO meter** — confirmed
+live (measurement `xymd1`, see §10) — used for charge kWh/efficiency rather than decoding the OBC AC side;
+the `ioniq-sessions` bot already does this for home charges (`bounds:meter`, §7).
 
 ---
 
@@ -245,6 +247,17 @@ New `Ioniq EV` dashboard family (JSON under `config/grafana/dashboards/`, provid
 | **12 V / LDC** | `aux_12v` timeseries banded by state; per-drive LDC on-voltage ceiling; parked resting-voltage trend (daily min/median); derived `ldc_ok`. |
 | **Tires** | Per-wheel `psi_cold` trend; inter-wheel spread; per-wheel temp vs ambient; over/under-inflation bands. |
 | **Trips & charging** | State timeline (active/charging/parked); per-trip distance/energy/efficiency (kWh/100 km); regen recovery %; charge sessions (AC/DC, kWh, avg power); SoC-at-park distribution; charger-meter AC power overlay (if live). |
+
+> **Data source (2026-07-18):** this dashboard was previously **deferred** — per-trip distance/energy/
+> efficiency, regen-recovery %, and charge-session breakdowns need trip/charge **session boundaries** that
+> no bot emitted, and pure-InfluxQL session math is fragile and unvalidatable
+> (`docs/superpowers/specs/2026-07-15-ioniq-monitoring-phase4-dashboards-design.md` §1). It is now unblocked:
+> the **`ioniq-sessions`** automations bot segments the telemetry stream into `trip`/`charge`/`park` sessions
+> and the **`ioniq_sessions`** InfluxDB measurement (tag `kind`, back-dated `start_ts`) is this dashboard's
+> data source — see
+> `docs/superpowers/specs/2026-07-18-ioniq-session-segmentation-bot-design.md` and
+> `docs/influxdb-schema.md` (`ioniq_sessions` measurement). Building the dashboard panels themselves remains
+> a separate, not-yet-started deliverable (design spec §1, §9 PR3).
 | **Pipeline health** | Samples/min per group; per-group last-seen; connectivity transitions; Influx/Mongo growth; DTC history. |
 
 Link the family with a dashboard-links row (overview ↔ detail), per repo navigation standard.
@@ -293,7 +306,16 @@ Each rule's `annotations.description` should carry the first action. Summary tab
 
 ## 10. Open items / dependencies
 
-- **Verify the `charger` ORNO meter is live.** It's configured (monitoring bus, `or-we-526`) but no current readings were found under the expected Influx tags; needed for AC-side charge energy/efficiency. (OVMS, which previously covered this, is dead as of ~2025-09-24.)
+- ~~Verify the `charger` ORNO meter is live.~~ **Resolved (2026-07-18):** it *is* live — verified over 609
+  days (2024-11 → 2026-07) of continuous ~8 s-cadence data. The original query found nothing because it
+  looked under `monitoring`/`charger`-named Influx tags/measurements; the meter actually writes to
+  measurement **`xymd1`** (tags `device.name=charger`; fields `ap`=W instantaneous power, `act`=cumulative
+  kWh), a naming mismatch, not a dead device. It has a 0 W idle baseline (99.98% of idle samples exactly
+  0 W), three observed charging tiers (~1.2 / 1.9 / 2.6 kW), and no daytime other-load on the circuit —
+  clean enough to bound home charges by a relative power threshold. Now used by the `ioniq-sessions` bot
+  (design spec `docs/superpowers/specs/2026-07-18-ioniq-session-segmentation-bot-design.md` §3.3, §0.1) as
+  the preferred `bounds:meter` source for AC-side charge energy/efficiency. (OVMS, which previously covered
+  this, is dead as of ~2025-09-24.)
 - **`brakes_on` is unreliable** (logger #9) — don't build braking alerts on it; use `brake_lamp`.
 - **New signals unlock new alerts** once logger tickets land: motor/inverter over-temp (#5), cabin over-temp / preconditioning verify (#6), direct LDC current/temp (#8), body/security (door-left-unlocked, window-open) (#13).
 - **Decide** dedicated vs shared Telegram channel (§3) before wide rollout.

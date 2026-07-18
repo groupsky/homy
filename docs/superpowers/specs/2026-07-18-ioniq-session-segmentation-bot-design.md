@@ -356,7 +356,7 @@ meter (home charge — preferred), or by captured `charge_connector` edges / int
 | `complete` | both start and end boundary samples were present (else metrics that need the missing side are null) |
 | `sample_count` | in-session samples seen (0 for a pure sleep rest — all metrics boundary-derived) |
 | `max_gap_sec` | largest inter-sample gap inside the session (0 if <2 samples) |
-| `closed_by` | `gear_park` \| `ignition_edge` \| `idle_split` \| `gap_stationary` \| `silence_timeout` \| `restart_lazy_close` |
+| `closed_by` | `gear_park` \| `ignition_edge` \| `idle_split` \| `gap_stationary` \| `motion_resume` (rest→drive) \| `silence_timeout` \| `restart_lazy_close` |
 | `gear_at_close` | the `gear` value that closed the trip, or null if closed without gear | audit/tuning |
 | `seq` | monotonic per-emit counter; with `(kind,start_ts,end_ts)` forms the de-dup key (§5.6) |
 | `schema_version` | integer, for downstream forward-compat |
@@ -648,6 +648,11 @@ string literals single-quoted; no `$timeFilter` — use explicit `WHERE time >= 
    tiers cleanly. **Calibration path:** the operator can re-exercise all 3 settings and (rarely) a
    powered-mode charge for simultaneous meter + car-side measurements to refine the AC→pack efficiency curve.
    `charge_type` stays `unknown` unless a powered-mode charge decodes it (§4.2).
+   - *Known minor approximation (rare `bounds:awake` only):* `power_avg_kw` = whole-rest `energy_in_kwh` ÷
+     coverage-span `duration_sec`, so if coverage starts after the rest opens (e.g. a cold-start powered-mode
+     charge) the rate can over-estimate. Spec-conformant with §4.2; affects only the no-meter/no-connector
+     powered-mode path, never the unbounded/meter/connector paths. A future refinement is to attribute only
+     coverage-span energy on this path.
 4. **`speed_kph` / `ignition` trustworthiness** — `speedMovingKph` hysteresis mitigates standstill jitter;
    ignition is operator-confirmed trustworthy as the awake delimiter but its 1→0 edge is only *sometimes*
    captured before power-off, so the silence timer remains the backstop. Validate both floors during tuning.
