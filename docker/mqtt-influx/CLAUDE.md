@@ -14,6 +14,7 @@ The mqtt-influx service bridges MQTT messages to InfluxDB time-series storage. M
 - **mqtt-influx-tetriary**: Additional power monitoring points (`/modbus/tetriary/+/+`)
 - **mqtt-influx-dry-switches**: Digital I/O bus (`/modbus/dry-switches/+/reading`) — decomposes packed input/output words into per-bit boolean fields for contact-sensor and RS485 bus-health diagnostics
 - **mqtt-influx-ioniq**: Hyundai Ioniq OBD telemetry (`ioniq/parsed/#`) → `ioniq` measurement
+- **mqtt-influx-ioniq-sessions**: Ioniq session records from the `ioniq-sessions` automations bot (`ioniq/derived/#`) → `ioniq_sessions` measurement (one record per closed trip/charge/park session)
 - **Water System Integration**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, boiler, and heat pump energy monitoring
 
 ### Data Flow
@@ -51,6 +52,7 @@ module.exports = (data) => {
 - **dds519mr**: DDS519MR energy meter data  
 - **ex9em**: EX9EM energy meter data
 - **ioniq**: Hyundai Ioniq OBD telemetry — recursively-typed/flattened parsed frames into the `ioniq` measurement (tags `group`, `state`)
+- **ioniq-session**: Ioniq session records (`_type: 'ioniq-session'`) — one closed trip/charge/park record per emit into the `ioniq_sessions` measurement (tag `kind`; timestamp `start_ts`; `end_ts` and all other §4 metrics as typed fields, null metrics omitted)
 - **mbsl32di**: MBSL32DI digital-input module — raw word + per-input boolean fields (`dry_switch_input`)
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data

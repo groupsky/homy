@@ -63,6 +63,7 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
 - **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
 - **mqtt-influx-ioniq**: `ioniq/parsed/#` → InfluxDB (`ioniq` measurement; decoded Hyundai Ioniq OBD telemetry, tags `group`/`state`)
+- **mqtt-influx-ioniq-sessions**: `ioniq/derived/#` → InfluxDB (`ioniq_sessions` measurement; one record per closed trip/charge/park session from the `ioniq-sessions` bot, tag `kind`)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Specialized Monitoring
@@ -236,6 +237,48 @@ query this measurement's `v` field. See
 - Representative fields: `soc`, `hv_v`, `hv_a`, `12v`, `speed`, `relays.main`, `dtc`
 **Retention**: kept indefinitely (compact numeric data). The bulky raw archive lives separately in MongoDB (`ioniq` collection, 90-day TTL on `_ts`) — see `docker/mqtt-mongo/CLAUDE.md`.
 **Use Cases**: Hyundai Ioniq OBD time-series (SoC, HV pack, speed, temps, TPMS) for Grafana and InfluxQL trip/charging analysis
+
+#### `ioniq_sessions` Measurement
+**Source**: `mqtt-influx-ioniq-sessions` → `ioniq/derived/#` (converter `converters/ioniq-session.js`,
+`_type: "ioniq-session"`). Published by the `ioniq-sessions` automations bot, one record per closed
+session — a low-rate, wide, categorical *records table*, deliberately kept out of the 2 Hz `ioniq`
+measurement (see `docs/superpowers/specs/2026-07-18-ioniq-session-segmentation-bot-design.md` §6).
+**Tag Structure**:
+- `kind`: `trip` | `charge` | `park` — low-cardinality (3 values); the only tag, what dashboards
+  filter/group by
+**Timestamp**: `start_ts` (epoch ms), written at `ms` precision. Records are intentionally **back-dated to
+session start** (not write/emit time) so a "sessions over time" axis places each session where it began —
+this matters most for sleep-gap `charge`/`park` rests, which are only computed (and published) retrospectively
+on resume, well after `start_ts`. `end_ts` is carried as a field, not the timestamp.
+**Fields**: every other payload key, typed by JS runtime type (same discipline as the `ioniq` converter):
+numbers → float (uniformly, even integers); booleans → boolean; strings → string; `null`/`undefined` metrics
+are **omitted** (no sentinel — a session with an unmeasurable metric simply has no field for it, never a
+fabricated `0`). `_type`, `group`, `state`, `ts`, `kind`, `_bot`, `_tz` are excluded from fields (identity/tag/
+envelope metadata, not measurement data).
+- **Common fields** (all `kind`s): `end_ts` (epoch ms), `duration_sec` (s), `complete` (bool — both boundary
+  samples present), `sample_count`, `max_gap_sec` (s), `closed_by` (`gear_park` \| `ignition_edge` \|
+  `idle_split` \| `gap_stationary` \| `motion_resume` \| `silence_timeout` \| `restart_lazy_close`), `gear_at_close`, `seq`
+  (monotonic per-emit counter), `schema_version`.
+- **`trip` fields**: `distance_km` (km; null unless ≥2 distinct odometer readings), `odometer_coverage`
+  (0–1), `energy_out_kwh` / `energy_regen_kwh` / `energy_net_kwh` (kWh), `efficiency_wh_per_km` (Wh/km; null
+  if `distance_km` null), `soc_start` / `soc_end` / `soc_delta_pct` (%), `speed_avg_kph` / `speed_max_kph`
+  (km/h), `power_max_kw` (kW), `ambient_c` (°C, best-effort), `start_truncated` (bool), `contained_plugged`
+  (bool).
+- **`charge` fields**: `energy_in_kwh` (kWh into pack; always valid), `charge_ah` (Ah; always valid),
+  `soc_start` / `soc_delta_pct` / `soc_end` (%), `bounds` (`meter` \| `connector` \| `awake` \| `unbounded`),
+  `duration_is_charge` (bool), `power_avg_kw` (kW; null when unbounded), `connector_confirmed` (bool),
+  `ac_energy_kwh` (kWh; null without a home-meter match), `charge_efficiency` (0–1; null without meter),
+  `charge_type` (`AC` \| `DC` \| `unknown`).
+- **`park` fields**: `soc_start` / `soc_end` / `soc_delta_pct` (%), `soc_drain_pct_per_day` (%/day; null if
+  `duration_sec` below the config drain-minimum), `aux12v_start` / `aux12v_end` (V, best-effort),
+  `connector_confirmed` (bool).
+**Retention**: kept indefinitely (compact, one row per session). Session records also reach MongoDB via the
+existing `mqtt-mongo-ioniq` (`ioniq/#`) subscription — append-only, so downstream consumers there must
+de-dup on `(kind, start_ts, end_ts)`.
+**Use Cases**: per-trip distance/energy/efficiency, charge-session energy/power/efficiency, parasitic-drain
+analysis, and the "Trips & charging" Grafana dashboard (`docs/ioniq-monitoring-alerting-spec.md` §7) — this
+measurement is its data source, unblocking the dashboard that was previously deferred for lack of session
+boundaries.
 
 ### Automation System Monitoring
 
