@@ -36,7 +36,7 @@ groups:
                   type: query
               expression: ldc
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 60s
         labels: { severity: warning, device: ioniq, subsystem: 12v }
         annotations:

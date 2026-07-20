@@ -43,11 +43,28 @@ function addField(point, key, value) {
 }
 
 /**
+ * The OBD logger occasionally gets a "no data" response from the ECU for the
+ * primary BMS query (raw frame `6101FFFFFFFF...`) and decodes it as literal
+ * 0 instead of omitting the fields. A real pack can never read exactly 0 V
+ * on both min and max cell simultaneously (that's every cell physically
+ * destroyed/disconnected at once), so this is an unambiguous garbage-frame
+ * signature — not a real vehicle state. Dropping the whole point here stops
+ * it from tripping Grafana's raw-field thresholds (cell under-voltage, etc).
+ */
+function isGarbageBmsFrame(data) {
+    return data.group === 'bms/2101' && data.cell_min_v === 0 && data.cell_max_v === 0
+}
+
+/**
  * Converts an `ioniq` parsed telemetry payload into a single InfluxDB point.
  * Tags: group, state (low-cardinality; what dashboards filter/group by).
  * Timestamp: data.ts (epoch ms) passed straight to the ms-precision write API.
  */
 module.exports = function ioniq(data) {
+    if (isGarbageBmsFrame(data)) {
+        return []
+    }
+
     const point = new Point('ioniq')
 
     if (data.group !== undefined && data.group !== null) {

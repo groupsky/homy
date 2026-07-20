@@ -72,4 +72,20 @@ describe('ioniq converter', () => {
         expect(() => ioniq(frame)).not.toThrow()
         expect(ioniq(frame)).toHaveLength(1)
     })
+
+    it('drops a bms/2101 frame with cell_min_v and cell_max_v both 0 (garbage no-data frame)', () => {
+        const frame = {
+            _type: 'ioniq', group: 'bms/2101', state: 'parked', ts: 1720000000006,
+            hv_v: 0, aux_12v: 0, cell_min_v: 0, cell_max_v: 0, isolation_kohm: 1000,
+        }
+        expect(ioniq(frame)).toEqual([])
+    })
+
+    it('keeps a bms/2101 frame when only one of cell_min_v/cell_max_v is 0 (not the garbage signature)', () => {
+        const frame = {
+            _type: 'ioniq', group: 'bms/2101', state: 'parked', ts: 1720000000007,
+            cell_min_v: 0, cell_max_v: 3.85,
+        }
+        expect(ioniq(frame)).toHaveLength(1)
+    })
 })

@@ -36,7 +36,7 @@ groups:
                   type: query
               expression: iso
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -73,7 +73,7 @@ groups:
                   type: query
               expression: iso
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 10m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
@@ -110,7 +110,7 @@ groups:
                   type: query
               expression: cmin
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 1m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -147,7 +147,7 @@ groups:
                   type: query
               expression: cmin
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 1m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
@@ -184,7 +184,7 @@ groups:
                   type: query
               expression: cmax
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 1m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
@@ -221,7 +221,7 @@ groups:
                   type: query
               expression: tmax
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 5m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -258,7 +258,7 @@ groups:
                   type: query
               expression: tmax
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 5m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
@@ -295,7 +295,7 @@ groups:
                   type: query
               expression: soh
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 1h
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -332,7 +332,7 @@ groups:
                   type: query
               expression: soh
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 1h
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
@@ -383,7 +383,7 @@ groups:
                   type: query
               expression: disq
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 15m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
