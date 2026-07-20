@@ -121,7 +121,8 @@ describe('ioniq-cell-health bot — cell_spread_mv', () => {
     ['non-JSON string', 'not-json{{{'],
     ['wrong length (31)', JSON.stringify(flatSegment().slice(0, 31))],
     ['non-array', JSON.stringify({ not: 'an array' })],
-    ['NaN element', JSON.stringify([...flatSegment().slice(0, 31), null])]
+    ['NaN element', JSON.stringify([...flatSegment().slice(0, 31), null])],
+    ['all-zero array (garbage no-data frame)', JSON.stringify(new Array(32).fill(0))]
   ])('rejects a malformed cells frame (%s) and keeps the prior good segment, with no emission from the bad frame', async (_label, badCells) => {
     const seg = flatSegment()
     await mqtt._trigger(CELLS1, { cells: JSON.stringify(seg), state: 'parked', ts: 1 })
@@ -216,6 +217,24 @@ describe('ioniq-cell-health bot — module_temp_spread_c', () => {
     expect(mqtt.publish).not.toHaveBeenCalled()
 
     // retrigger with the other good topic — should use retained good moduleTemps
+    await mqtt._trigger(BMS2105, { module_temps_6_12: JSON.stringify(moduleTemps6_12), state: 'parked', ts: 3 })
+    expect(mqtt.publish).toHaveBeenCalledTimes(1)
+    expect(mqtt.publish).toHaveBeenCalledWith(MODULE_TEMP_SPREAD_OUT, expect.objectContaining({ value: 33 - 28 }))
+  })
+
+  it('rejects an all-zero module_temps frame (garbage no-data OBD frame) instead of merging it into the spread', async () => {
+    const moduleTemps = [30, 31, 29, 30, 30]
+    const moduleTemps6_12 = [30, 30, 33, 30, 30, 30, 28]
+    await mqtt._trigger(BMS2101, { module_temps: JSON.stringify(moduleTemps), state: 'parked', ts: 1 })
+    await mqtt._trigger(BMS2105, { module_temps_6_12: JSON.stringify(moduleTemps6_12), state: 'parked', ts: 1 })
+    expect(mqtt.publish).toHaveBeenCalledTimes(1)
+    mqtt.publish.mockClear()
+
+    // A garbage all-zero frame must not overwrite the retained good segment
+    // or emit a bogus spread from it.
+    await mqtt._trigger(BMS2101, { module_temps: JSON.stringify([0, 0, 0, 0, 0]), state: 'parked', ts: 2 })
+    expect(mqtt.publish).not.toHaveBeenCalled()
+
     await mqtt._trigger(BMS2105, { module_temps_6_12: JSON.stringify(moduleTemps6_12), state: 'parked', ts: 3 })
     expect(mqtt.publish).toHaveBeenCalledTimes(1)
     expect(mqtt.publish).toHaveBeenCalledWith(MODULE_TEMP_SPREAD_OUT, expect.objectContaining({ value: 33 - 28 }))

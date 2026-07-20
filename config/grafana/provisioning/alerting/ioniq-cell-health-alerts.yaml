@@ -36,7 +36,7 @@ groups:
                   type: query
               expression: spread
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -73,7 +73,7 @@ groups:
                   type: query
               expression: spread
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 10m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
@@ -110,7 +110,7 @@ groups:
                   type: query
               expression: spread
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -147,7 +147,7 @@ groups:
                   type: query
               expression: spread
         noDataState: OK
-        execErrState: Alerting
+        execErrState: OK
         for: 10m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:

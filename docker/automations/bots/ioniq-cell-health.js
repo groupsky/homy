@@ -8,6 +8,13 @@
 // fields inside carry their own JSON-string-encoded float arrays. Tolerate an
 // already-parsed array too (defensive, mirrors ioniq-dtc's parseCodes) so a
 // delivery quirk can't silently corrupt a segment.
+//
+// Also rejects an all-zero array: the OBD logger occasionally decodes a
+// "no data" ECU response as literal 0s instead of omitting the frame, and a
+// same-length all-zero array otherwise passes every other check here. 32
+// cell voltages or 5-7 module temps reading exactly 0.0 in unison is not a
+// real sensor state, so treat it the same as a malformed frame and keep the
+// prior segment rather than merge garbage into the spread calculation.
 function parseFloatArray (raw, expectedLen) {
   let arr = raw
   if (typeof arr === 'string') {
@@ -20,6 +27,9 @@ function parseFloatArray (raw, expectedLen) {
     return null
   }
   if (!Array.isArray(arr) || arr.length !== expectedLen || !arr.every(Number.isFinite)) {
+    return null
+  }
+  if (arr.every((n) => n === 0)) {
     return null
   }
   return arr
