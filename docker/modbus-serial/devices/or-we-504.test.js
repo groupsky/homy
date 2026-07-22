@@ -145,7 +145,9 @@ describe('read', () => {
     }
     const state = {}
 
-    expect(await read(client, config, state)).toBeDefined()
+    expect(await read(client, config, state)).toEqual({
+      v: 225.9, c: 1.9, freq: 50.1, p: 407, rp: 135, ap: 429, pow: 0.949,
+    })
     expect(await read(client, config, state)).toBeUndefined()
   })
 
@@ -186,16 +188,41 @@ describe('read', () => {
 
   // maxMsBetweenReports 0 disables the periodic forced report, matching or-we-514/or-we-526
   it('should never re-report unchanged values when maxMsBetweenReports is 0', async () => {
-    const mockReadHoldingRegisters = jest.fn().mockResolvedValue({data: [0x0000, 0x0ED3, 0x0000, 0x0000]})
-    const client = {readHoldingRegisters: mockReadHoldingRegisters}
-    const config = {
-      read: {instantaneous: false, energy: true, config: false},
-      options: {maxMsBetweenReports: 0},
+    jest.useFakeTimers()
+    try {
+      const mockReadHoldingRegisters = jest.fn().mockResolvedValue({data: [0x0000, 0x0ED3, 0x0000, 0x0000]})
+      const client = {readHoldingRegisters: mockReadHoldingRegisters}
+      const config = {
+        read: {instantaneous: false, energy: true, config: false},
+        options: {maxMsBetweenReports: 0},
+      }
+      const state = {}
+
+      expect(await read(client, config, state)).toEqual({tot_act: 3.795, tot_react: 0})
+      expect(await read(client, config, state)).toBeUndefined()
+
+      jest.advanceTimersByTime(3600000)
+
+      expect(await read(client, config, state)).toBeUndefined()
+    } finally {
+      jest.useRealTimers()
     }
+  })
+
+  it('should drop garbage frames reporting no voltage and no grid frequency', async () => {
+    const mockReadHoldingRegisters = jest.fn()
+      .mockResolvedValueOnce({data: [0x08D3, 0x0013, 0x01F5, 0x0197, 0x0087, 0x01AD, 0x03B5]})
+      .mockResolvedValueOnce({data: [0x0000, 0x0ED3, 0x0000, 0x0000]})
+      .mockResolvedValueOnce({data: [0, 0, 0, 0, 0, 0, 0]})
+    const client = {readHoldingRegisters: mockReadHoldingRegisters}
     const state = {}
 
-    expect(await read(client, config, state)).toEqual({tot_act: 3.795, tot_react: 0})
-    expect(await read(client, config, state)).toBeUndefined()
+    expect(await read(client, undefined, state)).toEqual(expect.objectContaining({tot_act: 3.795}))
+    // the garbage frame must not be published, and must not clobber the last good values
+    expect(await read(client, undefined, state)).toBeUndefined()
+    expect(state).toEqual(expect.objectContaining({v: 225.9, tot_act: 3.795}))
+    // the energy registers are not even read once the frame is known to be garbage
+    expect(mockReadHoldingRegisters).toHaveBeenCalledTimes(3)
   })
 
   it('should propagate read errors and leave state untouched', async () => {
@@ -227,78 +254,140 @@ describe('read', () => {
 })
 
 describe('setup', () => {
+  const timeout = () => Object.assign(new Error('Timed out'), {errno: 'ETIMEDOUT'})
+
+  const mockClient = (overrides = {}) => ({
+    // modbus-serial has no response parser for FC 0x28, so the unlock always times out
+    customFunction: jest.fn().mockRejectedValue(timeout()),
+    writeRegisters: jest.fn().mockResolvedValue({}),
+    readHoldingRegisters: jest.fn().mockResolvedValue({data: [2]}),
+    setID: jest.fn(),
+    ...overrides,
+  })
+
   it('should not touch the meter when given nothing to change', async () => {
-    const mockWriteRegisters = jest.fn().mockResolvedValue({})
+    const client = mockClient()
 
-    await setup({writeRegisters: mockWriteRegisters}, {})
+    await setup(client, {})
 
-    expect(mockWriteRegisters).not.toHaveBeenCalled()
+    expect(client.customFunction).not.toHaveBeenCalled()
+    expect(client.writeRegisters).not.toHaveBeenCalled()
+  })
+
+  it('should unlock with the factory password before writing', async () => {
+    const client = mockClient()
+
+    await setup(client, {baudRate: 4800})
+
+    // datasheet: 01 28 FE 01 00 02 04 00 00 00 00
+    expect(client.customFunction).toHaveBeenCalledWith(0x28,
+      [0xFE, 0x01, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00, 0x00])
+    expect(client.customFunction.mock.invocationCallOrder[0])
+      .toBeLessThan(client.writeRegisters.mock.invocationCallOrder[0])
+  })
+
+  it('should unlock with the given password', async () => {
+    const client = mockClient()
+
+    await setup(client, {baudRate: 4800, password: '12345678'})
+
+    expect(client.customFunction).toHaveBeenCalledWith(0x28,
+      [0xFE, 0x01, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78])
+  })
+
+  it('should propagate unlock failures other than the expected timeout', async () => {
+    const client = mockClient({
+      customFunction: jest.fn().mockRejectedValue(new Error('Port Not Open')),
+    })
+
+    await expect(setup(client, {baudRate: 4800})).rejects.toThrow('Port Not Open')
+    expect(client.writeRegisters).not.toHaveBeenCalled()
   })
 
   it('should write baud rate', async () => {
-    const mockWriteRegisters = jest.fn().mockResolvedValue({})
+    const client = mockClient()
 
-    await setup({writeRegisters: mockWriteRegisters}, {baudRate: 4800})
+    await setup(client, {baudRate: 4800})
 
-    expect(mockWriteRegisters).toHaveBeenCalledWith(0x0E, [3])
+    expect(client.writeRegisters).toHaveBeenCalledWith(0x0E, [3])
   })
 
   it('should reject an unsupported baud rate instead of writing garbage', async () => {
-    const mockWriteRegisters = jest.fn().mockResolvedValue({})
+    const client = mockClient()
 
-    await expect(setup({writeRegisters: mockWriteRegisters}, {baudRate: 19200}))
-      .rejects.toThrow('Unsupported baud rate 19200')
-    expect(mockWriteRegisters).not.toHaveBeenCalled()
+    await expect(setup(client, {baudRate: 19200})).rejects.toThrow('Unsupported baud rate 19200')
+    expect(client.writeRegisters).not.toHaveBeenCalled()
   })
 
-  it('should write the password as 4 BCD digits per register', async () => {
-    const mockWriteRegisters = jest.fn().mockResolvedValue({})
+  it('should write a new password as 4 BCD digits per register', async () => {
+    const client = mockClient()
 
     // datasheet: 02 10 00 10 00 02 04 11 11 11 11 -> password 11111111
-    await setup({writeRegisters: mockWriteRegisters}, {password: '11111111'})
+    await setup(client, {newPassword: '11111111'})
 
-    expect(mockWriteRegisters).toHaveBeenCalledWith(0x10, [0x1111, 0x1111])
+    expect(client.writeRegisters).toHaveBeenCalledWith(0x10, [0x1111, 0x1111])
   })
 
   it('should reject a password that is not exactly 8 digits', async () => {
-    const mockWriteRegisters = jest.fn().mockResolvedValue({})
+    const client = mockClient()
 
-    await expect(setup({writeRegisters: mockWriteRegisters}, {password: '1234'}))
+    await expect(setup(client, {newPassword: '1234'}))
       .rejects.toThrow('Password must be exactly 8 digits')
-    expect(mockWriteRegisters).not.toHaveBeenCalled()
+    expect(client.writeRegisters).not.toHaveBeenCalled()
   })
 
   it('should write the address last and switch the client to it', async () => {
-    const mockWriteRegisters = jest.fn().mockResolvedValue({})
-    const mockSetID = jest.fn()
+    const client = mockClient()
 
-    await setup({writeRegisters: mockWriteRegisters, setID: mockSetID},
-      {address: 2, baudRate: 9600, password: '11111111'})
+    await setup(client, {address: 2, baudRate: 9600, newPassword: '11111111'})
 
-    expect(mockWriteRegisters).toHaveBeenNthCalledWith(1, 0x0E, [4])
-    expect(mockWriteRegisters).toHaveBeenNthCalledWith(2, 0x10, [0x1111, 0x1111])
-    expect(mockWriteRegisters).toHaveBeenNthCalledWith(3, 0x0F, [2])
-    expect(mockSetID).toHaveBeenCalledWith(2)
+    expect(client.writeRegisters).toHaveBeenNthCalledWith(1, 0x0E, [4])
+    expect(client.writeRegisters).toHaveBeenNthCalledWith(2, 0x10, [0x1111, 0x1111])
+    expect(client.writeRegisters).toHaveBeenNthCalledWith(3, 0x0F, [2])
+    expect(client.setID).toHaveBeenCalledWith(2)
   })
 
   it('should switch the client to the new address when the meter answers from it', async () => {
     // the meter applies the address immediately, so the reply comes from the new unit id
     // and modbus-serial rejects it - the write itself did succeed
-    const mockWriteRegisters = jest.fn()
-      .mockRejectedValueOnce(new Error('Unexpected data error, expected address 1 got 2'))
-    const mockSetID = jest.fn()
+    const client = mockClient({
+      writeRegisters: jest.fn()
+        .mockRejectedValueOnce(new Error('Unexpected data error, expected address 1 got 2')),
+    })
 
-    await setup({writeRegisters: mockWriteRegisters, setID: mockSetID}, {address: 2})
+    await setup(client, {address: 2})
 
-    expect(mockSetID).toHaveBeenCalledWith(2)
+    expect(client.setID).toHaveBeenCalledWith(2)
+    expect(client.readHoldingRegisters).toHaveBeenCalledWith(0x0F, 1)
+  })
+
+  it('should not swallow an unexpected function code as an address change', async () => {
+    // same message prefix, but a stale reply from another unit - the write did not succeed
+    const client = mockClient({
+      writeRegisters: jest.fn()
+        .mockRejectedValueOnce(new Error('Unexpected data error, expected code 16 got 3')),
+    })
+
+    await expect(setup(client, {address: 2}))
+      .rejects.toThrow('Unexpected data error, expected code 16 got 3')
+    expect(client.setID).not.toHaveBeenCalled()
+  })
+
+  it('should fail when the meter did not take the new address', async () => {
+    const client = mockClient({
+      readHoldingRegisters: jest.fn().mockResolvedValue({data: [1]}),
+    })
+
+    await expect(setup(client, {address: 2}))
+      .rejects.toThrow('Address change failed, meter reports address 1')
   })
 
   it('should propagate other address write failures', async () => {
-    const mockWriteRegisters = jest.fn().mockRejectedValueOnce(new Error('Timed out'))
-    const mockSetID = jest.fn()
+    const client = mockClient({
+      writeRegisters: jest.fn().mockRejectedValueOnce(new Error('Illegal data address')),
+    })
 
-    await expect(setup({writeRegisters: mockWriteRegisters, setID: mockSetID}, {address: 2}))
-      .rejects.toThrow('Timed out')
-    expect(mockSetID).not.toHaveBeenCalled()
+    await expect(setup(client, {address: 2})).rejects.toThrow('Illegal data address')
+    expect(client.setID).not.toHaveBeenCalled()
   })
 })

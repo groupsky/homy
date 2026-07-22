@@ -17,15 +17,19 @@
 //   0x0F modbus address  - uint16
 //   0x10 password        - 2 registers, 4 BCD digits each (e.g. '11111111' -> [0x1111, 0x1111])
 //
+// NOTE: the energy word order is not pinned by the documentation - the only worked example
+// (0x0ED3 = 3795Wh) has a zero high word, and the register table labels registers 7/8 both
+// "UINT32 - Big Endian (ABCD)" and "Swapped long". Confirm against hardware before trusting
+// energy totals above 65535Wh. The BCD password encoding is likewise inferred from an
+// all-repdigit example ('11111111'); writing '12345678' on hardware would confirm it.
+//
 // The register documentation interleaves two different meters' register maps. Only the
-// examples consistent with the OR-WE-504 table (holding registers 0x00-0x10, address at
+// examples consistent with the OR-WE-504 table (holding registers 0x00-0x11, address at
 // 0x0F) are implemented here; the other set - which reads registers 0x00-0x02 as a single
 // energy counter and writes the address to 0x06 (power factor on this meter) - is ignored.
 //
 // Configuration registers are write protected. The meter is unlocked by function code 0x28
-// at register 0xFE01, which stays valid for ~10 seconds. `modbus-serial` cannot emit that
-// function code (only FC 1-6, 15-17, 20, 22, 23, 43 and custom codes 65-72/100-110), so
-// `setup` cannot unlock the meter itself - it must be unlocked out of band first.
+// at register 0xFE01, which stays valid for ~10 seconds - see `unlock`.
 
 /**
  * @typedef {1200|2400|4800|9600} BAUD_RATE
@@ -107,7 +111,7 @@ const readLong = (msb, lsb) => msb * 0x10000 + lsb
 /**
  * Encode an 8 digit password as the 2 BCD registers expected by the meter,
  * e.g. '12345678' -> [0x1234, 0x5678]
- * @param {string|number} password
+ * @param {string} password
  * @return {Array<number>}
  */
 const writePassword = (password) => {
@@ -163,6 +167,14 @@ async function read (
     // power factor
     result.pow = data[6] / 1000
     changed |= result.pow !== state.pow
+
+    // The meter is line powered, so it cannot answer while reporting no voltage and no grid
+    // frequency - such a frame is bus garbage (contention, another slave answering). Dropping
+    // the whole poll keeps a spurious zero out of the monotonic energy counters, where it
+    // would show up downstream as a full-counter drop and an equal phantom spike on recovery.
+    if (result.v === 0 && result.freq === 0) {
+      return
+    }
   }
 
   if (energy) {
@@ -211,23 +223,51 @@ async function read (
 }
 
 /**
+ * Unlock the write protection on the configuration registers, valid for ~10 seconds.
+ * Emitted as function code 0x28 at register 0xFE01, which `modbus-serial` has no response
+ * parser for - the request reaches the meter, but the reply is never matched to the
+ * transaction and it times out, so the timeout is expected and ignored here.
+ * @param {import('modbus-serial').ModbusRTU} client
+ * @param {string} [password] current meter password, factory default '00000000'
+ * @return {Promise<void>}
+ */
+async function unlock (client, password = '00000000') {
+  const [hi, lo] = writePassword(password)
+  try {
+    await client.customFunction(0x28, [
+      // register 0xFE01, 2 registers, 4 data bytes
+      0xFE, 0x01, 0x00, 0x02, 0x04,
+      hi >> 8, hi & 0xFF, lo >> 8, lo & 0xFF,
+    ])
+  } catch (e) {
+    if (e.errno !== 'ETIMEDOUT') throw e
+  }
+}
+
+/**
  * Setup communication parameters - changes are applied after device restart.
- * The meter must already be unlocked (see the note on function code 0x28 above), otherwise
- * every write below is rejected by the meter.
+ * The write protection is lifted first, which requires the meter's current password.
  * @param {import('modbus-serial').ModbusRTU} client
  * @param {{
  *   [address]: number,
  *   [baudRate]: BAUD_RATE,
  *   [password]: string,
+ *   [newPassword]: string,
  * }} newConfig
  * @return {Promise<void>}
  */
 async function setup (client, newConfig) {
+  if (newConfig.baudRate == null && newConfig.newPassword == null && newConfig.address == null) {
+    return
+  }
+
+  await unlock(client, newConfig.password)
+
   if (newConfig.baudRate != null) {
     await client.writeRegisters(0x0E, [writeBaudRate(newConfig.baudRate)])
   }
-  if (newConfig.password != null) {
-    await client.writeRegisters(0x10, writePassword(newConfig.password))
+  if (newConfig.newPassword != null) {
+    await client.writeRegisters(0x10, writePassword(newConfig.newPassword))
   }
   // changing the address must come last - subsequent writes would need the new id
   if (newConfig.address != null) {
@@ -235,10 +275,17 @@ async function setup (client, newConfig) {
       await client.writeRegisters(0x0F, [newConfig.address])
     } catch (e) {
       // the meter applies the new address immediately and answers from it, which the client
-      // rejects as coming from an unexpected unit - the write itself did succeed
-      if (!/Unexpected data error/.test(e.message)) throw e
+      // rejects as coming from an unexpected unit - the write itself did succeed. Match the
+      // new address specifically: the same message prefix is also used for an unexpected
+      // function code, which is a real failure (stale reply from another unit on the bus).
+      if (!new RegExp(`expected address \\d+ got ${newConfig.address}$`).test(e.message)) throw e
     }
     client.setID(newConfig.address)
+    // the meter is at the new address either way - confirm the write actually took effect
+    const { data } = await client.readHoldingRegisters(0x0F, 1)
+    if (data[0] !== newConfig.address) {
+      throw new Error(`Address change failed, meter reports address ${data[0]}`)
+    }
   }
 }
 
