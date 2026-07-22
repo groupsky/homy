@@ -1,22 +1,24 @@
 const {describe, expect, it, jest} = require('@jest/globals')
 const {read, setup} = require('./or-we-504')
 
+// Fixtures marked [datasheet] are taken from the worked examples in the OR-WE-504 register
+// documentation. The rest are constructed to exercise scaling and are not device captures.
 describe('read', () => {
   it('should read instantaneous parameters', async () => {
     const mockReadHoldingRegisters = jest.fn().mockResolvedValueOnce({
       data: [
-        // voltage - 225.9V - uint16 in V*10
+        // [datasheet] voltage - 225.9V - uint16 in V*10
         0x08D3,
-        // current - 1.9A - uint16 in A*10
+        // [datasheet] current - 1.9A - uint16 in A*10
         0x0013,
         // frequency - 50.1Hz - uint16 in Hz*10
         0x01F5,
-        // active power - 1234W - uint16 in W
-        0x04D2,
-        // reactive power - 345VAr - uint16 in VAr
-        0x0159,
-        // apparent power - 1300VA - uint16 in VA
-        0x0514,
+        // active power - 407W - uint16 in W (225.9V * 1.9A * 0.949)
+        0x0197,
+        // reactive power - 135VAr - uint16 in VAr
+        0x0087,
+        // apparent power - 429VA - uint16 in VA (225.9V * 1.9A)
+        0x01AD,
         // power factor - 0.949 - uint16 in factor*1000
         0x03B5,
       ]
@@ -28,9 +30,9 @@ describe('read', () => {
       v: 225.9,
       c: 1.9,
       freq: 50.1,
-      p: 1234,
-      rp: 345,
-      ap: 1300,
+      p: 407,
+      rp: 135,
+      ap: 429,
       pow: 0.949,
     })
     expect(mockReadHoldingRegisters).toHaveBeenCalledTimes(1)
@@ -40,9 +42,12 @@ describe('read', () => {
   it('should read energy parameters', async () => {
     const mockReadHoldingRegisters = jest.fn().mockResolvedValueOnce({
       data: [
-        // active energy - 3795Wh - uint32 in Wh, high word first
+        // [datasheet] active energy - 3795Wh - uint32 in Wh, high word first
         0x0000, 0x0ED3,
-        // reactive energy - 70011Wh - uint32 in VArh, high word first
+        // reactive energy - 70011VArh - uint32 in VArh, high word first
+        // NOTE: word order is not pinned by any datasheet example (the only one has a zero
+        // high word) and the register table labels these both "Big Endian (ABCD)" and
+        // "Swapped long" - confirm against hardware before trusting the energy totals
         0x0001, 0x117B,
       ]
     })
@@ -97,7 +102,7 @@ describe('read', () => {
 
   it('should read instantaneous and energy by default', async () => {
     const mockReadHoldingRegisters = jest.fn()
-      .mockResolvedValueOnce({data: [0x08D3, 0x0013, 0x01F5, 0x04D2, 0x0159, 0x0514, 0x03B5]})
+      .mockResolvedValueOnce({data: [0x08D3, 0x0013, 0x01F5, 0x0197, 0x0087, 0x01AD, 0x03B5]})
       .mockResolvedValueOnce({data: [0x0000, 0x0ED3, 0x0000, 0x0000]})
 
     const result = await read({readHoldingRegisters: mockReadHoldingRegisters})
@@ -106,9 +111,9 @@ describe('read', () => {
       v: 225.9,
       c: 1.9,
       freq: 50.1,
-      p: 1234,
-      rp: 345,
-      ap: 1300,
+      p: 407,
+      rp: 135,
+      ap: 429,
       pow: 0.949,
       tot_act: 3.795,
       tot_react: 0,
@@ -130,6 +135,81 @@ describe('read', () => {
     expect(await read(client, config, state)).toBeUndefined()
   })
 
+  it('should skip reporting unchanged instantaneous values', async () => {
+    const mockReadHoldingRegisters = jest.fn()
+      .mockResolvedValue({data: [0x08D3, 0x0013, 0x01F5, 0x0197, 0x0087, 0x01AD, 0x03B5]})
+    const client = {readHoldingRegisters: mockReadHoldingRegisters}
+    const config = {
+      read: {instantaneous: true, energy: false, config: false},
+      options: {maxMsBetweenReports: 60000},
+    }
+    const state = {}
+
+    expect(await read(client, config, state)).toBeDefined()
+    expect(await read(client, config, state)).toBeUndefined()
+  })
+
+  it('should skip reporting unchanged config values', async () => {
+    const mockReadHoldingRegisters = jest.fn().mockResolvedValue({data: [0x0004, 0x0002]})
+    const client = {readHoldingRegisters: mockReadHoldingRegisters}
+    const config = {
+      read: {instantaneous: false, energy: false, config: true},
+      options: {maxMsBetweenReports: 60000},
+    }
+    const state = {}
+
+    expect(await read(client, config, state)).toEqual({baud_rate: 9600, id: 2})
+    expect(await read(client, config, state)).toBeUndefined()
+  })
+
+  it('should report unchanged values again once the report interval elapses', async () => {
+    jest.useFakeTimers()
+    try {
+      const mockReadHoldingRegisters = jest.fn().mockResolvedValue({data: [0x0000, 0x0ED3, 0x0000, 0x0000]})
+      const client = {readHoldingRegisters: mockReadHoldingRegisters}
+      const config = {
+        read: {instantaneous: false, energy: true, config: false},
+        options: {maxMsBetweenReports: 60000},
+      }
+      const state = {}
+
+      expect(await read(client, config, state)).toBeDefined()
+      expect(await read(client, config, state)).toBeUndefined()
+
+      jest.advanceTimersByTime(60001)
+
+      expect(await read(client, config, state)).toEqual({tot_act: 3.795, tot_react: 0})
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  // maxMsBetweenReports 0 disables the periodic forced report, matching or-we-514/or-we-526
+  it('should never re-report unchanged values when maxMsBetweenReports is 0', async () => {
+    const mockReadHoldingRegisters = jest.fn().mockResolvedValue({data: [0x0000, 0x0ED3, 0x0000, 0x0000]})
+    const client = {readHoldingRegisters: mockReadHoldingRegisters}
+    const config = {
+      read: {instantaneous: false, energy: true, config: false},
+      options: {maxMsBetweenReports: 0},
+    }
+    const state = {}
+
+    expect(await read(client, config, state)).toEqual({tot_act: 3.795, tot_react: 0})
+    expect(await read(client, config, state)).toBeUndefined()
+  })
+
+  it('should propagate read errors and leave state untouched', async () => {
+    const error = new Error('Timed out')
+    const mockReadHoldingRegisters = jest.fn()
+      .mockResolvedValueOnce({data: [0x08D3, 0x0013, 0x01F5, 0x0197, 0x0087, 0x01AD, 0x03B5]})
+      .mockRejectedValueOnce(error)
+    const state = {}
+
+    await expect(read({readHoldingRegisters: mockReadHoldingRegisters}, undefined, state))
+      .rejects.toThrow(error)
+    expect(state).toEqual({})
+  })
+
   it('should report changed values within the report interval', async () => {
     const mockReadHoldingRegisters = jest.fn()
       .mockResolvedValueOnce({data: [0x0000, 0x0ED3, 0x0000, 0x0000]})
@@ -147,21 +227,12 @@ describe('read', () => {
 })
 
 describe('setup', () => {
-  it('should unlock with the factory password when none given', async () => {
+  it('should not touch the meter when given nothing to change', async () => {
     const mockWriteRegisters = jest.fn().mockResolvedValue({})
 
     await setup({writeRegisters: mockWriteRegisters}, {})
 
-    expect(mockWriteRegisters).toHaveBeenCalledTimes(1)
-    expect(mockWriteRegisters).toHaveBeenCalledWith(0x80, [0x0000, 0x0000, 0x0000, 0x0000])
-  })
-
-  it('should unlock with the given password', async () => {
-    const mockWriteRegisters = jest.fn().mockResolvedValue({})
-
-    await setup({writeRegisters: mockWriteRegisters}, {password: '12345678'})
-
-    expect(mockWriteRegisters).toHaveBeenCalledWith(0x80, [0x0012, 0x0034, 0x0056, 0x0078])
+    expect(mockWriteRegisters).not.toHaveBeenCalled()
   })
 
   it('should write baud rate', async () => {
@@ -172,23 +243,62 @@ describe('setup', () => {
     expect(mockWriteRegisters).toHaveBeenCalledWith(0x0E, [3])
   })
 
-  it('should write a new password', async () => {
+  it('should reject an unsupported baud rate instead of writing garbage', async () => {
     const mockWriteRegisters = jest.fn().mockResolvedValue({})
 
-    await setup({writeRegisters: mockWriteRegisters}, {newPassword: '12345678'})
+    await expect(setup({writeRegisters: mockWriteRegisters}, {baudRate: 19200}))
+      .rejects.toThrow('Unsupported baud rate 19200')
+    expect(mockWriteRegisters).not.toHaveBeenCalled()
+  })
 
-    expect(mockWriteRegisters).toHaveBeenCalledWith(0x40, [0x0012, 0x0034, 0x0056, 0x0078])
+  it('should write the password as 4 BCD digits per register', async () => {
+    const mockWriteRegisters = jest.fn().mockResolvedValue({})
+
+    // datasheet: 02 10 00 10 00 02 04 11 11 11 11 -> password 11111111
+    await setup({writeRegisters: mockWriteRegisters}, {password: '11111111'})
+
+    expect(mockWriteRegisters).toHaveBeenCalledWith(0x10, [0x1111, 0x1111])
+  })
+
+  it('should reject a password that is not exactly 8 digits', async () => {
+    const mockWriteRegisters = jest.fn().mockResolvedValue({})
+
+    await expect(setup({writeRegisters: mockWriteRegisters}, {password: '1234'}))
+      .rejects.toThrow('Password must be exactly 8 digits')
+    expect(mockWriteRegisters).not.toHaveBeenCalled()
   })
 
   it('should write the address last and switch the client to it', async () => {
     const mockWriteRegisters = jest.fn().mockResolvedValue({})
     const mockSetID = jest.fn()
 
-    await setup({writeRegisters: mockWriteRegisters, setID: mockSetID}, {address: 2, baudRate: 9600})
+    await setup({writeRegisters: mockWriteRegisters, setID: mockSetID},
+      {address: 2, baudRate: 9600, password: '11111111'})
 
-    expect(mockWriteRegisters).toHaveBeenNthCalledWith(1, 0x80, [0, 0, 0, 0])
-    expect(mockWriteRegisters).toHaveBeenNthCalledWith(2, 0x0E, [4])
+    expect(mockWriteRegisters).toHaveBeenNthCalledWith(1, 0x0E, [4])
+    expect(mockWriteRegisters).toHaveBeenNthCalledWith(2, 0x10, [0x1111, 0x1111])
     expect(mockWriteRegisters).toHaveBeenNthCalledWith(3, 0x0F, [2])
     expect(mockSetID).toHaveBeenCalledWith(2)
+  })
+
+  it('should switch the client to the new address when the meter answers from it', async () => {
+    // the meter applies the address immediately, so the reply comes from the new unit id
+    // and modbus-serial rejects it - the write itself did succeed
+    const mockWriteRegisters = jest.fn()
+      .mockRejectedValueOnce(new Error('Unexpected data error, expected address 1 got 2'))
+    const mockSetID = jest.fn()
+
+    await setup({writeRegisters: mockWriteRegisters, setID: mockSetID}, {address: 2})
+
+    expect(mockSetID).toHaveBeenCalledWith(2)
+  })
+
+  it('should propagate other address write failures', async () => {
+    const mockWriteRegisters = jest.fn().mockRejectedValueOnce(new Error('Timed out'))
+    const mockSetID = jest.fn()
+
+    await expect(setup({writeRegisters: mockWriteRegisters, setID: mockSetID}, {address: 2}))
+      .rejects.toThrow('Timed out')
+    expect(mockSetID).not.toHaveBeenCalled()
   })
 })
