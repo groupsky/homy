@@ -38,7 +38,8 @@
 /**
  * @typedef {{
  *   [read]: {
- *     [instantaneous]: boolean,
+ *     [instantaneous]: boolean, // also gates the garbage frame guard - keep enabled
+
  *     [energy]: boolean,
  *     [config]: boolean,
  *   },
@@ -169,10 +170,13 @@ async function read (
     changed |= result.pow !== state.pow
 
     // The meter is line powered, so it cannot answer while reporting no voltage and no grid
-    // frequency - such a frame is bus garbage (contention, another slave answering). Dropping
+    // frequency. A frame that does is a meter-side glitch (corrupted frames are already
+    // rejected by the CRC check, and other slaves' replies by the unit id filter). Dropping
     // the whole poll keeps a spurious zero out of the monotonic energy counters, where it
     // would show up downstream as a full-counter drop and an equal phantom spike on recovery.
+    // Logged because otherwise a misfiring guard is indistinguishable from "value unchanged".
     if (result.v === 0 && result.freq === 0) {
+      console.warn('Ignoring or-we-504 frame reporting no voltage and no grid frequency')
       return
     }
   }
@@ -222,17 +226,25 @@ async function read (
   return result
 }
 
+// the unlock is only valid for ~10 seconds, and the request below always burns a full
+// client timeout waiting for a reply that never arrives - cap that so the window is not
+// spent before the first write lands
+const MAX_UNLOCK_TIMEOUT_MS = 500
+
 /**
  * Unlock the write protection on the configuration registers, valid for ~10 seconds.
- * Emitted as function code 0x28 at register 0xFE01, which `modbus-serial` has no response
- * parser for - the request reaches the meter, but the reply is never matched to the
- * transaction and it times out, so the timeout is expected and ignored here.
+ * Emitted as function code 0x28 at register 0xFE01. `RTUBufferedPort` has no expected reply
+ * length for that function code, so the reply is dropped at the port layer and never reaches
+ * the protocol layer - the request does go out, but the transaction always times out. The
+ * timeout is therefore the expected outcome and is ignored here.
  * @param {import('modbus-serial').ModbusRTU} client
  * @param {string} [password] current meter password, factory default '00000000'
  * @return {Promise<void>}
  */
 async function unlock (client, password = '00000000') {
   const [hi, lo] = writePassword(password)
+  const timeout = client.getTimeout()
+  client.setTimeout(Math.min(timeout, MAX_UNLOCK_TIMEOUT_MS))
   try {
     await client.customFunction(0x28, [
       // register 0xFE01, 2 registers, 4 data bytes
@@ -241,12 +253,15 @@ async function unlock (client, password = '00000000') {
     ])
   } catch (e) {
     if (e.errno !== 'ETIMEDOUT') throw e
+  } finally {
+    client.setTimeout(timeout)
   }
 }
 
 /**
- * Setup communication parameters - changes are applied after device restart.
- * The write protection is lifted first, which requires the meter's current password.
+ * Setup communication parameters. The write protection is lifted first, which requires the
+ * meter's current password. Writes are ordered so that they are safe whether the meter
+ * applies each change immediately or only on restart - see the note on `baudRate` below.
  * @param {import('modbus-serial').ModbusRTU} client
  * @param {{
  *   [address]: number,
@@ -261,31 +276,37 @@ async function setup (client, newConfig) {
     return
   }
 
+  // validate before unlocking, so a bad argument does not leave the meter unprotected
+  const baudRate = newConfig.baudRate != null ? writeBaudRate(newConfig.baudRate) : null
+  const newPassword = newConfig.newPassword != null ? writePassword(newConfig.newPassword) : null
+
   await unlock(client, newConfig.password)
 
-  if (newConfig.baudRate != null) {
-    await client.writeRegisters(0x0E, [writeBaudRate(newConfig.baudRate)])
+  if (newPassword != null) {
+    await client.writeRegisters(0x10, newPassword)
   }
-  if (newConfig.newPassword != null) {
-    await client.writeRegisters(0x10, writePassword(newConfig.newPassword))
-  }
-  // changing the address must come last - subsequent writes would need the new id
   if (newConfig.address != null) {
     try {
       await client.writeRegisters(0x0F, [newConfig.address])
     } catch (e) {
-      // the meter applies the new address immediately and answers from it, which the client
-      // rejects as coming from an unexpected unit - the write itself did succeed. Match the
-      // new address specifically: the same message prefix is also used for an unexpected
-      // function code, which is a real failure (stale reply from another unit on the bus).
-      if (!new RegExp(`expected address \\d+ got ${newConfig.address}$`).test(e.message)) throw e
+      // The meter answers the address write from its new unit id. RTUBufferedPort drops
+      // replies whose unit id is not the one addressed, so the transaction simply times out;
+      // over an unbuffered/TCP transport the protocol layer reports the mismatch instead.
+      // Either way the write itself may well have succeeded - the read back below decides.
+      const applied = e.errno === 'ETIMEDOUT' ||
+        new RegExp(`expected address \\d+ got ${newConfig.address}$`).test(e.message)
+      if (!applied) throw e
     }
     client.setID(newConfig.address)
-    // the meter is at the new address either way - confirm the write actually took effect
     const { data } = await client.readHoldingRegisters(0x0F, 1)
     if (data[0] !== newConfig.address) {
       throw new Error(`Address change failed, meter reports address ${data[0]}`)
     }
+  }
+  // the baud rate is written last: if it applies immediately, every write after it would go
+  // out at a rate the meter no longer listens on
+  if (baudRate != null) {
+    await client.writeRegisters(0x0E, [baudRate])
   }
 }
 

@@ -216,10 +216,13 @@ describe('read', () => {
       .mockResolvedValueOnce({data: [0, 0, 0, 0, 0, 0, 0]})
     const client = {readHoldingRegisters: mockReadHoldingRegisters}
     const state = {}
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
     expect(await read(client, undefined, state)).toEqual(expect.objectContaining({tot_act: 3.795}))
     // the garbage frame must not be published, and must not clobber the last good values
     expect(await read(client, undefined, state)).toBeUndefined()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
     expect(state).toEqual(expect.objectContaining({v: 225.9, tot_act: 3.795}))
     // the energy registers are not even read once the frame is known to be garbage
     expect(mockReadHoldingRegisters).toHaveBeenCalledTimes(3)
@@ -257,11 +260,13 @@ describe('setup', () => {
   const timeout = () => Object.assign(new Error('Timed out'), {errno: 'ETIMEDOUT'})
 
   const mockClient = (overrides = {}) => ({
-    // modbus-serial has no response parser for FC 0x28, so the unlock always times out
+    // RTUBufferedPort drops the FC 0x28 reply, so the unlock always times out
     customFunction: jest.fn().mockRejectedValue(timeout()),
     writeRegisters: jest.fn().mockResolvedValue({}),
     readHoldingRegisters: jest.fn().mockResolvedValue({data: [2]}),
     setID: jest.fn(),
+    getTimeout: jest.fn().mockReturnValue(1000),
+    setTimeout: jest.fn(),
     ...overrides,
   })
 
@@ -312,11 +317,31 @@ describe('setup', () => {
     expect(client.writeRegisters).toHaveBeenCalledWith(0x0E, [3])
   })
 
-  it('should reject an unsupported baud rate instead of writing garbage', async () => {
+  it('should reject an unsupported baud rate before unlocking the meter', async () => {
     const client = mockClient()
 
     await expect(setup(client, {baudRate: 19200})).rejects.toThrow('Unsupported baud rate 19200')
+    expect(client.customFunction).not.toHaveBeenCalled()
     expect(client.writeRegisters).not.toHaveBeenCalled()
+  })
+
+  it('should cap the client timeout while unlocking and restore it after', async () => {
+    const client = mockClient({getTimeout: jest.fn().mockReturnValue(10000)})
+
+    await setup(client, {baudRate: 4800})
+
+    expect(client.setTimeout).toHaveBeenNthCalledWith(1, 500)
+    expect(client.setTimeout).toHaveBeenNthCalledWith(2, 10000)
+  })
+
+  it('should write the baud rate after the address', async () => {
+    const client = mockClient()
+
+    await setup(client, {address: 2, baudRate: 4800})
+
+    const addressWrite = client.writeRegisters.mock.calls.findIndex(([reg]) => reg === 0x0F)
+    const baudWrite = client.writeRegisters.mock.calls.findIndex(([reg]) => reg === 0x0E)
+    expect(addressWrite).toBeLessThan(baudWrite)
   })
 
   it('should write a new password as 4 BCD digits per register', async () => {
@@ -328,28 +353,41 @@ describe('setup', () => {
     expect(client.writeRegisters).toHaveBeenCalledWith(0x10, [0x1111, 0x1111])
   })
 
-  it('should reject a password that is not exactly 8 digits', async () => {
+  it('should reject a password that is not exactly 8 digits before unlocking', async () => {
     const client = mockClient()
 
     await expect(setup(client, {newPassword: '1234'}))
       .rejects.toThrow('Password must be exactly 8 digits')
+    expect(client.customFunction).not.toHaveBeenCalled()
     expect(client.writeRegisters).not.toHaveBeenCalled()
   })
 
-  it('should write the address last and switch the client to it', async () => {
+  it('should write password, then address, then baud rate', async () => {
     const client = mockClient()
 
     await setup(client, {address: 2, baudRate: 9600, newPassword: '11111111'})
 
-    expect(client.writeRegisters).toHaveBeenNthCalledWith(1, 0x0E, [4])
-    expect(client.writeRegisters).toHaveBeenNthCalledWith(2, 0x10, [0x1111, 0x1111])
-    expect(client.writeRegisters).toHaveBeenNthCalledWith(3, 0x0F, [2])
+    expect(client.writeRegisters).toHaveBeenNthCalledWith(1, 0x10, [0x1111, 0x1111])
+    expect(client.writeRegisters).toHaveBeenNthCalledWith(2, 0x0F, [2])
+    expect(client.writeRegisters).toHaveBeenNthCalledWith(3, 0x0E, [4])
     expect(client.setID).toHaveBeenCalledWith(2)
   })
 
-  it('should switch the client to the new address when the meter answers from it', async () => {
-    // the meter applies the address immediately, so the reply comes from the new unit id
-    // and modbus-serial rejects it - the write itself did succeed
+  it('should switch the client to the new address when the address write times out', async () => {
+    // the meter answers from its new unit id, which RTUBufferedPort drops - this timeout is
+    // what the address write actually rejects with over the transport this repo uses
+    const client = mockClient({
+      writeRegisters: jest.fn().mockRejectedValueOnce(timeout()),
+    })
+
+    await setup(client, {address: 2})
+
+    expect(client.setID).toHaveBeenCalledWith(2)
+    expect(client.readHoldingRegisters).toHaveBeenCalledWith(0x0F, 1)
+  })
+
+  it('should switch the client to the new address on an unbuffered address mismatch', async () => {
+    // an unbuffered or TCP transport reports the mismatch instead of timing out
     const client = mockClient({
       writeRegisters: jest.fn()
         .mockRejectedValueOnce(new Error('Unexpected data error, expected address 1 got 2')),
@@ -358,7 +396,6 @@ describe('setup', () => {
     await setup(client, {address: 2})
 
     expect(client.setID).toHaveBeenCalledWith(2)
-    expect(client.readHoldingRegisters).toHaveBeenCalledWith(0x0F, 1)
   })
 
   it('should not swallow an unexpected function code as an address change', async () => {
