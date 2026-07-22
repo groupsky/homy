@@ -286,6 +286,7 @@ async function setup (client, newConfig) {
     await client.writeRegisters(0x10, newPassword)
   }
   if (newConfig.address != null) {
+    const previousAddress = client.getID()
     try {
       await client.writeRegisters(0x0F, [newConfig.address])
     } catch (e) {
@@ -297,14 +298,29 @@ async function setup (client, newConfig) {
         new RegExp(`expected address \\d+ got ${newConfig.address}$`).test(e.message)
       if (!applied) throw e
     }
+    // The meter answers its own address write from the new address (the documented reply
+    // `02 10 00 0F 00 01 31 F9` carries a CRC only valid for a frame addressed 0x02), so it
+    // is reachable there straight away and the read back is meaningful.
     client.setID(newConfig.address)
-    const { data } = await client.readHoldingRegisters(0x0F, 1)
-    if (data[0] !== newConfig.address) {
-      throw new Error(`Address change failed, meter reports address ${data[0]}`)
+    let reported
+    try {
+      const { data } = await client.readHoldingRegisters(0x0F, 1)
+      reported = data[0]
+    } catch (e) {
+      // leave the client where the meter actually is, so the caller can retry
+      client.setID(previousAddress)
+      throw new Error(`Address change could not be verified, meter is unreachable at ${newConfig.address}`, { cause: e })
+    }
+    if (reported !== newConfig.address) {
+      client.setID(previousAddress)
+      throw new Error(`Address change failed, meter reports address ${reported}`)
     }
   }
-  // the baud rate is written last: if it applies immediately, every write after it would go
-  // out at a rate the meter no longer listens on
+  // The baud rate is written last and is deliberately not verified. Its acknowledgement is
+  // sent at the old rate, but whether the meter then switches immediately or only on restart
+  // is not documented - so a read back would fail spuriously under one of the two, and the
+  // caller has to reopen the port at the new rate either way. Writing it last is safe under
+  // both: nothing follows that could be stranded at the wrong rate.
   if (baudRate != null) {
     await client.writeRegisters(0x0E, [baudRate])
   }

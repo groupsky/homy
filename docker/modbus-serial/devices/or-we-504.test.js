@@ -267,6 +267,7 @@ describe('setup', () => {
     setID: jest.fn(),
     getTimeout: jest.fn().mockReturnValue(1000),
     setTimeout: jest.fn(),
+    getID: jest.fn().mockReturnValue(1),
     ...overrides,
   })
 
@@ -410,13 +411,24 @@ describe('setup', () => {
     expect(client.setID).not.toHaveBeenCalled()
   })
 
-  it('should fail when the meter did not take the new address', async () => {
+  it('should fail and restore the client id when the meter did not take the new address', async () => {
     const client = mockClient({
       readHoldingRegisters: jest.fn().mockResolvedValue({data: [1]}),
     })
 
     await expect(setup(client, {address: 2}))
       .rejects.toThrow('Address change failed, meter reports address 1')
+    expect(client.setID).toHaveBeenLastCalledWith(1)
+  })
+
+  it('should restore the client id when the meter is unreachable at the new address', async () => {
+    const client = mockClient({
+      readHoldingRegisters: jest.fn().mockRejectedValue(timeout()),
+    })
+
+    await expect(setup(client, {address: 2}))
+      .rejects.toThrow('Address change could not be verified, meter is unreachable at 2')
+    expect(client.setID).toHaveBeenLastCalledWith(1)
   })
 
   it('should propagate other address write failures', async () => {
