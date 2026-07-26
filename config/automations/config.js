@@ -488,6 +488,18 @@ module.exports = {
       type: 'ioniq-tpms',
       tpmsTopic: 'ioniq/parsed/tpms',
       ambientTopic: 'ioniq/parsed/ambient',
+      // temp_excess gating (issue #1415). The four wheel values in a frame are
+      // latched independently, so they are only comparable when all of them
+      // refreshed close together, and the comparison only means anything while
+      // the car is rolling. psi_cold / tire_spread_psi are unaffected.
+      speedTopics: [
+        'ioniq/parsed/bms/2101',                // speed_kph while awake
+        'ioniq/parsed/vmcu',                    // speed_kph alongside gear
+      ],
+      wheelFreshnessWindowMs: 600000,           // 10 min mutual refresh window
+      speedMovingKph: 3,                        // above this = rolling (matches ioniq-sessions)
+      motionMaxAgeMs: 1800000,                  // 30 min since the car last moved
+      speedMaxAgeMs: 3600000,                   // older speed telemetry => motion unknown => fail open
     },
     ioniqCellHealth: {
       type: 'ioniq-cell-health',
