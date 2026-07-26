@@ -74,6 +74,7 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
 - **Alert queries**: Do NOT use `$timeFilter` in Grafana 9.5+ (known issue with provisioned alerts)  
 - **Alert time filtering**: `relativeTimeRange` does NOT filter InfluxQL queries - must use explicit `WHERE time >= now() - [duration]`
 - **All alert queries need explicit time filtering** to prevent using stale data from disconnected devices
+- **`last()` over a long window is not "the current value"**: it returns the newest point in the window and keeps returning it until a newer one arrives, so `for:` cannot be relied on to filter transients -- see "`last()` Over a Long Window Defeats `for:`" under Troubleshooting
 - **Data frequency varies**: Temperature data ~15min intervals, battery data ~1-4h intervals (device-dependent)
 - **Dashboard queries**: Can use `$timeFilter` normally - works fine in dashboard context
 - Use appropriate time aggregation (`aggregateWindow` for Flux, aggregate functions for InfluxQL)
@@ -418,6 +419,37 @@ Grafana's own internal state (users, dashboard metadata, alert rule state, ngale
 - **GitHub Issues**: Known problems documented in issues #77466 and #8195
 - **Testing**: Use data source query editor to validate syntax before provisioning
 - **Verification**: Check alert instances via `/api/alertmanager/grafana/api/v2/alerts` for error details
+
+**`last()` Over a Long Window Defeats `for:`:**
+- **Symptoms**: A rule with `for: 10m` pages on a single spurious sample anyway; once firing it stays firing long after the bad sample, and only recovers when the next good sample is published (or when the spike ages out of the query window)
+- **Mechanism**: `SELECT last("value") ... WHERE time >= now() - 6h` means "the newest point in the last 6 hours", **not** "the value right now". With nothing newer published, every evaluation returns the same point. `for:` requires the condition to be *continuously true* for the given duration -- it does **not** require *fresh* data. So a spike that happens to be the last published value stays true across every evaluation in the pending window, `for:` elapses, and the rule fires. `for:` only suppresses an artefact that a corrective sample **overwrites inside the for-window**; it is not a general transient filter.
+- **Recognising an affected rule** -- all three hold:
+  1. The query collapses to a single point with `last()` (or `first()`/`mean()` over the whole range) over a window much longer than the source's publish interval
+  2. `for:` is set, and its comment or PR description describes it as filtering transients
+  3. The source can go quiet -- a sleeping vehicle, a docked battery device, a store-and-forward logger
+- **Worked example** (`ioniq-tpms-*-temp-excess`, group `interval: 1m`, `for: 10m`, `SELECT last("value") ... - 6h`):
+  ```
+  12:00  car wakes, publishes tire_rr_temp_excess = 12.3 (TPMS refresh artefact)
+  12:01  eval -> last() = 12.3 > 8  -> Pending
+  12:02  car sleeps, nothing more is published
+  12:03..12:10  eval -> last() = 12.3 (same point, still inside the 6h window) -> still Pending
+  12:11  for: 10m has elapsed with the condition continuously true -> Alerting, pages
+  18:00  the 12:00 point finally ages out of the 6h window -> NoData -> noDataState: OK -> clears
+  ```
+  Had a corrective frame arrived at 12:02, `last()` would have returned it and the rule would have resolved from Pending without paging. That is the only case `for:` covers.
+- **Practical test**: `for:` is a real transient filter only when the source reliably publishes **several** samples inside the for-window. If `for` is smaller than ~2x the publish interval, or the source can stop publishing entirely, treat `for:` as best-effort and say so in a comment on the rule.
+- **Solutions**, in order of preference:
+  1. **Shorten the query window** so `last()` cannot hold a stale point. Only safe when the source publishes reliably -- and check `noDataState` first: `NoData` will page on every quiet period, `OK` will *silently clear* a real alert instead of holding last known state.
+  2. **Aggregate in InfluxQL, not in the reducer.** For a `gt` threshold use `min()`, for an `lt` threshold use `max()`, so a lone outlier cannot drive the rule:
+     ```sql
+     ✅ SELECT max("soh") FROM "ioniq" WHERE "group"='bms/2105' AND time >= now() - 24h
+     ❌ SELECT last("soh") FROM "ioniq" WHERE "group"='bms/2105' AND time >= now() - 24h
+     ```
+     **Gotcha**: the `classic_conditions` `reducer` is applied to the *query result*, and `SELECT last(...)` has already collapsed that to a single point -- so changing `reducer: last` to `reducer: min`/`avg` does nothing. The aggregation has to happen in the query. The cost is detection latency: with `max()` over 24h a genuine step down is only reported once it dominates the whole window, so use this only for slow-moving signals.
+  3. **Add an explicit freshness gate**: a second query `SELECT count("value") ... time >= now() - 20m` with a `gt 0` condition ANDed in, so the rule can only fire on recent data. This costs persistence -- the alert clears as soon as the source sleeps, which is often exactly what the long window was there to prevent.
+  4. **Fix upstream and document it**: where the long window is deliberate (keeping an alert visible after a device sleeps), the transient filter belongs in the producer, not the alert rule. Keep `for:` as a cheap backstop, but comment on the rule that it is not a guarantee.
+- **Still worth setting `for:`**: it reliably absorbs a one-off evaluation glitch and it genuinely filters transients on fast, always-on sources (e.g. `sunseeker-battery-*`, which publish every 2-5 min while awake). The failure is specific to the combination of a long `last()` window and a source that can go silent.
+- **Reference**: issues #1417 (analysis) and #1419 (per-rule audit of the provisioned rules)
 
 **"database is locked" Errors (ngalert scheduler):**
 - **Symptoms**: Grafana logs show `database is locked` errors, alert rule evaluations silently missed

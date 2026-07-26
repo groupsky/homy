@@ -296,6 +296,12 @@ groups:
               expression: soh
         noDataState: OK
         execErrState: OK
+        # Formality, not a transient filter: last() over 24h keeps returning a
+        # spurious low sample for the whole window, so the pending period elapses
+        # and the rule fires anyway (issue #1419). Kept because SoH moves over
+        # months and the 24h window is needed to survive the car sleeping (~12h
+        # gaps observed); the guard against garbage frames is the all-zero drop
+        # in the mqtt-influx converter (issue #1413).
         for: 1h
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -333,6 +339,8 @@ groups:
               expression: soh
         noDataState: OK
         execErrState: OK
+        # Formality, not a transient filter -- see ioniq-soh-step above and
+        # "last() Over a Long Window Defeats for:" in config/grafana/CLAUDE.md.
         for: 1h
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:

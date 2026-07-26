@@ -52,6 +52,13 @@ groups:
               type: classic_conditions
         noDataState: NoData
         execErrState: Alerting
+        # Effective as a transient filter here, unlike the ioniq rules: the mower
+        # publishes every 2-5 min while awake, so several fresh samples land
+        # inside the pending window and a one-off reading is overwritten before
+        # it can fire. The 4h window only holds the last value once the mower
+        # goes silent, and "last seen critically low, now offline" is an alert
+        # worth having. See config/grafana/CLAUDE.md, "last() Over a Long Window
+        # Defeats for:" (issue #1419).
         for: 10m
         annotations:
           description: "Sunseeker lawn mower battery is critically low at {{ $values.battery.Value }}%"
@@ -108,6 +115,12 @@ groups:
               type: classic_conditions
         noDataState: NoData
         execErrState: Alerting
+        # "voltage" is only reported while the mower is on the charger, at ~2 min
+        # intervals, and the first sample of a charge session is the depleted
+        # end-of-discharge reading (7 samples under 18 V in 30 days, every one of
+        # them followed by a higher reading 2 min later). So 5m covers at least
+        # two fresh samples and does filter those -- see the note on
+        # sunseeker-battery-low above.
         for: 5m
         annotations:
           description: "Sunseeker battery voltage critically low at {{ $values.voltage.Value }}mV"
