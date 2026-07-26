@@ -508,10 +508,17 @@ module.exports = {
         'ioniq/parsed/cells/33',
         'ioniq/parsed/cells/65',
       ],
-      moduleTemp1Topic: 'ioniq/parsed/bms/2101',
+      // bms/2101 carries module_temps 1-5 AND the contemporaneous
+      // cell_max_v/cell_min_v pair that cell_spread_mv is derived from (#1418).
+      bmsTopic: 'ioniq/parsed/bms/2101',
       moduleTemp2Topic: 'ioniq/parsed/bms/2105',
       cellSpreadOutputTopic: 'ioniq/parsed/derived/cell_spread_mv',
       moduleTempSpreadOutputTopic: 'ioniq/parsed/derived/module_temp_spread_c',
+      // Cross-frame join gating (issue #1418). The cells/* segments and the two
+      // module-temp frames are polled separately and persist across vehicle
+      // sleeps, so they are only comparable when their logger timestamps fall
+      // inside one window. A full cells cycle completes in ~300 ms.
+      segmentFreshnessWindowMs: 600000,         // 10 min, matches ioniq-tpms
     },
     ioniq12vLdc: {
       type: 'ioniq-12v-ldc',
