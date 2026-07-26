@@ -1,5 +1,15 @@
 apiVersion: 1
 
+# The 6h query window is deliberate: the car publishes TPMS only while awake
+# (~138 of any 168 hours have no samples at all), and every rule here is
+# noDataState: OK, so a short window would let the alert silently clear the
+# moment the car sleeps instead of staying visible. The cost is that
+# `SELECT last(...) ... - 6h` keeps returning the newest point for up to 6
+# hours, which means `for:` cannot be relied on as a transient filter -- see
+# "last() Over a Long Window Defeats for:" in config/grafana/CLAUDE.md
+# (issue #1419). The real artefact filter is the wheel-freshness gate in
+# docker/automations/bots/ioniq-tpms.js (issues #1415/#1416).
+
 groups:
   - orgId: 1
     name: Ioniq TPMS Alerts
@@ -150,6 +160,10 @@ groups:
         execErrState: OK
         # A dragging brake or a failing bearing produces a sustained excess; a
         # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
@@ -300,6 +314,10 @@ groups:
         execErrState: OK
         # A dragging brake or a failing bearing produces a sustained excess; a
         # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
@@ -450,6 +468,10 @@ groups:
         execErrState: OK
         # A dragging brake or a failing bearing produces a sustained excess; a
         # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
@@ -600,6 +622,10 @@ groups:
         execErrState: OK
         # A dragging brake or a failing bearing produces a sustained excess; a
         # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
