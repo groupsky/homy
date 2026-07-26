@@ -219,10 +219,13 @@ query this measurement's `v` field. See
     `ioniq-cell-health` automations bot merges the 12 battery module temperatures (`module_temps`[5]
     from `bms/2101` + `module_temps_6_12`[7] from `bms/2105`) and publishes field `value` =
     `max − min` in °C. The two frames come from different PIDs, so the point is suppressed unless
-    their logger timestamps fall inside the same freshness window, and a `module_temps` array that
-    carries the OBD "no data" signature (all zeros, or some zeros alongside peers well above
-    freezing) is discarded rather than merged (#1418). Grafana's `ioniq-module-temp-spread-*` rules
-    alert on `value > 8` (warning) / `> 15` (critical).
+    their logger timestamps fall inside the same freshness window. A module-temperature array
+    carrying the OBD "no data" signature is discarded rather than merged (#1418): all-zero arrays by
+    shape, and partly-zero arrays by cross-checking the lowest module against the `temp_min` the same
+    `bms/2101` frame reports (rejected when it sits more than 2 °C below). `bms/2105` carries no
+    `temp_min`, so `module_temps_6_12` is cross-checked against the paired `bms/2101` frame's
+    `temp_min` at merge time instead. Grafana's `ioniq-module-temp-spread-*` rules alert on
+    `value > 8` (warning) / `> 15` (critical).
   - `derived/ldc_ok` — a bot-produced `group` value (not from the logger): the `ioniq-12v-ldc`
     automations bot publishes it from `bms/2101` with field `value` ∈ {0,1}. `0` means the LDC
     (DC-DC converter) is not charging the 12 V battery — `aux_12v` held below 13.2 V for ≥60 s while

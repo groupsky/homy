@@ -43,10 +43,10 @@ const CELL_V_MIN = 1.0
 const CELL_V_MAX = 5.0
 const MODULE_TEMP_MIN_C = -40
 const MODULE_TEMP_MAX_C = 100
-// Highest temperature any other module may report while one of them reads exactly
-// 0.0 °C before the frame is treated as a partial "no data" decode — see
-// hasPartialNoDataZeros.
-const MODULE_TEMP_NO_DATA_PEER_MAX_C = 10
+// How far below the BMS's own reported pack minimum (`temp_min`) the coldest
+// per-module reading may sit before the frame is treated as a corrupt decode.
+// See isCoherentWithPackMin.
+const MODULE_TEMP_PACK_MIN_TOLERANCE_C = 2
 
 // Widest allowed spread between the frame timestamps taking part in a join.
 // A full cells poll cycle completes in ~300 ms and repeats every ~30 s while the
@@ -73,7 +73,9 @@ const isFiniteNum = (x) => typeof x === 'number' && Number.isFinite(x)
 // partly zero. For module temperatures 0 °C is a legitimate reading, so the
 // all-zero shape needs a rule of its own — five or seven module temperatures
 // reading exactly 0.0 in unison is a garbage frame, one of them reading 0.0 is a
-// cold pack. See hasPartialNoDataZeros for the partly-zero case.
+// cold pack. It has to stay even though isCoherentWithPackMin covers the partly-
+// zero case: on an all-zero frame the BMS reports temp_min = 0 as well, so the
+// cross-check sees a perfectly coherent freezing pack.
 function parseFloatArray (raw, expectedLen, minValue, maxValue) {
   let arr = raw
   if (typeof arr === 'string') {
@@ -104,18 +106,45 @@ function parseFloatArray (raw, expectedLen, minValue, maxValue) {
 // all-zero rule does not see them and neither does a range check, because 0 °C is
 // a physically possible module temperature.
 //
-// What is not possible is one module reading exactly 0.0 while another reads well
-// above freezing: the modules share a pack enclosure and a coolant loop, so a
-// genuine 0 °C reading means the whole pack is near freezing. Across 33008
-// production frames the coldest clean module reading was 14 °C and all three
-// corrupt frames had peers at 27-32 °C, so the limit below separates them by a
-// wide margin.
+// The discriminator is the bms/2101 frame's own `temp_min` field: the BMS reports
+// the pack minimum independently of the per-module array, and on all three
+// corrupt frames it stayed at the real value (26, 30, 31 °C) while zeros were
+// injected into the array. Measured over every bms/2101 frame in the database
+// (31422 frames, all of which carry temp_min):
 //
-// Trade-off: a genuine >10 °C spread in which the cold end reads exactly 0.0 is
-// suppressed. That combination is far more likely a decode failure than physics,
-// and any other cold module would still surface the same fault.
-function hasPartialNoDataZeros (arr, peerLimit) {
-  return arr.some((n) => n === 0) && Math.max(...arr) > peerLimit
+//   min(module_temps) − temp_min   frames
+//     −31 / −30 / −26              1 each   <- the three known corrupt frames
+//     −1                             525
+//      0                          27942
+//     +1                            2952
+//
+// so a tolerance of 2 °C sits one step outside the widest clean disagreement and
+// 24 °C away from the nearest corrupt frame. Pairing each of the 1586 bms/2105
+// frames with its nearest bms/2101 frame shows temp_min tracks the minimum of the
+// merged 12-module array to within ±1 °C as well, which is what lets the same
+// check cover module_temps_6_12 (see the publish-time check in handleModuleTemps).
+//
+// Unlike the peer-magnitude rule this replaces ("some element is 0 while another
+// is above 10 °C"), it is season-independent: a genuinely near-freezing pack
+// reports temp_min ≈ 0 too, and a genuine cold outlier module drags temp_min down
+// with it, so neither is rejected. The rule it replaces suppressed both, which
+// turned a real winter spread into a silently-too-low published value.
+//
+// Only the low side is checked. The "no data" decode fills the array with zeros,
+// which can only pull the minimum down; the upper end is already bounded by
+// MODULE_TEMP_MAX_C, and adding a temp_max check would introduce a rejection path
+// no observed frame motivates.
+//
+// A frame without a usable temp_min is accepted: this is a cross-check against a
+// second source, not a freshness gate, and temp_min is present on 100% of
+// production frames, so its absence signals an unexpected payload shape rather
+// than corruption. Failing open there leaves the all-zero and range rules in
+// place instead of silently killing the alerting signal; replaying the 12 days
+// of production frames with temp_min stripped costs 3 leaked artefacts, whereas
+// failing closed would cost all 32942 points.
+function isCoherentWithPackMin (temps, packMin, tolerance) {
+  if (!isFiniteNum(packMin)) return true
+  return Math.min(...temps) >= packMin - tolerance
 }
 
 // Round to 0.1 to strip binary floating-point noise (e.g. (3.70-3.64)*1000 =
@@ -155,12 +184,17 @@ module.exports = function createIoniqCellHealth (name, config) {
       // timestamp the stored value came from, which is what the freshness gates
       // compare. It has to survive a restart, otherwise every restart would
       // re-open the stale-join hole this bot exists to close.
+      // `packMin` is the `temp_min` reported by the same bms/2101 frame that
+      // supplied `moduleTemps`; the two are always written together so the
+      // publish-time coherence check compares an array against its own frame's
+      // pack minimum and never against a newer one.
       default: {
         seg0: null,
         seg1: null,
         seg2: null,
         moduleTemps: null,
         moduleTemps6_12: null,
+        packMin: null,
         stamps: {}
       },
       migrate: ({ defaultState, state }) => {
@@ -173,6 +207,12 @@ module.exports = function createIoniqCellHealth (name, config) {
         if (!state.stamps || typeof state.stamps !== 'object') {
           state.stamps = { ...defaultState.stamps }
         }
+        // A cache carried over without `packMin` leaves the coherence check
+        // without an input; it fails open until the next bms/2101 frame refills
+        // both fields together.
+        if (!('packMin' in state)) {
+          state.packMin = defaultState.packMin
+        }
         return state
       }
     },
@@ -182,6 +222,9 @@ module.exports = function createIoniqCellHealth (name, config) {
       // map entirely; the bot must not crash on it.
       if (!persistedCache.stamps || typeof persistedCache.stamps !== 'object') {
         persistedCache.stamps = {}
+      }
+      if (!('packMin' in persistedCache)) {
+        persistedCache.packMin = null
       }
 
       // Freshness gate: the given frame timestamps are only comparable when they
@@ -267,16 +310,29 @@ module.exports = function createIoniqCellHealth (name, config) {
         })
       }
 
-      const handleModuleTemps = (cacheKey, expectedLen, field) => (payload) => {
+      // `packMinField` names the field carrying the BMS's own pack minimum on this
+      // topic, or is null when the topic does not carry one (bms/2105).
+      const handleModuleTemps = (cacheKey, expectedLen, field, packMinField) => (payload) => {
         const parsed = parseFloatArray(
           payload && payload[field], expectedLen, MODULE_TEMP_MIN_C, MODULE_TEMP_MAX_C)
-        if (parsed === null || hasPartialNoDataZeros(parsed, MODULE_TEMP_NO_DATA_PEER_MAX_C)) {
+        if (parsed === null) {
           log(`rejected malformed ${field} frame, keeping prior segment`)
           return
         }
+        const framePackMin = packMinField === null ? null : payload[packMinField]
+        if (!isCoherentWithPackMin(parsed, framePackMin, MODULE_TEMP_PACK_MIN_TOLERANCE_C)) {
+          log(`rejected incoherent ${field} frame (min below ${packMinField})`, parsed, framePackMin)
+          return
+        }
         store(cacheKey, parsed, payload.ts)
+        // Written in the same step as the array so the pair can never desync: a
+        // frame whose array was rejected above must not leave its pack minimum
+        // behind to be checked against the retained array.
+        if (packMinField !== null) {
+          persistedCache.packMin = isFiniteNum(framePackMin) ? framePackMin : null
+        }
 
-        const { moduleTemps, moduleTemps6_12, stamps } = persistedCache
+        const { moduleTemps, moduleTemps6_12, stamps, packMin } = persistedCache
         if (moduleTemps === null || moduleTemps6_12 === null) return
         // The frame just stored is one of the two, so its stamp is this frame's
         // timestamp; the gate therefore also bounds how stale the other one is.
@@ -286,6 +342,19 @@ module.exports = function createIoniqCellHealth (name, config) {
         }
 
         const temps = moduleTemps.concat(moduleTemps6_12)
+        // bms/2105 carries no pack minimum of its own, so module_temps_6_12 is
+        // cross-checked here instead, against the temp_min of the bms/2101 frame
+        // it is being merged with. The freshness gate above has already
+        // established that the two frames are comparable, and temp_min tracks the
+        // merged 12-module minimum to within ±1 °C across every paired frame in
+        // production. Suppressing rather than retaining is deliberate: unlike the
+        // per-topic checks there is no known-good merged array to fall back on,
+        // and the next frame from either topic re-evaluates in ~30 s.
+        if (!isCoherentWithPackMin(temps, packMin, MODULE_TEMP_PACK_MIN_TOLERANCE_C)) {
+          log('module_temp_spread_c suppressed: merged temps incoherent with pack minimum', temps, packMin)
+          return
+        }
+
         mqtt.publish(moduleTempSpreadOutputTopic, {
           _type: 'ioniq',
           group: 'derived/module_temp_spread_c',
@@ -296,7 +365,7 @@ module.exports = function createIoniqCellHealth (name, config) {
       }
 
       // bms/2101 feeds both derived signals, so it gets a single subscription.
-      const onModuleTemps1 = handleModuleTemps('moduleTemps', 5, 'module_temps')
+      const onModuleTemps1 = handleModuleTemps('moduleTemps', 5, 'module_temps', 'temp_min')
       const onBmsFrame = (payload) => {
         if (!payload) return
         handleCellSpread(payload)
@@ -306,7 +375,7 @@ module.exports = function createIoniqCellHealth (name, config) {
       await Promise.all([
         ...cellTopics.map((topic, index) => mqtt.subscribe(topic, handleCells(segKeys[index]))),
         mqtt.subscribe(bmsTopic, onBmsFrame),
-        mqtt.subscribe(moduleTemp2Topic, handleModuleTemps('moduleTemps6_12', 7, 'module_temps_6_12'))
+        mqtt.subscribe(moduleTemp2Topic, handleModuleTemps('moduleTemps6_12', 7, 'module_temps_6_12', null))
       ])
     }
   }

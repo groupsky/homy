@@ -32,8 +32,23 @@ function makeCache () {
     seg2: null,
     moduleTemps: null,
     moduleTemps6_12: null,
+    packMin: null,
     stamps: {}
   }
+}
+
+// A bms/2101 module-temp frame. `temp_min` is the BMS's own pack minimum, which
+// the coherence cross-check compares the array against; production carries it on
+// every frame, so it defaults to the array minimum here.
+function tempFrame1 (temps, { ts = 1, state = 'parked', tempMin = Math.min(...temps) } = {}) {
+  const frame = { module_temps: JSON.stringify(temps), state, ts }
+  if (tempMin !== null) frame.temp_min = tempMin
+  return frame
+}
+
+// A bms/2105 module-temp frame. This topic carries no pack minimum of its own.
+function tempFrame2 (temps, { ts = 2, state = 'parked' } = {}) {
+  return { module_temps_6_12: JSON.stringify(temps), state, ts }
 }
 
 const config = {
@@ -88,10 +103,33 @@ describe('ioniq-cell-health bot — subscriptions', () => {
 })
 
 describe('ioniq-cell-health bot — persistedCache', () => {
-  it('is at version 2 and defaults to an empty stamp map', () => {
+  it('is at version 2 and defaults to an empty stamp map and no pack minimum', () => {
     const bot = createIoniqCellHealth('ioniq-cell-health', config)
     expect(bot.persistedCache.version).toBe(2)
     expect(bot.persistedCache.default.stamps).toEqual({})
+    expect(bot.persistedCache.default.packMin).toBeNull()
+  })
+
+  it('adds packMin to a cache that predates it', () => {
+    const bot = createIoniqCellHealth('ioniq-cell-health', config)
+    const state = { ...makeCache() }
+    delete state.packMin
+    const migrated = bot.persistedCache.migrate({
+      version: 2,
+      defaultState: bot.persistedCache.default,
+      state
+    })
+    expect(migrated.packMin).toBeNull()
+  })
+
+  it('does not discard a packMin that is already present', () => {
+    const bot = createIoniqCellHealth('ioniq-cell-health', config)
+    const migrated = bot.persistedCache.migrate({
+      version: 2,
+      defaultState: bot.persistedCache.default,
+      state: { ...makeCache(), packMin: 26 }
+    })
+    expect(migrated.packMin).toBe(26)
   })
 
   it('migrates a v1 cache without stamps, leaving the carried-over segments unstamped', () => {
@@ -499,33 +537,37 @@ describe('ioniq-cell-health bot — module_temp_spread_c', () => {
   })
 
   it.each([
-    ['all-zero array (garbage no-data frame)', [0, 0, 0, 0, 0]],
-    ['implausibly high module temperature', [30, 31, 29, 30, 500]],
-    ['implausibly low module temperature', [30, 31, 29, 30, -273]],
-    // Real partial "no data" decodes from production. The last two published
+    // Shape/range rejections, caught by parseFloatArray before any cross-check.
+    ['all-zero array (garbage no-data frame)', [0, 0, 0, 0, 0], 0],
+    ['implausibly high module temperature', [30, 31, 29, 30, 500], 29],
+    ['implausibly low module temperature', [30, 31, 29, 30, -273], 29],
+    // The three real partial "no data" decodes from production, each with the
+    // temp_min the same frame actually reported. The last two published
     // module_temp_spread_c of 31 °C and 32 °C, twice the critical threshold.
-    ['partial no-data zeros, 2026-07-14', [27, 27, 26, 0, 0]],
-    ['partial no-data zeros, 2026-07-17 16:23', [31, 31, 0, 0, 0]],
-    ['partial no-data zeros, 2026-07-17 17:52', [32, 31, 32, 31, 0]]
-  ])('rejects a physically impossible module_temps frame (%s) instead of merging it into the spread', async (_label, badTemps) => {
+    ['partial no-data zeros, 2026-07-14', [27, 27, 26, 0, 0], 26],
+    ['partial no-data zeros, 2026-07-17 16:23', [31, 31, 0, 0, 0], 30],
+    ['partial no-data zeros, 2026-07-17 17:52', [32, 31, 32, 31, 0], 31]
+  ])('rejects a corrupt module_temps frame (%s) instead of merging it into the spread', async (_label, badTemps, tempMin) => {
     const moduleTemps = [30, 31, 29, 30, 30]
     const moduleTemps6_12 = [30, 30, 33, 30, 30, 30, 28]
-    await mqtt._trigger(BMS2101, { module_temps: JSON.stringify(moduleTemps), state: 'parked', ts: 1 })
-    await mqtt._trigger(BMS2105, { module_temps_6_12: JSON.stringify(moduleTemps6_12), state: 'parked', ts: 1 })
+    await mqtt._trigger(BMS2101, tempFrame1(moduleTemps, { ts: 1, tempMin: 28 }))
+    await mqtt._trigger(BMS2105, tempFrame2(moduleTemps6_12, { ts: 1 }))
     expect(mqtt.publish).toHaveBeenCalledTimes(1)
     mqtt.publish.mockClear()
 
-    await mqtt._trigger(BMS2101, { module_temps: JSON.stringify(badTemps), state: 'parked', ts: 2 })
+    await mqtt._trigger(BMS2101, tempFrame1(badTemps, { ts: 2, tempMin }))
     expect(mqtt.publish).not.toHaveBeenCalled()
 
-    await mqtt._trigger(BMS2105, { module_temps_6_12: JSON.stringify(moduleTemps6_12), state: 'parked', ts: 3 })
+    // The retained (still ~fresh) array and its pack minimum both survive the
+    // rejection, so the next good bms/2105 frame publishes the real spread.
+    await mqtt._trigger(BMS2105, tempFrame2(moduleTemps6_12, { ts: 3 }))
     expect(mqtt.publish).toHaveBeenCalledTimes(1)
     expect(mqtt.publish).toHaveBeenCalledWith(MODULE_TEMP_SPREAD_OUT, expect.objectContaining({ value: 33 - 28 }))
   })
 
   it('keeps a legitimate 0 °C module temperature (the zero guards must not reject a near-freezing pack)', async () => {
-    await mqtt._trigger(BMS2101, { module_temps: JSON.stringify([0, 1, 0, -1, 0]), state: 'parked', ts: 1 })
-    await mqtt._trigger(BMS2105, { module_temps_6_12: JSON.stringify([0, 0, 2, 0, 0, 0, -2]), state: 'parked', ts: 2 })
+    await mqtt._trigger(BMS2101, tempFrame1([0, 1, 0, -1, 0], { ts: 1 }))
+    await mqtt._trigger(BMS2105, tempFrame2([0, 0, 2, 0, 0, 0, -2], { ts: 2 }))
 
     expect(mqtt.publish).toHaveBeenCalledWith(MODULE_TEMP_SPREAD_OUT, expect.objectContaining({ value: 4 }))
   })
@@ -557,5 +599,126 @@ describe('ioniq-cell-health bot — module_temp_spread_c', () => {
     })
     expect(mqtt.publish).toHaveBeenCalledTimes(1)
     expect(mqtt.publish).toHaveBeenCalledWith(MODULE_TEMP_SPREAD_OUT, expect.objectContaining({ value: 2 }))
+  })
+})
+
+// The corruption cross-check: a module-temp array is only usable when its lowest
+// element agrees with the pack minimum the BMS reports for the same frame. These
+// tests pin both ends — the corrupt frames it must still reject, and the genuine
+// cold-pack readings the rule it replaced (reject any zero alongside a peer above
+// 10 °C) turned into silently-too-low published spreads.
+describe('ioniq-cell-health bot — module_temps coherence with temp_min', () => {
+  let mqtt, persistedCache, bot
+  beforeEach(async () => {
+    mqtt = makeMqtt()
+    persistedCache = makeCache()
+    bot = createIoniqCellHealth('ioniq-cell-health', config)
+    await bot.start({ mqtt, persistedCache })
+  })
+
+  const lastTempSpread = () => {
+    const calls = mqtt.publish.mock.calls.filter((c) => c[0] === MODULE_TEMP_SPREAD_OUT)
+    return calls.length ? calls[calls.length - 1][1] : null
+  }
+
+  // Winter DC fast charging and pack warm-up put a real >8 °C gradient across the
+  // pack with the cold end sitting at exactly 0 °C. Every one of these clears the
+  // 8 °C warning threshold and must reach Grafana as the true spread.
+  it.each([
+    ['winter fast charge, cold tail module', [13, 12, 11, 11, 0], [11, 11, 11, 11, 11, 11, 11], 13],
+    ['pack warm-up, steep gradient', [12, 8, 4, 0, 0], [3, 2, 2, 1, 1, 1, 0], 12],
+    ['single cold module in the 6-12 bank', [15, 15, 15, 15, 15], [15, 15, 0, 15, 15, 15, 15], 15]
+  ])('publishes the true spread for a genuine cold-end-at-zero pack (%s)', async (_label, temps1, temps2, expected) => {
+    await mqtt._trigger(BMS2101, tempFrame1(temps1, { ts: 1, tempMin: 0 }))
+    await mqtt._trigger(BMS2105, tempFrame2(temps2, { ts: 2 }))
+
+    expect(lastTempSpread()).toEqual(expect.objectContaining({ value: expected }))
+    expect(expected).toBeGreaterThan(8) // would page — must not be suppressed or understated
+  })
+
+  // Boundary pair for MODULE_TEMP_PACK_MIN_TOLERANCE_C. One step apart, so
+  // widening or narrowing the tolerance breaks one of them.
+  it('accepts an array whose minimum sits exactly the tolerance below temp_min', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([10, 10, 10, 10, 8], { ts: 1, tempMin: 10 }))
+    await mqtt._trigger(BMS2105, tempFrame2([10, 10, 10, 10, 10, 10, 10], { ts: 2 }))
+
+    expect(lastTempSpread()).toEqual(expect.objectContaining({ value: 2 }))
+  })
+
+  it('rejects an array whose minimum sits one step further below temp_min', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([10, 10, 10, 10, 7], { ts: 1, tempMin: 10 }))
+    await mqtt._trigger(BMS2105, tempFrame2([10, 10, 10, 10, 10, 10, 10], { ts: 2 }))
+
+    expect(lastTempSpread()).toBeNull()
+    expect(persistedCache.moduleTemps).toBeNull()
+  })
+
+  // Same boundary on the merged 12-module array, which is what covers the bms/2105
+  // side (that topic reports no pack minimum of its own).
+  it('accepts a module_temps_6_12 minimum exactly the tolerance below the paired temp_min', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([10, 10, 10, 10, 10], { ts: 1, tempMin: 10 }))
+    await mqtt._trigger(BMS2105, tempFrame2([10, 10, 10, 10, 10, 10, 8], { ts: 2 }))
+
+    expect(lastTempSpread()).toEqual(expect.objectContaining({ value: 2 }))
+  })
+
+  it('suppresses the spread when module_temps_6_12 drops one step further below the paired temp_min', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([10, 10, 10, 10, 10], { ts: 1, tempMin: 10 }))
+    await mqtt._trigger(BMS2105, tempFrame2([10, 10, 10, 10, 10, 10, 7], { ts: 2 }))
+
+    expect(lastTempSpread()).toBeNull()
+  })
+
+  it('suppresses the spread for a partial no-data decode on bms/2105, which carries no temp_min', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([31, 31, 30, 31, 30], { ts: 1, tempMin: 30 }))
+    await mqtt._trigger(BMS2105, tempFrame2([31, 30, 0, 0, 0, 0, 0], { ts: 2 }))
+
+    expect(lastTempSpread()).toBeNull()
+  })
+
+  it('still rejects an all-zero array, whose temp_min reads 0 and is therefore coherent', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([0, 0, 0, 0, 0], { ts: 1, tempMin: 0 }))
+    await mqtt._trigger(BMS2105, tempFrame2([27, 27, 26, 27, 27, 26, 27], { ts: 2 }))
+
+    expect(lastTempSpread()).toBeNull()
+    expect(persistedCache.moduleTemps).toBeNull()
+  })
+
+  it('falls open when the frame carries no temp_min, leaving the all-zero and range rules in charge', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([27, 27, 26, 0, 0], { ts: 1, tempMin: null }))
+    await mqtt._trigger(BMS2105, tempFrame2([27, 27, 26, 27, 27, 26, 27], { ts: 2 }))
+
+    expect(persistedCache.packMin).toBeNull()
+    expect(lastTempSpread()).toEqual(expect.objectContaining({ value: 27 }))
+  })
+
+  it('keeps the rejected frame\'s temp_min out of the cache so it cannot be checked against the retained array', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([27, 27, 26, 27, 27], { ts: 1, tempMin: 26 }))
+    expect(persistedCache.packMin).toBe(26)
+
+    // Corrupt frame: rejected, and its temp_min must not replace the stored one.
+    await mqtt._trigger(BMS2101, tempFrame1([31, 31, 0, 0, 0], { ts: 2, tempMin: 30 }))
+    expect(persistedCache.packMin).toBe(26)
+    expect(persistedCache.moduleTemps).toEqual([27, 27, 26, 27, 27])
+    expect(persistedCache.stamps.moduleTemps).toBe(1)
+
+    // A retained-but-still-fresh array is a real measurement, so the joined signal
+    // continues from it rather than gapping. The stamp is deliberately not
+    // refreshed, so the freshness gate still closes if the corruption persists.
+    await mqtt._trigger(BMS2105, tempFrame2([27, 27, 25, 27, 27, 26, 27], { ts: 3 }))
+    expect(lastTempSpread()).toEqual(expect.objectContaining({ value: 2 }))
+  })
+
+  it('closes the gate rather than publishing from a retained array once corruption outlasts the window', async () => {
+    await mqtt._trigger(BMS2101, tempFrame1([27, 27, 26, 27, 27], { ts: 1000, tempMin: 26 }))
+    await mqtt._trigger(BMS2105, tempFrame2([27, 27, 25, 27, 27, 26, 27], { ts: 1100 }))
+    expect(lastTempSpread()).toEqual(expect.objectContaining({ value: 2 }))
+    mqtt.publish.mockClear()
+
+    const late = 1000 + 11 * MINUTE
+    await mqtt._trigger(BMS2101, tempFrame1([31, 31, 0, 0, 0], { ts: late, tempMin: 30 }))
+    await mqtt._trigger(BMS2105, tempFrame2([31, 31, 30, 31, 31, 30, 31], { ts: late + 100 }))
+
+    expect(mqtt.publish).not.toHaveBeenCalledWith(MODULE_TEMP_SPREAD_OUT, expect.anything())
   })
 })
