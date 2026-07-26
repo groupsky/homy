@@ -148,7 +148,9 @@ groups:
               expression: q
         noDataState: OK
         execErrState: OK
-        for: 0s
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
           summary: "🚗 FL (front-left) tire running hot vs the other wheels"
@@ -296,7 +298,9 @@ groups:
               expression: q
         noDataState: OK
         execErrState: OK
-        for: 0s
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
           summary: "🚗 FR (front-right) tire running hot vs the other wheels"
@@ -444,7 +448,9 @@ groups:
               expression: q
         noDataState: OK
         execErrState: OK
-        for: 0s
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
           summary: "🚗 RL (rear-left) tire running hot vs the other wheels"
@@ -592,7 +598,9 @@ groups:
               expression: q
         noDataState: OK
         execErrState: OK
-        for: 0s
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        for: 10m
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
           summary: "🚗 RR (rear-right) tire running hot vs the other wheels"

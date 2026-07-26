@@ -1,8 +1,9 @@
-const { describe, expect, it, jest, beforeEach } = require('@jest/globals')
+const { describe, expect, it, jest, beforeEach, afterEach } = require('@jest/globals')
 const createIoniqTpms = require('./ioniq-tpms')
 
 const TPMS = 'ioniq/parsed/tpms'
 const AMBIENT = 'ioniq/parsed/ambient'
+const SPEED = 'ioniq/parsed/bms/2101'
 const P = (name) => `ioniq/parsed/derived/${name}`
 
 function makeMqtt () {
@@ -20,10 +21,10 @@ function makeMqtt () {
 }
 
 function makeCache () {
-  return { lastRaw: null }
+  return { lastRaw: null, wheelChangedAt: {} }
 }
 
-const config = { tpmsTopic: TPMS, ambientTopic: AMBIENT }
+const config = { tpmsTopic: TPMS, ambientTopic: AMBIENT, speedTopics: [SPEED] }
 
 // Realistic prod-derived sample (2026-07-15 routy). The real tpms frame nests each
 // wheel: {"fl":{"psi":37,"c":37}, ...}. Cold-normalize to 15 °C @ 0.18 psi/°C.
@@ -288,6 +289,219 @@ describe('ioniq-tpms bot', () => {
     it('does not mistake the payload hex `raw` string for wheel data', async () => {
       await mqtt._trigger(TPMS, PROD)
       expect(published(mqtt, 'tire_fl_psi_cold').psi).toBe(37)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Regression: issue #1415 — the four TPMS values in a frame are NOT
+  // contemporaneous. The car latches each wheel's last received value, and the
+  // sensors only transmit while the wheel turns, so after a long park the set
+  // steps from stale to fresh one wheel at a time. The wheel that refreshes last
+  // briefly looks 10-15 °C hotter than its already-refreshed peers.
+  // ---------------------------------------------------------------------------
+
+  const MIN = 60 * 1000
+  const HOUR = 60 * MIN
+
+  // Build a tpms frame from a {fl,fr,rl,rr} temperature map. A TPMS sensor
+  // transmits pressure and temperature in the same burst, so psi is derived from
+  // the temperature here: a wheel that refreshes changes both fields, exactly as
+  // the prod frames do.
+  function frame (ts, temps, extra = {}) {
+    const f = { _type: 'ioniq', group: 'tpms', state: 'active', ts, ...extra }
+    for (const [w, c] of Object.entries(temps)) {
+      f[w] = { psi: Math.round((33 + 0.18 * (c - 15)) * 10) / 10, c }
+    }
+    return f
+  }
+
+  // Every temp_excess value published so far, in order.
+  function excessValues (mqtt) {
+    return mqtt.publish.mock.calls
+      .filter((c) => /_temp_excess$/.test(c[0]))
+      .map((c) => c[1].value)
+  }
+
+  function excessCount (mqtt) {
+    return mqtt.publish.mock.calls.filter((c) => /_temp_excess$/.test(c[0])).length
+  }
+
+  describe('per-wheel freshness gate (issue #1415 replays)', () => {
+    it('emits no temp_excess breach replaying the 2026-07-25 wake-up', async () => {
+      // Stale set held since the 07-22 drive, then a V2L wake-up refreshes
+      // rl, fr, fl, rr in that order over ~6 minutes. RR lags three samples and
+      // peaked at +12.33 °C under the old logic.
+      const t0 = Date.UTC(2026, 6, 25, 7, 0, 55)
+      await mqtt._trigger(TPMS, frame(t0, { fl: 28, fr: 29, rl: 31, rr: 30 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 25, 14, 1, 0), { fl: 28, fr: 29, rl: 19, rr: 30 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 25, 14, 3, 26), { fl: 28, fr: 16, rl: 19, rr: 30 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 25, 14, 4, 12), { fl: 18, fr: 16, rl: 19, rr: 30 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 25, 14, 6, 43), { fl: 18, fr: 16, rl: 19, rr: 18 }))
+
+      expect(Math.max(...excessValues(mqtt))).toBeLessThanOrEqual(8)
+      // ...and specifically nothing at all while the set was mixed stale/fresh.
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBe(0.33)
+    })
+
+    it('emits no temp_excess breach replaying the 2026-07-16 wake-up', async () => {
+      // Bulk 38 -> 22/23 step with RL lagging one sample (peaked +15.33 °C).
+      const t0 = Date.UTC(2026, 6, 15, 18, 30, 0)
+      await mqtt._trigger(TPMS, frame(t0, { fl: 38, fr: 38, rl: 38, rr: 38 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 16, 4, 55, 0), { fl: 22, fr: 23, rl: 38, rr: 23 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 16, 4, 56, 0), { fl: 22, fr: 23, rl: 22, rr: 23 }))
+
+      expect(Math.max(...excessValues(mqtt))).toBeLessThanOrEqual(8)
+    })
+
+    it('emits no temp_excess breach replaying the 2026-07-20 wake-up', async () => {
+      // Bulk 33/34 -> 22/23 step with FR lagging one sample (peaked +10.33 °C).
+      const t0 = Date.UTC(2026, 6, 19, 19, 0, 0)
+      await mqtt._trigger(TPMS, frame(t0, { fl: 33, fr: 34, rl: 34, rr: 34 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 20, 5, 18, 0), { fl: 23, fr: 34, rl: 24, rr: 24 }))
+      await mqtt._trigger(TPMS, frame(Date.UTC(2026, 6, 20, 5, 19, 0), { fl: 23, fr: 23, rl: 24, rr: 24 }))
+
+      expect(Math.max(...excessValues(mqtt))).toBeLessThanOrEqual(8)
+    })
+
+    it('suppresses only temp_excess — psi_cold and spread still publish', async () => {
+      const t0 = Date.UTC(2026, 6, 25, 7, 0, 55)
+      await mqtt._trigger(TPMS, frame(t0, { fl: 28, fr: 29, rl: 31, rr: 30 }))
+      mqtt.publish.mockClear()
+      // One wheel refreshes 7 hours later — the rest are stale.
+      await mqtt._trigger(TPMS, frame(t0 + 7 * HOUR, { fl: 28, fr: 29, rl: 19, rr: 30 }))
+      expect(excessCount(mqtt)).toBe(0)
+      expect(published(mqtt, 'tire_rl_psi_cold')).toBeDefined()
+      expect(published(mqtt, 'tire_spread_psi')).toBeDefined()
+    })
+
+    it('resumes temp_excess once every wheel has refreshed inside the window', async () => {
+      const t0 = 0
+      await mqtt._trigger(TPMS, frame(t0, { fl: 28, fr: 29, rl: 31, rr: 30 }))
+      await mqtt._trigger(TPMS, frame(t0 + 7 * HOUR, { fl: 20, fr: 29, rl: 31, rr: 30 }))
+      await mqtt._trigger(TPMS, frame(t0 + 7 * HOUR + MIN, { fl: 20, fr: 21, rl: 31, rr: 30 }))
+      mqtt.publish.mockClear()
+      await mqtt._trigger(TPMS, frame(t0 + 7 * HOUR + 2 * MIN, { fl: 20, fr: 21, rl: 22, rr: 23 }))
+      // fl 20 / fr 21 / rl 22 / rr 23 all changed within 2 minutes of each other.
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBe(2)
+    })
+
+    it('honours a configured wheelFreshnessWindowMs', async () => {
+      mqtt = makeMqtt()
+      persistedCache = makeCache()
+      bot = createIoniqTpms('ioniq-tpms', { ...config, wheelFreshnessWindowMs: 8 * HOUR })
+      await bot.start({ mqtt, persistedCache })
+      await mqtt._trigger(TPMS, frame(0, { fl: 28, fr: 29, rl: 31, rr: 30 }))
+      mqtt.publish.mockClear()
+      // 7 h apart — outside the 10 min default, inside the configured 8 h window.
+      await mqtt._trigger(TPMS, frame(7 * HOUR, { fl: 28, fr: 29, rl: 19, rr: 30 }))
+      expect(excessCount(mqtt)).toBeGreaterThan(0)
+    })
+
+    it('tolerates a persisted cache written before wheelChangedAt existed', async () => {
+      mqtt = makeMqtt()
+      persistedCache = { lastRaw: null } // v1 shape
+      bot = createIoniqTpms('ioniq-tpms', config)
+      await bot.start({ mqtt, persistedCache })
+      await mqtt._trigger(TPMS, frame(0, { fl: 28, fr: 29, rl: 31, rr: 30 }))
+      expect(excessCount(mqtt)).toBeGreaterThan(0)
+    })
+
+    it('declares a persistedCache migration for the new wheelChangedAt map', () => {
+      const spec = createIoniqTpms('ioniq-tpms', config).persistedCache
+      expect(spec.version).toBeGreaterThan(1)
+      expect(spec.default).toHaveProperty('wheelChangedAt')
+      const migrated = spec.migrate({
+        version: 1, defaultState: spec.default, state: { lastRaw: null }
+      })
+      expect(migrated.wheelChangedAt).toEqual({})
+    })
+  })
+
+  describe('motion gate (issue #1415)', () => {
+    // A dragging brake or a failing bearing only heats a wheel while it rolls,
+    // so a cross-wheel temperature comparison at standstill is meaningless.
+    const hotFrame = (ts) => frame(ts, { fl: 30, fr: 31, rl: 30, rr: 45 })
+
+    beforeEach(() => { jest.useFakeTimers() })
+    afterEach(() => { jest.useRealTimers() })
+
+    it('suppresses temp_excess when fresh telemetry says the car is standing still', async () => {
+      await mqtt._trigger(SPEED, { speed_kph: 0 })
+      await mqtt._trigger(TPMS, hotFrame(Date.now()))
+      expect(excessCount(mqtt)).toBe(0)
+      expect(published(mqtt, 'tire_rr_psi_cold')).toBeDefined()
+    })
+
+    it('suppresses temp_excess when the last motion is older than motionMaxAgeMs', async () => {
+      await mqtt._trigger(SPEED, { speed_kph: 60 })
+      jest.advanceTimersByTime(31 * MIN)
+      await mqtt._trigger(SPEED, { speed_kph: 0 })
+      await mqtt._trigger(TPMS, hotFrame(Date.now()))
+      expect(excessCount(mqtt)).toBe(0)
+    })
+
+    it('derives temp_excess for a genuinely hot wheel while driving', async () => {
+      // All four wheels refresh every minute; rr climbs away from its peers.
+      const temps = [
+        { fl: 30, fr: 31, rl: 30, rr: 32 },
+        { fl: 31, fr: 32, rl: 31, rr: 38 },
+        { fl: 32, fr: 33, rl: 32, rr: 44 },
+        { fl: 33, fr: 34, rl: 33, rr: 50 }
+      ]
+      for (const t of temps) {
+        await mqtt._trigger(SPEED, { speed_kph: 55 })
+        await mqtt._trigger(TPMS, frame(Date.now(), t))
+        jest.advanceTimersByTime(MIN)
+      }
+      // rr 50 - mean(33,34,33) = 50 - 33.33 = 16.67
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBe(16.67)
+    })
+
+    it('keeps deriving while motion is still recent after stopping', async () => {
+      await mqtt._trigger(SPEED, { speed_kph: 55 })
+      jest.advanceTimersByTime(5 * MIN)
+      await mqtt._trigger(SPEED, { speed_kph: 0 })
+      await mqtt._trigger(TPMS, hotFrame(Date.now()))
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBeGreaterThan(8)
+    })
+
+    it('fails open when no speed telemetry has ever arrived', async () => {
+      await mqtt._trigger(TPMS, hotFrame(Date.now()))
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBeGreaterThan(8)
+    })
+
+    it('fails open when the speed telemetry itself is stale', async () => {
+      await mqtt._trigger(SPEED, { speed_kph: 0 })
+      jest.advanceTimersByTime(61 * MIN)
+      await mqtt._trigger(TPMS, hotFrame(Date.now()))
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBeGreaterThan(8)
+    })
+
+    it('ignores a speed payload without a usable speed_kph', async () => {
+      await mqtt._trigger(SPEED, { speed_kph: 'n/a' })
+      await mqtt._trigger(TPMS, hotFrame(Date.now()))
+      // nothing usable was learned, so the gate still fails open
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBeGreaterThan(8)
+    })
+
+    it('subscribes to every configured speed topic', async () => {
+      mqtt = makeMqtt()
+      persistedCache = makeCache()
+      bot = createIoniqTpms('ioniq-tpms', {
+        ...config, speedTopics: ['ioniq/parsed/bms/2101', 'ioniq/parsed/vmcu']
+      })
+      await bot.start({ mqtt, persistedCache })
+      expect(mqtt.subscribe).toHaveBeenCalledWith('ioniq/parsed/bms/2101', expect.any(Function))
+      expect(mqtt.subscribe).toHaveBeenCalledWith('ioniq/parsed/vmcu', expect.any(Function))
+    })
+
+    it('disables the motion gate when speedTopics is empty', async () => {
+      mqtt = makeMqtt()
+      persistedCache = makeCache()
+      bot = createIoniqTpms('ioniq-tpms', { ...config, speedTopics: [] })
+      await bot.start({ mqtt, persistedCache })
+      await mqtt._trigger(TPMS, hotFrame(Date.now()))
+      expect(published(mqtt, 'tire_rr_temp_excess').value).toBeGreaterThan(8)
     })
   })
 })
