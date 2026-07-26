@@ -108,10 +108,10 @@ Columns: **Signal/source** · **Condition** · **Threshold** (baseline/spec) · 
 | Pack temp `temp_max` (bms/2101) | over-temp | `>45` warn / `>55` crit (spec) | warning / **critical** | 5m | Grafana |
 | SoH `soh` (bms/2105) | capacity fade | drop `>2%` from 30-day baseline warn; `<85%` crit | warning / **critical** | 1h | Grafana (baseline via subquery or bot) |
 | Available discharge `avail_dis` (bms/2101) | BMS derate | `<70 kW` while `soc>30` (baseline 98) | warning | 15m | Grafana |
-| **Rest cell spread** (96 cells, `cells/1|33|65`) | imbalance at rest | `>50 mV` warn / `>100 mV` crit (baseline 20 mV); **state≠active** | warning / **critical** | 10m | **Bot** `ioniq-cell-health` → `derived/cell_spread_mv` |
+| **Rest cell spread** (`cell_max_v`−`cell_min_v`, bms/2101) | imbalance at rest | `>50 mV` warn / `>100 mV` crit (baseline 20 mV, observed max 40 mV); **state≠active** | warning / **critical** | 10m | **Bot** `ioniq-cell-health` → `derived/cell_spread_mv` |
 | **Module thermal spread** (12 sensors, bms/2101+2105) | hot module/coolant | `>8 °C` warn / `>15 °C` crit (baseline 2 °C) | warning / **critical** | 10m | **Bot** → `derived/module_temp_spread_c` |
 
-Notes: SoH baseline — simplest v1 is a static `<98%` step + `<85%` crit; a rolling baseline needs a bot or a CQ. `cell_v_dev` field is deadbanded to 0 — **do not** alert on it; compute spread from the arrays.
+Notes: SoH baseline — simplest v1 is a static `<98%` step + `<85%` crit; a rolling baseline needs a bot or a CQ. `cell_v_dev` field is deadbanded to 0 — **do not** alert on it. Spread comes from the `cell_max_v`/`cell_min_v` pair in one bms/2101 frame, not from joining the three separately-polled `cells/*` arrays (#1418).
 
 ### 4.2 Auxiliary 12 V / LDC
 
@@ -176,7 +176,7 @@ All bots follow the repo pattern (`module.exports = (name, config) => ({ persist
 
 | Bot | Type | Subscribes | Emits (`ioniq/parsed/derived/…`) | Core logic |
 |---|---|---|---|---|
-| `ioniq-cell-health` | new | `ioniq/parsed/cells/1\|33\|65`, `…/bms/2101`, `…/bms/2105` | `cell_spread_mv`, `module_temp_spread_c` | Reassemble 96-cell array (3 topics) → max−min (skip when `state='active'`); merge 12 module temps across two frames → max−min. |
+| `ioniq-cell-health` | new | `ioniq/parsed/cells/1\|33\|65`, `…/bms/2101`, `…/bms/2105` | `cell_spread_mv`, `module_temp_spread_c` | Spread = `cell_max_v`−`cell_min_v` from the single bms/2101 frame (skip when `state='active'`); the 96-cell reassembly only yields `outlierIndex`; merge 12 module temps across two frames → max−min. All cross-frame joins gated on a mutual freshness window (#1418). |
 | `ioniq-12v-ldc` | new | `…/bms/2101` | `ldc_ok` (0/1), `aux12v_drop` | Rolling window of `aux_12v`,`ignition`,`hv_kw`; flag LDC-not-charging under the low-load rule; compute drop rate. |
 | `ioniq-charge-guard` | new | `…/bms/2101`, `…/bcm` (charge_connector), `…/obc` | `soc_at_park`, `charge_stalled`, `charge_reduced_rate` | State-edge SoC capture; stalled = relay on + low power (reuse `timeout-emit` semantics); reduced-rate classifier. |
 | `ioniq-dtc` | new (thin) | `ioniq/parsed/dtc/#` | `dtc_count` (+ `codes`) | `codes.length`; pass code list through for the message. Could be a `mqtt-transform` config rather than bespoke code. |

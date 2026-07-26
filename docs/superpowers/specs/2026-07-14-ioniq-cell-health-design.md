@@ -38,6 +38,13 @@ exact-match topic subscriptions (config-overridable), and mocked-MQTT Jest tests
 
 ### 3.1 `derived/cell_spread_mv`
 
+> **Superseded by issue #1418.** The three `cells/*` segments are polled separately and persist across
+> vehicle sleeps, so joining them without a freshness check merged a fresh segment with stale ones and
+> published 260/440/3800 mV artefacts against a real spread of 20 mV. `value` is now derived from the
+> `cell_max_v`/`cell_min_v` pair in the single `bms/2101` frame; the 96-cell join survives only to
+> produce `outlierIndex`, which is omitted unless all participating frames share a freshness window.
+> The rest of this section describes the original (defective) behaviour.
+
 - Reassemble the 96-cell array from the three `cells` segments (1→1-32, 33→33-64, 65→65-96). Each
   segment's last-known parsed array is held in `persistedCache` so a signal can be emitted whenever
   **any** of the three arrives while all three segments are present.

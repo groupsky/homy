@@ -206,16 +206,23 @@ query this measurement's `v` field. See
     temperature minus the mean temperature of the other three wheels (°C). Grafana
     `ioniq-tpms-<w>-temp-excess` alerts on `value > 8`.
   - `derived/cell_spread_mv` — a bot-produced `group` value (not from the logger): the
-    `ioniq-cell-health` automations bot reassembles the 96-cell pack (from `cells/1`, `cells/33`,
-    `cells/65`) and publishes field `value` = `(max − min) · 1000` in mV (rest spread; emitted only
-    when `state` is `parked`/`charging`, skipped while `active`), plus field `outlierIndex` = the
-    1-based cell index (1–96) furthest from the pack mean. Grafana's `ioniq-cell-spread-*` rules alert
-    on `value > 50` (warning) / `> 100` (critical).
+    `ioniq-cell-health` automations bot publishes field `value` = `(cell_max_v − cell_min_v) · 1000`
+    in mV, taken from the single `bms/2101` frame so the two ends of the spread are contemporaneous
+    by construction (rest spread; emitted only when `state` is `parked`/`charging`, skipped while
+    `active`). Optional field `outlierIndex` = the 1-based cell index (1–96) furthest from the pack
+    mean, computed from the 96-cell reassembly (`cells/1` + `cells/33` + `cells/65`); it is **omitted**
+    unless the three segments and the `bms/2101` frame all share one freshness window, so the field is
+    sparser than `value` — query it with `last("outlierIndex")`. Grafana's `ioniq-cell-spread-*` rules
+    alert on `value > 50` (warning) / `> 100` (critical). Before #1418 `value` came from the 96-cell
+    join and could merge segments cached across a vehicle sleep, producing 260–3800 mV artefacts.
   - `derived/module_temp_spread_c` — a bot-produced `group` value (not from the logger): the
     `ioniq-cell-health` automations bot merges the 12 battery module temperatures (`module_temps`[5]
     from `bms/2101` + `module_temps_6_12`[7] from `bms/2105`) and publishes field `value` =
-    `max − min` in °C. Grafana's `ioniq-module-temp-spread-*` rules alert on `value > 8` (warning) /
-    `> 15` (critical).
+    `max − min` in °C. The two frames come from different PIDs, so the point is suppressed unless
+    their logger timestamps fall inside the same freshness window, and a `module_temps` array that
+    carries the OBD "no data" signature (all zeros, or some zeros alongside peers well above
+    freezing) is discarded rather than merged (#1418). Grafana's `ioniq-module-temp-spread-*` rules
+    alert on `value > 8` (warning) / `> 15` (critical).
   - `derived/ldc_ok` — a bot-produced `group` value (not from the logger): the `ioniq-12v-ldc`
     automations bot publishes it from `bms/2101` with field `value` ∈ {0,1}. `0` means the LDC
     (DC-DC converter) is not charging the 12 V battery — `aux_12v` held below 13.2 V for ≥60 s while
