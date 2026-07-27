@@ -19,7 +19,7 @@ Base images are custom Docker images built on top of official upstream images (N
 
 1. **Eliminate Docker Hub Rate Limits**: GitHub Actions has strict Docker Hub rate limits (200 pulls/6h authenticated) that caused frequent CI failures. By using GHCR exclusively, we eliminate these limits entirely.
 
-2. **Two-Step Dependency Updates**: Dependabot creates separate PRs:
+2. **Two-Step Dependency Updates**: Renovate creates separate PRs:
    - **Step 1**: Update base image Dockerfile → CI pulls from Docker Hub once → publishes to GHCR
    - **Step 2**: Update service Dockerfiles → CI pulls from GHCR → zero Docker Hub calls
 
@@ -141,22 +141,22 @@ set: |
 echo "  ghcr.io/groupsky/homy/new-image:X.Y.Z"
 ```
 
-### 5. Configure Dependabot
+### 5. Configure Renovate
 
-Add to `.github/dependabot.yml`:
+The base images are automatically covered by the `base-images` group in `renovate.json`:
 
-```yaml
-- package-ecosystem: "docker"
-  directory: "/base-images/new-image-name"
-  schedule:
-    interval: "weekly"
-  reviewers:
-    - "groupsky"
-  groups:
-    base-images:
-      patterns:
-        - "*"
+```json
+{
+  "description": "Base images - Pure Docker Hub mirrors",
+  "matchPaths": ["base-images/**"],
+  "groupName": "base-images",
+  "schedule": ["before 3am on Monday"],
+  "automerge": true,
+  "matchUpdateTypes": ["patch", "minor"]
+}
 ```
+
+**No manual configuration needed** - the `base-images/**` pattern automatically includes all base images.
 
 ### 6. Document in README
 
@@ -177,15 +177,15 @@ Commit all changes and push. The GitHub Actions workflow will build and publish 
 
 ### Automated Updates (Preferred)
 
-Dependabot automatically detects upstream image updates and creates PRs weekly. When a Dependabot PR is created:
+Renovate automatically detects upstream image updates and creates PRs weekly (Monday 3 AM UTC). When a Renovate PR is created:
 
 1. **Review the PR**: Check the upstream changelog for breaking changes
 2. **CI automatically**:
    - Builds the updated base image
    - Pushes to GHCR with the new version tag
    - Runs validation checks
-3. **Merge the PR**: Base image is now available at the new version
-4. **Wait for service PRs**: Dependabot will detect the new GHCR tag and create separate PRs to update services
+3. **Merge the PR**: Base image is now available at the new version (or auto-merges if patch/minor update)
+4. **Wait for service PRs**: Renovate will detect the new GHCR tag and create separate PRs to update services
 
 **No manual updates to docker-bake.hcl needed!** The workflow extracts versions dynamically from Dockerfiles.
 
@@ -335,15 +335,16 @@ All services now use base images from GHCR to avoid Docker Hub rate limits. Even
 2. Check that the version exists in GHCR
 3. Ensure no `pull: true` in service's test workflow (not needed with pinned versions)
 
-### Dependabot Not Creating PRs
+### Renovate Not Creating PRs
 
-**Problem**: Dependabot isn't detecting base image updates.
+**Problem**: Renovate isn't detecting base image updates.
 
 **Solution**:
-1. Check `.github/dependabot.yml` has entry for the base image
-2. Verify directory path matches exactly: `/base-images/image-name`
-3. Ensure `package-ecosystem: "docker"` is set
-4. Check Dependabot logs in GitHub's Insights > Dependency graph > Dependabot
+1. Check that `renovate.json` includes the `base-images/**` pattern in matchPaths
+2. Verify Renovate schedule: base images update weekly (Monday 3 AM UTC)
+3. Check the Dependency Dashboard issue for pending updates
+4. Review Renovate logs in the most recent workflow run: `.github/workflows/renovate-coverage.yml`
+5. Ensure Mend Renovate App is installed on the repository
 
 ### Version Extraction Fails
 
@@ -463,7 +464,8 @@ gh api /orgs/groupsky/packages/container/node/versions
 - Base image Dockerfiles: `base-images/*/Dockerfile`
 - Build configuration: `base-images/docker-bake.hcl`
 - CI workflow: `.github/workflows/base-images.yml`
-- Dependabot config: `.github/dependabot.yml`
+- Renovate config: `renovate.json`
+- Coverage validation: `.github/workflows/renovate-coverage.yml`
 - Validation workflows: `.github/workflows/validate-*.yml`
 
 ### Environment Variables
