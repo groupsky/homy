@@ -5,7 +5,7 @@
 import mqtt from 'mqtt';
 import { InfluxDB, Point } from '@influxdata/influxdb-client';
 import { SunseekerMessageParser } from './message-parser.js';
-import { MQTT, HEALTH_CHECK } from './constants.js';
+import { MQTT, HEALTH_CHECK, FLOAT_FIELDS } from './constants.js';
 import { validateConfig, generateClientId, isTimestampRecent, createError } from './utils.js';
 import { logger } from './logger.js';
 
@@ -239,10 +239,13 @@ export class SunseekerMqttInfluxService {
     // Add fields
     Object.entries(dataPoint.fields).forEach(([key, value]) => {
       if (typeof value === 'number') {
-        if (Number.isInteger(value)) {
-          point.intField(key, value);
-        } else {
+        // Type from the field schema, never from the runtime value: a float
+        // field that happens to hold a round value must still be written as a
+        // float, or it pins the field to integer for the whole InfluxDB shard.
+        if (FLOAT_FIELDS.has(key) || !Number.isInteger(value)) {
           point.floatField(key, value);
+        } else {
+          point.intField(key, value);
         }
       } else if (typeof value === 'boolean') {
         point.booleanField(key, value);
