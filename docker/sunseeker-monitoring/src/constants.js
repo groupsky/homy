@@ -65,6 +65,22 @@ export const MEASUREMENTS = {
   COMMANDS: 'sunseeker_commands'
 };
 
+// Fields that must always be written to InfluxDB as floats.
+//
+// InfluxDB 1.x fixes a field's type per shard group from the first write of
+// that field in that shard. These fields are derived by dividing a raw
+// milli-unit reading by 1000, so they periodically land on a round value
+// (4000mV / 1000 === 4) that is indistinguishable from an integer at runtime.
+// Letting such a value select the integer type registers the field as an
+// integer for the rest of the shard, after which every fractional write is
+// rejected with a 400 field type conflict and the entire point is dropped.
+export const FLOAT_FIELDS = new Set([
+  'voltage',
+  'min_cell_voltage',
+  'max_cell_voltage',
+  'current'
+]);
+
 // Message command types
 export const COMMAND_TYPES = {
   STATUS_UPDATE: 501,
