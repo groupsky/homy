@@ -67,7 +67,9 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Specialized Monitoring
-- **sunseeker-monitoring**: Solar tracking and monitoring with integrated mqtt-influx bridge
+- **sunseeker-monitoring**: Sunseeker robotic lawn mower telemetry, with its own integrated
+  mqtt-influx bridge (subscribes to the vendor cloud broker `mqtts.sk-robot.com`, not the local
+  broker) → `sunseeker_*` measurements
 
 ## Measurements and Schema
 
@@ -290,6 +292,80 @@ analysis, and the "Trips & charging" Grafana dashboard (`docs/ioniq-monitoring-a
 measurement is its data source, unblocking the dashboard that was previously deferred for lack of session
 boundaries.
 
+### Lawn Mower Telemetry
+
+**Source**: the `sunseeker-monitoring` service, which connects directly to the Sunseeker vendor
+cloud broker (`mqtts.sk-robot.com`), parses the device's proprietary messages, and writes InfluxDB
+itself — it does not pass through the local MQTT broker or the shared `mqtt-influx` service.
+Subscribes to `/device/<deviceId>/+` and `/app/<appId>/+`; each message is routed by its `cmd`
+field (`src/message-parser.js`).
+
+**Common tags** (every `sunseeker_*` measurement): `device_id` (the mower's serial) and `service`
+(always `sunseeker-mqtt-influx`, applied as a write-API default tag).
+
+| Measurement | Source `cmd` | Fields | Notes |
+|---|---|---|---|
+| `sunseeker_mode` | 501 | `mode` (int), `mode_text` (string) | `0` standby, `1` mowing, `2` on_the_way_home, `3` charging, `7` mowing_border |
+| `sunseeker_power` | 501 | `battery_percentage` (int) | Coarse battery level from the status frame |
+| `sunseeker_station` | 501 | `at_station` (bool) | Docked on the charging station |
+| `sunseeker_battery_detail` | 509 | see below | Detailed battery/orientation metrics parsed out of log text |
+| `sunseeker_battery_info` | 512 | `battery_id` (int), `battery_type` (string), `charge_times` (int), `discharge_times` (int) | Pack identity and cycle counts |
+| `sunseeker_state_change` | 511 | `message_code` (int), `timestamp` (int) | Device-reported state transitions |
+| `sunseeker_commands` | 400 | `command` (int), `result` (bool) | Acknowledgements for commands sent to the mower |
+| `sunseeker_connection` | any | `connected` (bool, always `true`) | Heartbeat written on every received message — see below |
+
+#### `sunseeker_battery_detail` Measurement
+**Source**: `cmd` 509 log messages, whose free-text body is scraped with regexes
+(`bat vol=`, `percent=`, `min=`, `max=`, `temp=`, `current=`, `pitch=`, `roll=`, `heading=`; all
+match unsigned integers only, so negative current or orientation values are silently unparsed).
+Fields are
+written only when the corresponding pattern is present, so **points are sparse and ragged** — most
+carry just `percentage` and `temperature`, and a minority carry the full cell/voltage set. Queries
+must tolerate missing fields rather than assume a fixed shape.
+
+**Extra tag**: `temp_alert` — `high` (≥40 °C), `low` (≤10 °C), or `normal`, from
+`TEMPERATURE.HIGH_THRESHOLD` / `LOW_THRESHOLD` in `src/constants.js`. Note these bounds are **not**
+the same as the Grafana temperature alert thresholds (>45 °C / <5 °C), so the tag and the alert
+rules disagree by design-drift; prefer the raw `temperature` field for analysis.
+
+**Fields**: raw milli-unit readings are kept alongside their converted forms for compatibility.
+
+| Field | Type | Unit | Notes |
+|---|---|---|---|
+| `voltage` / `voltage_mv` | float / int | V / mV | Pack voltage; only reported while charging |
+| `min_cell_voltage` / `min_cell_mv` | float / int | V / mV | Lowest cell |
+| `max_cell_voltage` / `max_cell_mv` | float / int | V / mV | Highest cell |
+| `current` / `current_ma` | float / int | A / mA | Pack current |
+| `percentage` | int | % | Battery level |
+| `temperature` | int | °C | Pack temperature |
+| `pitch`, `roll`, `heading` | int | ° | Chassis orientation |
+
+**Field typing is load-bearing.** `voltage`, `min_cell_voltage`, `max_cell_voltage` and `current`
+are derived by dividing a milli-unit reading by 1000, so they periodically land on an exact integer
+(4000 mV / 1000 === 4). InfluxDB 1.x fixes a field's type **per 7-day shard group** from the first
+write of that field in the shard, and rejects every later conflicting write with a 400 —
+**dropping the whole point**, not just the offending field. Typing these fields from the runtime
+value therefore silences the entire measurement for up to a week. They are declared in
+`FLOAT_FIELDS` (`src/constants.js`) and always written as floats; any new fractional field must be
+added there too. See PR #1430.
+
+**Cadence**: roughly one point every 5 minutes while the mower is awake (~288/day). A sustained gap
+means either the mower is unreachable or ingestion is broken — `sunseeker_connection` distinguishes
+the two.
+
+#### `sunseeker_connection` Measurement
+**Source**: written by the service on **every** received MQTT message, with `connected` hard-coded
+to `true`. It is a liveness heartbeat, not a state field: there is no `connected=false` record, so
+disconnection is detected by *absence* of points, which is why the connectivity alert counts rows
+(`SELECT count("connected") ... WHERE "connected" = true`) rather than reading the last value.
+
+**Cadence**: ~12-16 points/hour in standby (every ~5 min, including overnight) rising to
+100-240/hour while mowing. The heartbeat does not go quiet when the mower is merely idle, which is
+what makes a 30-minute absence a reliable disconnection signal.
+
+**Use Cases**: mower connectivity alerting; separating "mower unreachable" from "telemetry
+pipeline broken" when `sunseeker_battery_detail` goes stale but this measurement keeps flowing.
+
 ### Automation System Monitoring
 
 #### `automation_status` Measurement
@@ -444,6 +520,12 @@ When adding new measurements or modifying existing ones:
 Modbus Devices → modbus-serial-* → Direct InfluxDB Write
                                  ↓
 Modbus Devices → modbus-serial-* → MQTT Publish → mqtt-influx-* → InfluxDB Write
+
+Sunseeker mower → vendor cloud broker (mqtts.sk-robot.com) → sunseeker-monitoring → InfluxDB Write
 ```
+
+**Note**: `sunseeker-monitoring` is the one writer that bypasses the local broker entirely — it
+subscribes to an external vendor broker and writes InfluxDB directly, so its data path shares no
+infrastructure with the `modbus-serial` / `mqtt-influx` pipelines and fails independently of them.
 
 **Note**: The actual system is more complex than initially documented, with 60+ distinct measurements including device-specific power monitoring.
