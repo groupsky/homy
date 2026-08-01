@@ -52,7 +52,7 @@ jobs:
           docker compose --env-file example.env --file docker-compose.yml config > resolved-docker-compose.yml
 
       - name: Build all containers
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           source: .
           files: |
