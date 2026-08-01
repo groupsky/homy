@@ -435,7 +435,7 @@ jobs:
           echo "count=${#ALL_IMAGES[@]}" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Hub upstream cache
-        uses: actions/cache@b7e8d49f17405cc70c1c120101943203c98d3a4b # v4.2.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # v4.2.0
         with:
           path: /tmp/docker-cache
           # Cache key includes runner OS, base image directory, and version
