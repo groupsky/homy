@@ -125,9 +125,16 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
               type: last
             type: query
         expression: temperature
-  noDataState: NoData
-  execErrState: Alerting
+  noDataState: OK
+  execErrState: OK
 ```
+**Why `OK`/`OK` here**: `sunseeker_battery_detail` can legitimately stop ingesting (mower asleep,
+or the InfluxDB int/float shard-poisoning bug that dropped it for days — PR #1430). A threshold
+rule may only speak about data it can actually see, so both the absence path (`NoData`) and the
+query-failure path (`Error`) are silenced on all four `sunseeker-battery-*` threshold rules — the
+`Error` path (InfluxDB down, auth failure, "database is locked") would otherwise page the identical
+four false battery/temperature emergencies with `[no value]` in the description. Absence detection
+is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
 
 **Connectivity Alert Configuration Example:**
 ```yaml
@@ -187,10 +194,54 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
 - Alert when count = 0 (no positive connectivity records in time window)
 - **Important**: Include explicit time filtering with `time >= now() - [duration]` as `relativeTimeRange` alone doesn't limit InfluxQL queries
 
+*Staleness / Absence Alerts:*
+- Use when a threshold rule's own `noDataState`/`execErrState` must be `OK` (its measurement can
+  legitimately stop ingesting) but something still needs to page on prolonged absence — **one
+  dedicated rule per data source**, not duplicated across every threshold rule reading it
+- **Single count query, `noDataState: Alerting`.** Do NOT build absence detection as a two-query AND
+  ("field is stale AND source is alive"). ❌ **Tested and rejected**: InfluxQL `count()` over an
+  entirely empty time range returns **no rows**, not `0` — even `GROUP BY time() fill(0)` does not
+  synthesize a row when the whole range is empty. An AND across two such queries collapses to
+  `NoData` exactly when it should fire, so it silently never alerts. Use one `count()` query against
+  the field you want freshness on, with `noDataState: Alerting`
+- **The counted field defines "stale"**: counting a field that is simply absent from an otherwise-
+  populated window is indistinguishable from no data at all. Pick the field with the best coverage
+  on the measurement — e.g. `percentage` on `sunseeker_battery_detail` (~99% of points; see
+  `docs/influxdb-schema.md`)
+- **Threshold headroom, not `lt 1`**: a partial outage produces a trickle, not a clean absence. `lt
+  1` lets a single straggler point flip the rule back to `OK` and emit a false all-clear, which then
+  re-fires on the next gap — several page/resolve cycles per day through a degraded period. Set the
+  count threshold with headroom below the healthy per-window floor, not at the absolute minimum.
+  Worked example: `sunseeker_battery_detail` normally logs 5-6 points/30m; the July 2026 incident was
+  a trickle (4-11 points/day instead of ~288) that a `lt 1` threshold would have flapped on
+  repeatedly, while `lt 2` requires a ~6x cadence collapse before it fires (it only fires at <=1
+  point per 30m window, against a healthy floor of 5-6)
+- **`for:` is a genuine transient filter here** — unlike `last()` over a long window (see
+  Troubleshooting, "`last()` Over a Long Window Defeats `for:`"). A sliding `count()` window has no
+  single point to latch onto: every evaluation during the pending window is an independent
+  observation of absence, so a corrective sample immediately un-trips it. Contrast: `last()` keeps
+  returning the same stale point on every evaluation until a newer one arrives, so a transient can
+  ride out the whole `for:` window as if it were still true
+- Example: `sunseeker-telemetry-stale`
+  (`config/grafana/provisioning/alerting/sunseeker-telemetry-alerts.yaml`) —
+  `SELECT count("percentage") FROM "sunseeker_battery_detail" WHERE time >= now() - 30m`, `lt 2`,
+  `noDataState: Alerting`, `execErrState: Alerting`, `for: 1h`. Time to page ≈ 90-95 min after the
+  last point (30m for the window to empty + 1h pending) — deliberately after
+  `sunseeker-connection-lost` (~30-35 min), so a genuinely unreachable mower is named as a connection
+  loss first. This is an accepted trade-off, not a bug: a real outage produces two alerts, and
+  collapsing them to one needs the two-query AND that provably does not work (above)
+
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning
 - **Temperature alerts**: >40°C high, <5°C low
 - **Connection alerts**: >30 minutes no data
+- **Telemetry staleness**: `sunseeker-telemetry-stale` pages ~90-95 min after the last
+  `sunseeker_battery_detail` point — see "Staleness / Absence Alerts" above
+- **`noDataState`/`execErrState` on threshold rules reading a measurement that can stop ingesting**:
+  set BOTH to `OK`, and delegate absence detection to exactly one dedicated staleness rule per data
+  source (PR #1430 postmortem). Otherwise every threshold rule on that measurement becomes a
+  duplicate, mis-named alarm for the same pipeline fault. The staleness rule is the sole owner of "I
+  cannot see this data" and takes `Alerting` on both paths
 
 **Deleting Provisioned Alerts:**
 File-provisioned alerts cannot be deleted through the Grafana UI or standard API calls. To remove them, create a temporary deletion configuration file:
@@ -421,6 +472,7 @@ Grafana's own internal state (users, dashboard metadata, alert rule state, ngale
 - **Verification**: Check alert instances via `/api/alertmanager/grafana/api/v2/alerts` for error details
 
 **`last()` Over a Long Window Defeats `for:`:**
+- **Not the same failure as staleness/absence rules**: this trap is specific to `last()` (or `first()`/`mean()`) collapsing a long window to one point that `for:` can't tell apart from a fresh sample. A sliding `count()` doesn't have this problem — every evaluation re-counts the window from scratch, so `for:` genuinely filters transients there. See "Staleness / Absence Alerts" under Alert Patterns for the contrast.
 - **Symptoms**: A rule with `for: 10m` pages on a single spurious sample anyway; once firing it stays firing long after the bad sample, and only recovers when the next good sample is published (or when the spike ages out of the query window)
 - **Mechanism**: `SELECT last("value") ... WHERE time >= now() - 6h` means "the newest point in the last 6 hours", **not** "the value right now". With nothing newer published, every evaluation returns the same point. `for:` requires the condition to be *continuously true* for the given duration -- it does **not** require *fresh* data. So a spike that happens to be the last published value stays true across every evaluation in the pending window, `for:` elapses, and the rule fires. `for:` only suppresses an artefact that a corrective sample **overwrites inside the for-window**; it is not a general transient filter.
 - **Recognising an affected rule** -- all three hold:
