@@ -41,7 +41,7 @@ groups:
               # single straggler flips the rule to OK and sends a false
               # all-clear, then it re-fires an hour later; that is ~5 page/
               # resolve cycles a day. Healthy cadence is 5-6 points per 30m
-              # window, so "< 2" needs a 12x collapse to false-fire.
+              # window, so "< 2" needs a ~6x collapse to false-fire.
               conditions:
                 - evaluator:
                     params:

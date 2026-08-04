@@ -214,7 +214,8 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   count threshold with headroom below the healthy per-window floor, not at the absolute minimum.
   Worked example: `sunseeker_battery_detail` normally logs 5-6 points/30m; the July 2026 incident was
   a trickle (4-11 points/day instead of ~288) that a `lt 1` threshold would have flapped on
-  repeatedly, while `lt 2` requires a ~12x cadence collapse before it fires
+  repeatedly, while `lt 2` requires a ~6x cadence collapse before it fires (it only fires at <=1
+  point per 30m window, against a healthy floor of 5-6)
 - **`for:` is a genuine transient filter here** — unlike `last()` over a long window (see
   Troubleshooting, "`last()` Over a Long Window Defeats `for:`"). A sliding `count()` window has no
   single point to latch onto: every evaluation during the pending window is an independent
