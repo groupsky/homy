@@ -50,8 +50,14 @@ groups:
               maxDataPoints: 43200
               refId: A
               type: classic_conditions
-        noDataState: NoData
-        execErrState: Alerting
+        # A dead ingestion pipeline is not a battery emergency. Both the NoData
+        # and Error paths are silenced here so this rule can only speak about
+        # data it can actually see; absence and query failure are owned by
+        # sunseeker-telemetry-stale instead. See issue #1430 (int/float field
+        # typing dropped every sunseeker_battery_detail point for days, and
+        # these rules paged it as four battery/temperature alarms).
+        noDataState: OK
+        execErrState: OK
         # Effective as a transient filter here, unlike the ioniq rules: the mower
         # publishes every 2-5 min while awake, so several fresh samples land
         # inside the pending window and a one-off reading is overwritten before
@@ -61,7 +67,7 @@ groups:
         # Defeats for:" (issue #1419).
         for: 10m
         annotations:
-          description: "Sunseeker lawn mower battery is critically low at {{ $values.battery.Value }}%"
+          description: "Sunseeker lawn mower battery is critically low at {{ $values.battery.Value }}% (last reading, up to 4h old)"
           runbook_url: ""
           summary: "Battery level is below 15%"
         labels:
@@ -113,8 +119,14 @@ groups:
               maxDataPoints: 43200
               refId: A
               type: classic_conditions
-        noDataState: NoData
-        execErrState: Alerting
+        # A dead ingestion pipeline is not a battery emergency. Both the NoData
+        # and Error paths are silenced here so this rule can only speak about
+        # data it can actually see; absence and query failure are owned by
+        # sunseeker-telemetry-stale instead. See issue #1430 (int/float field
+        # typing dropped every sunseeker_battery_detail point for days, and
+        # these rules paged it as four battery/temperature alarms).
+        noDataState: OK
+        execErrState: OK
         # "voltage" is only reported while the mower is on the charger, at ~2 min
         # intervals, and the first sample of a charge session is the depleted
         # end-of-discharge reading (7 samples under 18 V in 30 days, every one of
@@ -123,7 +135,7 @@ groups:
         # sunseeker-battery-low above.
         for: 5m
         annotations:
-          description: "Sunseeker battery voltage critically low at {{ $values.voltage.Value }}mV"
+          description: "Sunseeker battery voltage critically low at {{ $values.voltage.Value }}V (last reading, up to 4h old)"
           runbook_url: ""
           summary: "Battery voltage below safe operating threshold"
         labels:

@@ -50,11 +50,17 @@ groups:
               maxDataPoints: 43200
               refId: A
               type: classic_conditions
-        noDataState: NoData
-        execErrState: Alerting
+        # A dead ingestion pipeline is not a battery emergency. Both the NoData
+        # and Error paths are silenced here so this rule can only speak about
+        # data it can actually see; absence and query failure are owned by
+        # sunseeker-telemetry-stale instead. See issue #1430 (int/float field
+        # typing dropped every sunseeker_battery_detail point for days, and
+        # these rules paged it as four battery/temperature alarms).
+        noDataState: OK
+        execErrState: OK
         for: 10m
         annotations:
-          description: "Sunseeker battery temperature is dangerously high at {{ $values.temperature.Value }}°C"
+          description: "Sunseeker battery temperature is dangerously high at {{ $values.temperature.Value }}°C (last reading, up to 30m old)"
           runbook_url: ""
           summary: "Battery temperature exceeds safe operating limits"
         labels:
@@ -106,11 +112,17 @@ groups:
               maxDataPoints: 43200
               refId: A
               type: classic_conditions
-        noDataState: NoData
-        execErrState: Alerting
+        # A dead ingestion pipeline is not a battery emergency. Both the NoData
+        # and Error paths are silenced here so this rule can only speak about
+        # data it can actually see; absence and query failure are owned by
+        # sunseeker-telemetry-stale instead. See issue #1430 (int/float field
+        # typing dropped every sunseeker_battery_detail point for days, and
+        # these rules paged it as four battery/temperature alarms).
+        noDataState: OK
+        execErrState: OK
         for: 10m
         annotations:
-          description: "Sunseeker battery temperature is critically low at {{ $values.temperature.Value }}°C"
+          description: "Sunseeker battery temperature is critically low at {{ $values.temperature.Value }}°C (last reading, up to 30m old)"
           runbook_url: ""
           summary: "Battery temperature below safe operating limits"
         labels:

@@ -318,10 +318,20 @@ field (`src/message-parser.js`).
 **Source**: `cmd` 509 log messages, whose free-text body is scraped with regexes
 (`bat vol=`, `percent=`, `min=`, `max=`, `temp=`, `current=`, `pitch=`, `roll=`, `heading=`; all
 match unsigned integers only, so negative current or orientation values are silently unparsed).
-Fields are
-written only when the corresponding pattern is present, so **points are sparse and ragged** — most
-carry just `percentage` and `temperature`, and a minority carry the full cell/voltage set. Queries
-must tolerate missing fields rather than assume a fixed shape.
+Fields are written only when the corresponding pattern is present, so points can be missing fields —
+queries must tolerate that rather than assume a fixed shape. But the fields are **not** evenly
+sparse: measured on prod over 7/30 days, `percentage` and `temperature` are present on essentially
+every point (99%+), `min_cell_voltage`/`max_cell_voltage` on ~98%, and `voltage` on ~83-84% — none of
+these are a minority case. The genuinely sparse fields are `current`, `pitch`, `roll` and `heading`
+(7-27% of points).
+
+**`voltage`/`current` presence is activity-gated, not simply "charging only".** Verified directly:
+0/8 points in a mowing window carried them, 22/22 in a charging window did. But the resulting *share*
+of points that carry them moves with how much the mower mowed vs. charged that particular week — a
+duty-cycle artifact, not a stable percentage to design around. Measured `voltage` gaps run 78-130
+min, confirming it isn't reported continuously even while awake. **`percentage` is the most
+consistently present field and is the correct choice for a staleness `count()`** — see
+`config/grafana/CLAUDE.md` ("Staleness / Absence Alerts").
 
 **Extra tag**: `temp_alert` — `high` (≥40 °C), `low` (≤10 °C), or `normal`, from
 `TEMPERATURE.HIGH_THRESHOLD` / `LOW_THRESHOLD` in `src/constants.js`. Note these bounds are **not**
@@ -332,11 +342,11 @@ rules disagree by design-drift; prefer the raw `temperature` field for analysis.
 
 | Field | Type | Unit | Notes |
 |---|---|---|---|
-| `voltage` / `voltage_mv` | float / int | V / mV | Pack voltage; only reported while charging |
+| `voltage` / `voltage_mv` | float / int | V / mV | Pack voltage; activity-gated, see above |
 | `min_cell_voltage` / `min_cell_mv` | float / int | V / mV | Lowest cell |
 | `max_cell_voltage` / `max_cell_mv` | float / int | V / mV | Highest cell |
 | `current` / `current_ma` | float / int | A / mA | Pack current |
-| `percentage` | int | % | Battery level |
+| `percentage` | int | % | Battery level; most consistently present, see above |
 | `temperature` | int | °C | Pack temperature |
 | `pitch`, `roll`, `heading` | int | ° | Chassis orientation |
 
@@ -349,9 +359,16 @@ value therefore silences the entire measurement for up to a week. They are decla
 `FLOAT_FIELDS` (`src/constants.js`) and always written as floats; any new fractional field must be
 added there too. See PR #1430.
 
-**Cadence**: roughly one point every 5 minutes while the mower is awake (~288/day). A sustained gap
-means either the mower is unreachable or ingestion is broken — `sunseeker_connection` distinguishes
-the two.
+**Residual dual typing (harmless)**: `SHOW FIELD KEYS` still lists `max_cell_voltage` and
+`min_cell_voltage` as **both** float and integer, because the field-key list is a union across all
+shards and pre-#1430 shards still hold integer-typed writes from before the fix. This is historical
+residue, not a live problem — `count(max_cell_voltage)` and `count(min_cell_voltage)` are identical
+over both 24h and 7d windows, so nothing is being silently dropped now. Don't mistake it for a
+recurrence of the #1430 bug.
+
+**Cadence**: ~12 points/hour (~5 min interval) while idle, rising to ~18-30/hour while mowing or
+charging — roughly 288/day at the healthy floor. A sustained gap means either the mower is
+unreachable or ingestion is broken — `sunseeker_connection` distinguishes the two.
 
 #### `sunseeker_connection` Measurement
 **Source**: written by the service on **every** received MQTT message, with `connected` hard-coded
@@ -360,11 +377,17 @@ disconnection is detected by *absence* of points, which is why the connectivity 
 (`SELECT count("connected") ... WHERE "connected" = true`) rather than reading the last value.
 
 **Cadence**: ~12-16 points/hour in standby (every ~5 min, including overnight) rising to
-100-240/hour while mowing. The heartbeat does not go quiet when the mower is merely idle, which is
-what makes a 30-minute absence a reliable disconnection signal.
+100-241/hour while mowing. The heartbeat does not go quiet when the mower is merely idle, but it
+does during genuine outages — measured over 30 days on prod, 8 gaps exceeded 30 minutes: 42, 46, 63,
+343, 380, 468, 543 and 1497 minutes.
 
 **Use Cases**: mower connectivity alerting; separating "mower unreachable" from "telemetry
 pipeline broken" when `sunseeker_battery_detail` goes stale but this measurement keeps flowing.
+Measured on prod, `sunseeker_battery_detail` can stall up to 25 min *before* `sunseeker_connection`
+does, so the connectivity alert (`sunseeker-connection-lost`, ~30-35 min to page) reliably names a
+genuinely unreachable mower before the battery-telemetry staleness alert does (~90-95 min); see
+`config/grafana/CLAUDE.md` ("Staleness / Absence Alerts") for the alert design and the accepted
+trade-off of both firing for one real outage.
 
 ### Automation System Monitoring
 

@@ -1,0 +1,85 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Sunseeker Telemetry Alerts
+    folder: Lawn Mower
+    interval: 5m
+    rules:
+      - uid: sunseeker-telemetry-stale
+        title: Sunseeker Telemetry Stale
+        condition: A
+        # Absence detection, not a threshold: a count() over an empty range
+        # returns NO ROWS (not 0), so this rule reports staleness through
+        # noDataState: Alerting - the same mechanism sunseeker-connection-lost
+        # relies on. A two-query AND against the connection heartbeat was tested
+        # and does not work: it collapses to NoData exactly when it should fire.
+        # "percentage" is counted because it is the most consistently present
+        # field on a sunseeker_battery_detail point and the input to the only
+        # critical rule (sunseeker-battery-low), so "stale" means "the critical
+        # rule is blind".
+        data:
+          - refId: telemetry
+            queryType: ''
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT count("percentage") FROM "sunseeker_battery_detail" WHERE time >= now() - 30m'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              # lt 2, not lt 1: the July 2026 incident was a trickle, not a
+              # clean absence - a few points per day still landed. With "< 1" a
+              # single straggler flips the rule to OK and sends a false
+              # all-clear, then it re-fires an hour later; that is ~5 page/
+              # resolve cycles a day. Healthy cadence is 5-6 points per 30m
+              # window, so "< 2" needs a 12x collapse to false-fire.
+              conditions:
+                - evaluator:
+                    params:
+                      - 2
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - telemetry
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: telemetry
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: classic_conditions
+        noDataState: Alerting
+        execErrState: Alerting
+        # Deliberately staggered behind sunseeker-connection-lost (which pages
+        # at ~30-35m) so a genuinely unreachable mower is named as a connection
+        # loss first. Time to page here is ~90-95m after the last point: 30m for
+        # the query window to empty, then this 1h pending period. Unlike the
+        # last()-over-a-long-window rules, for: is a real filter here - a
+        # sliding count() cannot latch a stale point, so every evaluation in the
+        # pending hour is an independent observation of absence.
+        for: 1h
+        annotations:
+          description: "sunseeker_battery_detail has not been written for 90+ minutes. Battery and temperature alerts are blind until this clears - check the sunseeker-monitoring service and InfluxDB for rejected writes (see issue #1430). If the mower itself is unreachable, Sunseeker Connection Lost fires first and names that cause."
+          runbook_url: ""
+          summary: "No battery telemetry from the mower for 90+ minutes"
+        labels:
+          severity: warning
+          device: sunseeker
+          type: telemetry
