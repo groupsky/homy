@@ -10,3 +10,6 @@
 [submodule "scripts/tests/bats-assert"]
 	path = scripts/tests/bats-assert
 	url = https://github.com/bats-core/bats-assert.git
+[submodule "docker/homeassistant/custom_components/maintenance-supporter"]
+	path = docker/homeassistant/custom_components/maintenance-supporter
+	url = https://github.com/iluebbe/maintenance_supporter.git

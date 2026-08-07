@@ -111,6 +111,7 @@ services:
       - ${HOMEASSISTANT_CONFIG}/energy.json:/config/.storage/energy:ro
       - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
       - ./docker/homeassistant/custom_components/sunseeker-lawn-mower/custom_components/sunseeker:/config/custom_components/sunseeker:ro
+      - ./docker/homeassistant/custom_components/maintenance-supporter/custom_components/maintenance_supporter:/config/custom_components/maintenance_supporter:ro
     logging:
       options:
         max-size: "10m"
