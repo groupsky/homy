@@ -341,7 +341,8 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   and the CI evaluator check closes exactly one syntactic member of the class. The only thing that
   actually proves an `OK`/`OK` rule is alive is an external check on Grafana's error log or on
   `grafana_alerting_rule_evaluation_failures_total`. For scale: on 2026-08-09 the live log held
-  **65,126** `Failed to build rule evaluator` lines for a single dead rule, and no one had noticed
+  **over 65,000** `Failed to build rule evaluator` lines for a single dead rule — still growing by one
+  a minute while this was being written — and no one had noticed
 
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning
