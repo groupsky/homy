@@ -242,18 +242,114 @@ groups:
           system: boiler
           component: energy
 
+
+      # --- Solar circuit: why `outputs.p1` state changes cannot be alerted on ---
+      #
+      # The SR-04 solar controller runs a `kick` anti-seize function: a short pump
+      # pulse every ~15-27 minutes through its daylight window (`kickOn: 8`,
+      # `kickOff: 20`; the device's own `kickPause` register reads 30 and
+      # `kickTime` 3). `outputs.p1` therefore takes BOTH values in every daylight
+      # hour whether or not any heat is being moved, and takes only ONE value all
+      # night when the pump is correctly idle. Any rule shaped like
+      # `count(DISTINCT "outputs.p1") <= 1` is exactly inverted with respect to the
+      # failure it is meant to catch. The previous version of this rule was:
+      #
+      #   SELECT count(DISTINCT "outputs.p1") FROM "xymd1"
+      #   WHERE "device.name"='solar_heater' AND time >= now() - 1h    -- lte 1, for 1h
+      #
+      # Replayed over 2026-04-25..2026-08-09 it fired on ~45% of all hours - every
+      # night on all 107 days - and for ZERO daylight hours during the 63-day solar
+      # outage of 2026-06-08..2026-08-09, when the collector probe failed and the
+      # circuit delivered no heat at all. See issue #1472.
+      #
+      # What replaces it, and why these numbers:
+      #
+      #   * Pump activity is measured as a SAMPLE COUNT of `outputs.p1 = true`, not
+      #     as state changes. The solar Modbus bus polls every ~1.28 s (2810-2814
+      #     samples/hour), so 6 hours holds ~16900 samples. Kick alone contributes
+      #     3-9 samples/hour, i.e. ~38-48 per 6 h window. `lt 100` sits at roughly
+      #     2x pure kick. It IS tied to the poll rate: if the solar bus gains
+      #     devices or slows down, re-measure and retune.
+      #   * PV output gates "the sun is actually out", using an independent sensor
+      #     (the SUN2000 inverter) rather than the collector probe `t3`, which is
+      #     the very thing that failed silently in #1472.
+      #   * `max(t2) < 55` suppresses the legitimate case "the tank is already hot,
+      #     so the controller has correctly stopped circulating". The electric
+      #     heater cuts out at 50 degC (`comfortMin: 47` + `hysteresis: 3` in
+      #     config/automations/boiler-controller-config.js), so a top temperature
+      #     below 55 means nothing but electricity has heated this tank.
+      #
+      # IMPORTANT - why the PV query is `GROUP BY time(1h)` with `reducer: avg` and
+      # not a bare `mean("ap")`: InfluxQL `mean()` averages over POINTS, not over
+      # time. The inverter publishes on change (`maxMsBetweenReports` 5 min), so it
+      # logs ~60-77 points/hour in daylight against ~11/hour at night, and a bare
+      # `mean()` over a 12 h window is biased high by 30-40%. Bucketing to hourly
+      # means first and averaging those gives a true time-weighted kW, so
+      # `threshold x window hours` really is kWh. Measured on 2026-01-12: bare
+      # `mean("ap")` = 1.286 kW (implying 15.4 kWh) against 12.72 kWh actually
+      # generated; the bucketed form gives 0.75 kW = 9.0 kWh. Getting this wrong
+      # made an earlier draft of `boiler-solar-no-contribution` fire on ordinary
+      # winter days.
+      #
+      # Verified by replay against production InfluxDB, hourly evaluation, over the
+      # full two years 2024-08-01..2026-08-09:
+      #   0 alert days outside the outage - none in either winter
+      #   50 of the 63 outage days, first alert on 2026-06-08 - day one of the
+      #     failure - in the window ending 09:00Z (pump_on=38, solar_kw=1.62,
+      #     tank_top=48.9)
+      #   Fires only between 10:00Z and 17:00Z; never at night.
+      # The 13 outage days it misses are days when kick alone happened to exceed
+      # the threshold (across 89 outage windows the pump-on count runs 8..814,
+      # median 38) or PV was too low; `boiler-solar-no-contribution` covers most of
+      # them.
+      #
+      # noDataState is OK. Note the mechanism is NOT "the rule goes NoData at
+      # night": Grafana's classic_conditions combines the per-condition NoData flag
+      # with the SAME operator as the firing flag (v9.5 pkg/expr/classic), so with
+      # `solar_kw` and `tank_top` always returning rows the ANDed NoData collapses
+      # to false. What actually happens is that an empty `pump_on` result makes
+      # that condition evaluate FALSE, so the rule reports OK. Same outcome, and
+      # the same blind spot either way: a pump wedged fully off - kick included -
+      # produces no rows and cannot be caught here. That case is covered by
+      # `boiler-solar-no-contribution` below, which never reads `outputs.p1`.
+      #
+      # Both solar rules fire on most of the same days during a real fault, in
+      # overlapping hours, under different alertnames - so a sustained outage pages
+      # roughly twice as often as one rule alone. That is accepted, for the same
+      # reason as the sunseeker connectivity/staleness pair: neither rule can see
+      # the other's failure mode. See config/grafana/CLAUDE.md.
       - uid: boiler-solar-circulation-stuck
-        title: Solar Circulation Pump Stuck
+        title: Solar Circulation Idle While Sunny
         condition: A
         data:
-          - refId: solar_state
+          - refId: pump_on
             queryType: ''
             relativeTimeRange:
-              from: 3600  # 1 hour lookback
+              from: 21600  # 6 hour lookback
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(DISTINCT "outputs.p1") FROM "xymd1" WHERE "device.name"=''solar_heater'' AND time >= now() - 1h'
+              query: 'SELECT count("outputs.p1") FROM "xymd1" WHERE "device.name"=''solar_heater'' AND "outputs.p1"=true AND time >= now() - 6h'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: solar_kw
+            queryType: ''
+            relativeTimeRange:
+              from: 21600  # 6 hour lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT mean("ap") FROM "inverter" WHERE "device.name"=''main'' AND time >= now() - 6h GROUP BY time(1h) fill(0)'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: tank_top
+            queryType: ''
+            relativeTimeRange:
+              from: 21600  # 6 hour lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT max("t2") FROM "xymd1" WHERE "device.name"=''solar_heater'' AND time >= now() - 6h'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -264,25 +360,156 @@ groups:
             datasourceUid: __expr__
             model:
               type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: __expr__
+              refId: A
               conditions:
                 - evaluator:
-                    params: [1]  # Only one distinct state = stuck
-                    type: lte
+                    params: [100]  # ~2x the ~38-48 samples pure kick leaves in 6h
+                    type: lt
                   operator:
                     type: and
                   query:
-                    params: [solar_state]
+                    params: [pump_on]
                   reducer:
                     type: last
                   type: query
-              expression: solar_state
-        noDataState: NoData
+                - evaluator:
+                    params: [1.5]  # time-weighted kW over 6h => ~9 kWh harvested: clearly sunny
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [solar_kw]
+                  reducer:
+                    type: avg  # average the hourly buckets -> time-weighted, see comment above
+                  type: query
+                - evaluator:
+                    params: [55]  # electric cutoff is 50 degC; above 55 means solar did work
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [tank_top]
+                  reducer:
+                    type: last
+                  type: query
+              expression: pump_on
+        noDataState: OK
         execErrState: OK
         for: 1h
         annotations:
-          summary: "☀️ Solar Circulation Pump May Be Stuck"
-          description: "Solar circulation pump has not changed state in the last hour. Check if pump is functioning correctly."
+          summary: "☀️ Solar Circulation Idle While Sunny"
+          description: "The solar pump has run for under ~2 minutes in the last 6 hours while the PV inverter averaged over 1.5 kW and the boiler top stayed below 55°C. Only the SR-04 anti-seize kick is moving the pump. Check the collector probe (t3) against the actual collector temperature, then the pump and the SR-04 delta settings."
         labels:
           severity: warning
+          system: boiler
+          component: solar
+
+      # --- No solar contribution on a sunny day ---
+      #
+      # The strongest available signal, and independent of `outputs.p1` entirely:
+      # on a day with real PV yield, a boiler top that never rises above the
+      # electric cutoff proves 100% of the heat was electric.
+      #
+      #   * 50.0 degC is the electric cutoff (`comfortMin: 47` + `hysteresis: 3`).
+      #     Through the 2026-06-08..2026-08-09 outage `max(t2)` was exactly 50.0 on
+      #     51 of the 63 days and never above 50.9 except on the 2026-08-09 repair
+      #     day; before it, good days reached 61-71 degC. `lt 50.5` allows half a
+      #     degree of overshoot and measurement noise.
+      #   * `solar_kw > 1.3` is a TIME-WEIGHTED kW over 12 h (see the long note on
+      #     the rule above for why the hourly bucketing is load-bearing), so it
+      #     means ~15.6 kWh actually landed inside the window. A full solar day
+      #     here is 20-26 kWh, so this can only be satisfied by a window covering
+      #     most of one sunny day - which is what makes a 12 h rolling window
+      #     behave like a daily check without needing a fixed evaluation time. A
+      #     24 h window was tried first and rejected: it straddles two days, so one
+      #     dull day plus the next sunny morning fired it.
+      #   * NOT dormant in winter, and it must not be assumed to be. An earlier
+      #     draft used a bare `mean("ap")` and fired on ordinary December-February
+      #     days; with the time-weighted form the winter firings drop away, but
+      #     2026-02-25 still alerts and is a genuine no-contribution day.
+      #
+      # Verified by replay against production InfluxDB, hourly evaluation, over the
+      # full two years 2024-08-01..2026-08-09:
+      #   4 alert days outside the outage - 2025-05-28, 2026-02-25, 2026-04-08 and
+      #     2026-05-13. All four are true positives by this rule's own definition:
+      #     PV yield 18.1-24.2 kWh, collector peaking at 49.2-51.8 degC against a
+      #     tank held at 50.0-50.4, i.e. the solar circuit really did contribute
+      #     nothing. Expect roughly two such alerts a year.
+      #   56 of the 63 outage days, first alert on 2026-06-08 - day one - in the
+      #     window ending 11:00Z (solar_kw=1.38, tank_top=49.8). Fires 12:00Z-21:00Z.
+      # Together with boiler-solar-circulation-stuck, 59 of the 63 outage days
+      # raised an alert. The four that did not: 2026-06-12 and 2026-07-02 (too
+      # little sun to pass the gate), 2026-07-23 (a 7.8 h data outage - note the
+      # bare `mean("ap")` reads 1.66 kW there against 0.42 time-weighted, which is
+      # the point-weighting bias in miniature) and 2026-08-09 (the repair day).
+      - uid: boiler-solar-no-contribution
+        title: No Solar Contribution On A Sunny Day
+        condition: A
+        data:
+          - refId: tank_top
+            queryType: ''
+            relativeTimeRange:
+              from: 43200  # 12 hour lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT max("t2") FROM "xymd1" WHERE "device.name"=''solar_heater'' AND time >= now() - 12h'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: solar_kw
+            queryType: ''
+            relativeTimeRange:
+              from: 43200  # 12 hour lookback
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT mean("ap") FROM "inverter" WHERE "device.name"=''main'' AND time >= now() - 12h GROUP BY time(1h) fill(0)'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource:
+                type: __expr__
+                uid: __expr__
+              refId: A
+              conditions:
+                - evaluator:
+                    params: [50.5]  # electric cutoff 50 degC + 0.5 degC overshoot allowance
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [tank_top]
+                  reducer:
+                    type: last
+                  type: query
+                - evaluator:
+                    params: [1.3]  # time-weighted kW over 12h => ~15.6 kWh: a genuinely sunny day
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [solar_kw]
+                  reducer:
+                    type: avg  # average the hourly buckets -> time-weighted, see comment above
+                  type: query
+              expression: tank_top
+        noDataState: OK
+        execErrState: OK
+        for: 1h
+        annotations:
+          summary: "🔆 No Solar Contribution On A Sunny Day"
+          description: "The boiler top has not exceeded the 50°C electric cutoff in 12 hours, yet the PV inverter averaged over 1.3 kW across the same window. All of the tank's heat is coming from the immersion heater and the solar circuit is contributing nothing. Check the collector probe (t3), the pump, and the SR-04 delta settings."
+        labels:
+          severity: high
           system: boiler
           component: solar

@@ -231,6 +231,48 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   loss first. This is an accepted trade-off, not a bug: a real outage produces two alerts, and
   collapsing them to one needs the two-query AND that provably does not work (above)
 
+*Duty-Cycle Alerts (an actuator that must have been running):*
+- Use when the question is "did this thing actually run?" and the actuator's own state signal is
+  polluted by periodic self-test / anti-seize pulses. **Do not alert on state changes.** Alert on how
+  many samples were in the active state: `SELECT count("field") ... WHERE "field" = true AND time >=
+  now() - Nh`, thresholded well above what the pulses alone contribute
+- **Worked example** (issue #1472): the SR-04 solar controller pulses its pump for 2-3 s roughly every
+  22 minutes all day (`kick`), so `outputs.p1` toggles in every daylight hour whether or not heat is
+  moving, and holds one value all night when the pump is correctly idle. The old
+  `count(DISTINCT "outputs.p1") <= 1, for: 1h` rule was therefore exactly inverted: replayed over 107
+  days of production data it fired on **45% of all hours** — every night, all 107 days — and on **zero**
+  daylight hours through a 63-day total solar outage. The replacement counts `outputs.p1 = true`
+  samples over 6 h against a threshold ~2x the pulse contribution, and fires 0 times in 44 healthy
+  days
+- **Gate on an independent sensor, not the suspect one.** The #1472 fault *was* the collector probe
+  (`t3`) reporting ~35 °C against >110 °C actual, so any rule gated on `t3` would have stayed silent.
+  Both replacement rules gate on PV inverter output (`inverter.ap`) instead — a different device on a
+  different bus
+- **Sample-count thresholds are tied to the poll rate.** Write the observed rate and the arithmetic
+  into a comment on the rule so the next person knows to re-measure if the bus changes
+- **Gate on a time-weighted aggregate, not a bare `mean()`.** InfluxQL `mean()` averages over *points*,
+  not over time, so any source that publishes on change is over-weighted in whichever conditions make
+  it publish more. The SUN2000 inverter logs ~60-77 points/hour while generating against ~11/hour at
+  night, which biases `mean("ap")` over a 12 h window high by 30-40% — enough that a gate calibrated
+  on summer data fired on ordinary winter days. Use `GROUP BY time(1h) fill(0)` with `reducer: avg`
+  (equal weight per bucket ⇒ true time-weighted average, and `threshold × window hours` really is
+  energy), or `integral("field", 1h)` for a direct kWh figure. Validate the gate across at least one
+  full year, not one season
+- **`noDataState: OK` is usually forced here.** Be precise about *why*, because the obvious
+  explanation is wrong: a multi-condition `classic_conditions` does **not** go NoData just because one
+  input is empty. Grafana v9.5 (`pkg/expr/classic`) combines the per-condition NoData flag with the
+  same operator as the firing flag, so under `and` a single empty input among several populated ones
+  collapses NoData to false; the empty condition simply evaluates **false** and the rule reports OK.
+  Either way `count(... = true)` over a window with no matching rows returns no rows rather than `0`
+  (see above), so "actuator wedged fully off, self-test included" is invisible to this rule — pair it
+  with a second rule that infers the same fault from its *effect* and never reads the actuator state
+  at all (here, `boiler-solar-no-contribution`: tank top never exceeded the electric cutoff while PV
+  yield was meaningful)
+- **Expect the pair to double-page.** Both rules fire on most of the same days during a real fault
+  under different alertnames, so a sustained outage notifies roughly twice as often as one rule would
+  — the same accepted trade-off as the sunseeker connectivity/staleness pair above. Say so on the
+  rules rather than leaving it to be discovered
+
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning
 - **Temperature alerts**: >40°C high, <5°C low
