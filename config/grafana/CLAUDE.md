@@ -101,6 +101,10 @@ Grafana 9.5 knows exactly five evaluator types. There are no others:
 | `outside_range` | `[lo, hi]` | value < lo or value > hi |
 | `no_value` | `[]` | the series produced no value |
 
+The `threshold` expression (`type: threshold`) uses a **different, smaller** set —
+`pkg/expr/threshold.go` `supportedThresholdFuncs` omits `no_value`. No rule in this
+directory uses it today, but do not assume one list covers both.
+
 - ❌ **`gte` and `lte` do not exist.** They look plausible, the YAML provisioner accepts
   them without complaint, and the rule appears in the UI looking perfectly healthy — but the
   scheduler logs `Failed to build rule evaluator ... invalid evaluator type` on **every tick**
@@ -110,10 +114,15 @@ Grafana 9.5 knows exactly five evaluator types. There are no others:
   `boiler-controller-emergency-heating` (`gte`, issue #1475 — dead from the day it was written)
 - **Rewrite**: on an integer count `gte N` is `gt N-1` and `lte N` is `lt N+1`; `gte 1` is
   `gt 0`. On a float threshold just move the bound — the boundary case is not meaningful
-- **Enforced in CI**: `.github/workflows/validate-grafana-alerts.yml` runs
-  `.github/scripts/validate-grafana-alerts.js` over `provisioning/alerting/*.yaml` on every
-  change and fails with the file, line, rule uid and offending type. Run it locally with
-  `node .github/scripts/validate-grafana-alerts.js`
+- **Checked in CI, but not yet blocking**: `.github/workflows/validate-grafana-alerts.yml`
+  runs `.github/scripts/validate-grafana-alerts/` over every `.yaml`, `.yml` **and `.json`**
+  file in `provisioning/alerting/` on every change, and fails with the file, document path,
+  rule uid and offending type. It parses the files rather than grepping them, so formatting
+  cannot hide an evaluator from it. Run it locally with
+  `cd .github/scripts/validate-grafana-alerts && npm ci && npm run validate`.
+  ⚠️ The `master` ruleset requires only `CodeQL` and `Workflow Summary`, so **a red result
+  reports but does not block merge**. Add `Validate Alert Evaluators` to the branch ruleset
+  to make it enforcing
 - **Diagnosing a suspected dead rule**:
   `docker logs homy_grafana_1 2>&1 | grep "Failed to build rule evaluator"`
 
