@@ -30,7 +30,9 @@ const SUGGESTIONS = {
   ne: 'use `outside_range` around the value',
 }
 
-const DEFAULT_DIR = 'config/grafana/provisioning/alerting'
+// Fixed on purpose: taking the directory from argv/env would make every file
+// read in this script a path-injection sink for no benefit (CodeQL js/path-injection).
+const ALERTING_DIR = 'config/grafana/provisioning/alerting'
 
 /**
  * Scans one provisioning file for evaluator types.
@@ -92,7 +94,7 @@ function findEvaluatorTypes (file) {
 }
 
 function main () {
-  const dir = process.argv[2] || DEFAULT_DIR
+  const dir = ALERTING_DIR
 
   if (!fs.existsSync(dir)) {
     console.error(`❌ Alert provisioning directory not found: ${dir}`)
