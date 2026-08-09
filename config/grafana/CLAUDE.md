@@ -231,6 +231,31 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   loss first. This is an accepted trade-off, not a bug: a real outage produces two alerts, and
   collapsing them to one needs the two-query AND that provably does not work (above)
 
+*Duty-Cycle Alerts (an actuator that must have been running):*
+- Use when the question is "did this thing actually run?" and the actuator's own state signal is
+  polluted by periodic self-test / anti-seize pulses. **Do not alert on state changes.** Alert on how
+  many samples were in the active state: `SELECT count("field") ... WHERE "field" = true AND time >=
+  now() - Nh`, thresholded well above what the pulses alone contribute
+- **Worked example** (issue #1472): the SR-04 solar controller pulses its pump for 2-3 s roughly every
+  22 minutes all day (`kick`), so `outputs.p1` toggles in every daylight hour whether or not heat is
+  moving, and holds one value all night when the pump is correctly idle. The old
+  `count(DISTINCT "outputs.p1") <= 1, for: 1h` rule was therefore exactly inverted: replayed over 107
+  days of production data it fired on **45% of all hours** — every night, all 107 days — and on **zero**
+  daylight hours through a 63-day total solar outage. The replacement counts `outputs.p1 = true`
+  samples over 6 h against a threshold ~2x the pulse contribution, and fires 0 times in 44 healthy
+  days
+- **Gate on an independent sensor, not the suspect one.** The #1472 fault *was* the collector probe
+  (`t3`) reporting ~35 °C against >110 °C actual, so any rule gated on `t3` would have stayed silent.
+  Both replacement rules gate on PV inverter output (`inverter.ap`) instead — a different device on a
+  different bus
+- **Sample-count thresholds are tied to the poll rate.** Write the observed rate and the arithmetic
+  into a comment on the rule so the next person knows to re-measure if the bus changes
+- **`noDataState: OK` is usually forced here**, because `count(... = true)` over a window with no
+  matching rows returns no rows rather than `0` (see above). That leaves "actuator wedged fully off,
+  self-test included" invisible to this rule — pair it with a second rule that infers the same fault
+  from its *effect* and never reads the actuator state at all (here, `boiler-solar-no-contribution`:
+  tank top never exceeded the electric cutoff while PV yield was meaningful)
+
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning
 - **Temperature alerts**: >40°C high, <5°C low

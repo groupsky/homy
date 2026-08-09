@@ -393,13 +393,27 @@ trade-off of both firing for one real outage.
 
 #### `automation_status` Measurement
 **Source**: automation-events-processor → `homy/automation/+/status` topics
-**Status**: ⚠️ **Currently not available** - Service experiencing InfluxDB authentication errors
-**Tag Structure**: `service: [controller_name]`, `type: "status"`
+**Status**: ✅ **Being written** - verified 2026-08-09: 1101 points for `service='boilerController'` in
+the preceding 7 days, most recent at `2026-08-09T11:39:16Z`. An earlier note in this file claimed the
+measurement was unavailable because of InfluxDB authentication errors; that has not been true for some
+time. The two alert rules that read it - `boiler-controller-emergency-heating` and
+`boiler-controller-not-responding` - see live data (32 points matching `reason =~ /.*emergency.*/` in
+the 30 days to 2026-08-09; 6 points in the trailing 30 minutes).
+**Tag Structure**: `service: [controller_name]`, `type: "status"`, `source`, plus `reason` and
+`controlMode` (see below)
 **Key Fields**:
 - **Controller Decisions** (Source of Truth):
-  - `reason` (string): Decision reasoning (e.g., "comfort_heating_insufficient", "solar_priority_available")
-  - `controlMode` (string): Current operation mode ("automatic", "manual_on", "manual_off", "vacation_3d", etc.)
-  - `manualOverrideExpires` (timestamp): When manual mode expires (null for automatic mode)
+  - `reason` (**tag**, not a field): Decision reasoning. Observed values: `comfort_heating_insufficient`,
+    `emergency_heating_bottom_cold`, `emergency_heating_top_cold`, `hysteresis_zone_maintain_false`,
+    `hysteresis_zone_maintain_true`, `solar_priority_available`, `temperature_sufficient`
+  - `controlMode` (**tag**, not a field): Current operation mode ("automatic", "manual_on", "manual_off", "vacation_3d", etc.)
+  - `manualOverrideExpires` (integer field): When manual mode expires (0 for automatic mode)
+
+  **Gotcha**: `reason` and `controlMode` are written as tags by
+  `docker/automation-events-processor/processor.js`, so `SELECT count("reason")` returns nothing.
+  `SHOW FIELD KEYS` still lists `reason`/`controlMode` as string fields - those are leftovers from an
+  older schema and hold no recent points. Filter on them (`WHERE reason =~ /.*emergency.*/`) and count
+  a real field (`count(*)`, `count("heaterState")`) instead.
 - **Controller View** (For Correlation):
   - `heaterState` (boolean): Controller's intended relay state
   - `solarCirculation` (boolean): Solar pump state as seen by controller
