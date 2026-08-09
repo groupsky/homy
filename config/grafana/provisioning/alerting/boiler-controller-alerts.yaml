@@ -70,12 +70,30 @@ groups:
       # `gte 1` on a count is `gt 0`. CI now rejects gte/lte in this directory
       # (.github/workflows/validate-grafana-alerts.yml).
       #
-      #   * `count("heaterState")`, NOT `count(*)`. `count(*)` emits one column
-      #     per field - 7 as of 2026-08-09 - so classic_conditions receives a
-      #     multi-series frame and emits one alert instance per series, i.e. 7
-      #     duplicate notifications for one event. `heaterState` is the only field
-      #     present on 100% of points (4851/4851 over the 30 days to 2026-08-09;
-      #     the temp_* fields are 4849-4850).
+      # WHAT "EMERGENCY" MEANS HERE. `emergency_heating_*` is raised whenever the
+      # tank top or bottom is below `emergencyMin`, which is 30 degC in the
+      # DEPLOYED config (config/automations/boiler-controller-config.js:19). The
+      # bot's own default is 45 (boiler-controller.js:14) and is NOT what runs -
+      # always quote the deployed value, never the default. The data agrees:
+      # across 1385 emergency points from 2025-09-27 to 2026-08-07,
+      # `temp_bottom_seen` ran 15.3..29.9 degC and `temp_top_seen` at top_cold ran
+      # 21.8..29.9. Nothing near 45. 93.7% of points are bottom_cold (1298),
+      # 6.3% top_cold (87).
+      #
+      #   * `count("heaterState")`, NOT `count(*)` - but NOT for the reason it
+      #     looks like. A multi-series frame does NOT produce one alert instance
+      #     per series: `ConditionsCmd.Execute` (v9.5.21 pkg/expr/classic/
+      #     classic.go) builds exactly one unlabelled `mathexp.NewNumber("", nil)`
+      #     and OR-folds the series inside `executeCond`, leaving the per-series
+      #     outcomes as EvalMatch metadata only. One instance either way. The real
+      #     reasons: `count(*)`'s column set is UNSTABLE - 7 columns over 30 days,
+      #     9 over 330 days on this measurement - so the query changes shape with
+      #     its own time window; and it drags in the legacy `controlMode`/`reason`
+      #     string fields (distinct from the same-named tags) plus
+      #     `manualOverrideExpires`, which SHOW FIELD KEYS reports with CONFLICTING
+      #     TYPES, integer AND string. With OR-folding, any of those can decide the
+      #     condition. `heaterState` is on 100% of points (4851/4851 over the 30
+      #     days to 2026-08-09) and means exactly "the controller published".
       #
       #   * noDataState is OK, and this is load-bearing. InfluxQL `count()` over a
       #     range with no matching rows returns NO ROWS, not 0 - not even with
@@ -90,33 +108,70 @@ groups:
       #   * The 20 min lookback is tied to the controller's 15 min heartbeat.
       #     boiler-controller.js publishes automation_status only when the decision
       #     or reason CHANGES, plus a heartbeat every 15 min that repeats
-      #     lastDecisionReason. A window shorter than 15 min cannot bridge two
-      #     consecutive heartbeats, so one real emergency episode is torn into
+      #     lastDecisionReason. A window shorter than 15 min usually cannot bridge
+      #     two consecutive heartbeats, so one real emergency episode is torn into
       #     fragments and the rule fires on sub-minute alignment luck rather than on
-      #     duration. Measured over 178 days of production data (2026-02-10..
-      #     2026-08-07, 701 emergency points, 264 gap-clustered episodes) the
-      #     shipped 10m/10m shape produced 495 pending starts for 264 episodes and
-      #     172 firings across only 154 distinct episodes - 18 duplicate pages for
-      #     the same event - while firing on episodes far shorter than the 10 min it
-      #     claims to detect (10 of its 11 firings in Jul-Aug 2026 were on episodes
-      #     under 10 min). 20 min is the smallest window that exceeds the heartbeat.
-      #     IT IS TIED TO THAT HEARTBEAT: if the 15 min interval in
-      #     docker/automations/bots/boiler-controller.js changes, re-tune this.
+      #     duration. 20 min is the smallest window that exceeds the heartbeat. It
+      #     bridges 888 of the 928 intra-episode gaps (95.7%); 40 gaps still exceed
+      #     20 min, so "usually", not "always". IT IS TIED TO THAT HEARTBEAT: if the
+      #     15 min interval in docker/automations/bots/boiler-controller.js changes,
+      #     re-tune this.
       #
       #   * `for: 30m` with a 20 min window means the condition must hold for 30 min,
       #     and an episode of span S holds it for S + 20 min, so firing requires
-      #     S >= ~11 min - i.e. the "more than 10 minutes" the description promises,
-      #     now actually measured. Time to page is 30 min after the first emergency
-      #     point. Replayed over the same 178 days: 129 firings on 129 DISTINCT
-      #     episodes (no duplicates) against 134 episodes whose span was >= 10 min,
-      #     and zero firings in Jul-Aug 2026, when no episode lasted 10 min.
-      #     Seasonal by nature - 30 in Feb, 38 in Mar, 20 in May, 9 in Jun, 0 after.
+      #     S >= ~11 min - i.e. the "more than 10 minutes" this is meant to detect,
+      #     now actually measured rather than approximated by alignment.
+      #
+      # VERIFIED BY REPLAY against production InfluxDB over the FULL dataset -
+      # 2025-09-27..2026-08-07, 314 days, 1385 emergency points - at 1-minute
+      # evaluations on one shared grid. Episodes are gap-clustered at 16 min; the
+      # clustering must exceed the 15 min heartbeat or the metric collapses (at
+      # 10 min only 10 episodes look "long"), and it is stable for any threshold
+      # above it (288 long episodes at 16m, 288 at 20m, 290 at 30m). 503 episodes,
+      # 288 of span >= 10 min.
+      #
+      #                       shipped 10m/10m      this rule 20m/30m
+      #     firings                       344                    280
+      #     long episodes caught      166/288                276/288
+      #     false pages                   138                      4
+      #     duplicate pages                40                      0
+      #     time-to-page p50/p95    10.6/55.6 min        30.5/30.9 min
+      #
+      #   The old shape missed 122 of the 288 sustained episodes outright and paged
+      #   138 times for episodes shorter than the 10 min it claimed to detect.
+      #   Known miss for the new shape: 2026-07-01T19:22:18Z, span 10.5 min, sits
+      #   right on the threshold and does not fire - 1 expected in Jul, 0 delivered.
+      #
+      #   * severity is `warning`, PROVISIONALLY. At 26.7 pages/30d annualised and
+      #     40-44 per month through Dec-Feb this is more than one page a day for a
+      #     third of the year, and 93.7% of it is the tank BOTTOM below 30 degC,
+      #     which on a stratified tank with a cold mains inlet is what happens after
+      #     any winter hot-water draw. Whether that is the automation working as
+      #     intended or a real problem is issue #1477; revisit this label there.
+      #     Do NOT retune `emergencyMin` to quiet this alert - that changes when the
+      #     immersion heater runs, which is the automation's semantics, not ours.
+      #
+      #   * Why a reason-based rule rather than a temperature one. The alternative
+      #     is `max("t1") FROM "xymd1" ... lt 30` with `for: 0` on a probe logging
+      #     ~2777 points/hour: a true duration test, no stale tail, and no
+      #     dependence on the bot's publish cadence. It was considered and not
+      #     taken, because matching on `reason` inherits the bot's own suppression -
+      #     during `manual_off` and `vacation_*` the bot never emits an emergency
+      #     reason, so a deliberately cold tank stays quiet, whereas a temperature
+      #     rule would need its own `controlMode` gate. That is the trade: this
+      #     shape is a choice, not the only option.
       #
       #   * execErrState stays OK. boiler-controller-not-responding below already
       #     owns "automation_status cannot be read" with execErrState Alerting;
-      #     duplicating it here would double-page one datasource fault. The failure
-      #     mode that OK hid - an unbuildable evaluator - is now caught in CI
-      #     instead. See config/grafana/CLAUDE.md, "Staleness / Absence Alerts".
+      #     duplicating it here would double-page one datasource fault. But be
+      #     honest about the cost: OK/OK makes this rule UNFALSIFIABLE - it reads
+      #     Normal when there is no emergency AND when it is completely broken
+      #     (datasource down, measurement or field renamed, typo'd refId, or the bot
+      #     changing the reason strings so /.*emergency.*/ stops matching). The CI
+      #     evaluator check closes exactly one syntactic member of that class. Only
+      #     an external check on Grafana's error log or
+      #     grafana_alerting_rule_evaluation_failures_total proves it is alive.
+      #     See config/grafana/CLAUDE.md, "Staleness / Absence Alerts".
       - uid: boiler-controller-emergency-heating
         title: Boiler Emergency Heating Active
         condition: A
@@ -156,25 +211,36 @@ groups:
         for: 30m
         annotations:
           summary: "❄️ Boiler Emergency Heating Active"
-          description: "Boiler controller has been in emergency heating mode continuously for more than 10 minutes (top or bottom below 45°C). Temperature is critically low and requires attention."
+          description: >-
+            The boiler controller reported emergency heating (tank top or bottom below 30°C,
+            `emergencyMin` in config/automations/boiler-controller-config.js) continuously for
+            more than 10 minutes. This fires 30 minutes after the emergency began, and the
+            condition lags the tank by up to 20 minutes, so the boiler may already have
+            recovered by the time you read this. Almost all of these are the tank bottom
+            after a large hot-water draw - see issue #1477 before treating it as a fault.
         labels:
-          severity: high
+          # Provisional - see issue #1477 and the note above.
+          severity: warning
           system: boiler
           component: automation
 
       # Absence rule: it WANTS to fire when the data stops, so noDataState stays
       # Alerting - and that is the only path by which it can fire. InfluxQL
-      # `count()` over an empty range returns no rows rather than 0, so `lt 1` is
-      # unreachable and is kept only as a defensive floor.
-      # `count(*)` was replaced by `count("heaterState")` for the same reason as
-      # boiler-controller-emergency-heating above: `count(*)` yields one column per
-      # field (7 as of 2026-08-09), and classic_conditions emits one alert instance
-      # per series. Here that is currently harmless only because `lt 1` never
-      # matches - but a field with sparse coverage would give a real per-field
-      # count of 0 in some windows and page a false "controller offline" for it.
-      # `heaterState` is present on 100% of points (4851/4851 over the 30 days to
-      # 2026-08-09), so it is the right single-series proxy for "the controller
-      # published something".
+      # `count()` over a range with no matching rows returns no rows at all, so
+      # `lt 1` is unreachable and is kept only as a defensive floor.
+      #
+      # `count(*)` was replaced by `count("heaterState")` for the same reasons as
+      # boiler-controller-emergency-heating above: the `count(*)` column set is
+      # unstable across time ranges and pulls in the legacy `controlMode`/`reason`
+      # string fields and the conflicting-type `manualOverrideExpires`.
+      # NOT because a sparse field could page a false "controller offline" - it
+      # could not. A field with no points in the range comes back as a column that
+      # is PRESENT WITH NULL VALUES (measured: `controlMode` and `reason` over 330
+      # days), neither omitted nor 0, and `last` over an all-null series returns a
+      # Number with a nil value (pkg/expr/classic/reduce.go), which the evaluator
+      # treats as not-firing. `heaterState` is on 100% of points (4851/4851 over
+      # the 30 days to 2026-08-09), so it is the honest single-series proxy for
+      # "the controller published something".
       - uid: boiler-controller-not-responding
         title: Boiler Controller Not Responding
         condition: A
