@@ -67,8 +67,10 @@ groups:
       # does not accept (only gt, lt, within_range, outside_range, no_value). It
       # failed to build an evaluator on every tick and, with execErrState OK, was
       # reported Normal - silently dead since it was written. See issue #1475.
-      # `gte 1` on a count is `gt 0`. CI now rejects gte/lte in this directory
-      # (.github/workflows/validate-grafana-alerts.yml).
+      # `gte 1` on a count is `gt 0`. CI now parses every rule in this directory
+      # and rejects any unsupported evaluator
+      # (.github/workflows/validate-grafana-alerts.yml) - though that check is
+      # NOT yet a required status check on master, so it reports without blocking.
       #
       # WHAT "EMERGENCY" MEANS HERE. `emergency_heating_*` is raised whenever the
       # tank top or bottom is below `emergencyMin`, which is 30 degC in the
