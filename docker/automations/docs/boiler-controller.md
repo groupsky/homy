@@ -84,7 +84,7 @@ The heater is **threshold-based, not scheduled**. The legacy `boilerOnSchedule` 
 | `emergencyMin` | 30 °C | Emergency heating below this |
 | `solarAdvantageMin` | 5 °C | Collector this far above tank top ⇒ defer to solar |
 | `solarDisadvantageMax` | -100 °C | Effectively disables the "solar insufficient, boost" branch |
-| `manualOverrideExpiry` | 24 h | Manual/vacation modes fall back to `automatic` after this |
+| `manualOverrideExpiry` | 24 h | Default expiry for `manual_on`/`manual_off`; an object payload's `duration` overrides it. **Vacation modes do not use it** — they expire after `days × 24 − 6` hours (66 / 114 / 162 / 234 / 330 h) |
 
 **Decision order** (first match wins, `makeDecision()` in the bot):
 
@@ -111,7 +111,7 @@ of the `boiler-solar-no-contribution` alert — see
 - **Circulation pump** controlled directly by external controller
 - **Temperature monitoring** provided by external controller via Modbus
 - **Electric heater recommendation** provided as status (outputs.p6) but not used for control
-- **Completely independent** of home automation electric heater schedule
+- **Completely independent** of the home automation electric heater control
 
 ## Home Assistant Integration
 
@@ -154,7 +154,7 @@ of the `boiler-solar-no-contribution` alert — see
 ### Known blind spot
 
 The bot cannot tell a working solar circuit from a broken one: it only sees the collector temperature
-the external controller reports. When that probe failed in June 2026 it read ~35 °C against >110 °C
+the external controller reports. When that probe failed on 2026-06-08 it read ~35 °C against >110 °C
 actual, so both the SR-04 and the bot correctly concluded there was no solar advantage and the
 immersion heater carried the entire load for 63 days. Detection lives in the Grafana alerts
 (`boiler-solar-circulation-stuck`, `boiler-solar-no-contribution`), not in this bot — see issue #1472
@@ -166,7 +166,7 @@ and `config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
 - **Bot implementation:** `docker/automations/bots/boiler-controller.js`
 - **Feature mappings:** `config/automations/features.js:797-846`  
 - **HA discovery:** `config/automations/ha_discovery.js` — contactor switch (~:876), temperature
-  sensors (~:944-962), control-mode select (~:1017)
+  sensors (~:942-989 — boiler low/high, solar panel, service room), control-mode select (~:1017)
 
 ## Safety Features
 

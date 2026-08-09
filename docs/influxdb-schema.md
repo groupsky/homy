@@ -156,9 +156,24 @@ query this measurement's `v` field. See
 **Source**: modbus-serial-inverter → Solar PV inverter (TCP connection)
 **Tag Structure**: `bus: "inverter"`, `device: "main"`
 **Key Fields**:
+- `ap` (float): Instantaneous AC output power in **kW** (`sun2000.js` divides the raw register by 1000)
+- `daily_p` (float): Energy generated since local midnight (kWh); resets at the day boundary
 - `total_p` (float): Accumulated PV energy production (kWh)
-- Additional inverter metrics: power output, system status
-**Use Cases**: Solar PV production monitoring, grid integration analysis
+- Additional inverter metrics: `eff`, `freq`, `pf`, `rp`, `temp`, `ins`
+**Cadence**: published on change with `maxMsBetweenReports` 5 min, so point density tracks daylight —
+roughly 60-77 points/hour while generating against ~11/hour at night.
+
+**Gotcha for alerting**: because the cadence is uneven, InfluxQL `mean("ap")` (which averages over
+*points*, not over time) is biased high by 30-40% on any window spanning night. Measured on
+2026-01-12, a 12 h window gives `mean("ap")` = 1.286 kW — implying 15.4 kWh — against 12.72 kWh
+actually generated. For a time-weighted kW use `GROUP BY time(1h) fill(0)` and average the buckets
+(`reducer: avg`), which gives 0.750 kW = 9.0 kWh; or use `integral("ap", 1h)` for kWh directly. Both
+solar circuit alert rules depend on this — see
+`config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
+
+**Use Cases**: Solar PV production monitoring, grid integration analysis, and as an *independent*
+"is the sun out" gate for solar thermal alerting (the collector probe `t3` cannot serve that purpose,
+because it is the sensor that fails — issue #1472)
 
 #### `switches` Measurement
 **Source**: modbus-serial-dry-switches → Digital I/O monitoring (direct InfluxDB write)
@@ -413,7 +428,8 @@ the 30 days to 2026-08-09; 6 points in the trailing 30 minutes).
   `docker/automation-events-processor/processor.js`, so `SELECT count("reason")` returns nothing.
   `SHOW FIELD KEYS` still lists `reason`/`controlMode` as string fields - those are leftovers from an
   older schema and hold no recent points. Filter on them (`WHERE reason =~ /.*emergency.*/`) and count
-  a real field (`count(*)`, `count("heaterState")`) instead.
+  a real field instead. Prefer `count("heaterState")` over `count(*)`: `count(*)` returns one column
+  per field, which in a `classic_conditions` alert becomes a multi-series frame.
 - **Controller View** (For Correlation):
   - `heaterState` (boolean): Controller's intended relay state
   - `solarCirculation` (boolean): Solar pump state as seen by controller
@@ -435,7 +451,9 @@ the 30 days to 2026-08-09; 6 points in the trailing 30 minutes).
 
 ### Data to Ignore
 - ❌ `outputs.p6` (solar_heater_electric_heater flag) - Misconfigured
-- ⚠️ Solar PV data not directly applicable to boiler heating (different electrical network)
+- ⚠️ Solar PV data does not *heat* the boiler (different electrical network), so it must not be read as
+  a boiler energy input. It is nonetheless the correct proxy for "the sun is out" when alerting on the
+  solar **thermal** circuit, and both solar circuit alert rules use it that way.
 
 ## Query Examples (Verified)
 

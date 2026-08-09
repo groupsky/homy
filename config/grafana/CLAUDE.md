@@ -250,11 +250,28 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   different bus
 - **Sample-count thresholds are tied to the poll rate.** Write the observed rate and the arithmetic
   into a comment on the rule so the next person knows to re-measure if the bus changes
-- **`noDataState: OK` is usually forced here**, because `count(... = true)` over a window with no
-  matching rows returns no rows rather than `0` (see above). That leaves "actuator wedged fully off,
-  self-test included" invisible to this rule — pair it with a second rule that infers the same fault
-  from its *effect* and never reads the actuator state at all (here, `boiler-solar-no-contribution`:
-  tank top never exceeded the electric cutoff while PV yield was meaningful)
+- **Gate on a time-weighted aggregate, not a bare `mean()`.** InfluxQL `mean()` averages over *points*,
+  not over time, so any source that publishes on change is over-weighted in whichever conditions make
+  it publish more. The SUN2000 inverter logs ~60-77 points/hour while generating against ~11/hour at
+  night, which biases `mean("ap")` over a 12 h window high by 30-40% — enough that a gate calibrated
+  on summer data fired on ordinary winter days. Use `GROUP BY time(1h) fill(0)` with `reducer: avg`
+  (equal weight per bucket ⇒ true time-weighted average, and `threshold × window hours` really is
+  energy), or `integral("field", 1h)` for a direct kWh figure. Validate the gate across at least one
+  full year, not one season
+- **`noDataState: OK` is usually forced here.** Be precise about *why*, because the obvious
+  explanation is wrong: a multi-condition `classic_conditions` does **not** go NoData just because one
+  input is empty. Grafana v9.5 (`pkg/expr/classic`) combines the per-condition NoData flag with the
+  same operator as the firing flag, so under `and` a single empty input among several populated ones
+  collapses NoData to false; the empty condition simply evaluates **false** and the rule reports OK.
+  Either way `count(... = true)` over a window with no matching rows returns no rows rather than `0`
+  (see above), so "actuator wedged fully off, self-test included" is invisible to this rule — pair it
+  with a second rule that infers the same fault from its *effect* and never reads the actuator state
+  at all (here, `boiler-solar-no-contribution`: tank top never exceeded the electric cutoff while PV
+  yield was meaningful)
+- **Expect the pair to double-page.** Both rules fire on most of the same days during a real fault
+  under different alertnames, so a sustained outage notifies roughly twice as often as one rule would
+  — the same accepted trade-off as the sunseeker connectivity/staleness pair above. Say so on the
+  rules rather than leaving it to be discovered
 
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning

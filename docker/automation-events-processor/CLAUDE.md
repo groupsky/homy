@@ -80,7 +80,8 @@ The service processes automation decision events with this structure:
 ### InfluxDB Output
 Events are transformed into InfluxDB points with:
 - **Measurement**: `automation_status`
-- **Tags**: `service` (bot name), `type` (status)
+- **Tags**: `service` (bot name), `type` (status), `reason`, `controlMode` — see the Field Type Mapping
+  note below; `reason`/`controlMode` are tags, not fields
 - **Fields**: Decision data, state data, temperature readings
 - **Timestamp**: Event timestamp from `_tz` field
 
@@ -108,11 +109,18 @@ The service validates all incoming events:
 
 | Event Field | InfluxDB Type | Format | Example |
 |-------------|---------------|---------|---------|
-| reason | stringField | `"value"` | `"comfort_heating_insufficient"` |
-| controlMode | stringField | `"value"` | `"automatic"` |
-| manualOverrideExpires | intField/stringField | `123i` or `"null"` | `1726411800000i` |
+| reason | **tag** | `key=value` | `reason=comfort_heating_insufficient` |
+| controlMode | **tag** | `key=value` | `controlMode=automatic` |
+| manualOverrideExpires | intField | `123i` (**`0i` when null**) | `1726411800000i` |
 | heaterState | booleanField | `T`/`F` | `T` |
+| solarCirculation | booleanField | `T`/`F` | `T` |
 | temperatures.* | floatField | `45.2` | `45.2` |
+
+**`reason` and `controlMode` are tags, not fields** (`processor.js` calls `.tag()`, not
+`.stringField()`). Consequences for queries: `SELECT count("reason")` returns **nothing**, so filter on
+them (`WHERE reason =~ /.*emergency.*/`) and count a real field such as `count("heaterState")`.
+`SHOW FIELD KEYS` still lists `reason`/`controlMode` as string fields — pre-#1041 residue holding no
+recent points. See `docs/influxdb-schema.md`.
 
 ## Testing
 
