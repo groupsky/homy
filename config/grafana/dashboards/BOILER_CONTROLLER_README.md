@@ -35,7 +35,8 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
 ### Temperature Monitoring
 - **Safety Threshold**: 85°C maximum (red threshold line)
 - **Comfort Range**: 50-85°C optimal operation
-- **Emergency Heating**: Triggered below 45°C
+- **Emergency Heating**: Triggered below 30°C (`emergencyMin` in
+  `config/automations/boiler-controller-config.js`; the bot's *default* of 45 is not what runs)
 
 ### Power Consumption
 - **Normal Operation**: 0-3kW typical range
@@ -68,13 +69,16 @@ count back to seven.)
 
 ### High Priority Alerts
 3. **Temperature Sensor Failure** (`boiler-temperature-sensor-failure`) - No readings for 30+ minutes
-4. **Emergency Heating Active** (`boiler-controller-emergency-heating`) - Critical low temperature for 10+ minutes
-5. **No Solar Contribution On A Sunny Day** (`boiler-solar-no-contribution`) - boiler top has not
+4. **No Solar Contribution On A Sunny Day** (`boiler-solar-no-contribution`) - boiler top has not
    exceeded the 50°C electric cutoff in 12 hours while the PV inverter averaged >1.3 kW over the same
    window, i.e. every kWh in the tank came from the immersion heater. See "Solar circuit alert
    thresholds" below.
 
 ### Warning Alerts
+5. **Emergency Heating Active** (`boiler-controller-emergency-heating`) - tank top or bottom below
+   30°C continuously for 10+ minutes. Pages 30 minutes after onset and lags the tank by up to 20
+   minutes. `severity: warning` is **provisional**: this fires 40-44 times a month through
+   December-February, and 93.7% of it is the tank bottom after a hot-water draw. See issue #1477.
 6. **Excessive Power** (`boiler-excessive-power-consumption`) - >3kW consumption for 15+ minutes
 7. **Solar Circulation Idle While Sunny** (`boiler-solar-circulation-stuck`) - under ~2 minutes of pump
    run time in 6 hours while the PV inverter averaged >1.5 kW and the boiler top stayed below 55°C.

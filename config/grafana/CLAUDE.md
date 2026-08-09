@@ -89,6 +89,43 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
 - Use descriptive alert names and labels
 - Include recovery conditions for all alerts
 
+**Supported `classic_conditions` evaluators:**
+
+Grafana 9.5 knows exactly five evaluator types. There are no others:
+
+| `type` | `params` | meaning |
+|---|---|---|
+| `gt` | `[x]` | value > x |
+| `lt` | `[x]` | value < x |
+| `within_range` | `[lo, hi]` | lo < value < hi |
+| `outside_range` | `[lo, hi]` | value < lo or value > hi |
+| `no_value` | `[]` | the series produced no value |
+
+The `threshold` expression (`type: threshold`) uses a **different, smaller** set —
+`pkg/expr/threshold.go` `supportedThresholdFuncs` omits `no_value`. No rule in this
+directory uses it today, but do not assume one list covers both.
+
+- ❌ **`gte` and `lte` do not exist.** They look plausible, the YAML provisioner accepts
+  them without complaint, and the rule appears in the UI looking perfectly healthy — but the
+  scheduler logs `Failed to build rule evaluator ... invalid evaluator type` on **every tick**
+  and never evaluates the query. With `execErrState: OK` that permanent error is reported as
+  Normal, so the rule is **silently dead** with nothing to see anywhere in the UI. This has
+  bitten twice: `boiler-solar-circulation-stuck` (`lte`, issue #1472) and
+  `boiler-controller-emergency-heating` (`gte`, issue #1475 — dead from the day it was written)
+- **Rewrite**: on an integer count `gte N` is `gt N-1` and `lte N` is `lt N+1`; `gte 1` is
+  `gt 0`. On a float threshold just move the bound — the boundary case is not meaningful
+- **Checked in CI, but not yet blocking**: `.github/workflows/validate-grafana-alerts.yml`
+  runs `.github/scripts/validate-grafana-alerts/` over every `.yaml`, `.yml` **and `.json`**
+  file in `provisioning/alerting/` on every change, and fails with the file, document path,
+  rule uid and offending type. It parses the files rather than grepping them, so formatting
+  cannot hide an evaluator from it. Run it locally with
+  `cd .github/scripts/validate-grafana-alerts && npm ci && npm run validate`.
+  ⚠️ The `master` ruleset requires only `CodeQL` and `Workflow Summary`, so **a red result
+  reports but does not block merge**. Add `Validate Alert Evaluators` to the branch ruleset
+  to make it enforcing
+- **Diagnosing a suspected dead rule**:
+  `docker logs homy_grafana_1 2>&1 | grep "Failed to build rule evaluator"`
+
 **Working Alert Configuration Example:**
 ```yaml
 - uid: sunseeker-battery-temp-high
@@ -193,6 +230,29 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
 - Example: `SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true AND time >= now() - 30m`
 - Alert when count = 0 (no positive connectivity records in time window)
 - **Important**: Include explicit time filtering with `time >= now() - [duration]` as `relativeTimeRange` alone doesn't limit InfluxQL queries
+- **Count a named field, not `count(*)`.** Not for the reason it looks like: `count(*)` returns
+  one column per field, but a multi-series frame does **not** produce one alert instance per
+  series. `ConditionsCmd.Execute` (v9.5.21 `pkg/expr/classic/classic.go`) builds exactly one
+  unlabelled `mathexp.NewNumber("", nil)`; series are OR-folded inside `executeCond` (any series
+  firing makes the condition fire) and the per-series outcomes survive only as `EvalMatch`
+  metadata. One instance, one notification, whatever the column count — consistent with the
+  folding note under *Staleness / Absence Alerts* below. The real problems are:
+  - **The column set is unstable.** It depends on which fields exist in the shards the range
+    touches. `count(*)` on `automation_status` returned **7** columns over 30 days and **9** over
+    330 days (measured 2026-08-09) — the query silently changes shape with its own time window
+  - **It drags in fields the rule never meant to read.** On `automation_status` those are the
+    legacy `controlMode` and `reason` *string fields* (distinct from the same-named tags), plus
+    `manualOverrideExpires`, which `SHOW FIELD KEYS` reports with **conflicting types, `integer`
+    AND `string`**. Because series are OR-folded, any of them can decide the condition
+  - **A field with no points is not omitted and is not `0`** — it comes back as a column present
+    with null values. `last` over an all-null series returns a Number with a **nil** value
+    (`pkg/expr/classic/reduce.go`: `if allNull { return num }` after `num.SetValue(nil)`), which
+    the evaluator treats as not-firing. So it raises no false positive — but it does mean a
+    `lt 1` condition over `count(*)` is **unreachable**, and such a rule only ever fires through
+    its `noDataState`
+
+  Use `count("heaterState")` — one named field with full coverage (4851/4851 points over the 30
+  days to 2026-08-09) — so the query means what the rule intends
 
 *Staleness / Absence Alerts:*
 - Use when a threshold rule's own `noDataState`/`execErrState` must be `OK` (its measurement can
@@ -272,6 +332,17 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   under different alertnames, so a sustained outage notifies roughly twice as often as one rule would
   — the same accepted trade-off as the sunseeker connectivity/staleness pair above. Say so on the
   rules rather than leaving it to be discovered
+- **`noDataState: OK` + `execErrState: OK` makes a rule unfalsifiable — say so on the rule.** Such a
+  rule reads Normal when nothing is wrong *and* when it is completely broken: InfluxDB unreachable,
+  measurement or field renamed, a reducer that yields nil, a typo'd `refId`, a changed
+  `datasourceUid`, or — for a rule matching on a tag — the producer changing the strings the regex
+  is written against. Nothing in the alert UI distinguishes these from health. A companion
+  "not responding" rule covers only the subset where the *data* stops, not where the *rule* breaks,
+  and the CI evaluator check closes exactly one syntactic member of the class. The only thing that
+  actually proves an `OK`/`OK` rule is alive is an external check on Grafana's error log or on
+  `grafana_alerting_rule_evaluation_failures_total`. For scale: on 2026-08-09 the live log held
+  **over 65,000** `Failed to build rule evaluator` lines for a single dead rule — still growing by one
+  a minute while this was being written — and no one had noticed
 
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning

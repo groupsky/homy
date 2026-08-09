@@ -61,6 +61,119 @@ groups:
           system: boiler
           component: temperature
 
+      # --- Emergency heating: why gt 0 / noDataState OK / 20m window / for 30m ---
+      #
+      # This rule shipped with `type: gte`, which Grafana 9.5 classic_conditions
+      # does not accept (only gt, lt, within_range, outside_range, no_value). It
+      # failed to build an evaluator on every tick and, with execErrState OK, was
+      # reported Normal - silently dead since it was written. See issue #1475.
+      # `gte 1` on a count is `gt 0`. CI now parses every rule in this directory
+      # and rejects any unsupported evaluator
+      # (.github/workflows/validate-grafana-alerts.yml) - though that check is
+      # NOT yet a required status check on master, so it reports without blocking.
+      #
+      # WHAT "EMERGENCY" MEANS HERE. `emergency_heating_*` is raised whenever the
+      # tank top or bottom is below `emergencyMin`, which is 30 degC in the
+      # DEPLOYED config (config/automations/boiler-controller-config.js:19). The
+      # bot's own default is 45 (boiler-controller.js:14) and is NOT what runs -
+      # always quote the deployed value, never the default. The data agrees:
+      # across 1385 emergency points from 2025-09-27 to 2026-08-07,
+      # `temp_bottom_seen` ran 15.3..29.9 degC and `temp_top_seen` at top_cold ran
+      # 21.8..29.9. Nothing near 45. 93.7% of points are bottom_cold (1298),
+      # 6.3% top_cold (87).
+      #
+      #   * `count("heaterState")`, NOT `count(*)` - but NOT for the reason it
+      #     looks like. A multi-series frame does NOT produce one alert instance
+      #     per series: `ConditionsCmd.Execute` (v9.5.21 pkg/expr/classic/
+      #     classic.go) builds exactly one unlabelled `mathexp.NewNumber("", nil)`
+      #     and OR-folds the series inside `executeCond`, leaving the per-series
+      #     outcomes as EvalMatch metadata only. One instance either way. The real
+      #     reasons: `count(*)`'s column set is UNSTABLE - 7 columns over 30 days,
+      #     9 over 330 days on this measurement - so the query changes shape with
+      #     its own time window; and it drags in the legacy `controlMode`/`reason`
+      #     string fields (distinct from the same-named tags) plus
+      #     `manualOverrideExpires`, which SHOW FIELD KEYS reports with CONFLICTING
+      #     TYPES, integer AND string. With OR-folding, any of those can decide the
+      #     condition. `heaterState` is on 100% of points (4851/4851 over the 30
+      #     days to 2026-08-09) and means exactly "the controller published".
+      #
+      #   * noDataState is OK, and this is load-bearing. InfluxQL `count()` over a
+      #     range with no matching rows returns NO ROWS, not 0 - not even with
+      #     `GROUP BY time() fill(0)` (verified against production: a 20 min window
+      #     ending 2026-08-08T12:00:00Z returned nothing at all). Emergency heating
+      #     is absent ~96% of the time, so this single-condition rule spends almost
+      #     all of its life in NoData. The shipped `noDataState: NoData` would
+      #     therefore have raised a permanent DatasourceNoData notification the
+      #     moment the evaluator started building - a pager storm, not an alert.
+      #     "No rows" here means "no emergency", which is the healthy state: OK.
+      #
+      #   * The 20 min lookback is tied to the controller's 15 min heartbeat.
+      #     boiler-controller.js publishes automation_status only when the decision
+      #     or reason CHANGES, plus a heartbeat every 15 min that repeats
+      #     lastDecisionReason. A window shorter than 15 min usually cannot bridge
+      #     two consecutive heartbeats, so one real emergency episode is torn into
+      #     fragments and the rule fires on sub-minute alignment luck rather than on
+      #     duration. 20 min is the smallest window that exceeds the heartbeat. It
+      #     bridges 888 of the 928 intra-episode gaps (95.7%); 40 gaps still exceed
+      #     20 min, so "usually", not "always". IT IS TIED TO THAT HEARTBEAT: if the
+      #     15 min interval in docker/automations/bots/boiler-controller.js changes,
+      #     re-tune this.
+      #
+      #   * `for: 30m` with a 20 min window means the condition must hold for 30 min,
+      #     and an episode of span S holds it for S + 20 min, so firing requires
+      #     S >= ~11 min - i.e. the "more than 10 minutes" this is meant to detect,
+      #     now actually measured rather than approximated by alignment.
+      #
+      # VERIFIED BY REPLAY against production InfluxDB over the FULL dataset -
+      # 2025-09-27..2026-08-07, 314 days, 1385 emergency points - at 1-minute
+      # evaluations on one shared grid. Episodes are gap-clustered at 16 min; the
+      # clustering must exceed the 15 min heartbeat or the metric collapses (at
+      # 10 min only 10 episodes look "long"), and it is stable for any threshold
+      # above it (288 long episodes at 16m, 288 at 20m, 290 at 30m). 503 episodes,
+      # 288 of span >= 10 min.
+      #
+      #                       shipped 10m/10m      this rule 20m/30m
+      #     firings                       344                    280
+      #     long episodes caught      166/288                276/288
+      #     false pages                   138                      4
+      #     duplicate pages                40                      0
+      #     time-to-page p50/p95    10.6/55.6 min        30.5/30.9 min
+      #
+      #   The old shape missed 122 of the 288 sustained episodes outright and paged
+      #   138 times for episodes shorter than the 10 min it claimed to detect.
+      #   Known miss for the new shape: 2026-07-01T19:22:18Z, span 10.5 min, sits
+      #   right on the threshold and does not fire - 1 expected in Jul, 0 delivered.
+      #
+      #   * severity is `warning`, PROVISIONALLY. At 26.7 pages/30d annualised and
+      #     40-44 per month through Dec-Feb this is more than one page a day for a
+      #     third of the year, and 93.7% of it is the tank BOTTOM below 30 degC,
+      #     which on a stratified tank with a cold mains inlet is what happens after
+      #     any winter hot-water draw. Whether that is the automation working as
+      #     intended or a real problem is issue #1477; revisit this label there.
+      #     Do NOT retune `emergencyMin` to quiet this alert - that changes when the
+      #     immersion heater runs, which is the automation's semantics, not ours.
+      #
+      #   * Why a reason-based rule rather than a temperature one. The alternative
+      #     is `max("t1") FROM "xymd1" ... lt 30` with `for: 0` on a probe logging
+      #     ~2777 points/hour: a true duration test, no stale tail, and no
+      #     dependence on the bot's publish cadence. It was considered and not
+      #     taken, because matching on `reason` inherits the bot's own suppression -
+      #     during `manual_off` and `vacation_*` the bot never emits an emergency
+      #     reason, so a deliberately cold tank stays quiet, whereas a temperature
+      #     rule would need its own `controlMode` gate. That is the trade: this
+      #     shape is a choice, not the only option.
+      #
+      #   * execErrState stays OK. boiler-controller-not-responding below already
+      #     owns "automation_status cannot be read" with execErrState Alerting;
+      #     duplicating it here would double-page one datasource fault. But be
+      #     honest about the cost: OK/OK makes this rule UNFALSIFIABLE - it reads
+      #     Normal when there is no emergency AND when it is completely broken
+      #     (datasource down, measurement or field renamed, typo'd refId, or the bot
+      #     changing the reason strings so /.*emergency.*/ stops matching). The CI
+      #     evaluator check closes exactly one syntactic member of that class. Only
+      #     an external check on Grafana's error log or
+      #     grafana_alerting_rule_evaluation_failures_total proves it is alive.
+      #     See config/grafana/CLAUDE.md, "Staleness / Absence Alerts".
       - uid: boiler-controller-emergency-heating
         title: Boiler Emergency Heating Active
         condition: A
@@ -68,11 +181,11 @@ groups:
           - refId: reason
             queryType: ''
             relativeTimeRange:
-              from: 300  # 5 minutes lookback
+              from: 1200  # 20 minutes lookback - must exceed the 15m heartbeat
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(*) FROM automation_status WHERE "service"=''boilerController'' AND reason =~ /.*emergency.*/ AND time >= now() - 10m'
+              query: 'SELECT count("heaterState") FROM automation_status WHERE "service"=''boilerController'' AND reason =~ /.*emergency.*/ AND time >= now() - 20m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -85,8 +198,8 @@ groups:
               type: classic_conditions
               conditions:
                 - evaluator:
-                    params: [1]
-                    type: gte
+                    params: [0]  # gt 0 == the unsupported `gte 1` this rule shipped with
+                    type: gt
                   operator:
                     type: and
                   query:
@@ -95,17 +208,41 @@ groups:
                     type: last
                   type: query
               expression: reason
-        noDataState: NoData
+        noDataState: OK  # no rows == no emergency == healthy; see the note above
         execErrState: OK
-        for: 10m
+        for: 30m
         annotations:
           summary: "❄️ Boiler Emergency Heating Active"
-          description: "Boiler controller is in emergency heating mode for more than 10 minutes. Temperature is critically low and requires immediate attention."
+          description: >-
+            The boiler controller reported emergency heating (tank top or bottom below 30°C,
+            `emergencyMin` in config/automations/boiler-controller-config.js) continuously for
+            more than 10 minutes. This fires 30 minutes after the emergency began, and the
+            condition lags the tank by up to 20 minutes, so the boiler may already have
+            recovered by the time you read this. Almost all of these are the tank bottom
+            after a large hot-water draw - see issue #1477 before treating it as a fault.
         labels:
-          severity: high
+          # Provisional - see issue #1477 and the note above.
+          severity: warning
           system: boiler
           component: automation
 
+      # Absence rule: it WANTS to fire when the data stops, so noDataState stays
+      # Alerting - and that is the only path by which it can fire. InfluxQL
+      # `count()` over a range with no matching rows returns no rows at all, so
+      # `lt 1` is unreachable and is kept only as a defensive floor.
+      #
+      # `count(*)` was replaced by `count("heaterState")` for the same reasons as
+      # boiler-controller-emergency-heating above: the `count(*)` column set is
+      # unstable across time ranges and pulls in the legacy `controlMode`/`reason`
+      # string fields and the conflicting-type `manualOverrideExpires`.
+      # NOT because a sparse field could page a false "controller offline" - it
+      # could not. A field with no points in the range comes back as a column that
+      # is PRESENT WITH NULL VALUES (measured: `controlMode` and `reason` over 330
+      # days), neither omitted nor 0, and `last` over an all-null series returns a
+      # Number with a nil value (pkg/expr/classic/reduce.go), which the evaluator
+      # treats as not-firing. `heaterState` is on 100% of points (4851/4851 over
+      # the 30 days to 2026-08-09), so it is the honest single-series proxy for
+      # "the controller published something".
       - uid: boiler-controller-not-responding
         title: Boiler Controller Not Responding
         condition: A
@@ -117,7 +254,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count(*) FROM automation_status WHERE "service"=''boilerController'' AND time >= now() - 30m'
+              query: 'SELECT count("heaterState") FROM automation_status WHERE "service"=''boilerController'' AND time >= now() - 30m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
