@@ -1,0 +1,41 @@
+name: Validate Grafana Alerts
+
+on:
+  push:
+    paths:
+      - 'config/grafana/provisioning/alerting/**'
+      - '.github/scripts/validate-grafana-alerts.js'
+      - '.github/workflows/validate-grafana-alerts.yml'
+  pull_request:
+    paths:
+      - 'config/grafana/provisioning/alerting/**'
+      - '.github/scripts/validate-grafana-alerts.js'
+      - '.github/workflows/validate-grafana-alerts.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-evaluators:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Validate alert YAML syntax
+        run: |
+          python3 -c "
+          import glob, sys, yaml
+          failed = False
+          for f in sorted(glob.glob('config/grafana/provisioning/alerting/*.y*ml')):
+              try:
+                  yaml.safe_load(open(f))
+                  print('✅ %s' % f)
+              except yaml.YAMLError as e:
+                  print('❌ %s: %s' % (f, e))
+                  failed = True
+          sys.exit(1 if failed else 0)
+          "
+
+      - name: Validate classic_conditions evaluator types
+        run: node .github/scripts/validate-grafana-alerts.js

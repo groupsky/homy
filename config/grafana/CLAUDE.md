@@ -89,6 +89,34 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
 - Use descriptive alert names and labels
 - Include recovery conditions for all alerts
 
+**Supported `classic_conditions` evaluators:**
+
+Grafana 9.5 knows exactly five evaluator types. There are no others:
+
+| `type` | `params` | meaning |
+|---|---|---|
+| `gt` | `[x]` | value > x |
+| `lt` | `[x]` | value < x |
+| `within_range` | `[lo, hi]` | lo < value < hi |
+| `outside_range` | `[lo, hi]` | value < lo or value > hi |
+| `no_value` | `[]` | the series produced no value |
+
+- ❌ **`gte` and `lte` do not exist.** They look plausible, the YAML provisioner accepts
+  them without complaint, and the rule appears in the UI looking perfectly healthy — but the
+  scheduler logs `Failed to build rule evaluator ... invalid evaluator type` on **every tick**
+  and never evaluates the query. With `execErrState: OK` that permanent error is reported as
+  Normal, so the rule is **silently dead** with nothing to see anywhere in the UI. This has
+  bitten twice: `boiler-solar-circulation-stuck` (`lte`, issue #1472) and
+  `boiler-controller-emergency-heating` (`gte`, issue #1475 — dead from the day it was written)
+- **Rewrite**: on an integer count `gte N` is `gt N-1` and `lte N` is `lt N+1`; `gte 1` is
+  `gt 0`. On a float threshold just move the bound — the boundary case is not meaningful
+- **Enforced in CI**: `.github/workflows/validate-grafana-alerts.yml` runs
+  `.github/scripts/validate-grafana-alerts.js` over `provisioning/alerting/*.yaml` on every
+  change and fails with the file, line, rule uid and offending type. Run it locally with
+  `node .github/scripts/validate-grafana-alerts.js`
+- **Diagnosing a suspected dead rule**:
+  `docker logs homy_grafana_1 2>&1 | grep "Failed to build rule evaluator"`
+
 **Working Alert Configuration Example:**
 ```yaml
 - uid: sunseeker-battery-temp-high
@@ -193,6 +221,13 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
 - Example: `SELECT count("connected") FROM "sunseeker_connection" WHERE "connected" = true AND time >= now() - 30m`
 - Alert when count = 0 (no positive connectivity records in time window)
 - **Important**: Include explicit time filtering with `time >= now() - [duration]` as `relativeTimeRange` alone doesn't limit InfluxQL queries
+- **Never `count(*)` in an alert query.** It returns one column per field on the measurement
+  (`automation_status` had 7 on 2026-08-09), so `classic_conditions` receives a multi-series
+  frame and emits **one alert instance per series** — the same event notified N times. Count a
+  single named field with full coverage instead: `count("heaterState")`. Note also that a field
+  with no points in the range is omitted from `count(*)` entirely rather than reported as 0, so
+  a `lt 1` condition over `count(*)` can never match and the rule only ever fires through its
+  `noDataState`
 
 *Staleness / Absence Alerts:*
 - Use when a threshold rule's own `noDataState`/`execErrState` must be `OK` (its measurement can
