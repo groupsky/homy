@@ -49,7 +49,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "This morning's cold-start pressure for the front-left tire (derived/tire_fl_bar_coldstart) — the wheel's RAW pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. This IS the value the shipped under-inflation alerts evaluate (low <2.20, critical <1.90 bar); the tire has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and a 30-day lookback carries the last reading across a week of not driving — a frozen value is expected, not stale. Nothing is published on a day the car is not driven, or for a second long park later the same day (a tire that has sat in the sun is not a cold one). The >2.90 red band is a sanity guide only: the over-inflation alert evaluates the normalised series in the trend panel below, not this one.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_fl_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -123,7 +123,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "This morning's cold-start pressure for the front-right tire (derived/tire_fr_bar_coldstart) — the wheel's RAW pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. This IS the value the shipped under-inflation alerts evaluate (low <2.20, critical <1.90 bar); the tire has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and a 30-day lookback carries the last reading across a week of not driving — a frozen value is expected, not stale. Nothing is published on a day the car is not driven, or for a second long park later the same day (a tire that has sat in the sun is not a cold one). The >2.90 red band is a sanity guide only: the over-inflation alert evaluates the normalised series in the trend panel below, not this one.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_fr_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -197,7 +197,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "This morning's cold-start pressure for the rear-left tire (derived/tire_rl_bar_coldstart) — the wheel's RAW pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. This IS the value the shipped under-inflation alerts evaluate (low <2.20, critical <1.90 bar); the tire has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and a 30-day lookback carries the last reading across a week of not driving — a frozen value is expected, not stale. Nothing is published on a day the car is not driven, or for a second long park later the same day (a tire that has sat in the sun is not a cold one). The >2.90 red band is a sanity guide only: the over-inflation alert evaluates the normalised series in the trend panel below, not this one.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_rl_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -271,7 +271,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "This morning's cold-start pressure for the rear-right tire (derived/tire_rr_bar_coldstart) — the wheel's RAW pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. This IS the value the shipped under-inflation alerts evaluate (low <2.20, critical <1.90 bar); the tire has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and a 30-day lookback carries the last reading across a week of not driving — a frozen value is expected, not stale. Nothing is published on a day the car is not driven, or for a second long park later the same day (a tire that has sat in the sun is not a cold one). The >2.90 red band is a sanity guide only: the over-inflation alert evaluates the normalised series in the trend panel below, not this one.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_rr_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -609,7 +609,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "The signal the under-inflation alerts evaluate: each wheel's raw cold-start pressure (derived/tire_*_bar_coldstart), one point per wheel per driving morning, taken from the first fresh TPMS frame after a park of 6 h or more. Dashed reference lines are the alert thresholds (1.90 critical / 2.20 low bar) against the 2.5 bar cold placard. Points, not lines, because the series is genuinely one sample a day — a gap means the car was not driven that day, or its first drive was a second start after an already-warm park. PINNED TO 30 DAYS regardless of the dashboard time picker (timeFrom), because at the dashboard's 6 h default this panel would always be empty. A step down across consecutive mornings on one wheel is a leak; all four falling together at about 0.09 bar/month is ordinary permeation.",
+      "description": "The signal the under-inflation alerts evaluate: each wheel's raw cold-start pressure (derived/tire_*_bar_coldstart), one point per wheel per driving morning, taken from the first fresh TPMS frame after a park of 6 h or more. Dashed reference lines are the alert thresholds (1.90 critical / 2.20 low bar) against the 2.5 bar cold placard. Drawn as points with no connecting line, because the series genuinely is one sample a day and a gap is information: the car was not driven, or its first drive that day followed an already-warm park. PINNED TO 30 DAYS regardless of the dashboard time picker (timeFrom), because at the dashboard's 6 h default this panel would always be empty. The RULES look back only 7 days and take the MINIMUM over that span, so a point here that sits below a threshold keeps its alert firing for a week. Beware reading a trend off this panel: the cold-start value tracks overnight ambient at about 0.011 bar/°C, which over a 16-35 °C summer is a 0.2 bar swing — several months of permeation. The Cold Pressure Trend panel below is the one to read a leak from.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -621,7 +621,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "drawStyle": "line",
+            "drawStyle": "points",
             "fillOpacity": 0,
             "gradientMode": "none",
             "hideFrom": {
@@ -636,7 +636,7 @@
               "type": "linear"
             },
             "showPoints": "always",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"

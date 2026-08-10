@@ -62,12 +62,14 @@ const KELVIN_0C = 273.15
 
 // A sealed tyre is a fixed volume of gas, so absolute pressure is proportional
 // to absolute temperature (Gay-Lussac). The previous linearisation, a flat
-// TEMP_COEFF = 0.18 psi/°C, was ~15 % too steep: measured on FR over a single
-// run on 2026-08-09 (33 °C -> 47 °C) the real rate was 0.171 psi/°C, and the
+// TEMP_COEFF = 0.18 psi/°C, was ~8 % too steep: measured on FR over a single
+// run on 2026-08-09 (33 °C -> 47 °C) the real rate was 0.167 psi/°C, and the
 // gas law at these pressures gives 0.155-0.165 psi/°C depending on temperature.
-// Over-compensating made `psi_cold` drift *down* as the tyre heated (29.96 ->
-// 29.84 across that run) instead of staying flat, so the "cold" value depended
-// on how long ago the car had been driven (issue #1479).
+// Over-compensating left `psi_cold` sloping against tyre temperature instead of
+// flat, so the "cold" value depended on how long ago the car had been driven.
+// Least-squares slope of psi_cold against tyre temperature over all 10 548
+// points published across the 27 days to 2026-08-10: -0.0291 psi/°C on the
+// linearisation, -0.0099 on the gas law (issue #1479).
 //
 // Returns null for a temperature at or below absolute zero, which no real
 // sensor produces but which would otherwise divide by zero.
@@ -83,11 +85,22 @@ const toColdPsi = (psi, tempC) => {
 // ambient minimum (issue #1479).
 const COLDSTART_MIN_PARK_MS = 6 * 60 * 60 * 1000
 
+// A cold-start reading goes straight into an alerting series whose query window
+// is days wide, and the day gate is consumed the moment one is published — so a
+// single implausible frame would both hold the alert for days and block the real
+// reading arriving minutes later. Bound it to pressures a road tyre can hold.
+// Across the 14 256 raw wheel-readings in the 27 days to 2026-08-10 every value
+// fell between 2.14 and 2.61 bar, so this rejects nothing real; it exists for a
+// failing sensor reporting 0 (which would page as *critical*) or stuck high.
+const COLDSTART_MIN_BAR = 1.0
+const COLDSTART_MAX_BAR = 4.5
+
 // Calendar day in the process's local timezone (the automations container runs
 // with TZ set from the compose env). "First start of the day" is a statement
-// about the owner's morning, so it must not be evaluated in UTC — the local
-// day boundary is 03:00 UTC in summer here, which would split an early start
-// from the night that produced it.
+// about the owner's morning, so it must not be evaluated in UTC. Europe/Sofia is
+// UTC+3 in summer, so local midnight is 21:00 UTC the day before: a 22:00 and an
+// 08:00 local start are one local day but two UTC days, and UTC keying would
+// publish a cold start for both — the second off a tyre that has sat in the sun.
 const localDayKey = (ms) => {
   const d = new Date(ms)
   const p = (n) => String(n).padStart(2, '0')
@@ -355,16 +368,34 @@ module.exports = function createIoniqTpms (name, config = {}) {
         // 2026-08-04 FR refreshed at 05:17:22Z while FL was still replaying a
         // 40 °C value it had latched the previous evening.
         //
-        // Fails closed on an unknown park length: with no previous frame to diff
-        // against, every wheel looks "changed" whether or not it actually spoke,
-        // and a wheel with no recorded last-changed time has no park to measure.
-        // Both mean "we do not know", and publishing a possibly-warm reading
-        // into an alerting series is worse than waiting for tomorrow morning.
+        // Fails closed wherever the evidence is incomplete. Publishing a
+        // possibly-warm reading into an alerting series is worse than waiting
+        // for tomorrow morning: a missed cold start leaves the alert holding its
+        // previous state, a wrong one changes it. Each `continue` below leaves
+        // the day UNconsumed, so a later frame the same morning still qualifies.
         const frameDay = localDayKey(frameTs)
         for (const w of WHEELS) {
           if (!prevRaw || !changedNow[w]) continue
+
+          // `changedNow` only says this wheel's (psi, c) pair differs from the
+          // previous frame. That is evidence the sensor spoke only if the
+          // previous frame carried a pressure for this wheel AND the pressure
+          // moved: a wheel that was absent, or that reappears with the value the
+          // car latched hours ago, is indistinguishable from a genuine refresh
+          // by the pair alone, and would publish an end-of-drive reading as a
+          // cold start. A tyre that has cooled over a 6 h park has always moved
+          // at least one 0.2 psi step — all 104 cold starts in the 27 days to
+          // 2026-08-10 pass both tests, so neither costs a real reading.
           const psi = raw[`${w}.psi`]
-          if (!isFiniteNum(psi)) continue
+          const prevPsi = prevRaw[`${w}.psi`]
+          if (!isFiniteNum(psi) || !isFiniteNum(prevPsi) || prevPsi === psi) continue
+
+          const bar = toBar(psi)
+          if (bar < COLDSTART_MIN_BAR || bar > COLDSTART_MAX_BAR) {
+            log('coldstart rejected: implausible pressure', w, bar)
+            continue
+          }
+
           const prevAt = prevChangedAt[w]
           if (!isFiniteNum(prevAt)) continue
           if (frameTs - prevAt < coldstartMinParkMs) continue
@@ -373,10 +404,10 @@ module.exports = function createIoniqTpms (name, config = {}) {
           // Same field shape as tire_<w>_bar_cold so the two are interchangeable
           // in a query. `bar` equals `value` here by construction — that identity
           // *is* the point: a coldstart reading is the raw pressure, untouched.
-          const extra = { bar: toBar(psi) }
+          const extra = { bar }
           if (ownTemp[w] !== undefined) extra.temp = ownTemp[w]
-          publish(`tire_${w}_bar_coldstart`, payload, toBar(psi), extra)
-          log('coldstart', w, toBar(psi), 'after', Math.round((frameTs - prevAt) / 3600000), 'h park')
+          publish(`tire_${w}_bar_coldstart`, payload, bar, extra)
+          log('coldstart', w, bar, 'after', Math.round((frameTs - prevAt) / 3600000), 'h park')
         }
 
         // Spread across all wheels that produced a cold pressure (needs >= 2).

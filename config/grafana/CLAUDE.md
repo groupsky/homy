@@ -365,14 +365,25 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   publish that. A tyre reaches ambient overnight, so the first fresh TPMS frame after a ≥6 h park is
   a true cold reading: no reference temperature, no external sensor, nothing to drift.
   `derived/tire_<w>_bar_coldstart` carries one point per wheel per morning and the rules read that
-- **One point per event fixes flapping for free.** The old signal republished every ~30 s and sat
-  within one sensor quantisation step of its trip point, so it crossed and re-crossed all drive:
-  22 fire/resolve pairs inside a single wake cycle over 27.4 days. Evaluating a signal that is
-  *published once per occurrence* gives 0 by construction — no hysteresis, no `for:` bump, and none
-  of the `last()`-over-a-long-window trap below
-- **Cost, and say it on the rule**: a once-per-event series needs a query window measured in days,
-  and it can only tell you about the last event. The gate that selects the event is now part of the
-  alert's semantics even though it lives in the producer — document it where the threshold is
+- **One point per event fixes the *fast* flapping, not all of it.** The old signal republished on
+  every fresh frame (median 46 s) and sat within one sensor quantisation step of its trip point, so
+  it crossed and re-crossed all drive: 22 fire/resolve pairs inside a single wake cycle over 27.5
+  days. Replacing it with a once-per-occurrence signal measured **0** such pairs, swept across every
+  threshold from 1.79 to 2.30 bar. But a once-a-day signal still moves day to day — the cold-start
+  reading tracks overnight ambient at ~0.011 bar/°C, a 0.2 bar swing over a summer — and with
+  `last()` that produced 7 fires and 7 resolves in 27 days on tyres nobody touched. **Measure the
+  slow scale separately from the fast one; fixing one does not fix the other**
+- **Aggregate for the error that is expensive, and say which one you chose.** The general advice
+  below ("for an `lt` threshold use `max()`, so a lone outlier cannot drive the rule") guards
+  against a lone *low* reading firing. When the fault is persistent and the noise reads *high*, the
+  expensive error is the false all-clear and the choice inverts: `min()` over the window, so no
+  single good reading can clear it. On the TPMS rules `min()` over 7 d gave 2 fires / 0 resolves
+  where `last()` gave 7 / 7 and `max()` gave 0 / 0 — i.e. `max()` muted the real fault entirely
+- **Cost, and say it on the rule**: a once-per-event series needs a query window measured in days;
+  it can only tell you about the last event; a `min()` over the window means the alert persists for
+  the whole window after the fault is fixed; and past the window it goes NoData, so a dedicated
+  staleness rule has to own absence. The gate that selects the event is now part of the alert's
+  semantics even though it lives in the producer — document it where the threshold is
 
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning

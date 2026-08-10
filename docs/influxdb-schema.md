@@ -218,12 +218,13 @@ because it is the sensor that fails — issue #1472)
     de-duplicated against frozen readings.
     Compensation is the ideal gas law on absolute pressure,
     `value = (psi + 14.6959)·288.15/(temp + 273.15) − 14.6959`, since #1479. Before that it was a
-    flat `psi − 0.18·(temp − 15)`, which was ~15 % too steep: over all 10 548 points of the first
+    flat `psi − 0.18·(temp − 15)`, which was ~8 % too steep: over all 10 548 points of the first
     27 days the residual slope of `value` against tyre temperature was −0.0291 psi/°C, and the gas
     law brings it to −0.0099. **Values published before #1479 deployed sit lower than the same
-    reading does now** — median 0.35 psi, 0.02 psi at a 16 °C tyre rising to 0.75 psi at 48 °C
-    (measured over those 14 256 wheel-readings) — so treat a query that spans the cutover as two
-    series, not one.
+    reading does now** — median 0.34 psi across those 10 548 published points, from 0.02 psi at a
+    16 °C tyre to a median 0.65 psi at 48 °C (0.75 at the extreme) — so treat a query that spans
+    the cutover as two series, not one. The cutover is the date PR #1484 was deployed, not the
+    date it was written.
     **Nothing reads this series** — both the alerts and the `Ioniq EV / Tires` dashboard moved to
     `derived/tire_<w>_bar_cold` in #1478. It keeps writing so the psi history already in InfluxDB
     stays a continuous series; retire it only together with that history.
@@ -233,7 +234,7 @@ because it is the sensor that fails — issue #1472)
     decimals is 0.0145 psi — coarser than the 2-decimal psi series, but finer than the spacing of
     real readings. Extra fields `bar` (raw uncompensated pressure in bar) and `temp`. Published in
     the same frame as `tire_<w>_psi_cold` and derived from the same figure, so the two cannot drift
-    apart. Carries the same gas-law change and the same 2026-08-10 discontinuity as `psi_cold`.
+    apart. Carries the same gas-law change and the same deploy-date discontinuity as `psi_cold`.
     Grafana `ioniq-tpms-*-overinflated` (`> 2.90` info) alerts on it, and the `Ioniq EV / Tires`
     dashboard plots it as the pressure trend.
     **The under-inflation rules no longer read it** (issue #1479): a value normalized to 15 °C

@@ -273,13 +273,14 @@ describe('ioniq-tpms bot', () => {
     it('publishes the raw reading, with no temperature compensation applied', async () => {
       await seed(at(4, 20, 0))
       await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
-      const cs = published(mqtt, 'tire_fr_bar_coldstart')
-      // The normalised series drags the same 19 °C reading down to its 15 °C
-      // reference and lands 0.04 bar lower. That gap is exactly defect 1: the
-      // placard is defined at ambient, so 19 °C *is* the condition to compare at
-      // and the coldstart series must leave the reading alone.
-      expect(cs.value).toBe(cs.bar)
-      expect(published(mqtt, 'tire_fr_bar_cold').value).toBeLessThan(cs.value)
+      // 31.2 psi / 14.5038 = 2.151 bar, the reading exactly as the sensor gave
+      // it. The normalised series drags the same 19 °C reading down to its 15 °C
+      // reference and lands at 2.108 — 0.043 bar lower. That gap is defect 1:
+      // the placard is defined at ambient, so 19 °C *is* the condition to
+      // compare at, and the coldstart series must leave the reading alone.
+      expect(published(mqtt, 'tire_fr_bar_coldstart').value).toBe(2.151)
+      expect(published(mqtt, 'tire_fr_bar_coldstart').bar).toBe(2.151)
+      expect(published(mqtt, 'tire_fr_bar_cold').value).toBe(2.108)
     })
 
     describe('long-park gate', () => {
@@ -319,6 +320,94 @@ describe('ioniq-tpms bot', () => {
         // rather than alerting on a guess.
         await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
         expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      // The two halves of "the park length is unknown" fail closed
+      // independently, so each needs the other half held valid to be pinned.
+      it('publishes nothing with per-wheel timestamps but no previous frame', async () => {
+        // Reachable from a hand-seeded or partially-written cache. Every wheel
+        // reports "changed" against a null lastRaw, so without this guard all
+        // four would publish whatever the frame happened to carry.
+        mqtt = makeMqtt()
+        persistedCache = {
+          lastRaw: null,
+          wheelChangedAt: { fl: at(4, 20, 0), fr: at(4, 20, 0), rl: at(4, 20, 0), rr: at(4, 20, 0) },
+          coldstartDay: {}
+        }
+        bot = createIoniqTpms('ioniq-tpms', config)
+        await bot.start({ mqtt, persistedCache })
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('publishes nothing for a wheel that has no last-changed time yet', async () => {
+        // rr has never been seen changing — `frameTs - undefined` is NaN, and
+        // NaN < 6h is false, so without the finite check the park gate would
+        // *pass* and an unknown-park reading would publish.
+        mqtt = makeMqtt()
+        persistedCache = {
+          lastRaw: {
+            'fl.psi': 36.4, 'fl.c': 40, 'fr.psi': 35.4, 'fr.c': 41,
+            'rl.psi': 35.8, 'rl.c': 40, 'rr.psi': 36.2, 'rr.c': 41
+          },
+          wheelChangedAt: { fl: at(4, 20, 0), fr: at(4, 20, 0), rl: at(4, 20, 0) },
+          coldstartDay: {}
+        }
+        bot = createIoniqTpms('ioniq-tpms', config)
+        await bot.start({ mqtt, persistedCache })
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR, rr: { psi: 33.4, c: 20 } }))
+        expect(coldstarts(mqtt)).toEqual([['ioniq/parsed/derived/tire_fr_bar_coldstart', 2.151]])
+      })
+    })
+
+    describe('evidence that the sensor actually spoke', () => {
+      it('publishes nothing when the wheel was absent from the previous frame', async () => {
+        // fl drops out of the last frame before the park, then reappears next
+        // morning still carrying the value the car latched at the end of the
+        // evening drive. The (psi, c) pair "changed", but only because it was
+        // missing — the reading is 40 °C hot, and publishing it as a cold start
+        // would report 2.510 bar and mute a genuine low-pressure alert.
+        await seed(at(4, 19, 0))
+        await mqtt._trigger(TPMS, tpms(at(4, 20, 0), { fl: { c: 40 } }))
+        mqtt.publish.mockClear()
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fl: { psi: 36.4, c: 40 } }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('publishes nothing when the pressure is unchanged across the park', async () => {
+        // Only the temperature moved. A tyre that has cooled over 6 h has always
+        // moved at least one 0.2 psi step, so an unchanged pressure means the
+        // car is replaying a latched value with a fresher temperature.
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: { psi: 35.4, c: 19 } }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+    })
+
+    describe('implausible readings', () => {
+      // The value goes into an alerting series with a multi-day window, so a
+      // failing sensor reporting 0 would page as CRITICAL and hold for days.
+      it.each([
+        ['a dead sensor reporting zero', 0],
+        ['a stuck-high reading', 80]
+      ])('publishes nothing for %s', async (_label, psi) => {
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: { psi, c: 19 } }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('leaves the day open for a later qualifying frame', async () => {
+        // The day gate is consumed on publish, so rejecting must not consume it.
+        // Note what the rejection does NOT undo: the bogus frame still stamps
+        // `wheelChangedAt`, so the park clock restarts from it and the wheel has
+        // to sit another six hours before it qualifies again. Fail-closed, and
+        // an implausible reading is a broken sensor that will keep repeating
+        // rather than recover minutes later — but it does mean one bad frame at
+        // wake costs that wheel its reading unless the car parks up again.
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: { psi: 0, c: 0 } }))
+        await mqtt._trigger(TPMS, tpms(at(5, 12, 0), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toEqual([['ioniq/parsed/derived/tire_fr_bar_coldstart', 2.151]])
       })
     })
 
@@ -451,6 +540,54 @@ describe('ioniq-tpms bot', () => {
       })
     })
 
+    // jest.global-setup.js pins the whole suite to TZ=UTC, and jest's node
+    // environment hands tests a plain-object copy of process.env, so assigning
+    // TZ inside a test never reaches the binding that resets V8's date cache —
+    // local-day and UTC-day keying are indistinguishable in-process. The only
+    // way to pin the distinction is to replay the frames in a child node with
+    // TZ actually set in its environment.
+    describe('day boundary is local, not UTC', () => {
+      const replayIn = (tz, frames) => {
+        const script = `
+          const create = require(${JSON.stringify(require.resolve('./ioniq-tpms'))})
+          const out = []
+          const subs = {}
+          const mqtt = {
+            subscribe: (t, cb) => { subs[t] = cb; return Promise.resolve() },
+            publish: (t, p) => { if (/_bar_coldstart$/.test(t)) out.push(p.value); return Promise.resolve() }
+          }
+          const bot = create('t', { speedTopics: [] })
+          bot.start({ mqtt, persistedCache: { lastRaw: null, wheelChangedAt: {}, coldstartDay: {} } })
+            .then(async () => {
+              for (const f of ${JSON.stringify(frames)}) await subs['ioniq/parsed/tpms'](f)
+              process.stdout.write(JSON.stringify(out))
+            })
+        `
+        return JSON.parse(require('child_process').execFileSync(
+          process.execPath, ['-e', script], { env: { ...process.env, TZ: tz }, encoding: 'utf8' }
+        ))
+      }
+
+      // 00:30 and 10:00 Sofia on 5 August are ONE local day but TWO UTC days
+      // (21:30 UTC on the 4th and 07:00 UTC on the 5th). Both starts follow a
+      // park of more than six hours, so only the day key separates them.
+      const FRAMES = [
+        tpms(Date.UTC(2026, 7, 4, 12, 0), {}),
+        tpms(Date.UTC(2026, 7, 4, 21, 30), { fr: FRESH_FR }),
+        tpms(Date.UTC(2026, 7, 5, 7, 0), { fr: { psi: 34, c: 30 } })
+      ]
+
+      it('publishes once for two starts either side of UTC midnight', () => {
+        expect(replayIn('Europe/Sofia', FRAMES)).toEqual([2.151])
+      })
+
+      it('would publish twice if the day were keyed in UTC', () => {
+        // Not a requirement — this pins that the fixture actually discriminates,
+        // so the test above cannot pass for the wrong reason.
+        expect(replayIn('UTC', FRAMES)).toEqual([2.151, 2.344])
+      })
+    })
+
     it('declares a persistedCache migration for the new coldstartDay map', () => {
       const spec = createIoniqTpms('ioniq-tpms', config).persistedCache
       expect(spec.version).toBeGreaterThan(2)
@@ -477,9 +614,9 @@ describe('ioniq-tpms bot', () => {
   // "cold" value depended on how long ago the car had been driven.
   // ---------------------------------------------------------------------------
   describe('gas-law compensation (issue #1479)', () => {
-    // Verbatim FR trace from the 2026-08-09 run cited in the issue, thinned to
-    // one point per distinct temperature step (33 °C -> 47 °C). Under the old
-    // linearisation these normalise to 29.96 at the start and 29.84 at the end.
+    // Ten points sampled from the verbatim FR trace of the 2026-08-09 run cited
+    // in the issue, spanning 33 °C -> 47 °C. Measured rate over the full 45-point
+    // run: 0.167 psi/°C, against the 0.18 the linearisation assumed.
     const FR_RUN = [
       [33.2, 33], [33.6, 33], [34, 34], [34.2, 36], [34.4, 37],
       [34.6, 39], [35, 41], [35.2, 43], [35.4, 45], [36, 47]
@@ -496,9 +633,10 @@ describe('ioniq-tpms bot', () => {
       // dependence on tyre temperature — otherwise it silently encodes how long
       // ago the car was driven. Least-squares slope of psi_cold against tyre
       // temperature: 0.0076 psi/°C here, against -0.0140 for the 0.18 psi/°C
-      // linearisation on the same points (-0.0128 over the full 47-sample run).
-      // Not zero: pressure quantises at 0.2 psi and temperature at 1 °C, so ~0.6
-      // psi of scatter is in the inputs and no formula removes it.
+      // linearisation on the same ten points. Over all 10 548 points published
+      // across the 27 days to 2026-08-10 the same comparison is -0.0099 against
+      // -0.0291. Not zero: pressure quantises at 0.2 psi and temperature at
+      // 1 °C, so ~0.6 psi of scatter is in the inputs and no formula removes it.
       const temps = FR_RUN.map(([, c]) => c)
       const mt = temps.reduce((a, b) => a + b, 0) / temps.length
       const mv = vals.reduce((a, b) => a + b, 0) / vals.length
