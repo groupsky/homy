@@ -1,32 +1,72 @@
 apiVersion: 1
 
-# The 6h query window is deliberate: the car publishes TPMS only while awake
-# (~138 of any 168 hours have no samples at all), and every rule here is
-# noDataState: OK, so a short window would let the alert silently clear the
-# moment the car sleeps instead of staying visible. The cost is that
-# `SELECT last(...) ... - 6h` keeps returning the newest point for up to 6
-# hours, which means `for:` cannot be relied on as a transient filter -- see
+# Two different signals are alerted on here, and the difference is the whole
+# point of issue #1479.
+#
+# UNDER-INFLATION (`-psi-low`, `-psi-crit`) reads `derived/tire_<w>_bar_coldstart`
+# — one point per wheel per morning, taken by the bot from the first fresh TPMS
+# frame after a >= 6 h park and published raw. Two reasons it is not the
+# normalised series:
+#   1. The placard is defined at *ambient*. The normalised series is referenced
+#      to 15 °C, so it is off by the gap between the two — ~0.12 bar low at a
+#      25 °C August ambient, ~0.19 bar high at 0 °C in January. The rule was
+#      therefore loudest in the season pressures do not fall and quietest in the
+#      one they do. A coldstart reading needs no reference: the tyre has
+#      equilibrated with ambient overnight, so it is comparable as measured.
+#   2. The normalised series is republished every ~30 s while the car is awake,
+#      and FR and RL sit within 0.02 bar of the trip point — less than one TPMS
+#      quantisation step (0.2 psi = 0.014 bar). It crossed and re-crossed the
+#      line several times per drive. Replayed over the 27.4 days of production
+#      history to 2026-08-10, the old rule produced **22 fire/resolve pairs
+#      inside a single wake cycle**; the coldstart rule produces **0**, at every
+#      threshold tried between 1.79 and 2.30 bar. One evaluation per morning
+#      cannot flap, so no hysteresis and no `for:` bump are needed.
+#
+# EVERYTHING ELSE (`-overinflated`, `-spread-high`, `-temp-excess`) still reads
+# the continuously-published series. Over-inflation is not a stranding risk and
+# does not need the placard's precision; the spread and temperature rules are
+# wheel-to-wheel differences, in which the reference temperature cancels.
+#
+# Thresholds. The low/critical pair is now chosen **in bar against the 2.5 bar
+# placard**, not converted from a psi round number: 2.20 bar is 0.30 under
+# placard and 1.90 bar is 0.60 under (~24 %). Replayed over the same 27.4 days:
+# 2.20 fires 7 times (FR 4, RL 3) across 26 coldstart mornings — FR and RL
+# really are ~0.28 bar under placard, which is what the issue set out to keep
+# reporting — and 1.90 fires 0 times, against an observed minimum of 2.137 bar
+# on FR (2026-07-25). That is a measured count over one summer, not a claim that
+# the critical rule cannot fire; re-check it after a winter.
+# The over-inflated and spread thresholds are still the old psi round numbers
+# converted at 1 bar = 14.5038 psi and rounded to 2 decimals (42 -> 2.90,
+# spread 3 -> 0.21), which shifts their trip points by 0.05-0.07 psi.
+#
+# Query windows. The coldstart rules use 7d: the series publishes once per
+# driving day, so a 6h window would clear the alert by lunchtime and re-page the
+# next morning, and 7d keeps the last known cold reading visible through a week
+# of not driving. The rules that still read the continuous series keep 6h,
+# because the car publishes TPMS only while awake (~138 of any 168 hours have no
+# samples at all) and every rule here is noDataState: OK, so a short window would
+# let the alert silently clear the moment the car sleeps.
+#
+# Either way `SELECT last(...)` keeps returning the newest point until a newer
+# one arrives, so `for:` cannot be relied on as a transient filter -- see
 # "last() Over a Long Window Defeats for:" in config/grafana/CLAUDE.md
-# (issue #1419). The real artefact filter is the wheel-freshness gate in
-# docker/automations/bots/ioniq-tpms.js (issues #1415/#1416).
+# (issue #1419). The real artefact filters live in
+# docker/automations/bots/ioniq-tpms.js: the wheel-freshness gate for
+# temp_excess (issues #1415/#1416) and the coldstart gates for pressure (#1479).
 #
-# Units: the pressure rules query the *bar* series (`derived/tire_<w>_bar_cold`,
-# `derived/tire_spread_bar`) so the query, the threshold and the message text
-# are all in the unit the owner reads (issue #1478). The psi series is still
-# published, but nothing reads it — it keeps writing only so its existing
-# InfluxDB history stays a continuous series.
+# Residual, measured and accepted: the coldstart gate is "first start of the
+# day", which on a day whose first drive is in the afternoon takes a sun-soaked
+# tyre. That happened on 3 of 26 days in the replay (2026-07-25 17:01, 07-26
+# 13:05, 08-09 14:41, the last at 32-34 °C). A warm reading is a *high* one, so
+# it can only mute the alert, never invent one; it cost one cross-day
+# clear/re-fire pair on FR (cleared 07-26 13:06 at 2.248, re-fired 07-27 08:08
+# at 2.179). Gating on tyre-vs-ambient temperature would fix it but would make
+# the signal depend on an external sensor, which is exactly what this design
+# avoids.
 #
-# The thresholds are the psi ones converted at 1 bar = 14.5038 psi and rounded
-# to 2 decimals: 30 -> 2.07, 26 -> 1.79, 42 -> 2.90, spread 3 -> 0.21. That
-# rounding shifts each trip point by 0.02-0.07 psi (see the table in
-# docker/automations/bots/ioniq-tpms.js) — immaterial for tyre pressure, but it
-# is not exact, so this is a units change and not literally a no-op. They look
-# arbitrary because they are psi round numbers in disguise; leave them until
-# they are re-chosen in bar (issue #1479).
-#
-# The 2.5 bar placard quoted in the annotations is NOT one of these conversions
-# — 36 psi is 2.48 bar. 2.5 bar is the placard's own figure; the door label
-# carries both, and they are each rounded from 250 kPa independently.
+# The 2.5 bar placard quoted in the annotations is not a conversion of anything
+# here — 36 psi is 2.48 bar. 2.5 bar is the placard's own figure; the door label
+# carries both, each rounded from 250 kPa independently.
 
 groups:
   - orgId: 1
@@ -39,12 +79,12 @@ groups:
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_fl_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_fl_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -57,7 +97,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [2.07] }
+                - evaluator: { type: lt, params: [2.20] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -68,20 +108,20 @@ groups:
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 FL (front-left) tyre cold-pressure below 2.07 bar"
-          description: "Cold-normalized front-left tyre pressure is under 2.07 bar (placard 2.5 bar). Inflate before the next drive; check for a slow leak."
+          summary: "🚗 FL (front-left) tyre cold-start pressure below 2.20 bar"
+          description: "Front-left tyre read under 2.20 bar on the first cold reading after an overnight park (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak."
 
       - uid: ioniq-tpms-fl-psi-crit
         title: "🚗 Ioniq Tyre Critical — FL"
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_fl_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_fl_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -94,7 +134,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [1.79] }
+                - evaluator: { type: lt, params: [1.90] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -105,8 +145,8 @@ groups:
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 FL (front-left) tyre cold-pressure below 1.79 bar"
-          description: "Cold-normalized front-left tyre pressure is critically low (under 1.79 bar). Do not drive far — inflate or replace now to avoid tyre damage."
+          summary: "🚗 FL (front-left) tyre cold-start pressure below 1.90 bar"
+          description: "Front-left tyre read under 1.90 bar on the first cold reading after an overnight park (placard 2.5 bar). Do not drive far — inflate or replace now to avoid tyre damage."
 
       - uid: ioniq-tpms-fl-overinflated
         title: "🚗 Ioniq Tyre Over-inflated — FL"
@@ -193,12 +233,12 @@ groups:
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_fr_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_fr_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -211,7 +251,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [2.07] }
+                - evaluator: { type: lt, params: [2.20] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -222,20 +262,20 @@ groups:
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 FR (front-right) tyre cold-pressure below 2.07 bar"
-          description: "Cold-normalized front-right tyre pressure is under 2.07 bar (placard 2.5 bar). Inflate before the next drive; check for a slow leak."
+          summary: "🚗 FR (front-right) tyre cold-start pressure below 2.20 bar"
+          description: "Front-right tyre read under 2.20 bar on the first cold reading after an overnight park (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak."
 
       - uid: ioniq-tpms-fr-psi-crit
         title: "🚗 Ioniq Tyre Critical — FR"
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_fr_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_fr_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -248,7 +288,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [1.79] }
+                - evaluator: { type: lt, params: [1.90] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -259,8 +299,8 @@ groups:
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 FR (front-right) tyre cold-pressure below 1.79 bar"
-          description: "Cold-normalized front-right tyre pressure is critically low (under 1.79 bar). Do not drive far — inflate or replace now to avoid tyre damage."
+          summary: "🚗 FR (front-right) tyre cold-start pressure below 1.90 bar"
+          description: "Front-right tyre read under 1.90 bar on the first cold reading after an overnight park (placard 2.5 bar). Do not drive far — inflate or replace now to avoid tyre damage."
 
       - uid: ioniq-tpms-fr-overinflated
         title: "🚗 Ioniq Tyre Over-inflated — FR"
@@ -347,12 +387,12 @@ groups:
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_rl_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_rl_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -365,7 +405,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [2.07] }
+                - evaluator: { type: lt, params: [2.20] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -376,20 +416,20 @@ groups:
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 RL (rear-left) tyre cold-pressure below 2.07 bar"
-          description: "Cold-normalized rear-left tyre pressure is under 2.07 bar (placard 2.5 bar). Inflate before the next drive; check for a slow leak."
+          summary: "🚗 RL (rear-left) tyre cold-start pressure below 2.20 bar"
+          description: "Rear-left tyre read under 2.20 bar on the first cold reading after an overnight park (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak."
 
       - uid: ioniq-tpms-rl-psi-crit
         title: "🚗 Ioniq Tyre Critical — RL"
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_rl_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_rl_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -402,7 +442,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [1.79] }
+                - evaluator: { type: lt, params: [1.90] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -413,8 +453,8 @@ groups:
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 RL (rear-left) tyre cold-pressure below 1.79 bar"
-          description: "Cold-normalized rear-left tyre pressure is critically low (under 1.79 bar). Do not drive far — inflate or replace now to avoid tyre damage."
+          summary: "🚗 RL (rear-left) tyre cold-start pressure below 1.90 bar"
+          description: "Rear-left tyre read under 1.90 bar on the first cold reading after an overnight park (placard 2.5 bar). Do not drive far — inflate or replace now to avoid tyre damage."
 
       - uid: ioniq-tpms-rl-overinflated
         title: "🚗 Ioniq Tyre Over-inflated — RL"
@@ -501,12 +541,12 @@ groups:
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_rr_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_rr_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -519,7 +559,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [2.07] }
+                - evaluator: { type: lt, params: [2.20] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -530,20 +570,20 @@ groups:
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 RR (rear-right) tyre cold-pressure below 2.07 bar"
-          description: "Cold-normalized rear-right tyre pressure is under 2.07 bar (placard 2.5 bar). Inflate before the next drive; check for a slow leak."
+          summary: "🚗 RR (rear-right) tyre cold-start pressure below 2.20 bar"
+          description: "Rear-right tyre read under 2.20 bar on the first cold reading after an overnight park (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak."
 
       - uid: ioniq-tpms-rr-psi-crit
         title: "🚗 Ioniq Tyre Critical — RR"
         condition: A
         data:
           - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: { from: 604800, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
                 SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_rr_bar_cold' AND time >= now() - 6h
+                WHERE "group"='derived/tire_rr_bar_coldstart' AND time >= now() - 7d
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -556,7 +596,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: lt, params: [1.79] }
+                - evaluator: { type: lt, params: [1.90] }
                   operator: { type: and }
                   query: { params: [q] }
                   reducer: { type: last }
@@ -567,8 +607,8 @@ groups:
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms }
         annotations:
-          summary: "🚗 RR (rear-right) tyre cold-pressure below 1.79 bar"
-          description: "Cold-normalized rear-right tyre pressure is critically low (under 1.79 bar). Do not drive far — inflate or replace now to avoid tyre damage."
+          summary: "🚗 RR (rear-right) tyre cold-start pressure below 1.90 bar"
+          description: "Rear-right tyre read under 1.90 bar on the first cold reading after an overnight park (placard 2.5 bar). Do not drive far — inflate or replace now to avoid tyre damage."
 
       - uid: ioniq-tpms-rr-overinflated
         title: "🚗 Ioniq Tyre Over-inflated — RR"
