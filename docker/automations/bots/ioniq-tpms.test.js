@@ -27,9 +27,9 @@ function makeCache () {
 const config = { tpmsTopic: TPMS, ambientTopic: AMBIENT, speedTopics: [SPEED] }
 
 // Realistic prod-derived sample (2026-07-15 routy). The real tpms frame nests each
-// wheel: {"fl":{"psi":37,"c":37}, ...}. Cold-normalize to 15 °C @ 0.18 psi/°C.
-// fl: 36.6 - 0.18*(35-15) = 33.0 ; fr: 35.2 - 0.18*(36-15) = 31.42
-// rl: 35.6 - 0.18*(37-15) = 31.64 ; rr: 36.2 - 0.18*(37-15) = 32.24
+// wheel: {"fl":{"psi":37,"c":37}, ...}. Cold-normalize to 15 °C with the gas law
+// (issue #1479): psi_cold = (psi + 14.6959)·288.15/(c + 273.15) − 14.6959.
+// fl: 33.27 ; fr: 31.81 ; rl: 32.03 ; rr: 32.59
 function sample (overrides = {}) {
   return {
     _type: 'ioniq',
@@ -70,11 +70,11 @@ describe('ioniq-tpms bot', () => {
   it('emits four per-wheel cold pressures with correct payload shape', async () => {
     await mqtt._trigger(TPMS, sample())
     expect(published(mqtt, 'tire_fl_psi_cold')).toEqual(expect.objectContaining({
-      _type: 'ioniq', group: 'derived/tire_fl_psi_cold', state: 'active', ts: 1000, value: 33.0
+      _type: 'ioniq', group: 'derived/tire_fl_psi_cold', state: 'active', ts: 1000, value: 33.27
     }))
-    expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.42)
-    expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(31.64)
-    expect(published(mqtt, 'tire_rr_psi_cold').value).toBe(32.24)
+    expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.81)
+    expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(32.03)
+    expect(published(mqtt, 'tire_rr_psi_cold').value).toBe(32.59)
   })
 
   it('includes raw psi and used temp as extra fields', async () => {
@@ -84,9 +84,9 @@ describe('ioniq-tpms bot', () => {
 
   it('emits tire_spread_psi = max - min of cold pressures', async () => {
     await mqtt._trigger(TPMS, sample())
-    // max 33.0 (fl) - min 31.42 (fr) = 1.58
+    // max 33.27 (fl) - min 31.81 (fr) = 1.46
     expect(published(mqtt, 'tire_spread_psi')).toEqual(expect.objectContaining({
-      _type: 'ioniq', group: 'derived/tire_spread_psi', value: 1.58
+      _type: 'ioniq', group: 'derived/tire_spread_psi', value: 1.46
     }))
   })
 
@@ -105,8 +105,8 @@ describe('ioniq-tpms bot', () => {
   it('falls back to ambient temp when a wheel temp is missing', async () => {
     await mqtt._trigger(AMBIENT, { c: 25 })
     await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
-    // fl uses ambient 25: 36.6 - 0.18*(25-15) = 36.6 - 1.8 = 34.8
-    expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(34.8)
+    // fl uses ambient 25: (36.6+14.6959)*288.15/298.15 - 14.6959 = 34.88
+    expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(34.88)
     expect(published(mqtt, 'tire_fl_psi_cold').temp).toBe(25)
   })
 
@@ -118,13 +118,13 @@ describe('ioniq-tpms bot', () => {
   describe('bar output (issue #1478)', () => {
     it('emits a bar cold pressure for every wheel alongside the psi one', async () => {
       await mqtt._trigger(TPMS, sample())
-      // 33.0 / 14.5038 = 2.2753 ; 31.42 -> 2.1663 ; 31.64 -> 2.1815 ; 32.24 -> 2.2229
+      // 33.27 / 14.5038 = 2.2939 ; 31.81 -> 2.1932 ; 32.03 -> 2.2085 ; 32.59 -> 2.2470
       expect(published(mqtt, 'tire_fl_bar_cold')).toEqual(expect.objectContaining({
-        _type: 'ioniq', group: 'derived/tire_fl_bar_cold', state: 'active', ts: 1000, value: 2.275
+        _type: 'ioniq', group: 'derived/tire_fl_bar_cold', state: 'active', ts: 1000, value: 2.294
       }))
-      expect(published(mqtt, 'tire_fr_bar_cold').value).toBe(2.166)
-      expect(published(mqtt, 'tire_rl_bar_cold').value).toBe(2.181)
-      expect(published(mqtt, 'tire_rr_bar_cold').value).toBe(2.223)
+      expect(published(mqtt, 'tire_fr_bar_cold').value).toBe(2.193)
+      expect(published(mqtt, 'tire_rl_bar_cold').value).toBe(2.209)
+      expect(published(mqtt, 'tire_rr_bar_cold').value).toBe(2.247)
     })
 
     it('leaves the psi series byte-identical when the bar series is added', async () => {
@@ -134,17 +134,17 @@ describe('ioniq-tpms bot', () => {
         group: 'derived/tire_fl_psi_cold',
         state: 'active',
         ts: 1000,
-        value: 33.0,
+        value: 33.27,
         psi: 36.6,
         temp: 35
       })
-      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.58)
+      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.46)
     })
 
-    // The fixture above is float-clean (33.0, 31.42 ... are exact), so it would
-    // still pass if psi lost its round2. These inputs do not: 35.4 - 0.18*23
-    // is 31.259999999999998 in IEEE-754. Pins that moving the rounding out of
-    // `publish` and into the call sites kept psi at 2 decimals.
+    // The gas law almost never lands on a clean 2-decimal figure, so this pins
+    // that the rounding still happens at the call site rather than in `publish`
+    // (psi and bar round to different precisions). Unrounded, fr here is
+    // 31.703437... and the spread 1.6295...
     it('still rounds the psi series to 2 decimals on values with float residue', async () => {
       await mqtt._trigger(TPMS, sample({
         fl: { psi: 37, c: 37 },
@@ -152,9 +152,9 @@ describe('ioniq-tpms bot', () => {
         rl: { psi: 35.8, c: 38 },
         rr: { psi: 36.2, c: 38 }
       }))
-      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.26)
-      expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(31.66)
-      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.78)
+      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.7)
+      expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(32.07)
+      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.64)
     })
 
     // The two units are derived from one unrounded figure, so the published
@@ -181,9 +181,9 @@ describe('ioniq-tpms bot', () => {
 
     it('emits tire_spread_bar = max - min of the cold pressures in bar', async () => {
       await mqtt._trigger(TPMS, sample())
-      // 1.58 psi / 14.5038 = 0.1089 bar
+      // 1.46 psi / 14.5038 = 0.1007 bar
       expect(published(mqtt, 'tire_spread_bar')).toEqual(expect.objectContaining({
-        _type: 'ioniq', group: 'derived/tire_spread_bar', value: 0.109
+        _type: 'ioniq', group: 'derived/tire_spread_bar', value: 0.101
       }))
     })
 
@@ -191,17 +191,17 @@ describe('ioniq-tpms bot', () => {
     // bar series would quantise to 0.145 psi, adding up to 0.07 psi on top of
     // the error the 2-decimal thresholds already carry.
     it('keeps three decimals of resolution', async () => {
-      // 34.9 - 0.18*(35-15) = 31.3 psi -> 2.15807... bar
+      // (34.9+14.6959)*288.15/308.15 - 14.6959 = 31.6775 psi -> 2.18410... bar
       await mqtt._trigger(TPMS, sample({ fl: { psi: 34.9, c: 35 } }))
-      expect(published(mqtt, 'tire_fl_bar_cold').value).toBe(2.158)
+      expect(published(mqtt, 'tire_fl_bar_cold').value).toBe(2.184)
     })
 
     it('omits the bar series for a wheel with no usable pressure', async () => {
       await mqtt._trigger(TPMS, sample({ fl: { c: 35 } }))
       expect(published(mqtt, 'tire_fl_bar_cold')).toBeUndefined()
       expect(published(mqtt, 'tire_fr_bar_cold')).toBeDefined()
-      // remaining cold: fr 31.42, rl 31.64, rr 32.24 -> 0.82 psi -> 0.0565 bar
-      expect(published(mqtt, 'tire_spread_bar').value).toBe(0.057)
+      // remaining cold: fr 31.81, rl 32.03, rr 32.59 -> 0.78 psi -> 0.0538 bar
+      expect(published(mqtt, 'tire_spread_bar').value).toBe(0.054)
     })
 
     it('does not emit tire_spread_bar when fewer than two wheels are valid', async () => {
@@ -215,9 +215,315 @@ describe('ioniq-tpms bot', () => {
     it('uses the ambient fallback temperature for the bar series too', async () => {
       await mqtt._trigger(AMBIENT, { c: 25 })
       await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
-      // 36.6 - 0.18*(25-15) = 34.8 psi -> 2.3994 bar
-      expect(published(mqtt, 'tire_fl_bar_cold').value).toBe(2.399)
+      // (36.6+14.6959)*288.15/298.15 - 14.6959 = 34.8834 psi -> 2.4051 bar
+      expect(published(mqtt, 'tire_fl_bar_cold').value).toBe(2.405)
       expect(published(mqtt, 'tire_fl_bar_cold').temp).toBe(25)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Issue #1479: the under-inflation alerts moved off the continuously-published
+  // normalised series onto one point per morning, taken from the first fresh
+  // frame after a long park — a genuinely cold tyre, directly comparable to the
+  // placard, and evaluated once so it cannot flap across the trip point.
+  // ---------------------------------------------------------------------------
+  describe('cold-start pressure (issue #1479)', () => {
+    // Local wall-clock, not UTC: "first start of the day" is a statement about
+    // the owner's morning, and the bot keys the day in the process timezone.
+    // Building the timestamps the same way keeps this test timezone-independent.
+    const at = (day, h, m = 0, s = 0) => new Date(2026, 7, day, h, m, s).getTime()
+
+    // Latched overnight values: the last thing each sensor said on the evening
+    // drive, still being replayed by the car.
+    const STALE = {
+      fl: { psi: 36.4, c: 40 }, fr: { psi: 35.4, c: 41 },
+      rl: { psi: 35.8, c: 40 }, rr: { psi: 36.2, c: 41 }
+    }
+    // Verbatim first-fresh values from the 2026-08-04 05:17Z wake-up on routy.
+    const FRESH_FR = { psi: 31.2, c: 19 }
+    const FRESH_FL = { psi: 32.8, c: 19 }
+
+    const tpms = (ts, wheels) => ({
+      _type: 'ioniq', group: 'tpms', state: 'active', ts, ...STALE, ...wheels
+    })
+
+    // Seed the per-wheel last-changed map so a following frame has a park length
+    // to measure against. A cold cache has none and deliberately publishes nothing.
+    const seed = (ts) => mqtt._trigger(TPMS, tpms(ts, {}))
+
+    const coldstarts = (m) => m.publish.mock.calls
+      .filter((c) => /_bar_coldstart$/.test(c[0]))
+      .map((c) => [c[0], c[1].value])
+
+    it('publishes the first fresh frame after an overnight park', async () => {
+      await seed(at(4, 20, 0))
+      await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+      // 31.2 psi / 14.5038 = 2.15117 bar — raw, not compensated.
+      expect(published(mqtt, 'tire_fr_bar_coldstart')).toEqual({
+        _type: 'ioniq',
+        group: 'derived/tire_fr_bar_coldstart',
+        state: 'active',
+        ts: at(5, 5, 17),
+        value: 2.151,
+        bar: 2.151,
+        temp: 19
+      })
+    })
+
+    it('publishes the raw reading, with no temperature compensation applied', async () => {
+      await seed(at(4, 20, 0))
+      await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+      const cs = published(mqtt, 'tire_fr_bar_coldstart')
+      // The normalised series drags the same 19 °C reading down to its 15 °C
+      // reference and lands 0.04 bar lower. That gap is exactly defect 1: the
+      // placard is defined at ambient, so 19 °C *is* the condition to compare at
+      // and the coldstart series must leave the reading alone.
+      expect(cs.value).toBe(cs.bar)
+      expect(published(mqtt, 'tire_fr_bar_cold').value).toBeLessThan(cs.value)
+    })
+
+    describe('long-park gate', () => {
+      it('publishes after a park just over the six hour bound', async () => {
+        await seed(at(5, 5, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 11, 1), { fr: FRESH_FR }))
+        expect(published(mqtt, 'tire_fr_bar_coldstart')).toBeDefined()
+      })
+
+      it('publishes nothing after a park just under it', async () => {
+        await seed(at(5, 5, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 10, 59), { fr: FRESH_FR }))
+        expect(published(mqtt, 'tire_fr_bar_coldstart')).toBeUndefined()
+      })
+
+      it('publishes nothing for a wheel refreshing every few minutes mid-drive', async () => {
+        await seed(at(5, 12, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 12, 2), { fr: { psi: 34, c: 34 } }))
+        await mqtt._trigger(TPMS, tpms(at(5, 12, 5), { fr: { psi: 34.4, c: 37 } }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('honours a configured coldstartMinParkMs', async () => {
+        mqtt = makeMqtt()
+        persistedCache = makeCache()
+        bot = createIoniqTpms('ioniq-tpms', { ...config, coldstartMinParkMs: 2 * HOUR })
+        await bot.start({ mqtt, persistedCache })
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 0), {}))
+        await mqtt._trigger(TPMS, tpms(at(5, 8, 0), { fr: FRESH_FR }))
+        expect(published(mqtt, 'tire_fr_bar_coldstart')).toBeDefined()
+      })
+
+      it('publishes nothing on a cold cache, where the park length is unknown', async () => {
+        // The very first frame after a fresh install may be a true cold reading
+        // or a mid-drive one — with no previous frame to diff against, every
+        // wheel merely *looks* refreshed, so it waits for tomorrow morning
+        // rather than alerting on a guess.
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+    })
+
+    describe('first-start-of-day gate', () => {
+      it('publishes nothing for a second long park on the same day', async () => {
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toHaveLength(1)
+        // Parked all day in the sun, driven again in the evening: over six hours
+        // since fr last spoke, but the tyre is sun-soaked, not cold.
+        mqtt.publish.mockClear()
+        await mqtt._trigger(TPMS, tpms(at(5, 20, 0), { fr: { psi: 34.2, c: 38 } }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('publishes again the next morning', async () => {
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        mqtt.publish.mockClear()
+        await mqtt._trigger(TPMS, tpms(at(6, 5, 20), { fr: { psi: 31, c: 18 } }))
+        expect(coldstarts(mqtt)).toEqual([['ioniq/parsed/derived/tire_fr_bar_coldstart', 2.137]])
+      })
+
+      it('publishes once after a multi-day park', async () => {
+        await seed(at(2, 18, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toHaveLength(1)
+      })
+    })
+
+    describe('first frame, not an average of the first few', () => {
+      it('takes the first fresh value and ignores the wheel warming afterwards', async () => {
+        // Verbatim 2026-08-04: fr climbs 31.2 -> 32.2 in the three minutes after
+        // wake as the tyre picks up heat. Averaging those would read 0.07 bar high.
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17, 22), { fr: { psi: 31.2, c: 19 } }))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 18, 41), { fr: { psi: 31.4, c: 19 } }))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 19, 12), { fr: { psi: 31.6, c: 19 } }))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 20, 12), { fr: { psi: 32.2, c: 21 } }))
+        expect(coldstarts(mqtt)).toEqual([['ioniq/parsed/derived/tire_fr_bar_coldstart', 2.151]])
+      })
+    })
+
+    describe('staggered per-wheel wake-up', () => {
+      it('publishes each wheel on its own first fresh frame', async () => {
+        // Verbatim 2026-08-04 05:17Z: fr refreshed a whole frame before fl, while
+        // fl was still replaying the 36.4 psi / 40 °C it latched the night before.
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17, 22), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toEqual([['ioniq/parsed/derived/tire_fr_bar_coldstart', 2.151]])
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17, 41), { fr: FRESH_FR, fl: FRESH_FL }))
+        // fl joins with its own reading; fr is not republished.
+        expect(coldstarts(mqtt)).toEqual([
+          ['ioniq/parsed/derived/tire_fr_bar_coldstart', 2.151],
+          ['ioniq/parsed/derived/tire_fl_bar_coldstart', 2.261]
+        ])
+      })
+
+      it('does not let an early wheel consume the day for the others', async () => {
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17, 22), { fr: FRESH_FR }))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17, 41), { fr: FRESH_FR, fl: FRESH_FL }))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 18, 22), {
+          fr: FRESH_FR, fl: FRESH_FL, rl: { psi: 33, c: 20 }, rr: { psi: 33.4, c: 20 }
+        }))
+        expect(coldstarts(mqtt).map((c) => c[0])).toEqual([
+          P('tire_fr_bar_coldstart'), P('tire_fl_bar_coldstart'),
+          P('tire_rl_bar_coldstart'), P('tire_rr_bar_coldstart')
+        ])
+      })
+
+      it('skips a wheel whose fresh frame carries no pressure', async () => {
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: { c: 19 } }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('omits temp when the fresh frame carries no wheel temperature', async () => {
+        await seed(at(4, 20, 0))
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: { psi: 31.2 } }))
+        expect(published(mqtt, 'tire_fr_bar_coldstart')).not.toHaveProperty('temp')
+        expect(published(mqtt, 'tire_fr_bar_coldstart').value).toBe(2.151)
+      })
+    })
+
+    describe('restart with a warm persisted cache', () => {
+      // What the bot actually writes out: the last frame it processed, plus the
+      // per-wheel timestamps. The pair matters — `lastRaw` is what tells the next
+      // frame which wheels genuinely refreshed.
+      const STALE_RAW = {
+        'fl.psi': 36.4, 'fl.c': 40, 'fr.psi': 35.4, 'fr.c': 41,
+        'rl.psi': 35.8, 'rl.c': 40, 'rr.psi': 36.2, 'rr.c': 41
+      }
+      const allAt = (ts) => ({ fl: ts, fr: ts, rl: ts, rr: ts })
+      const restart = async (cache) => {
+        mqtt = makeMqtt()
+        persistedCache = { lastRaw: STALE_RAW, ...cache }
+        bot = createIoniqTpms('ioniq-tpms', config)
+        await bot.start({ mqtt, persistedCache })
+      }
+
+      it('publishes nothing when the cache says every wheel spoke minutes ago', async () => {
+        // Restarted mid-drive: the tyres are hot and nothing about the restart
+        // makes the next frame a cold reading.
+        await restart({ wheelChangedAt: allAt(at(5, 12, 0)), coldstartDay: {} })
+        await mqtt._trigger(TPMS, tpms(at(5, 12, 4), { fr: { psi: 34.4, c: 37 } }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('still publishes when the cache carries a genuine overnight gap', async () => {
+        await restart({ wheelChangedAt: allAt(at(4, 20, 0)), coldstartDay: {} })
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toEqual([['ioniq/parsed/derived/tire_fr_bar_coldstart', 2.151]])
+      })
+
+      it('does not re-publish a day already recorded in the cache', async () => {
+        // Restarted after the morning's coldstart had already gone out.
+        await restart({
+          wheelChangedAt: allAt(at(4, 20, 0)),
+          coldstartDay: { fl: '2026-08-05', fr: '2026-08-05', rl: '2026-08-05', rr: '2026-08-05' }
+        })
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        expect(coldstarts(mqtt)).toEqual([])
+      })
+
+      it('tolerates a cache written before coldstartDay existed', async () => {
+        await restart({ wheelChangedAt: { fr: at(4, 20, 0) } })
+        await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+        expect(published(mqtt, 'tire_fr_bar_coldstart').value).toBe(2.151)
+      })
+    })
+
+    it('declares a persistedCache migration for the new coldstartDay map', () => {
+      const spec = createIoniqTpms('ioniq-tpms', config).persistedCache
+      expect(spec.version).toBeGreaterThan(2)
+      expect(spec.default).toHaveProperty('coldstartDay')
+      const migrated = spec.migrate({
+        version: 2, defaultState: spec.default, state: { lastRaw: null, wheelChangedAt: { fr: 1 } }
+      })
+      expect(migrated.coldstartDay).toEqual({})
+      expect(migrated.wheelChangedAt).toEqual({ fr: 1 })
+    })
+
+    it('keeps publishing the normalised series alongside the coldstart one', async () => {
+      await seed(at(4, 20, 0))
+      await mqtt._trigger(TPMS, tpms(at(5, 5, 17), { fr: FRESH_FR }))
+      expect(published(mqtt, 'tire_fr_bar_cold')).toBeDefined()
+      expect(published(mqtt, 'tire_fr_psi_cold')).toBeDefined()
+      expect(published(mqtt, 'tire_spread_bar')).toBeDefined()
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Issue #1479, defect 2: TEMP_COEFF = 0.18 psi/°C over-compensated by ~15 %, so
+  // `psi_cold` drifted *down* as the tyre heated instead of staying flat and the
+  // "cold" value depended on how long ago the car had been driven.
+  // ---------------------------------------------------------------------------
+  describe('gas-law compensation (issue #1479)', () => {
+    // Verbatim FR trace from the 2026-08-09 run cited in the issue, thinned to
+    // one point per distinct temperature step (33 °C -> 47 °C). Under the old
+    // linearisation these normalise to 29.96 at the start and 29.84 at the end.
+    const FR_RUN = [
+      [33.2, 33], [33.6, 33], [34, 34], [34.2, 36], [34.4, 37],
+      [34.6, 39], [35, 41], [35.2, 43], [35.4, 45], [36, 47]
+    ]
+
+    it('does not drift downward as the tyre heats through a run', async () => {
+      const vals = []
+      for (let i = 0; i < FR_RUN.length; i++) {
+        const [psi, c] = FR_RUN[i]
+        await mqtt._trigger(TPMS, sample({ ts: 1000 + i, fr: { psi, c } }))
+        vals.push(published(mqtt, 'tire_fr_psi_cold').value)
+      }
+      // The property that matters is that the "cold" value carries no remaining
+      // dependence on tyre temperature — otherwise it silently encodes how long
+      // ago the car was driven. Least-squares slope of psi_cold against tyre
+      // temperature: 0.0076 psi/°C here, against -0.0140 for the 0.18 psi/°C
+      // linearisation on the same points (-0.0128 over the full 47-sample run).
+      // Not zero: pressure quantises at 0.2 psi and temperature at 1 °C, so ~0.6
+      // psi of scatter is in the inputs and no formula removes it.
+      const temps = FR_RUN.map(([, c]) => c)
+      const mt = temps.reduce((a, b) => a + b, 0) / temps.length
+      const mv = vals.reduce((a, b) => a + b, 0) / vals.length
+      const slope = temps.reduce((a, t, i) => a + (t - mt) * (vals[i] - mv), 0) /
+        temps.reduce((a, t) => a + (t - mt) ** 2, 0)
+      expect(slope).toBeGreaterThan(0)
+      expect(slope).toBeLessThan(0.01)
+    })
+
+    it('compensates by the gas law rather than a flat 0.18 psi/°C', async () => {
+      // 35.4 psi at 45 °C. Linearised: 35.4 - 0.18*30 = 30.0.
+      // Gas law: (35.4+14.6959)*288.15/318.15 - 14.6959 = 30.68.
+      await mqtt._trigger(TPMS, sample({ fr: { psi: 35.4, c: 45 } }))
+      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(30.68)
+    })
+
+    it('leaves a wheel already at the reference temperature untouched', async () => {
+      await mqtt._trigger(TPMS, sample({ fr: { psi: 32.5, c: 15 } }))
+      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(32.5)
+    })
+
+    it('ignores a temperature at or below absolute zero instead of dividing by zero', async () => {
+      await mqtt._trigger(TPMS, sample({ fr: { psi: 32.5, c: -273.15 } }))
+      expect(published(mqtt, 'tire_fr_psi_cold')).toBeUndefined()
+      expect(published(mqtt, 'tire_fl_psi_cold')).toBeDefined()
     })
   })
 
@@ -267,8 +573,8 @@ describe('ioniq-tpms bot', () => {
 
     it('excludes a psi-less wheel from spread', async () => {
       await mqtt._trigger(TPMS, sample({ fl: { c: 35 } }))
-      // remaining cold: fr 31.42, rl 31.64, rr 32.24 → spread 32.24-31.42 = 0.82
-      expect(published(mqtt, 'tire_spread_psi').value).toBe(0.82)
+      // remaining cold: fr 31.81, rl 32.03, rr 32.59 → spread 32.59-31.81 = 0.78
+      expect(published(mqtt, 'tire_spread_psi').value).toBe(0.78)
     })
 
     it('still counts a psi-less-but-temp-present wheel in others temp_excess', async () => {
@@ -338,7 +644,7 @@ describe('ioniq-tpms bot', () => {
         await mqtt._trigger(AMBIENT, { c: 25 })
         jest.advanceTimersByTime(30 * 60 * 1000 - 1)
         await mqtt._trigger(TPMS, sample({ fl: { psi: 36.6 } }))
-        expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(34.8)
+        expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(34.88)
       } finally {
         jest.useRealTimers()
       }
@@ -381,28 +687,27 @@ describe('ioniq-tpms bot', () => {
 
     it('emits all four cold pressures from a verbatim prod frame', async () => {
       await mqtt._trigger(TPMS, PROD)
-      // fl: 37 - 0.18*(37-15) = 33.04 ; fr: 35.4 - 0.18*(38-15) = 31.26
-      // rl: 35.8 - 0.18*(38-15) = 31.66 ; rr: 36.2 - 0.18*(38-15) = 32.06
-      expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(33.04)
-      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.26)
-      expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(31.66)
-      expect(published(mqtt, 'tire_rr_psi_cold').value).toBe(32.06)
+      // gas law to 15 °C: fl 33.33 ; fr 31.7 ; rl 32.07 ; rr 32.44
+      expect(published(mqtt, 'tire_fl_psi_cold').value).toBe(33.33)
+      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.7)
+      expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(32.07)
+      expect(published(mqtt, 'tire_rr_psi_cold').value).toBe(32.44)
     })
 
     it('emits all four cold pressures in bar from a verbatim prod frame', async () => {
       await mqtt._trigger(TPMS, PROD)
       // the psi values above / 14.5038
-      expect(published(mqtt, 'tire_fl_bar_cold').value).toBe(2.278)
-      expect(published(mqtt, 'tire_fr_bar_cold').value).toBe(2.155)
-      expect(published(mqtt, 'tire_rl_bar_cold').value).toBe(2.183)
-      expect(published(mqtt, 'tire_rr_bar_cold').value).toBe(2.21)
+      expect(published(mqtt, 'tire_fl_bar_cold').value).toBe(2.298)
+      expect(published(mqtt, 'tire_fr_bar_cold').value).toBe(2.185)
+      expect(published(mqtt, 'tire_rl_bar_cold').value).toBe(2.211)
+      expect(published(mqtt, 'tire_rr_bar_cold').value).toBe(2.237)
     })
 
     it('emits spread and temp_excess from a verbatim prod frame', async () => {
       await mqtt._trigger(TPMS, PROD)
-      // max 33.04 (fl) - min 31.26 (fr) = 1.78
-      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.78)
-      expect(published(mqtt, 'tire_spread_bar').value).toBe(0.123)
+      // max 33.33 (fl) - min 31.7 (fr) = 1.64 (unrounded 1.6295)
+      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.64)
+      expect(published(mqtt, 'tire_spread_bar').value).toBe(0.113)
       // fl: 37 - mean(38,38,38) = -1
       expect(published(mqtt, 'tire_fl_temp_excess').value).toBe(-1)
     })
