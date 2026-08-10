@@ -344,6 +344,36 @@ is delegated to a single dedicated rule; see "Staleness / Absence Alerts" below.
   **over 65,000** `Failed to build rule evaluator` lines for a single dead rule — still growing by one
   a minute while this was being written — and no one had noticed
 
+*A Target From a Placard, a Datasheet or a Manual Comes With a Condition — Alert at That Condition:*
+- A manufacturer's number is not a bare number. "2.5 bar" on a tyre placard means *2.5 bar with the
+  tyre at ambient*; a boiler's rated flow assumes a stated ΔT; a battery's capacity assumes a stated
+  discharge rate and temperature. **Write the condition down next to the threshold**, then make sure
+  the series you evaluate is measured at it
+- **A normalisation is not a substitute for the condition.** It is tempting to compensate a reading
+  to a fixed reference and compare that to the spec. This is only correct when the reference *is*
+  the spec's condition. If the spec says "at ambient" and the series is normalised to a constant,
+  the rule carries a seasonal error equal to the gap between the two — and it is largest in exactly
+  the season the fault it looks for happens
+- **Worked example** (issue #1479): `ioniq-tpms-<w>-psi-low` thresholded a pressure normalised to
+  15 °C against a placard defined at ambient. The error is `0.0124 × (T_ambient − 15)` bar — **0.12
+  bar low** at a 25 °C August ambient (cries wolf) and **0.19 bar high** at 0 °C in January (stays
+  silent). Winter is when pressures genuinely fall, so the rule was loudest when it should have been
+  calm and mute when it should have been shouting. Raising the threshold would have hidden the
+  defect, not fixed it
+- **Prefer a measurement genuinely taken at the spec's condition, even if it is rare.** The fix was
+  not a better compensation formula — it was to find the moment the condition actually holds and
+  publish that. A tyre reaches ambient overnight, so the first fresh TPMS frame after a ≥6 h park is
+  a true cold reading: no reference temperature, no external sensor, nothing to drift.
+  `derived/tire_<w>_bar_coldstart` carries one point per wheel per morning and the rules read that
+- **One point per event fixes flapping for free.** The old signal republished every ~30 s and sat
+  within one sensor quantisation step of its trip point, so it crossed and re-crossed all drive:
+  22 fire/resolve pairs inside a single wake cycle over 27.4 days. Evaluating a signal that is
+  *published once per occurrence* gives 0 by construction — no hysteresis, no `for:` bump, and none
+  of the `last()`-over-a-long-window trap below
+- **Cost, and say it on the rule**: a once-per-event series needs a query window measured in days,
+  and it can only tell you about the last event. The gate that selects the event is now part of the
+  alert's semantics even though it lives in the producer — document it where the threshold is
+
 **Alert Thresholds:**
 - **Battery alerts**: <15% critical, <25% warning
 - **Temperature alerts**: >40°C high, <5°C low

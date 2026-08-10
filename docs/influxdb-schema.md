@@ -212,27 +212,57 @@ because it is the sensor that fails — issue #1472)
     + `dtc/pending`) and field `codes` = JSON-stringified array of the code strings. Grafana's
     `ioniq-dtc-present` rule alerts on `value > 0`.
   - `derived/tire_<w>_psi_cold` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — bot-produced by the `ioniq-tpms`
-    automations bot: per-wheel tire pressure temperature-compensated to a 15 °C cold reference
-    (`value = psi − 0.18·(temp − 15)` psi, using the wheel's own `.c` temp, falling back to
-    `ambient.c`), rounded to 2 decimals. Extra fields `psi` (raw psi) and `temp` (temperature used).
-    Only emitted for fresh `state='active'` samples, de-duplicated against frozen readings.
-    **Nothing reads this series any more** — both the alerts and the `Ioniq EV / Tires` dashboard
-    moved to `derived/tire_<w>_bar_cold` in #1478. It keeps writing so the psi history already in
-    InfluxDB stays a continuous series; retire it only together with that history.
+    automations bot: per-wheel tire pressure temperature-compensated to a 15 °C cold reference,
+    rounded to 2 decimals. Extra fields `psi` (raw psi) and `temp` (temperature used — the wheel's
+    own `.c`, falling back to `ambient.c`). Only emitted for fresh `state='active'` samples,
+    de-duplicated against frozen readings.
+    Compensation is the ideal gas law on absolute pressure,
+    `value = (psi + 14.6959)·288.15/(temp + 273.15) − 14.6959`, since #1479. Before that it was a
+    flat `psi − 0.18·(temp − 15)`, which was ~15 % too steep: over all 10 548 points of the first
+    27 days the residual slope of `value` against tyre temperature was −0.0291 psi/°C, and the gas
+    law brings it to −0.0099. **Values published before #1479 deployed sit lower than the same
+    reading does now** — median 0.35 psi, 0.02 psi at a 16 °C tyre rising to 0.75 psi at 48 °C
+    (measured over those 14 256 wheel-readings) — so treat a query that spans the cutover as two
+    series, not one.
+    **Nothing reads this series** — both the alerts and the `Ioniq EV / Tires` dashboard moved to
+    `derived/tire_<w>_bar_cold` in #1478. It keeps writing so the psi history already in InfluxDB
+    stays a continuous series; retire it only together with that history.
   - `derived/tire_<w>_bar_cold` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: the same cold-normalized
     per-wheel pressure expressed in bar. `value` = the **unrounded** cold pressure ÷ 14.5038,
     rounded to 3 decimals (so it can differ from `psi_cold ÷ 14.5038` in the third decimal). 3
     decimals is 0.0145 psi — coarser than the 2-decimal psi series, but finer than the spacing of
     real readings. Extra fields `bar` (raw uncompensated pressure in bar) and `temp`. Published in
     the same frame as `tire_<w>_psi_cold` and derived from the same figure, so the two cannot drift
-    apart. Grafana `ioniq-tpms-*-psi-low` (`< 2.07` warn) / `-psi-crit` (`< 1.79` crit) /
-    `-overinflated` (`> 2.90` info) rules alert on it — the rule uids still say `psi` for continuity.
-    The thresholds are the former 30 / 26 / 42 psi ones converted and rounded to 2 decimals, which
-    shifts each trip point by 0.02-0.07 psi (issue #1478).
+    apart. Carries the same gas-law change and the same 2026-08-10 discontinuity as `psi_cold`.
+    Grafana `ioniq-tpms-*-overinflated` (`> 2.90` info) alerts on it, and the `Ioniq EV / Tires`
+    dashboard plots it as the pressure trend.
+    **The under-inflation rules no longer read it** (issue #1479): a value normalized to 15 °C
+    cannot be compared to a placard that is defined at *ambient*, so it ran ~0.12 bar low at a
+    25 °C August ambient and ~0.19 bar high at 0 °C in January — loudest in the season pressures do
+    not fall, mute in the one they do. Use `bar_coldstart` for anything thresholded against the
+    placard; use this series for trend and for wheel-to-wheel comparison, where the reference
+    temperature cancels.
+  - `derived/tire_<w>_bar_coldstart` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: the wheel's
+    **raw, uncompensated** pressure in bar, taken from the first fresh TPMS frame it produces after
+    a park of ≥ 6 h, at most once per local calendar day (issue #1479). The tyre has equilibrated
+    with ambient overnight, so this reading is directly comparable to the 2.5 bar placard with no
+    reference temperature and no external sensor. `value` = raw psi ÷ 14.5038 at 3 decimals; extra
+    fields `bar` (**equal to `value` by construction** — that identity is the point: nothing is
+    applied to the reading) and `temp` (the wheel's own temperature, omitted if the frame carries
+    none). Grafana `ioniq-tpms-<w>-psi-low` (`< 2.20` warn) / `-psi-crit` (`< 1.90` crit) alert on
+    it; the rule uids still say `psi` for continuity.
+    **Roughly one point per wheel per driving day** — 104 points over 26 days in the 27-day replay
+    — so query it with a window of days, not hours. Nothing is published on a day the car is not
+    driven, on the first frame after a cold cache (the park length is unknown, and it fails closed),
+    or for a second long park later the same day.
+    Gated per wheel, not per frame: the four sensors wake staggered, and on 2026-08-04 FR refreshed
+    at 05:17:22Z while FL was still replaying a 40 °C value latched the previous evening.
   - `derived/tire_spread_psi` — `ioniq-tpms`: `value` = max − min of the four cold-normalized
     pressures (psi), 2 decimals. No reader left; kept writing for history, as above.
   - `derived/tire_spread_bar` — `ioniq-tpms`: the same spread in bar (÷ 14.5038), 3 decimals.
-    Grafana `ioniq-tpms-spread-high` alerts on `value > 0.21` (3 psi converted).
+    Grafana `ioniq-tpms-spread-high` alerts on `value > 0.21` (3 psi converted). Unaffected in
+    substance by the #1479 compensation change: this is a difference between four wheels normalized
+    the same way, so the reference temperature and most of the formula cancel.
   - `derived/tire_<w>_temp_excess` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: `value` = wheel
     temperature minus the mean temperature of the other three wheels (°C). Grafana
     `ioniq-tpms-<w>-temp-excess` alerts on `value > 8`.
