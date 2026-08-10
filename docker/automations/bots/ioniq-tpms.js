@@ -361,8 +361,8 @@ module.exports = function createIoniqTpms (name, config = {}) {
         // Both mean "we do not know", and publishing a possibly-warm reading
         // into an alerting series is worse than waiting for tomorrow morning.
         const frameDay = localDayKey(frameTs)
-        for (const w of prevRaw ? WHEELS : []) {
-          if (!changedNow[w]) continue
+        for (const w of WHEELS) {
+          if (!prevRaw || !changedNow[w]) continue
           const psi = raw[`${w}.psi`]
           if (!isFiniteNum(psi)) continue
           const prevAt = prevChangedAt[w]
