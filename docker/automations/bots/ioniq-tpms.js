@@ -1,9 +1,14 @@
 // ioniq-tpms: temperature-compensates the Ioniq's per-wheel tire pressures to a
 // 15 °C cold reference and derives cross-wheel signals (spread, per-wheel
 // temperature excess) onto ioniq/parsed/derived/* so Grafana can alert with a
-// trivial threshold. Raw psi is not comparable to the 36 psi cold placard because
-// pressure rises ~0.18 psi/°C, so a hot tire reads high; cold-normalization makes
-// the number directly comparable.
+// trivial threshold. Raw psi is not comparable to the 36 psi / 2.5 bar cold
+// placard because pressure rises ~0.18 psi/°C, so a hot tire reads high;
+// cold-normalization makes the number directly comparable.
+//
+// Each cold pressure is published in both units — `tire_<w>_psi_cold` and
+// `tire_<w>_bar_cold`, `tire_spread_psi` and `tire_spread_bar`. The alerts read
+// the bar series because the owner reads bar (issue #1478); the psi series is
+// kept because the Tires dashboard's history is in it.
 //
 // TPMS refreshes only on wheel rotation: parked/charging samples are stale and the
 // sensor repeats its last reading verbatim. So we evaluate only fresh `active`
@@ -30,6 +35,7 @@ const stringify = require('fast-json-stable-stringify')
 const WHEELS = ['fl', 'fr', 'rl', 'rr']
 const TEMP_COEFF = 0.18 // psi per °C
 const REF_TEMP_C = 15 // cold reference temperature
+const PSI_PER_BAR = 14.5038
 const AMBIENT_MAX_AGE_MS = 30 * 60 * 1000 // ambient older than this is not a reasonable reference
 
 // Widest allowed spread between the participating wheels' last-changed times. A
@@ -46,6 +52,12 @@ const SPEED_MAX_AGE_MS = 60 * 60 * 1000 // beyond this we no longer know whether
 
 const isFiniteNum = (x) => typeof x === 'number' && Number.isFinite(x)
 const round2 = (x) => Math.round(x * 100) / 100
+// Bar keeps one more decimal than psi so it resolves at least as finely:
+// 0.001 bar = 0.0145 psi, against 0.01 psi for the psi series. That matters
+// because the alert thresholds are exact conversions rounded to 2 decimals
+// (2.07 / 1.79 / 2.90 / 0.21 bar) — at 3 decimals each one trips within
+// ~0.02 psi of the psi rule it replaces, at 2 decimals it would drift 0.05 psi.
+const round3 = (x) => Math.round(x * 1000) / 1000
 
 // The tpms frame nests each wheel: {"fl":{"psi":37,"c":37}, ...}. (The flat
 // "fl.psi" fields visible in InfluxDB are produced by the mqtt-influx converter
@@ -154,10 +166,12 @@ module.exports = function createIoniqTpms (name, config = {}) {
           group: 'derived/' + signal,
           state: base.state,
           ts: base.ts,
-          value: round2(value),
+          value,
           ...extra
         })
       }
+
+      const toBar = (psi) => round3(psi / PSI_PER_BAR)
 
       const onTpms = (payload) => {
         if (!payload || payload.state !== 'active') return
@@ -214,18 +228,26 @@ module.exports = function createIoniqTpms (name, config = {}) {
           }
         }
 
-        // Per-wheel cold pressures.
+        // Per-wheel cold pressures, in both units. The alerts and their message
+        // text read bar (the owner's unit — issue #1478); the psi series stays
+        // so the Tires dashboard keeps its trend history across the cutover.
+        // Both come off the same `cold[w]`, so they cannot drift apart.
         for (const w of WHEELS) {
           if (cold[w] === undefined) continue
-          publish(`tire_${w}_psi_cold`, payload, cold[w], {
+          publish(`tire_${w}_psi_cold`, payload, round2(cold[w]), {
             psi: raw[`${w}.psi`], temp: compTemp[w]
+          })
+          publish(`tire_${w}_bar_cold`, payload, toBar(cold[w]), {
+            bar: toBar(raw[`${w}.psi`]), temp: compTemp[w]
           })
         }
 
         // Spread across all wheels that produced a cold pressure (needs >= 2).
         const coldVals = WHEELS.filter((w) => cold[w] !== undefined).map((w) => cold[w])
         if (coldVals.length >= 2) {
-          publish('tire_spread_psi', payload, Math.max(...coldVals) - Math.min(...coldVals))
+          const spread = Math.max(...coldVals) - Math.min(...coldVals)
+          publish('tire_spread_psi', payload, round2(spread))
+          publish('tire_spread_bar', payload, toBar(spread))
         }
 
         // Per-wheel temperature excess vs the mean of the OTHER wheels that have a
@@ -247,7 +269,7 @@ module.exports = function createIoniqTpms (name, config = {}) {
           const others = tempWheels.filter((o) => o !== w).map((o) => ownTemp[o])
           if (others.length === 0) continue
           const mean = others.reduce((a, b) => a + b, 0) / others.length
-          publish(`tire_${w}_temp_excess`, payload, ownTemp[w] - mean)
+          publish(`tire_${w}_temp_excess`, payload, round2(ownTemp[w] - mean))
         }
       }
 

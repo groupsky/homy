@@ -491,7 +491,7 @@ module.exports = {
       // temp_excess gating (issue #1415). The four wheel values in a frame are
       // latched independently, so they are only comparable when all of them
       // refreshed close together, and the comparison only means anything while
-      // the car is rolling. psi_cold / tire_spread_psi are unaffected.
+      // the car is rolling. The cold-pressure signals (psi and bar) are unaffected.
       speedTopics: [
         'ioniq/parsed/bms/2101',                // speed_kph while awake
         'ioniq/parsed/vmcu',                    // speed_kph alongside gear
