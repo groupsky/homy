@@ -125,13 +125,22 @@ Suppress "low voltage" firing while `hv_kw` is high — 12.9 V float under heavy
 
 ### 4.3 Tires (TPMS)
 
-Cold-normalize each wheel to 15 °C before thresholding: `psi_cold = psi − 0.18·(temp − 15)`. TPMS only refreshes on wheel rotation, so evaluate on **fresh, `state=active` samples only** (dedupe parked duplicates).
+TPMS only refreshes on wheel rotation, so evaluate on **fresh, `state=active` samples only** (dedupe parked duplicates).
 
-The bot publishes each cold pressure in **both units** — `derived/tire_<w>_psi_cold` and `derived/tire_<w>_bar_cold`, `derived/tire_spread_psi` and `derived/tire_spread_bar`. The alerts read the **bar** series and quote bar, because that is the unit the owner reads (issue #1478); the psi series is retained for dashboard trend history. Thresholds below are given in both, at `1 bar = 14.5038 psi`.
+Two signals, for two different jobs (issue #1479):
+
+- **Cold-start pressure** — `derived/tire_<w>_bar_coldstart`, the wheel's raw pressure from the first fresh frame after a ≥ 6 h park, at most once per local calendar day. The tyre has equilibrated with ambient overnight, so this is comparable to the placard **as measured**. This is what the under-inflation alerts read.
+- **Normalized pressure** — `derived/tire_<w>_psi_cold` / `_bar_cold`, every fresh frame, compensated to a 15 °C reference by the ideal gas law on absolute pressure: `psi_cold = (psi + 14.6959)·288.15/(temp + 273.15) − 14.6959`. This is the dashboard trend and the input to the cross-wheel spread.
+
+**Do not threshold the normalized series against the placard.** The placard is defined at *ambient*; normalizing to a fixed 15 °C shifts the value by the gap between the two, ~0.12 bar low at a 25 °C August ambient and ~0.19 bar high at 0 °C in January — loudest in the season pressures do not fall and mute in the one they do. It also republishes on every fresh frame (median 46 s apart) while the car is awake, which made a wheel sitting within one TPMS quantisation step (0.2 psi = 0.014 bar) of the trip point flap: 22 fire/resolve pairs inside a single wake cycle over the 27.5 days (3564 frames) to 2026-08-10, against 0 for the coldstart rule.
+
+The coldstart rules take `min()` over a 7-day window, not `last()`. One point per morning removes the intra-drive flapping, but the reading is referenced to that night's ambient and moves ~0.011 bar/°C, so with `last()` FR crossed 2.20 bar in both directions repeatedly (7 fires, 7 resolves in 27 days on tyres nobody touched). `min()` means a lone warm morning cannot report the tyre as fixed: 2 fires, 0 resolves. The cost is that the alert persists for about a week after inflating.
+
+The bot publishes each normalized cold pressure in **both units** — `derived/tire_<w>_psi_cold` and `derived/tire_<w>_bar_cold`, `derived/tire_spread_psi` and `derived/tire_spread_bar`. Everything downstream reads the **bar** series and quotes bar, because that is the unit the owner reads (issue #1478); the psi series is retained for history. The under-inflation thresholds are chosen in bar against the placard; the rest are still psi round numbers converted at `1 bar = 14.5038 psi`.
 
 | Signal | Condition | Threshold | Sev | for | Platform |
 |---|---|---|---|---|---|
-| Per-wheel cold pressure | under-inflation | `<2.07 bar` (30 psi) warn / `<1.79 bar` (26 psi) crit (placard 2.5 bar / 36 psi; no spare → stranding risk) | warning / **critical** | — | **Bot** `ioniq-tpms` → `derived/tire_<w>_bar_cold` (+ Grafana threshold) |
+| Per-wheel cold-start pressure | under-inflation | `<2.20 bar` warn / `<1.90 bar` crit (placard 2.5 bar; no spare → stranding risk) | warning / **critical** | — | **Bot** `ioniq-tpms` → `derived/tire_<w>_bar_coldstart` (+ Grafana threshold, 7 d window) |
 | Inter-wheel cold pressure | developing imbalance/leak | max−min `>0.21 bar` (3 psi; baseline 0.08 bar) | warning | — | **Bot** → `derived/tire_spread_bar` |
 | Per-wheel temp | brake drag / bearing | wheel `> others_mean + 8 °C`, ≥2 samples, active | warning | — | **Bot** → `derived/tire_<w>_temp_excess` |
 | Over-inflation cold pressure | hard ride/over-pressure | `>2.90 bar` (42 psi) | info | — | **Bot**/Grafana |
@@ -182,7 +191,7 @@ All bots follow the repo pattern (`module.exports = (name, config) => ({ persist
 | `ioniq-12v-ldc` | new | `…/bms/2101` | `ldc_ok` (0/1), `aux12v_drop` | Rolling window of `aux_12v`,`ignition`,`hv_kw`; flag LDC-not-charging under the low-load rule; compute drop rate. |
 | `ioniq-charge-guard` | new | `…/bms/2101`, `…/bcm` (charge_connector), `…/obc` | `soc_at_park`, `charge_stalled`, `charge_reduced_rate` | State-edge SoC capture; stalled = relay on + low power (reuse `timeout-emit` semantics); reduced-rate classifier. |
 | `ioniq-dtc` | new (thin) | `ioniq/parsed/dtc/#` | `dtc_count` (+ `codes`) | `codes.length`; pass code list through for the message. Could be a `mqtt-transform` config rather than bespoke code. |
-| `ioniq-tpms` | new | `ioniq/parsed/tpms`, `…/ambient` | `tire_<w>_psi_cold` + `tire_<w>_bar_cold`, `tire_spread_psi` + `tire_spread_bar`, `tire_<w>_temp_excess` | Cold-normalize; publish psi and bar; dedupe non-active/frozen; cross-wheel outliers. |
+| `ioniq-tpms` | new | `ioniq/parsed/tpms`, `…/ambient` | `tire_<w>_bar_coldstart`, `tire_<w>_psi_cold` + `tire_<w>_bar_cold`, `tire_spread_psi` + `tire_spread_bar`, `tire_<w>_temp_excess` | Publish the raw first fresh frame after a ≥6 h park, once per local day per wheel (the alerting signal); gas-law normalize to 15 °C for trend and spread; publish psi and bar; dedupe non-active/frozen; cross-wheel outliers. |
 
 Wire them in `config/automations/config.js` alongside existing bots. Where a generic bot fits (`timeout-emit` for charge-stalled, `stateful-counter`/`mqtt-transform` for DTC), prefer configuration over new code.
 

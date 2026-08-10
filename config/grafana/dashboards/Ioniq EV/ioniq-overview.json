@@ -586,7 +586,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-left tire pressure — RAW, temperature-uncompensated (tpms \"fl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fl_bar_cold, approximately (psi - 0.18 x (tempC - 15)) / 14.5038), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Front-left tire pressure — RAW, temperature-uncompensated (tpms \"fl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_fl_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -603,11 +603,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",
@@ -660,7 +660,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-right tire pressure — RAW, temperature-uncompensated (tpms \"fr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_fr_bar_cold, approximately (psi - 0.18 x (tempC - 15)) / 14.5038), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Front-right tire pressure — RAW, temperature-uncompensated (tpms \"fr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_fr_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -677,11 +677,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",
@@ -734,7 +734,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-left tire pressure — RAW, temperature-uncompensated (tpms \"rl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rl_bar_cold, approximately (psi - 0.18 x (tempC - 15)) / 14.5038), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Rear-left tire pressure — RAW, temperature-uncompensated (tpms \"rl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_rl_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -751,11 +751,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",
@@ -808,7 +808,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-right tire pressure — RAW, temperature-uncompensated (tpms \"rr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.79, orange <2.07, green 2.07-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped TPMS alerts do NOT evaluate this value: they evaluate cold-normalised pressure (derived/tire_rr_bar_cold, approximately (psi - 0.18 x (tempC - 15)) / 14.5038), which currently runs ~0.28 bar BELOW raw. Tile colour and alert state can therefore legitimately disagree — trust the alert. Cold-normalised per-wheel pressure belongs on the Ioniq EV - Tires dashboard.",
+      "description": "Rear-right tire pressure — RAW, temperature-uncompensated (tpms \"rr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_rr_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -825,11 +825,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",

@@ -49,7 +49,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the front-left tire (derived/tire_fl_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_fl_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -66,11 +66,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",
@@ -110,12 +110,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"fl_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_bar_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"fl_bar_coldstart\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "FL bar (cold)",
+      "title": "FL bar (cold-start)",
       "type": "stat"
     },
     {
@@ -123,7 +123,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the front-right tire (derived/tire_fr_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_fr_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -140,11 +140,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",
@@ -184,12 +184,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"fr_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fr_bar_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"fr_bar_coldstart\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fr_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "FR bar (cold)",
+      "title": "FR bar (cold-start)",
       "type": "stat"
     },
     {
@@ -197,7 +197,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the rear-left tire (derived/tire_rl_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_rl_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -214,11 +214,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",
@@ -258,12 +258,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"rl_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rl_bar_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"rl_bar_coldstart\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rl_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "RL bar (cold)",
+      "title": "RL bar (cold-start)",
       "type": "stat"
     },
     {
@@ -271,7 +271,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the rear-right tire (derived/tire_rr_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_rr_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -288,11 +288,11 @@
               },
               {
                 "color": "orange",
-                "value": 1.79
+                "value": 1.9
               },
               {
                 "color": "green",
-                "value": 2.07
+                "value": 2.2
               },
               {
                 "color": "red",
@@ -332,12 +332,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"rr_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rr_bar_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"rr_bar_coldstart\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rr_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "RR bar (cold)",
+      "title": "RR bar (cold-start)",
       "type": "stat"
     },
     {
@@ -609,7 +609,137 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Cold-equivalent pressure trend for all four wheels (derived/tire_*_bar_cold). Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. Dashed reference lines are the alert thresholds (1.79 critical / 2.07 low / 2.90 over-inflated bar); the 2.5 bar cold placard is the target inside the green band. However, fill(previous) only carries a value forward from within the queried window: if the window opens before the most recent sample (a fully-parked 6 h stretch with no new reading), this panel can render completely EMPTY rather than flat — that is expected, not a broken feed. The per-wheel last()+30d \"bar (cold)\" stat tiles above are the authoritative current-value source even when this panel shows nothing.",
+      "description": "The signal the under-inflation alerts evaluate: each wheel's raw cold-start pressure (derived/tire_*_bar_coldstart), one point per wheel per driving morning, taken from the first fresh TPMS frame after a park of 6 h or more. Dashed reference lines are the alert thresholds (1.90 critical / 2.20 low bar) against the 2.5 bar cold placard. Drawn as points with no connecting line, because the series genuinely is one sample a day and a gap is information: the car was not driven, or its first drive that day followed an already-warm park. PINNED TO 30 DAYS regardless of the dashboard time picker (timeFrom), because at the dashboard's 6 h default this panel would always be empty. The RULES look back only 7 days and take the MINIMUM over that span, so a point here that sits below a threshold keeps its alert firing for a week. Beware reading a trend off this panel: the cold-start value tracks overnight ambient at about 0.011 bar/°C, which over a 16-35 °C summer is a 0.2 bar swing — several months of permeation. The Cold Pressure Trend panel below is the one to read a leak from.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "points",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 8,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1.9
+              },
+              {
+                "color": "green",
+                "value": 2.2
+              }
+            ]
+          },
+          "unit": "suffix: bar"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"value\" AS \"fl\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_bar_coldstart' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "alias": "FL"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"value\" AS \"fr\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fr_bar_coldstart' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "B",
+          "alias": "FR"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"value\" AS \"rl\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rl_bar_coldstart' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "C",
+          "alias": "RL"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"value\" AS \"rr\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rr_bar_coldstart' AND $timeFilter",
+          "rawQuery": true,
+          "refId": "D",
+          "alias": "RR"
+        }
+      ],
+      "timeFrom": "30d",
+      "title": "Cold-Start Pressure (4 wheels) — the alerting signal",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Temperature-normalised cold-equivalent pressure trend for all four wheels (derived/tire_*_bar_cold), compensated to a 15 C reference by the gas law. Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. THIS IS NOT THE UNDER-INFLATION SIGNAL: the placard is defined at ambient, not at 15 C, so a normalised value sits about 0.12 bar low at a 25 C August ambient and about 0.19 bar high at 0 C in January — the low/critical alerts moved to the cold-start panel above (issue #1479). Only the over-inflation rule (>2.90 bar, the dashed line) still reads this series; use it for trend shape and for comparing wheels against each other, where the reference temperature cancels. However, fill(previous) only carries a value forward from within the queried window: if the window opens before the most recent sample (a fully-parked 6 h stretch with no new reading), this panel can render completely EMPTY rather than flat — that is expected, not a broken feed.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -651,16 +781,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1.79
-              },
-              {
                 "color": "green",
-                "value": 2.07
+                "value": null
               },
               {
                 "color": "red",
@@ -676,7 +798,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 16
       },
       "id": 9,
       "options": {
@@ -801,7 +923,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 16
       },
       "id": 10,
       "options": {
@@ -931,7 +1053,7 @@
         "h": 6,
         "w": 18,
         "x": 0,
-        "y": 16
+        "y": 24
       },
       "id": 11,
       "options": {
@@ -991,7 +1113,7 @@
         "h": 6,
         "w": 6,
         "x": 18,
-        "y": 16
+        "y": 24
       },
       "id": 12,
       "options": {
