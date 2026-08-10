@@ -127,12 +127,14 @@ Suppress "low voltage" firing while `hv_kw` is high — 12.9 V float under heavy
 
 Cold-normalize each wheel to 15 °C before thresholding: `psi_cold = psi − 0.18·(temp − 15)`. TPMS only refreshes on wheel rotation, so evaluate on **fresh, `state=active` samples only** (dedupe parked duplicates).
 
+The bot publishes each cold pressure in **both units** — `derived/tire_<w>_psi_cold` and `derived/tire_<w>_bar_cold`, `derived/tire_spread_psi` and `derived/tire_spread_bar`. The alerts read the **bar** series and quote bar, because that is the unit the owner reads (issue #1478); the psi series is retained for dashboard trend history. Thresholds below are given in both, at `1 bar = 14.5038 psi`.
+
 | Signal | Condition | Threshold | Sev | for | Platform |
 |---|---|---|---|---|---|
-| Per-wheel `psi_cold` | under-inflation | `<30` warn / `<26` crit (placard 36; no spare → stranding risk) | warning / **critical** | — | **Bot** `ioniq-tpms` → `derived/tire_<w>_psi_cold` (+ Grafana threshold) |
-| Inter-wheel `psi_cold` | developing imbalance/leak | max−min `>3 psi` (baseline 1.2) | warning | — | **Bot** → `derived/tire_spread_psi` |
+| Per-wheel cold pressure | under-inflation | `<2.07 bar` (30 psi) warn / `<1.79 bar` (26 psi) crit (placard 2.5 bar / 36 psi; no spare → stranding risk) | warning / **critical** | — | **Bot** `ioniq-tpms` → `derived/tire_<w>_bar_cold` (+ Grafana threshold) |
+| Inter-wheel cold pressure | developing imbalance/leak | max−min `>0.21 bar` (3 psi; baseline 0.08 bar) | warning | — | **Bot** → `derived/tire_spread_bar` |
 | Per-wheel temp | brake drag / bearing | wheel `> others_mean + 8 °C`, ≥2 samples, active | warning | — | **Bot** → `derived/tire_<w>_temp_excess` |
-| Over-inflation `psi_cold` | hard ride/over-pressure | `>42 psi` | info | — | **Bot**/Grafana |
+| Over-inflation cold pressure | hard ride/over-pressure | `>2.90 bar` (42 psi) | info | — | **Bot**/Grafana |
 | TPMS freshness | dead sensor / gap | no changed TPMS value in `>72 h driving` | info | — | Grafana staleness |
 
 ### 4.4 Faults (DTC)
@@ -180,7 +182,7 @@ All bots follow the repo pattern (`module.exports = (name, config) => ({ persist
 | `ioniq-12v-ldc` | new | `…/bms/2101` | `ldc_ok` (0/1), `aux12v_drop` | Rolling window of `aux_12v`,`ignition`,`hv_kw`; flag LDC-not-charging under the low-load rule; compute drop rate. |
 | `ioniq-charge-guard` | new | `…/bms/2101`, `…/bcm` (charge_connector), `…/obc` | `soc_at_park`, `charge_stalled`, `charge_reduced_rate` | State-edge SoC capture; stalled = relay on + low power (reuse `timeout-emit` semantics); reduced-rate classifier. |
 | `ioniq-dtc` | new (thin) | `ioniq/parsed/dtc/#` | `dtc_count` (+ `codes`) | `codes.length`; pass code list through for the message. Could be a `mqtt-transform` config rather than bespoke code. |
-| `ioniq-tpms` | new | `ioniq/parsed/tpms`, `…/ambient` | `tire_<w>_psi_cold`, `tire_spread_psi`, `tire_<w>_temp_excess` | Cold-normalize; dedupe non-active/frozen; cross-wheel outliers. |
+| `ioniq-tpms` | new | `ioniq/parsed/tpms`, `…/ambient` | `tire_<w>_psi_cold` + `tire_<w>_bar_cold`, `tire_spread_psi` + `tire_spread_bar`, `tire_<w>_temp_excess` | Cold-normalize; publish psi and bar; dedupe non-active/frozen; cross-wheel outliers. |
 
 Wire them in `config/automations/config.js` alongside existing bots. Where a generic bot fits (`timeout-emit` for charge-stalled, `stateful-counter`/`mqtt-transform` for DTC), prefer configuration over new code.
 
@@ -245,7 +247,7 @@ New `Ioniq EV` dashboard family (JSON under `config/grafana/dashboards/`, provid
 | **Overview** | SoC + SoC_display gauge; pack V/A/kW; 12 V (color-banded); current DTC status; connectivity/last-seen stat; odometer; current tire pressures (4 stats); active alert list. |
 | **Battery health** | SoC & SoH trend; cell max/min/spread (derived) timeseries; 12-module temp heatmap + spread; isolation; available charge/discharge envelope; cumulative Ah/kWh + derived usable-Ah and round-trip efficiency. |
 | **12 V / LDC** | `aux_12v` timeseries banded by state; per-drive LDC on-voltage ceiling; parked resting-voltage trend (daily min/median); derived `ldc_ok`. |
-| **Tires** | Per-wheel `psi_cold` trend; inter-wheel spread; per-wheel temp vs ambient; over/under-inflation bands. |
+| **Tires** | Per-wheel cold-pressure trend (bar); inter-wheel spread (bar); per-wheel temp vs ambient; over/under-inflation bands. |
 | **Trips & charging** | State timeline (active/charging/parked); per-trip distance/energy/efficiency (kWh/100 km); regen recovery %; charge sessions (AC/DC, kWh, avg power); SoC-at-park distribution; charger-meter AC power overlay (if live). |
 
 > **Data source (2026-07-18):** this dashboard was previously **deferred** — per-trip distance/energy/
