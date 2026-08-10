@@ -6,9 +6,12 @@
 // cold-normalization makes the number directly comparable.
 //
 // Each cold pressure is published in both units — `tire_<w>_psi_cold` and
-// `tire_<w>_bar_cold`, `tire_spread_psi` and `tire_spread_bar`. The alerts read
-// the bar series because the owner reads bar (issue #1478); the psi series is
-// kept because the Tires dashboard's history is in it.
+// `tire_<w>_bar_cold`, `tire_spread_psi` and `tire_spread_bar`. The alerts and
+// the Tires dashboard both read the bar series, because the owner reads bar
+// (issue #1478). Nothing reads the psi series any more: it is kept writing so
+// the years of psi points already in InfluxDB stay a continuous series rather
+// than a stub that stops on the cutover date. Retire it only together with
+// that history.
 //
 // TPMS refreshes only on wheel rotation: parked/charging samples are stale and the
 // sensor repeats its last reading verbatim. So we evaluate only fresh `active`
@@ -35,7 +38,7 @@ const stringify = require('fast-json-stable-stringify')
 const WHEELS = ['fl', 'fr', 'rl', 'rr']
 const TEMP_COEFF = 0.18 // psi per °C
 const REF_TEMP_C = 15 // cold reference temperature
-const PSI_PER_BAR = 14.5038
+const PSI_PER_BAR = 14.5038 // exact value 14.50377; the truncation is 1.8e-6 relative
 const AMBIENT_MAX_AGE_MS = 30 * 60 * 1000 // ambient older than this is not a reasonable reference
 
 // Widest allowed spread between the participating wheels' last-changed times. A
@@ -52,12 +55,26 @@ const SPEED_MAX_AGE_MS = 60 * 60 * 1000 // beyond this we no longer know whether
 
 const isFiniteNum = (x) => typeof x === 'number' && Number.isFinite(x)
 const round2 = (x) => Math.round(x * 100) / 100
-// Bar keeps one more decimal than psi so it resolves at least as finely:
-// 0.001 bar = 0.0145 psi, against 0.01 psi for the psi series. That matters
-// because the alert thresholds are exact conversions rounded to 2 decimals
-// (2.07 / 1.79 / 2.90 / 0.21 bar) — at 3 decimals each one trips within
-// ~0.02 psi of the psi rule it replaces, at 2 decimals it would drift 0.05 psi.
 const round3 = (x) => Math.round(x * 1000) / 1000
+
+// Bar is published at 3 decimals, one more than psi. This does NOT make it
+// finer than the psi series — 0.001 bar is 0.0145 psi, so it is ~45% coarser —
+// but it is fine enough not to add materially to the error that already exists
+// in the thresholds, and it stays injective on real data (raw psi arrives in
+// 0.2 psi steps and temps in whole °C, so cold pressures land on a 0.02 psi
+// lattice = 0.0014 bar apart, which 3 decimals never merges).
+//
+// Where the error actually comes from: the alert thresholds are the psi ones
+// converted and rounded to 2 decimals, and that rounding dominates. Effective
+// trip points against the psi rules they replace:
+//   low  <30 -> <2.07 bar   trips at 30.016 psi   (+0.021, fires slightly sooner)
+//   crit <26 -> <1.79 bar   trips at 25.955 psi   (-0.040, fires slightly later)
+//   over >42 -> >2.90 bar   trips at 42.068 psi   (+0.063, fires slightly later)
+//   spread >3 -> >0.21 bar  trips at  3.053 psi   (+0.048, fires slightly later)
+// Worst case ~0.07 psi, immaterial for tyre pressure. Publishing bar at only 2
+// decimals would add up to a further 0.07 psi on top; 4 decimals plus 4-decimal
+// thresholds would cut the whole thing to ~0.001 psi if exactness ever matters.
+const toBar = (psi) => round3(psi / PSI_PER_BAR)
 
 // The tpms frame nests each wheel: {"fl":{"psi":37,"c":37}, ...}. (The flat
 // "fl.psi" fields visible in InfluxDB are produced by the mqtt-influx converter
@@ -160,18 +177,19 @@ module.exports = function createIoniqTpms (name, config = {}) {
         return (Math.max(...stamps) - Math.min(...stamps)) <= wheelFreshnessWindowMs
       }
 
-      const publish = (signal, base, value, extra) => {
+      // `roundedValue` must already be rounded by the caller — this helper does
+      // not round, because psi and bar round to different precisions. Passing a
+      // raw float here ships full double precision to MQTT and InfluxDB.
+      const publish = (signal, base, roundedValue, extra) => {
         mqtt.publish(prefix + signal, {
           _type: 'ioniq',
           group: 'derived/' + signal,
           state: base.state,
           ts: base.ts,
-          value,
+          value: roundedValue,
           ...extra
         })
       }
-
-      const toBar = (psi) => round3(psi / PSI_PER_BAR)
 
       const onTpms = (payload) => {
         if (!payload || payload.state !== 'active') return
@@ -228,10 +246,10 @@ module.exports = function createIoniqTpms (name, config = {}) {
           }
         }
 
-        // Per-wheel cold pressures, in both units. The alerts and their message
-        // text read bar (the owner's unit — issue #1478); the psi series stays
-        // so the Tires dashboard keeps its trend history across the cutover.
-        // Both come off the same `cold[w]`, so they cannot drift apart.
+        // Per-wheel cold pressures, in both units. Everything downstream reads
+        // bar (the owner's unit — issue #1478); psi keeps writing only so its
+        // existing InfluxDB history stays continuous. Both are derived from the
+        // same unrounded `cold[w]` in the same frame, so they cannot drift.
         for (const w of WHEELS) {
           if (cold[w] === undefined) continue
           publish(`tire_${w}_psi_cold`, payload, round2(cold[w]), {

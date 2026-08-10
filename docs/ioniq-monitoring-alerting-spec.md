@@ -278,8 +278,8 @@ Each rule's `annotations.description` should carry the first action. Summary tab
 | SoH step / low | Log; compare to warranty threshold (Ioniq ~ replaceable <65–70%). |
 | 12 V low at rest | Charge/replace 12 V before next lock cycle; it strands the car. |
 | LDC not charging | DC-DC converter suspect; verify with a drive; service if repeats. |
-| Tire low / outlier | Top up (FR first per baseline); if it recurs, inspect for leak/nail. |
-| Tire temp outlier | Check for dragging brake / seizing bearing on that corner. |
+| Tyre low / outlier | Top up (FR first per baseline); if it recurs, inspect for leak/nail. |
+| Tyre temp outlier | Check for dragging brake / seizing bearing on that corner. |
 | **DTC present** | Read code(s) from the message; decode; act by code. |
 | Logger offline (unexpected) | Check box power/BLE; distinguish from normal post-lock power-off. |
 | Charge stalled / reduced-rate | Check cable/EVSE; confirm target SoC reached. |

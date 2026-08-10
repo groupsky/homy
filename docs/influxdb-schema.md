@@ -216,20 +216,23 @@ because it is the sensor that fails — issue #1472)
     (`value = psi − 0.18·(temp − 15)` psi, using the wheel's own `.c` temp, falling back to
     `ambient.c`), rounded to 2 decimals. Extra fields `psi` (raw psi) and `temp` (temperature used).
     Only emitted for fresh `state='active'` samples, de-duplicated against frozen readings.
-    **No alert reads this series** — the TPMS rules moved to `derived/tire_<w>_bar_cold` in #1478;
-    it is kept for the `Ioniq EV / Tires` dashboard's trend history.
+    **Nothing reads this series any more** — both the alerts and the `Ioniq EV / Tires` dashboard
+    moved to `derived/tire_<w>_bar_cold` in #1478. It keeps writing so the psi history already in
+    InfluxDB stays a continuous series; retire it only together with that history.
   - `derived/tire_<w>_bar_cold` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: the same cold-normalized
-    per-wheel pressure expressed in bar (`value` = the psi figure ÷ 14.5038), rounded to **3**
-    decimals so the series resolves at least as finely as the 2-decimal psi one (0.001 bar =
-    0.0145 psi). Extra fields `bar` (raw uncompensated pressure in bar) and `temp`. Published in the
-    same frame as, and from the same figure as, `tire_<w>_psi_cold`, so the two cannot drift apart.
-    Grafana `ioniq-tpms-*-psi-low` (`< 2.07` warn) / `-psi-crit` (`< 1.79` crit) / `-overinflated`
-    (`> 2.90` info) rules alert on it — the rule uids still say `psi` for continuity; the thresholds
-    are exact conversions of the former 30 / 26 / 42 psi ones (issue #1478).
+    per-wheel pressure expressed in bar. `value` = the **unrounded** cold pressure ÷ 14.5038,
+    rounded to 3 decimals (so it can differ from `psi_cold ÷ 14.5038` in the third decimal). 3
+    decimals is 0.0145 psi — coarser than the 2-decimal psi series, but finer than the spacing of
+    real readings. Extra fields `bar` (raw uncompensated pressure in bar) and `temp`. Published in
+    the same frame as `tire_<w>_psi_cold` and derived from the same figure, so the two cannot drift
+    apart. Grafana `ioniq-tpms-*-psi-low` (`< 2.07` warn) / `-psi-crit` (`< 1.79` crit) /
+    `-overinflated` (`> 2.90` info) rules alert on it — the rule uids still say `psi` for continuity.
+    The thresholds are the former 30 / 26 / 42 psi ones converted and rounded to 2 decimals, which
+    shifts each trip point by 0.02-0.07 psi (issue #1478).
   - `derived/tire_spread_psi` — `ioniq-tpms`: `value` = max − min of the four cold-normalized
-    pressures (psi), 2 decimals. No alert reads it; kept for dashboard history.
+    pressures (psi), 2 decimals. No reader left; kept writing for history, as above.
   - `derived/tire_spread_bar` — `ioniq-tpms`: the same spread in bar (÷ 14.5038), 3 decimals.
-    Grafana `ioniq-tpms-spread-high` alerts on `value > 0.21` (the exact conversion of 3 psi).
+    Grafana `ioniq-tpms-spread-high` alerts on `value > 0.21` (3 psi converted).
   - `derived/tire_<w>_temp_excess` (`w` ∈ `fl`,`fr`,`rl`,`rr`) — `ioniq-tpms`: `value` = wheel
     temperature minus the mean temperature of the other three wheels (°C). Grafana
     `ioniq-tpms-<w>-temp-excess` alerts on `value > 8`.

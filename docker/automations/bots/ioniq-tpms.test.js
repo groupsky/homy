@@ -112,8 +112,8 @@ describe('ioniq-tpms bot', () => {
 
   // ---------------------------------------------------------------------------
   // Issue #1478: the owner reads tyre pressures in bar, so a parallel bar series
-  // is published next to the psi one and the alerts moved onto it. The psi
-  // series stays for dashboard trend continuity.
+  // is published next to the psi one and everything downstream moved onto it.
+  // The psi series keeps writing so its existing history stays continuous.
   // ---------------------------------------------------------------------------
   describe('bar output (issue #1478)', () => {
     it('emits a bar cold pressure for every wheel alongside the psi one', async () => {
@@ -141,6 +141,35 @@ describe('ioniq-tpms bot', () => {
       expect(published(mqtt, 'tire_spread_psi').value).toBe(1.58)
     })
 
+    // The fixture above is float-clean (33.0, 31.42 ... are exact), so it would
+    // still pass if psi lost its round2. These inputs do not: 35.4 - 0.18*23
+    // is 31.259999999999998 in IEEE-754. Pins that moving the rounding out of
+    // `publish` and into the call sites kept psi at 2 decimals.
+    it('still rounds the psi series to 2 decimals on values with float residue', async () => {
+      await mqtt._trigger(TPMS, sample({
+        fl: { psi: 37, c: 37 },
+        fr: { psi: 35.4, c: 38 },
+        rl: { psi: 35.8, c: 38 },
+        rr: { psi: 36.2, c: 38 }
+      }))
+      expect(published(mqtt, 'tire_fr_psi_cold').value).toBe(31.26)
+      expect(published(mqtt, 'tire_rl_psi_cold').value).toBe(31.66)
+      expect(published(mqtt, 'tire_spread_psi').value).toBe(1.78)
+    })
+
+    // The two units are derived from one unrounded figure, so the published
+    // pair must always agree to within the rounding of the coarser one.
+    it('keeps every bar value consistent with its psi twin', async () => {
+      await mqtt._trigger(TPMS, sample())
+      for (const w of ['fl', 'fr', 'rl', 'rr']) {
+        const psi = published(mqtt, `tire_${w}_psi_cold`).value
+        const bar = published(mqtt, `tire_${w}_bar_cold`).value
+        expect(bar * 14.5038).toBeCloseTo(psi, 1)
+      }
+      expect(published(mqtt, 'tire_spread_bar').value * 14.5038)
+        .toBeCloseTo(published(mqtt, 'tire_spread_psi').value, 1)
+    })
+
     it('carries the raw pressure in bar and the temperature used', async () => {
       await mqtt._trigger(TPMS, sample())
       // raw 36.6 psi / 14.5038 = 2.5235 bar
@@ -158,11 +187,9 @@ describe('ioniq-tpms bot', () => {
       }))
     })
 
-    // 3 decimals, not 2: 0.001 bar = 0.0145 psi, so the bar series resolves as
-    // finely as the 2-decimal psi one and the exact-conversion alert thresholds
-    // (2.07 / 1.79 / 2.90 / 0.21 bar) trip within ~0.02 psi of the psi rules
-    // they replace. Rounding to 2 decimals would move the 2.07 bar trip point
-    // 0.05 psi away from 30 psi.
+    // 3 decimals, not 2 — see the rounding note in the bot. At 2 decimals the
+    // bar series would quantise to 0.145 psi, adding up to 0.07 psi on top of
+    // the error the 2-decimal thresholds already carry.
     it('keeps three decimals of resolution', async () => {
       // 34.9 - 0.18*(35-15) = 31.3 psi -> 2.15807... bar
       await mqtt._trigger(TPMS, sample({ fl: { psi: 34.9, c: 35 } }))
@@ -466,6 +493,9 @@ describe('ioniq-tpms bot', () => {
       expect(excessCount(mqtt)).toBe(0)
       expect(published(mqtt, 'tire_rl_psi_cold')).toBeDefined()
       expect(published(mqtt, 'tire_spread_psi')).toBeDefined()
+      // The bar series is what the alerts read, so it must survive the gate too.
+      expect(published(mqtt, 'tire_rl_bar_cold')).toBeDefined()
+      expect(published(mqtt, 'tire_spread_bar')).toBeDefined()
     })
 
     it('resumes temp_excess once every wheel has refreshed inside the window', async () => {
@@ -524,6 +554,7 @@ describe('ioniq-tpms bot', () => {
       await mqtt._trigger(TPMS, hotFrame(Date.now()))
       expect(excessCount(mqtt)).toBe(0)
       expect(published(mqtt, 'tire_rr_psi_cold')).toBeDefined()
+      expect(published(mqtt, 'tire_rr_bar_cold')).toBeDefined()
     })
 
     it('suppresses temp_excess when the last motion is older than motionMaxAgeMs', async () => {
