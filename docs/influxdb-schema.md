@@ -250,7 +250,9 @@ because it is the sensor that fails — issue #1472)
     fields `bar` (**equal to `value` by construction** — that identity is the point: nothing is
     applied to the reading) and `temp` (the wheel's own temperature, omitted if the frame carries
     none). Grafana `ioniq-tpms-<w>-psi-low` (`< 2.20` warn) / `-psi-crit` (`< 1.90` crit) alert on
-    it; the rule uids still say `psi` for continuity.
+    it; the rule uids still say `psi` for continuity, and the `Ioniq EV / Tires` dashboard shows it
+    as the four headline stat tiles and the "Cold-Start Pressure" panel (pinned to 30 d, because at
+    the dashboard's 6 h default a once-a-day series renders empty).
     **Roughly one point per wheel per driving day** — 104 points over 26 days in the 27-day replay
     — so query it with a window of days, not hours. Nothing is published on a day the car is not
     driven, on the first frame after a cold cache (the park length is unknown, and it fails closed),
