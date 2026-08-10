@@ -21,7 +21,7 @@
       }
     ]
   },
-  "description": "Hyundai Ioniq Electric — tire pressure and temperature detail: per-wheel temperature-normalised cold-equivalent pressure, per-wheel temperature excess, inter-wheel pressure spread, and trend history. Derived from PR0's derived/tire_* bot signals (deployed to prod).",
+  "description": "Hyundai Ioniq Electric — tire pressure and temperature detail: per-wheel temperature-normalised cold-equivalent pressure in bar, per-wheel temperature excess, inter-wheel pressure spread, and trend history. Derived from the ioniq-tpms bot's derived/tire_* signals; the pressure panels and the shipped alerts read the bar series (derived/tire_*_bar_cold), the parallel psi series is retained for history.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -49,13 +49,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the front-left tire (derived/tire_fl_psi_cold) — this IS the value the shipped TPMS alerts evaluate (low <30, critical <26, over-inflated >42 psi). The 36 psi cold placard is the inflation target; the green 30-42 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "Temperature-normalised cold-equivalent pressure for the front-left tire (derived/tire_fl_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -66,19 +66,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -110,12 +110,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"fl_psi_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_psi_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"fl_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_bar_cold' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "FL psi (cold)",
+      "title": "FL bar (cold)",
       "type": "stat"
     },
     {
@@ -123,13 +123,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the front-right tire (derived/tire_fr_psi_cold) — this IS the value the shipped TPMS alerts evaluate (low <30, critical <26, over-inflated >42 psi). The 36 psi cold placard is the inflation target; the green 30-42 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "Temperature-normalised cold-equivalent pressure for the front-right tire (derived/tire_fr_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -140,19 +140,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -184,12 +184,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"fr_psi_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fr_psi_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"fr_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fr_bar_cold' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "FR psi (cold)",
+      "title": "FR bar (cold)",
       "type": "stat"
     },
     {
@@ -197,13 +197,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the rear-left tire (derived/tire_rl_psi_cold) — this IS the value the shipped TPMS alerts evaluate (low <30, critical <26, over-inflated >42 psi). The 36 psi cold placard is the inflation target; the green 30-42 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "Temperature-normalised cold-equivalent pressure for the rear-left tire (derived/tire_rl_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -214,19 +214,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -258,12 +258,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"rl_psi_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rl_psi_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"rl_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rl_bar_cold' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "RL psi (cold)",
+      "title": "RL bar (cold)",
       "type": "stat"
     },
     {
@@ -271,13 +271,13 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure for the rear-right tire (derived/tire_rr_psi_cold) — this IS the value the shipped TPMS alerts evaluate (low <30, critical <26, over-inflated >42 psi). The 36 psi cold placard is the inflation target; the green 30-42 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
+      "description": "Temperature-normalised cold-equivalent pressure for the rear-right tire (derived/tire_rr_bar_cold) — this IS the value the shipped TPMS alerts evaluate (low <2.07, critical <1.79, over-inflated >2.90 bar). The 2.5 bar cold placard is the inflation target; the green 2.07-2.90 band brackets it. DRIVING-GATED: refreshes only when the pressure changes (driving/rotation), so while parked it shows the last known reading via a 30-day lookback — a frozen value is expected, not stale.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -288,19 +288,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -332,12 +332,12 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"rr_psi_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rr_psi_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") AS \"rr_bar_cold\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rr_bar_cold' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
       ],
-      "title": "RR psi (cold)",
+      "title": "RR bar (cold)",
       "type": "stat"
     },
     {
@@ -609,7 +609,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Cold-equivalent pressure trend for all four wheels (derived/tire_*_psi_cold). Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. Dashed reference lines are the alert thresholds (26 critical / 30 low / 42 over-inflated); the 36 psi cold placard is the target inside the green band. However, fill(previous) only carries a value forward from within the queried window: if the window opens before the most recent sample (a fully-parked 6 h stretch with no new reading), this panel can render completely EMPTY rather than flat — that is expected, not a broken feed. The per-wheel last()+30d \"psi (cold)\" stat tiles above are the authoritative current-value source even when this panel shows nothing.",
+      "description": "Cold-equivalent pressure trend for all four wheels (derived/tire_*_bar_cold). Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. Dashed reference lines are the alert thresholds (1.79 critical / 2.07 low / 2.90 over-inflated bar); the 2.5 bar cold placard is the target inside the green band. However, fill(previous) only carries a value forward from within the queried window: if the window opens before the most recent sample (a fully-parked 6 h stretch with no new reading), this panel can render completely EMPTY rather than flat — that is expected, not a broken feed. The per-wheel last()+30d \"bar (cold)\" stat tiles above are the authoritative current-value source even when this panel shows nothing.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -645,7 +645,7 @@
               "mode": "dashed"
             }
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -656,19 +656,19 @@
               },
               {
                 "color": "orange",
-                "value": 26
+                "value": 1.79
               },
               {
                 "color": "green",
-                "value": 30
+                "value": 2.07
               },
               {
                 "color": "red",
-                "value": 42
+                "value": 2.9
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -698,7 +698,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"fl\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_psi_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT last(\"value\") AS \"fl\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_bar_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "A",
           "alias": "FL"
@@ -708,7 +708,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"fr\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fr_psi_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT last(\"value\") AS \"fr\" FROM \"ioniq\" WHERE \"group\"='derived/tire_fr_bar_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "B",
           "alias": "FR"
@@ -718,7 +718,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"rl\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rl_psi_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT last(\"value\") AS \"rl\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rl_bar_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "C",
           "alias": "RL"
@@ -728,7 +728,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"rr\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rr_psi_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT last(\"value\") AS \"rr\" FROM \"ioniq\" WHERE \"group\"='derived/tire_rr_bar_cold' AND $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "D",
           "alias": "RR"
@@ -867,7 +867,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Largest cold-pressure difference between any two wheels (derived/tire_spread_psi). Lower is better — a healthy set sits within ~2-3 psi. NOTE: there is no shipped alert on this signal; the 3/5 psi bands are a rough sanity guide only, not a mirror of an alert rule. Driving-gated + fill(previous): fill(previous) only carries a value forward from within the queried window, so a fully-parked 6 h window can render this panel completely EMPTY rather than flat — that is expected, not a broken feed.",
+      "description": "Largest cold-pressure difference between any two wheels (derived/tire_spread_bar). Lower is better — a healthy set sits within ~0.14-0.20 bar. The orange band at 0.21 bar IS the ioniq-tpms-spread-high alert threshold; the red band at 0.34 bar is a sanity guide only. Driving-gated + fill(previous): fill(previous) only carries a value forward from within the queried window, so a fully-parked 6 h window can render this panel completely EMPTY rather than flat — that is expected, not a broken feed.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -903,7 +903,7 @@
               "mode": "line"
             }
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "min": 0,
           "thresholds": {
@@ -915,15 +915,15 @@
               },
               {
                 "color": "orange",
-                "value": 3
+                "value": 0.21
               },
               {
                 "color": "red",
-                "value": 5
+                "value": 0.34
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
@@ -953,7 +953,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"tire_spread_psi\" FROM \"ioniq\" WHERE \"group\"='derived/tire_spread_psi' AND $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT last(\"value\") AS \"tire_spread_bar\" FROM \"ioniq\" WHERE \"group\"='derived/tire_spread_bar' AND $timeFilter GROUP BY time($__interval) fill(previous)",
           "rawQuery": true,
           "refId": "A",
           "alias": "Inter-wheel spread"
@@ -967,7 +967,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Age of the most recent derived tire sample (timestamp of last(tire_fl_psi_cold)). Because tire signals are driving-gated, an age of hours or days while parked is NORMAL and does NOT mean the feed is broken. Reduces the Time field with unit dateTimeFromNow and a fixed 30-day lookback (never count(), which cannot distinguish fresh from days-stale, and never $timeFilter, which would read \"No data\" the moment the window is empty).",
+      "description": "Age of the most recent derived tire sample (timestamp of last(tire_fl_bar_cold)). Because tire signals are driving-gated, an age of hours or days while parked is NORMAL and does NOT mean the feed is broken. Reduces the Time field with unit dateTimeFromNow and a fixed 30-day lookback (never count(), which cannot distinguish fresh from days-stale, and never $timeFilter, which would read \"No data\" the moment the window is empty).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1015,7 +1015,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_psi_cold' AND time > now() - 30d",
+          "query": "SELECT last(\"value\") FROM \"ioniq\" WHERE \"group\"='derived/tire_fl_bar_cold' AND time > now() - 30d",
           "rawQuery": true,
           "refId": "A"
         }
