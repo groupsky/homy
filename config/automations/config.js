@@ -500,6 +500,13 @@ module.exports = {
       speedMovingKph: 3,                        // above this = rolling (matches ioniq-sessions)
       motionMaxAgeMs: 1800000,                  // 30 min since the car last moved
       speedMaxAgeMs: 3600000,                   // older speed telemetry => motion unknown => fail open
+      // Cold-start gate (issue #1479). The under-inflation alerts read
+      // tire_<w>_bar_coldstart, published from the first fresh frame a wheel
+      // produces after this long a park — and only on the first start of the
+      // local day, so an afternoon start off a sun-soaked tyre is skipped.
+      // Overnight is far longer than 6 h; shortening this admits tyres that
+      // have not yet equilibrated with ambient and reads them high.
+      coldstartMinParkMs: 21600000,             // 6 h
     },
     ioniqCellHealth: {
       type: 'ioniq-cell-health',
