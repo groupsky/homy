@@ -13,29 +13,37 @@ When creating a new Docker service:
 3. **Create service-specific CLAUDE.md**: Document development patterns and service-specific guidance
 4. **Update docker-compose.yml**: Add service configuration to the main compose file
 
-### Dependabot Configuration
+### Renovate Configuration
 
-**IMPORTANT**: When adding any new Dockerfile to this project (including test containers and minimal ones with just `FROM ...`), you MUST create or update the Dependabot configuration to monitor the container for dependency updates.
+**IMPORTANT**: When adding any new service to this project, you MUST update the Renovate configuration to monitor the service for dependency updates.
 
-#### Steps for Dependabot Setup:
-1. Edit `.github/dependabot.yml` in the repository root
-2. Add a new entry for the Docker service:
-   ```yaml
-   - package-ecosystem: "docker"
-     directory: "/docker/[service-name]"
-     schedule:
-       interval: "weekly"
+#### Steps for Renovate Setup:
+1. Edit `renovate.json` in the repository root
+2. Add the service path to the appropriate group's `matchPaths` array:
+   ```json
+   {
+     "description": "Choose appropriate group: infrastructure, mqtt-services, hardware-integration, monitoring, or home-automation",
+     "matchPaths": [
+       "docker/existing-service/**",
+       "docker/[your-new-service]/**"
+     ],
+     "groupName": "mqtt-services",
+     "schedule": ["before 3am on Monday"]
+   }
    ```
-3. **If the service has application dependencies** (package.json, requirements.txt, go.mod, etc.), add additional entries for those ecosystems:
-   ```yaml
-   - package-ecosystem: "npm"  # or "pip", "gomod", etc.
-     directory: "/docker/[service-name]"
-     schedule:
-       interval: "weekly"
-   ```
-4. Ensure the directory path matches the location of your Dockerfile and dependency files
+3. The `matchPaths` pattern `docker/[service-name]/**` automatically covers:
+   - Dockerfile (Docker base image updates)
+   - package.json (npm dependency updates)
+   - Other dependency files in the service directory
 
-This ensures that both base image updates and application dependency updates are automatically tracked and can be applied through pull requests, even for test containers or services that only use external images.
+**Service Groups:**
+- `infrastructure` - Core services (nginx, mosquitto, influxdb, grafana, mongo)
+- `mqtt-services` - Message processing (automations, mqtt-influx, mqtt-mongo)
+- `hardware-integration` - Device communication (modbus-serial, dmx-driver, telegram-bridge)
+- `monitoring` - Data collection (historian, sunseeker-monitoring)
+- `home-automation` - User interface (homeassistant)
+
+This ensures that both base image updates and application dependency updates are automatically tracked via Renovate PRs.
 
 ### Base Images - GHCR-Only Policy
 
@@ -43,7 +51,7 @@ This ensures that both base image updates and application dependency updates are
 
 **Why This Policy Exists:**
 - **Eliminates Docker Hub rate limits** (200 pulls/6h) that caused frequent CI failures
-- **Enables two-step dependency upgrades** via Dependabot (base image → service)
+- **Enables two-step dependency upgrades** via Renovate (base image → service)
 - **Centralized version control** for all base dependencies
 - **Faster CI/CD** through GHCR caching and no external dependencies
 
@@ -79,7 +87,7 @@ FROM alpine:3.22.1
 **Documentation:**
 - **Policy & Operations**: `base-images/CLAUDE.md` - Creating and managing base images
 - **Usage Examples**: `base-images/README.md` - Service Dockerfile patterns
-- **Upgrade Workflow**: `base-images/UPGRADE_WORKFLOW.md` - Two-step dependency updates
+- **Dependency Updates**: `renovate.json` - Renovate configuration for automated updates
 
 ### Service Types
 
