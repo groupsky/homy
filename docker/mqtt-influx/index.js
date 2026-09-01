@@ -45,9 +45,27 @@ const converters = {
     zigbee: require('./converters/zigbee'),
 }
 
-if (forcedConverter && !(forcedConverter in converters)) {
-    console.error('Unknown CONVERTER', forcedConverter)
-    process.exit(1)
+/**
+ * Resolves a converter by name, or null.
+ *
+ * Own-property lookup, never `name in converters`: the name comes either from
+ * an MQTT payload (`data._type`) or from the environment (`CONVERTER`), and
+ * `in` also matches inherited keys — `{"_type":"constructor"}` would pass an
+ * `in` check and then be invoked as if Object.prototype.constructor were a
+ * converter.
+ */
+function resolveConverter(name) {
+    if (typeof name !== 'string' || !Object.prototype.hasOwnProperty.call(converters, name)) {
+        return null
+    }
+    return converters[name]
+}
+
+// Fail at startup rather than silently dropping every message, which is what
+// an unknown CONVERTER would otherwise do.
+const forcedConverterFn = forcedConverter ? resolveConverter(forcedConverter) : null
+if (forcedConverter && !forcedConverterFn) {
+    throw new Error(`Unknown CONVERTER ${forcedConverter}`)
 }
 
 client.on('connect', function () {
@@ -84,13 +102,13 @@ client.on('message', function (topic, message) {
     try {
         const data = JSON.parse(message)
 
-        const converterName = forcedConverter || data._type
-        if (!(converterName in converters)) {
+        const converter = forcedConverterFn || resolveConverter(data._type)
+        if (!converter) {
             console.warn('Unhandled type', data._type, data)
             return
         }
 
-        const points = converters[converterName](data, topic)
+        const points = converter(data, topic)
 
         writeApi.writePoints(points)
     } catch (err) {
