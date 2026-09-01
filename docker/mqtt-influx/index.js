@@ -5,7 +5,20 @@ const mqtt = require('mqtt')
 const {InfluxDB} = require('@influxdata/influxdb-client')
 
 const mqttUrl = process.env.BROKER
-const topic = process.env.TOPIC
+// One or more topics, comma-separated. A bridge needs more than one when the
+// producer splits a device's data across topics — zigbee2mqtt publishes
+// availability separately from state, and availability is the half that shows
+// a device dropping off the mesh.
+// Named `topics`, not `topic`: the message handler's own `topic` parameter is
+// the per-message topic and must not be shadowed by the subscription list.
+const topics = (process.env.TOPIC || '').split(',').map((t) => t.trim()).filter(Boolean)
+// When set, every message on TOPIC is handed to this one converter, which
+// receives (payload, topic). Producers that do not stamp a `_type` into the
+// payload — anything not written by this project, zigbee2mqtt included —
+// cannot be dispatched by payload inspection, so the service is told which
+// converter to use instead. Unset restores the original behaviour exactly:
+// dispatch on data._type.
+const forcedConverter = process.env.CONVERTER
 const influxUrl = process.env.INFLUXDB_URL
 const influxToken = process.env.INFLUXDB_TOKEN || `${process.env.INFLUXDB_USERNAME}:${process.env.INFLUXDB_PASSWORD}`
 const influxOrg = process.env.INFLUXDB_ORG || ''
@@ -29,16 +42,22 @@ const converters = {
     mbsl32di: require('./converters/mbsl32di'),
     'or-we-514': require('./converters/or-we-514'),
     sdm630: require('./converters/sdm630'),
+    zigbee: require('./converters/zigbee'),
+}
+
+if (forcedConverter && !(forcedConverter in converters)) {
+    console.error('Unknown CONVERTER', forcedConverter)
+    process.exit(1)
 }
 
 client.on('connect', function () {
     console.log('connected to', mqttUrl)
-    client.subscribe(topic, function (err) {
+    client.subscribe(topics, function (err) {
         if (err) {
             console.log('Failure subscribing to topic', err)
             process.exit(1)
         }
-        console.log('subscribed to', topic)
+        console.log('subscribed to', topics)
     })
 })
 client.on('reconnect', function () {
@@ -65,12 +84,13 @@ client.on('message', function (topic, message) {
     try {
         const data = JSON.parse(message)
 
-        if (!(data._type in converters)) {
+        const converterName = forcedConverter || data._type
+        if (!(converterName in converters)) {
             console.warn('Unhandled type', data._type, data)
             return
         }
 
-        const points = converters[data._type](data)
+        const points = converters[converterName](data, topic)
 
         writeApi.writePoints(points)
     } catch (err) {
