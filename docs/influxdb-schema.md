@@ -22,11 +22,19 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 2. **modbus-serial-secondary** → `secondary` measurement
    - **Devices**: Multiple energy meters and appliances
      - water_pump (EX9EM, addr 1), microwave (OR-WE-514, addr 2)
-     - waste_pump (EX9EM, addr 3), oven (DDS519MR, addr 4)
+     - waste_pump (EX9EM, addr 3) - **dead**, oven (DDS519MR, addr 4)
      - stove (DDS519MR, addr 5), dishwasher (DDS519MR, addr 6)
-     - kitchen (DDS519MR, addr 7), laundry (DDS519MR, addr 8)
+     - kitchen (DDS519MR, addr 7) - **dead**, laundry (DDS519MR, addr 8)
      - boiler (DDS519MR, addr 20) - **Primary boiler energy monitoring**
    - **Data**: Power consumption, voltage, current per device
+   - **Dead devices**: `kitchen` last reported 2025-11-24T11:33:36Z and
+     `waste_pump` 2026-06-25T21:29:47Z. Both are commented out of
+     `config/modbus-serial/secondary.config.js` and write no series at all, so
+     a query that groups by `device.name` simply does not see them. Verified
+     against InfluxDB on 2026-09-01. `ac-alert.yaml` still excludes `kitchen`
+     by name — not because it is dead but because it was a genuinely faulty
+     meter (115 samples above 253 V in the year to 2025-09-01); see the comment
+     in that file before removing the filter.
 
 3. **modbus-serial-tetriary** → `tetriary` measurement
    - **Device**: Heat pump (DDS024MR, addr 1)
