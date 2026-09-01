@@ -10,14 +10,14 @@
     "test": "jest"
   },
   "dependencies": {
-    "@vue/reactivity": "^3.5.33",
-    "cron-parser": "^5.5.0",
+    "@vue/reactivity": "^3.5.42",
+    "cron-parser": "^5.10.0",
     "fast-json-stable-stringify": "^2.1.0",
-    "mqtt": "^5.15.1",
-    "suncalc": "^1.9.0"
+    "mqtt": "^5.15.2",
+    "suncalc": "^2.0.1"
   },
   "devDependencies": {
-    "jest": "^30.3.0",
+    "jest": "^30.5.0",
     "node-notifier": "^10.0.1",
     "prettier-2": "npm:prettier@^2.8.8"
   }
