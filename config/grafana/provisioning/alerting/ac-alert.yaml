@@ -8,96 +8,223 @@ groups:
     rules:
       - uid: webhook-3057STtVkz
         title: AC alert (Webhook)
-        condition: A
+        # Rewritten 2026-09-01 to fix three defects, all found by measurement
+        # against the production InfluxDB on routy. Every point below is
+        # load-bearing; read it before changing anything here.
+        #
+        # 1. reduce + threshold, NOT classic_conditions.
+        #    classic_conditions collapses every input series into a single
+        #    unlabeled instance, dropping the `device.name` and `phase` tags, so
+        #    the alert could not name which meter or which phase had moved. This
+        #    is the same trap documented at length in phase-power-loss-alert.yaml.
+        #    On 2026-08-28 01:01 UTC it therefore reported the wrong thing: it
+        #    said "Outside 210-247V" because `main` phase B touched 247.6 V,
+        #    while the actual event was a load-imbalance step in which phase A
+        #    sagged 5.5 V (241.6 -> 236.2) and B and C rose ~1.4 V, held ~38 s
+        #    and snapped back. A phase-A sag, reported as an unnamed
+        #    over-voltage. reduce+threshold preserves per-series labels, so each
+        #    instance carries its own device.name and phase.
+        #    Do NOT "simplify" this back to classic_conditions.
+        #
+        # 2. The band is 207-253 V, from БДС EN 50160: the LV supply voltage is
+        #    230 V +/- 10 %, i.e. 207-253 V. The old 247 V upper bound had no
+        #    standard behind it and paged for compliant supply — the 2026-08-28
+        #    excursion peaked at 247.6 V on `main` phase B and 248.2 V on the
+        #    `laundry` meter, both legal. Measured over 2025-09-01 -> 2026-09-01:
+        #    `main` reached 247 V on 65 separate days and any monitored meter did
+        #    on 114 days, so the old rule paged on roughly one day in three; its
+        #    highest reading all year was 249.3 V (`main` phase B,
+        #    2026-08-09 13:00 UTC) and it never once reached 253 V.
+        #    The sharpest way to see it: over 2024-09-01 -> 2026-09-01 `main`'s
+        #    own 3-minute median ranges 213.5-248.0 V. The old 247 V bound sat
+        #    BELOW the top of the normal operating envelope, so it was not a
+        #    tight threshold, it was a wrong one. The new bounds leave 6.5 V of
+        #    headroom below and 5.0 V above that envelope.
+        #    Do NOT re-tighten this to 247.
+        #
+        # 3. median() over the window, not min()/max() over raw samples.
+        #    Every observed firing of the lower bound has been an artefact. At
+        #    each of the three genuine mains interruptions (2026-08-30 04:14,
+        #    2026-08-30 19:12 and 2026-09-01 05:01 UTC) a single sub-meter
+        #    emitted one implausible sample on its first read after repowering —
+        #    dishwasher 132.8 V, laundry 137.0 V and 0.0 V, boiler 167.9 V —
+        #    while three-phase `main` read 232-239 V at the same instant. That is
+        #    a meter's first integration after it repowers, not site voltage, and
+        #    the `v > 0` filter does not catch it.
+        #    These samples do NOT follow a data gap: the interval before each was
+        #    6.1-6.3 s against a 5.5 s normal cadence, inside the poller's own
+        #    jitter. There is no gap to key off, so a "discard the first sample
+        #    after a gap" filter would not have caught any of them. What marks
+        #    them is that they are isolated — the next sample ~6 s later is back
+        #    to normal — and a median over the window is immune to that by
+        #    construction. The high side needs the same treatment: `heat_pump`
+        #    phase C has emitted 4.2e14 V and `microwave` 574.08 V as single
+        #    samples.
+        #    Artefacts that DO follow a gap exist — `oven` and `heat_pump`
+        #    phase C in the 2026-07-01 poller outage, in the `for:` note below —
+        #    so gap detection would not be useless, just insufficient: it
+        #    catches those two and misses all three of the interruption
+        #    artefacts, which is the wrong way round for a rule whose whole
+        #    failure history is the interruptions.
+        #    Replayed with this exact query text at all four historical firings,
+        #    every per-meter median lands in 229.5-246.7 V — none of them fires
+        #    under this rule. Replayed as 3-minute median windows over the two
+        #    years 2024-09-01 -> 2026-09-01, which includes the held-out year
+        #    2024-09-01 -> 2025-09-01 that none of this tuning looked at:
+        #    ~343,000 windows per series, and exactly two land outside the band,
+        #    both in the same 3-minute window of the same incident —
+        #    2026-07-01T17:12:00Z, `oven` median 264.3 V and `heat_pump` phase C
+        #    median 4.197e14 V. See the `for:` note below for why neither pages.
+        #    Every other live series stays inside the band for all two years.
+        #    Extreme 3-minute medians, min / max: `main` A 213.5/245.0,
+        #    B 223.7/248.0, C 223.0/247.8; `heat_pump` A 213.1/245.0,
+        #    B 223.2/248.1, C 223.0/(the artefact); `boiler` 213.0/245.6,
+        #    `oven` 213.2/(the artefact), `dishwasher` 223.6/248.7,
+        #    `laundry` 223.5/248.6, `stove` 223.2/248.0,
+        #    `waste_pump` 223.7/248.1, `microwave` 219.3/238.3,
+        #    `water_pump` 223.9/244.6. `microwave` (574.08 V samples) and
+        #    `stove` (278.5 V) never move a median at all, which is the
+        #    mechanism working.
+        #    EN 50160 itself assesses 10-minute mean RMS values, so a 3-minute
+        #    median is stricter than the standard it enforces.
+        #
+        # 4. A genuine multi-second interruption is NOT detectable by voltage
+        #    depth at all, and this rule does not try. Through all three of the
+        #    2026-08-30 / 2026-09-01 events `main` never left 232-243 V. The
+        #    signature is a 2.3-3.2 s gap in the data plus a 2-4 V step on
+        #    restoration, not a sag. Do NOT add gap detection here: per hq
+        #    decisions/0004 that signal is owned by a fleet checker, and
+        #    one-signal-one-owner means this rule must not duplicate it.
+        #
+        # 5. The `device.name != 'kitchen'` exclusion is kept, but not for the
+        #    reason the old comment gave ("occasionally returns 0V readings").
+        #    `kitchen` last reported 2025-11-24T11:33:36Z and is commented out of
+        #    config/modbus-serial/secondary.config.js, so it currently produces
+        #    no series and the filter excludes nothing (`waste_pump` is likewise
+        #    dead since 2026-06-25T21:29:47Z, and needs no filter). It is kept
+        #    because that meter's fault was not the isolated-sample kind the
+        #    median absorbs: while it was alive it produced 115 samples above
+        #    253 V in 2024-09-01 -> 2025-09-01, and 25 separate 3-minute windows
+        #    whose median was outside 207-253 V. If the meter is ever repaired,
+        #    re-check it against this rule before dropping this line; if it is
+        #    removed for good, drop the line with it.
+        #
+        # 6. `v > 0` is retained: a phase sitting at 0 V during an outage is
+        #    owned by phase-power-loss-alert.yaml and total-power-outage-alert.yaml.
+        #
+        # 7. noDataState: OK + execErrState: OK make this rule UNFALSIFIABLE, as
+        #    they did before this rewrite. It reads Normal when the supply is
+        #    healthy and equally when it is completely broken — InfluxDB
+        #    unreachable, `current_power` renamed, the reduce/threshold chain
+        #    failing to build. Both are still required: meters legitimately stop
+        #    reporting (see 5), and a datasource outage must not page as a
+        #    voltage emergency. Nothing in the alert UI distinguishes the two
+        #    states, so the only proof this rule is alive is external —
+        #    `docker logs homy_grafana_1 2>&1 | grep "Failed to build rule
+        #    evaluator"` and grafana_alerting_rule_evaluation_failures_total.
+        #    Check both after deploying this, not just the absence of pages:
+        #    `threshold` + `outside_range` is used by no other rule here.
+        #
+        # `for: 4m` is not decoration, and 4m is not a round number. The median
+        # is only robust while the window holds many samples; if a poller stalls
+        # and leaves a single sample in the 180 s window, the median IS that
+        # sample. This is observed, not hypothetical. A poller outage on
+        # 2026-07-01 took several buses down between 17:08 and 17:15 UTC, and
+        # each meter's first read back was garbage. `heat_pump` phase C shows
+        # the shape most clearly — per-minute sample counts across it read
+        # 100, 100, 15, 0, 0, 0, 0, 0, 1, 100, 100 — where that lone sample is
+        # 4.197e14 V at 17:14:59.859Z and is the entire content of the
+        # 17:12-17:15 window. `oven` did the same thing in the same window: 409.9 s
+        # with no reading (last good sample 17:08:07.757Z at 239.4 V), back at
+        # 17:14:57.679Z with 264.3 V. `microwave` returned 574.08 V at
+        # 17:15:02.471Z, landing in the next window alongside normal data, and
+        # so never moved a median at all.
+        # A sample can be the sole content of a rolling 180 s window across at
+        # most four consecutive 1-minute evaluations, i.e. just under 180 s of
+        # pending time — and no longer, because after 180 s it leaves the window
+        # and the series goes NoData. Any `for:` longer than the query window
+        # therefore makes a single-sample firing impossible whatever follows it;
+        # 4m clears 180 s with a 60 s margin. `for: 2m` would NOT be enough — it
+        # is 120 s, inside that reach.
+        # (In both cases as they actually happened, normal cadence resumed
+        # within a second, so only one evaluation was ever true. The margin is
+        # for the case that matters here: a meter that emits its garbage sample
+        # and then goes quiet again, which is what a power event looks like.)
+        # The cost is that a genuine excursion pages ~5.5 minutes after onset,
+        # still well inside the 10-minute means EN 50160 is assessed on.
+        #
+        # The precise alternative — a second query counting samples in the
+        # window, gated through a `math` expression — was rejected deliberately.
+        # No rule in this directory uses `math`, an expression chain cannot be
+        # evaluated without deploying it, and two rules here have already
+        # shipped silently dead on an untested expression detail (#1472, #1475).
+        # `for:` is used by every rule in this directory and its arithmetic is
+        # checkable on paper.
+        condition: outside
         data:
-          - refId: maxV
+          - refId: v
             queryType: ''
             relativeTimeRange:
-              from: 300
+              from: 180
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              alias: "max V"
-              groupBy:
-                - params: ["$__interval"]
-                  type: time
-                - params: ["null"]
-                  type: fill
-              intervalMs: 1000
-              maxDataPoints: 43200
-              measurement: current_power
-              orderByTime: ASC
-              policy: default
-              resultFormat: time_series
-              select:
-                - - params: ["v"]
-                    type: field
-                  - params: []
-                    type: max
-              tags:
-                # Exclude kitchen meter - faulty device that occasionally returns 0V readings
-                - key: "device.name"
-                  operator: "!="
-                  value: kitchen
-          - refId: minV
-            queryType: ''
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: P3C6603E967DC8568
-            model:
-              alias: "min V"
-              # Exclude kitchen (faulty 0V device) AND dead phases (v=0 during an
-              # outage) so a phase dropping to 0V no longer trips this generic
-              # "voltage out of range" alert — that is now covered by the dedicated
-              # phase-power-loss / total-power-outage alerts. Genuine brown-outs
-              # (a phase sagging to e.g. 150V, still > 0) are still caught.
-              query: 'SELECT min("v") FROM "current_power" WHERE "device.name" != ''kitchen'' AND "v" > 0 AND time >= now() - 300s'
+              query: |
+                SELECT median("v") FROM "current_power"
+                WHERE "v" > 0 AND "device.name" != 'kitchen' AND time >= now() - 180s
+                GROUP BY "device.name", "phase"
               rawQuery: true
               resultFormat: time_series
               intervalMs: 1000
               maxDataPoints: 43200
-          - refId: A
+          - refId: median
             queryType: ''
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
+              type: reduce
+              expression: v
+              reducer: last
               datasource:
                 type: __expr__
                 uid: __expr__
-              conditions:
-                - evaluator:
-                    params: [210]
-                    type: lt
-                  operator:
-                    type: and
-                  query:
-                    params: [minV]
-                  reducer:
-                    type: min
-                - evaluator:
-                    params: [248]
-                    type: gt
-                  operator:
-                    type: or
-                  query:
-                    params: [maxV]
-                  reducer:
-                    type: max
               intervalMs: 1000
               maxDataPoints: 43200
-              type: classic_conditions
+          - refId: outside
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: median
+              conditions:
+                - evaluator:
+                    params: [207, 253]
+                    type: outside_range
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
         noDataState: OK
         execErrState: OK
-        for: 0s
+        for: 4m
         annotations:
           __alertId__: "12"
           __dashboardUid__: "Nml0-Fonz"
           __panelId__: "3"
-          summary: "⚡ AC voltage out of range"
-          description: "The AC voltage has gone outside the safe operating range of 210-247V. This could indicate power quality issues or electrical problems."
+          # The InfluxDB tag is `device.name`, and `{{ $labels.device.name }}`
+          # would be parsed by Go templates as a field lookup, so it has to go
+          # through `index`. The `device_name` fallback covers Grafana
+          # sanitising the dot out of the label name; whichever is present
+          # renders, the other is an empty string. `phase` is empty on the
+          # single-phase sub-meters, hence the conditional.
+          summary: '⚡ AC voltage out of range on {{ or (index $labels "device.name") (index $labels "device_name") }}{{ if $labels.phase }} phase {{ $labels.phase }}{{ end }}'
+          description: 'Its 3-minute median voltage is {{ $values.median.Value }} V, outside the БДС EN 50160 supply range of 207-253 V (230 V ±10 %). The meter and phase named above are the ones that actually moved — a sag on one phase normally shows a matching rise on the other two, so check all three on `main` before blaming the named branch.'
         labels:
           rule_uid: webhook-3057STtVkz
           alert_type: webhook
