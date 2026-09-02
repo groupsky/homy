@@ -14,11 +14,13 @@ const { ttlIndexArgsFromEnv } = require('./ttl')
  * contrast, stays fatal (process exit) so the container restarts and retries.
  *
  * A payload that is not valid JSON is archived raw, not dropped: this is the
- * only record of the topics it covers. `buildRecord` never throws, which matters
- * because this listener is `async` — a throw here would be a rejected promise,
- * and NODE_OPTIONS="--unhandled-rejections=strict" in the Dockerfile makes that
- * fatal (issue #1526). The failure is logged with a bounded payload preview so a
- * broken publisher cannot flood the log.
+ * only record of the topics it covers. `buildRecord` is written not to throw,
+ * but nothing enforces that, so it is called inside a `try` — which matters
+ * because this listener is `async`: an escaping exception would be a rejected
+ * promise, and NODE_OPTIONS="--unhandled-rejections=strict" in the Dockerfile
+ * makes that fatal (issue #1526). See the backstop below. Either failure is
+ * logged with a bounded payload preview so a broken publisher cannot flood the
+ * log.
  */
 function startArchiving({ client, collection, env = process.env }) {
     client.on('message', async function (topic, message) {
