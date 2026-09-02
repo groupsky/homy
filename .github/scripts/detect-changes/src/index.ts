@@ -18,7 +18,7 @@ import { buildReverseDependencyMap, detectAffectedServices } from './lib/depende
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
-import { partitionBuildStrategy } from './lib/build-strategy.js';
+import { partitionBuildStrategy, servicesNeedingShaTag } from './lib/build-strategy.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
 import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
 
@@ -263,8 +263,11 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   const checkResult = await checkAllServices(servicesForCheck, options.baseSha);
   // Force-build directly-changed non-test services regardless of GHCR existence.
   const toBuild = Array.from(new Set([...mustBuild, ...checkResult.toBuild]));
-  const toRetag = checkResult.toRetag;
-  console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
+  // Services whose base-SHA image was found in GHCR. This answers "can this
+  // image be reused", which is NOT the same question as "which services need a
+  // tag at the new SHA" - see servicesNeedingShaTag below and issue #1544.
+  const existsAtBaseSha = checkResult.toRetag;
+  console.error(`To build: ${toBuild.length}, reusable at base SHA: ${existsAtBaseSha.length}`);
 
   // Step 10.5: Detect test-only changes
   console.error('Step 10.5: Detecting test-only changes...');
@@ -278,9 +281,9 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
     // Check if this is a test-only change (reuse precomputed status)
     if (testOnlyByService.get(serviceName)) {
-      // Verify that image exists in toRetag (already checked by Step 10)
-      // If image exists at base SHA, we can pull it for testing
-      if (toRetag.includes(serviceName)) {
+      // Verify the image exists at the base SHA (already checked by Step 10).
+      // If it does, we can pull it for testing instead of building.
+      if (existsAtBaseSha.includes(serviceName)) {
         toPullForTesting.push(serviceName);
       } else {
         // Image doesn't exist, must build despite test-only change
@@ -291,6 +294,15 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   }
 
   console.error(`Test-only changes: ${toPullForTesting.length}`);
+
+  // Every service NOT being rebuilt still needs an image at this commit's SHA,
+  // because deploy.sh pins IMAGE_TAG to the SHA for every compose service.
+  // Computed after the test-only loop above, which can still add to toBuild.
+  const toRetag = servicesNeedingShaTag({
+    allServices: services.map((s) => s.service_name),
+    toBuild,
+  });
+  console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
 
   console.error('Step 10.6: Grouping services by build context...');
   // Group services that share the same build context

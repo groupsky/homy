@@ -318,6 +318,28 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 - ✅ **Efficient Change Detection**: Only rebuilds affected services
 - ✅ **Cascading Updates**: Base image changes automatically rebuild dependent services
 
+### Stage 5B: image tags and the deploy contract
+
+`deploy.sh` exports `IMAGE_TAG="$NEW_VERSION"` (the full commit SHA) and every service in
+`docker-compose.yml` resolves `${IMAGE_TAG:-latest}`. **A default deploy therefore needs a
+SHA-tagged image for every service in the compose file, not just the ones a run rebuilt.**
+
+- Stage 5A (`Tag Built Images`) supplies that tag for services this run built.
+- Stage 5B (`Retag Unchanged Images`) supplies it for everything else, by retagging the
+  existing manifest. `to_retag` is *all compose services minus `to_build`* — see
+  `servicesNeedingShaTag` in `.github/scripts/detect-changes/src/lib/build-strategy.ts`.
+
+Do not confuse `to_retag` with retag *eligibility*. `partitionBuildStrategy` answers a
+different question — "may this service's image be reused rather than rebuilt?" — and its
+answer covers only changed and affected services. Using it for tagging was issue #1544: it
+left ~28 untouched services with no SHA tag, and every default deploy died on
+`manifest unknown` before it could stop a single container.
+
+Stage 5B sources the manifest from the previous commit's SHA tag, falling back to `:latest`
+with a warning for a service that has never been SHA-tagged. For a service that was not
+rebuilt those are the same manifest, and the fallback stops being taken once every service
+has been tagged once.
+
 ### Standalone Unit Test Workflows
 
 **Purpose**: Provide fast feedback for test-only changes without Docker build overhead.

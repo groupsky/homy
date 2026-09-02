@@ -13,7 +13,7 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { partitionBuildStrategy } from '../../src/lib/build-strategy.js';
+import { partitionBuildStrategy, servicesNeedingShaTag } from '../../src/lib/build-strategy.js';
 
 describe('partitionBuildStrategy', () => {
   test('directly-changed non-test service is force-built and NOT retag-eligible', () => {
@@ -98,5 +98,48 @@ describe('partitionBuildStrategy', () => {
 
     expect(result.mustBuild).toEqual([]);
     expect(result.retagEligible).toEqual([]);
+  });
+});
+
+describe('servicesNeedingShaTag', () => {
+  // deploy.sh pins IMAGE_TAG to the commit SHA for EVERY service in
+  // docker-compose.yml, so every service needs an image at that tag - not just
+  // the ones this run rebuilt. Before issue #1544 the retag list only ever held
+  // changed/affected services, so on a typical commit ~28 unchanged services got
+  // no SHA tag and a default deploy died on `manifest unknown`.
+  test('lists every service that is not being rebuilt', () => {
+    const result = servicesNeedingShaTag({
+      allServices: ['automations', 'dmx-driver', 'grafana', 'ha', 'mqtt-mongo-history'],
+      toBuild: ['dmx-driver', 'mqtt-mongo-history'],
+    });
+
+    expect(result).toEqual(['automations', 'grafana', 'ha']);
+  });
+
+  test('returns every service when nothing is rebuilt', () => {
+    expect(
+      servicesNeedingShaTag({ allServices: ['automations', 'grafana'], toBuild: [] })
+    ).toEqual(['automations', 'grafana']);
+  });
+
+  test('returns nothing when every service is rebuilt', () => {
+    expect(
+      servicesNeedingShaTag({ allServices: ['automations'], toBuild: ['automations'] })
+    ).toEqual([]);
+  });
+
+  test('is sorted and free of duplicates so the CI matrix is stable', () => {
+    const result = servicesNeedingShaTag({
+      allServices: ['zigbee', 'automations', 'zigbee', 'grafana'],
+      toBuild: [],
+    });
+
+    expect(result).toEqual(['automations', 'grafana', 'zigbee']);
+  });
+
+  test('ignores a service listed in toBuild that is not a compose service', () => {
+    expect(
+      servicesNeedingShaTag({ allServices: ['automations'], toBuild: ['ghost-service'] })
+    ).toEqual(['automations']);
   });
 });

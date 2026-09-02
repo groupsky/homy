@@ -1083,7 +1083,8 @@ jobs:
   # ============================================================================
   # Two jobs that ONLY run after Stage 3 AND all Stage 4 tests succeed:
   # A) Push Built Images - Tags and pushes newly built images to GHCR
-  # B) Retag Unchanged Images - Adds branch/latest tags to existing images
+  # B) Retag Unchanged Images - Tags every service NOT rebuilt at this commit's
+  #    SHA (plus latest/branch), so a default deploy can pull the whole stack
   # Critical rule: :latest tag ONLY applied after ALL tests pass
   # ============================================================================
 
@@ -1248,26 +1249,51 @@ jobs:
         run: |
           echo "=== Retagging existing image for ${{ matrix.service }} (image: $IMAGE_NAME) ==="
 
-          BASE_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:${{ steps.base-sha.outputs.sha }}"
-          echo "Base image: $BASE_IMAGE"
+          REPO="ghcr.io/groupsky/homy/$IMAGE_NAME"
+          BASE_IMAGE="$REPO:${{ steps.base-sha.outputs.sha }}"
 
-          # Determine new tag
-          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
-            NEW_TAG="latest"
+          # Pick the source manifest. Normally the previous commit's SHA tag.
+          #
+          # Before issue #1544 this job never created SHA tags at all, so a
+          # service that has not been rebuilt since may have no image at the base
+          # SHA. Fall back to :latest to bootstrap it - for a service that was NOT
+          # rebuilt, :latest IS its current content, so the two are the same
+          # manifest. Once a service has been tagged here the SHA chain is
+          # self-sustaining and this branch stops being taken.
+          if docker buildx imagetools inspect "$BASE_IMAGE" >/dev/null 2>&1; then
+            SOURCE="$BASE_IMAGE"
+            echo "Source: $SOURCE (base SHA)"
+          elif docker buildx imagetools inspect "$REPO:latest" >/dev/null 2>&1; then
+            SOURCE="$REPO:latest"
+            echo "::warning::No image at $BASE_IMAGE; bootstrapping from $REPO:latest (see issue #1544)"
           else
-            # Sanitize branch name for tag
-            BRANCH=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///' | sed 's/[^a-zA-Z0-9_.-]/-/g' | cut -c1-100)
-            NEW_TAG="$BRANCH"
+            echo "::error::No image to retag for ${{ matrix.service }}: neither $BASE_IMAGE nor $REPO:latest exists"
+            exit 1
           fi
 
-          NEW_IMAGE="ghcr.io/groupsky/homy/$IMAGE_NAME:$NEW_TAG"
-          echo "New tag: $NEW_IMAGE"
+          # The commit SHA tag is what deploy.sh pins IMAGE_TAG to, so EVERY
+          # service needs one or a default deploy dies on `manifest unknown`.
+          TAGS="$REPO:${{ github.sha }}"
+          TAGS="$TAGS $REPO:$(echo '${{ github.sha }}' | cut -c1-12)"
 
-          # Use imagetools create for manifest-only retag (no egress)
-          echo "Retagging (manifest-only, no download)..."
-          docker buildx imagetools create \
-            --tag "$NEW_IMAGE" \
-            "$BASE_IMAGE"
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            TAGS="$TAGS $REPO:latest"
+          else
+            BRANCH=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///' | sed 's/[^a-zA-Z0-9_.-]/-/g' | cut -c1-100)
+            TAGS="$TAGS $REPO:$BRANCH"
+          fi
+
+          # imagetools create is manifest-only: no layers are downloaded.
+          for TAG in $TAGS; do
+            if [ "$TAG" = "$SOURCE" ]; then
+              continue
+            fi
+            echo "Creating tag: $TAG"
+            if ! docker buildx imagetools create --tag "$TAG" "$SOURCE"; then
+              echo "::error::Failed to create tag: $TAG"
+              exit 1
+            fi
+          done
 
           echo "✅ Retag successful"
 

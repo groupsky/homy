@@ -57,3 +57,32 @@ export function partitionBuildStrategy(input: BuildStrategyInput): BuildStrategy
 
   return { mustBuild, retagEligible };
 }
+
+export interface ShaTagInput {
+  /** Every service in docker-compose.yml that has a GHCR image. */
+  allServices: string[];
+  /** Services this run rebuilds; they get their SHA tag from the build itself. */
+  toBuild: string[];
+}
+
+/**
+ * Services that need their existing image tagged at this commit's SHA.
+ *
+ * `deploy.sh` exports `IMAGE_TAG="$NEW_VERSION"` (the full commit SHA) and every
+ * service in `docker-compose.yml` resolves `${IMAGE_TAG:-latest}`, so a default
+ * deploy needs a SHA-tagged image for EVERY service — not only the ones this run
+ * rebuilt. Services that were rebuilt get that tag from the build; every other
+ * service must have its existing image retagged, or `docker compose pull` fails
+ * with `manifest unknown` and the deploy aborts. See issue #1544.
+ *
+ * This is deliberately "all services minus the ones being built", not
+ * "changed ∪ affected minus mustBuild" — the latter is the retag-*eligibility*
+ * question that `partitionBuildStrategy` answers, and it excludes the untouched
+ * services that make up most of the compose file.
+ */
+export function servicesNeedingShaTag(input: ShaTagInput): string[] {
+  const building = new Set(input.toBuild);
+  return Array.from(new Set(input.allServices))
+    .filter((name) => !building.has(name))
+    .sort();
+}
