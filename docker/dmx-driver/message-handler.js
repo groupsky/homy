@@ -38,8 +38,17 @@ function createMessageHandler (universe) {
     // Valid JSON is not necessarily the reading this driver expects: `null` has
     // no properties to destructure, and a missing `inputs` would otherwise
     // silently blank every channel.
-    if (payload === null || typeof payload !== 'object' || typeof payload.inputs !== 'number') {
-      console.error('Ignoring payload without a numeric inputs field for topic', topic,
+    //
+    // `inputs` must be an unsigned 32-bit flag field, not merely a number.
+    // `typeof === 'number'` admits Infinity, and `Infinity & bit` is 0 for every
+    // bit - the exact silent blanking this guard exists to prevent. It also
+    // admits fractional values, which the bitwise operators truncate, and
+    // negative ones, which would light every mapped channel. Note
+    // `Number.isSafeInteger(-1)` is true, so the range check is what closes
+    // negatives.
+    if (payload === null || typeof payload !== 'object' ||
+        !Number.isSafeInteger(payload.inputs) || payload.inputs < 0) {
+      console.error('Ignoring payload without an unsigned integer inputs field for topic', topic,
         `"${payloadPreview(message)}"`)
       return
     }

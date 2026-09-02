@@ -57,8 +57,39 @@ describe('createMessageHandler', () => {
       expect(() => handle(TOPIC, 'null')).not.toThrow()
     })
 
-    it('does not throw on a JSON scalar', () => {
-      expect(() => handle(TOPIC, '5')).not.toThrow()
+    it('drops a JSON scalar instead of blanking the universe', () => {
+      handle(TOPIC, '5')
+
+      expect(universe.frames).toHaveLength(0)
+      expect(errors).toHaveBeenCalledTimes(1)
+    })
+
+    // Infinity is the case the `typeof === 'number'` check let through, and it
+    // produces exactly the failure this guard exists to prevent: `Infinity & bit`
+    // is 0 for every bit, so every channel goes dark. It is also the only
+    // non-finite number JSON can carry - `NaN` is not valid JSON, so it is
+    // stopped by the parse guard instead.
+    it('drops an inputs field of Infinity rather than blanking every channel', () => {
+      handle(TOPIC, '{"inputs":2592}')
+      handle(TOPIC, '{"inputs":1e999}')
+
+      expect(universe.frames).toEqual([[128, 128, 128]])
+      expect(errors).toHaveBeenCalledTimes(1)
+    })
+
+    // `inputs` is an unsigned 32-bit flag field. A fractional value is silently
+    // truncated by the bitwise operators and a negative one turns every mapped
+    // channel on, so neither is a reading this driver should act on.
+    it('drops a fractional inputs field', () => {
+      handle(TOPIC, '{"inputs":32.7}')
+
+      expect(universe.frames).toHaveLength(0)
+    })
+
+    it('drops a negative inputs field rather than lighting every channel', () => {
+      handle(TOPIC, '{"inputs":-1}')
+
+      expect(universe.frames).toHaveLength(0)
     })
 
     it('leaves the universe untouched rather than blanking it', () => {

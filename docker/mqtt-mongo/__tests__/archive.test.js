@@ -121,6 +121,32 @@ describe('startArchiving with a malformed payload', () => {
         expect(collection.inserted[1].payload._parseError).toBeUndefined()
     })
 
+    // The archiver must decide from what buildRecord tells it, not from a field
+    // on the document: `_parseError` and `_raw` are ordinary JSON keys that any
+    // publisher can put in a perfectly valid payload.
+    it('does not report a parse failure for a valid payload carrying its own _parseError', async () => {
+        const client = new EventEmitter()
+        const collection = fakeCollection()
+        const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+        startArchiving({ client, collection, env: {} })
+
+        await messageListener(client)('ioniq/raw/obc', '{"_parseError":"legit","soc":36}')
+
+        expect(errors).not.toHaveBeenCalled()
+        expect(collection.inserted[0].payload.soc).toBe(36)
+        expect(collection.inserted[0].payload._parseError).toBe('legit')
+    })
+
+    it('does not report a parse failure for a valid payload carrying its own _raw', async () => {
+        const client = new EventEmitter()
+        const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+        startArchiving({ client, collection: fakeCollection(), env: {} })
+
+        await messageListener(client)('ioniq/raw/obc', '{"_raw":"62BC03"}')
+
+        expect(errors).not.toHaveBeenCalled()
+    })
+
     it('does not log for a well-formed payload', async () => {
         const client = new EventEmitter()
         const errors = jest.spyOn(console, 'error').mockImplementation(() => {})

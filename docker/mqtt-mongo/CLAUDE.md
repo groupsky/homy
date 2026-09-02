@@ -104,6 +104,21 @@ the document past MongoDB's 16 MB limit: `insertOne` failing is fatal by design
 (the container restarts and retries), which would reintroduce the crash the guard
 removes.
 
+`buildRecord` returns `{ record, error }` — the document to insert, and `null` or
+the reason it had to be wrapped. **The archiver decides from that flag, never from
+a field on the document.** `_raw` and `_parseError` are ordinary JSON keys, so a
+publisher can send them inside a perfectly valid payload; a caller that
+distinguished on them would report a parse failure that never happened. For the
+same reason a *consumer* of this archive cannot treat those fields as proof that a
+document was wrapped — only that the producer or the archiver put them there.
+
+`archive.js` also calls `buildRecord` inside a `try`. `buildRecord` is written not
+to throw, but nothing enforces that invariant, and this listener is `async` — so
+the backstop makes the no-crash guarantee structural rather than an argument about
+the current implementation. If it ever fires, the message is dropped (one message
+lost beats losing the archiver) and logged as `Failed to build record for topic
+<topic> "<preview>" <error>`.
+
 `archive.js` logs `Failed to parse payload for topic <topic> "<preview>" <reason>
 - archiving raw`. The preview comes from `payload-preview.js`, at most the first
 100 characters with `... (N chars)` appended, so a chatty broken publisher cannot
@@ -114,6 +129,18 @@ behaviour and its test suite are kept identical.
 
 A consumer reading this archive must expect `_raw`/`_parseError` documents
 alongside normal ones and skip or handle them.
+
+**Retention caveat.** `mqtt-mongo-ioniq` sets `TTL_EXPIRE_SECONDS=7776000`, so
+wrapped documents expire with everything else. `mqtt-mongo-history` sets no TTL at
+all, so a persistently malformed publisher on `/homy/br1/temp` — which previously
+crash-looped the archiver, making the problem loud — now accumulates up to 64 KiB
+per message indefinitely. That is the deliberate cost of not dropping; watch the
+`history` collection size if a producer there starts misbehaving.
+
+Separately, and pre-existing: an incoming payload that already carries `_ts` keeps
+it (see `buildRecord`), so a producer sending a *string* `_ts` still yields a
+document the TTL index cannot expire. The wrapper argument above only covers
+payloads this service stamps itself.
 
 ## Testing
 

@@ -38,6 +38,13 @@ function isArchivableObject(value) {
 /**
  * Builds the Mongo record for one MQTT message.
  *
+ * Returns `{ record, error }`. `record` is the document to insert; `error` is
+ * `null`, or the reason the payload could not be archived as it arrived. The
+ * reason is returned alongside the document rather than read back off it: the
+ * wrapper's `_raw` and `_parseError` are ordinary JSON keys, so a publisher can
+ * put them in a perfectly valid payload and a caller that distinguished on them
+ * would report a parse failure that never happened.
+ *
  * Both timestamps are only set when absent, so re-processing or a producer that
  * already stamped them is preserved. `now` is injectable for deterministic
  * tests.
@@ -50,13 +57,17 @@ function isArchivableObject(value) {
  */
 function buildRecord(topic, message, now = new Date()) {
     let payload
+    let error = null
     try {
         payload = JSON.parse(message)
         if (!isArchivableObject(payload)) {
-            payload = wrapRaw(message, `payload is not a JSON object (${typeof payload})`)
+            error = `payload is not a JSON object (${typeof payload})`
         }
     } catch (err) {
-        payload = wrapRaw(message, err.message)
+        error = err.message
+    }
+    if (error !== null) {
+        payload = wrapRaw(message, error)
     }
     if (!payload[TZ_FIELD]) {
         payload[TZ_FIELD] = now.getTime()
@@ -64,7 +75,7 @@ function buildRecord(topic, message, now = new Date()) {
     if (!payload[TS_FIELD]) {
         payload[TS_FIELD] = now
     }
-    return { topic, payload }
+    return { record: { topic, payload }, error }
 }
 
 function wrapRaw(message, reason) {

@@ -47,10 +47,18 @@ What the handler guarantees:
 - **A payload that is not valid JSON is dropped, not fatal.** It logs
   `Failed to parse payload for topic <topic> "<preview>" <error>` and returns.
 - **Valid JSON that is not a usable reading is also dropped.** `null` has no
-  properties to destructure, and an object without a numeric `inputs` would
+  properties to destructure, and an object without a usable `inputs` would
   otherwise silently blank every channel — worse than ignoring the message. Both
-  log `Ignoring payload without a numeric inputs field for topic <topic>
-  "<preview>"` and return.
+  log `Ignoring payload without an unsigned integer inputs field for topic
+  <topic> "<preview>"` and return.
+- **`inputs` must be an unsigned safe integer, not merely a number.** A
+  `typeof === 'number'` check admits `Infinity`, and `Infinity & bit` is 0 for
+  every bit — the exact silent blanking the guard exists to prevent, reachable
+  from JSON as `1e999`. It also admits fractional values (truncated by the
+  bitwise operators) and negatives (`-1` lights every mapped channel). Note that
+  `Number.isSafeInteger(-1)` is `true`, so the explicit `>= 0` check is what
+  closes negatives. `NaN` cannot arrive — it is not valid JSON — so the parse
+  guard stops it first.
 - **The universe is left untouched on a dropped message.** The previous frame
   stands; one bad publish does not reset the lights.
 - **The log carries a bounded preview.** `payload-preview.js` renders at most

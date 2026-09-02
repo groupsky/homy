@@ -1,4 +1,4 @@
-const { buildRecord, ERROR_FIELD } = require('./record')
+const { buildRecord } = require('./record')
 const { payloadPreview } = require('./payload-preview')
 const { ttlIndexArgsFromEnv } = require('./ttl')
 
@@ -22,13 +22,25 @@ const { ttlIndexArgsFromEnv } = require('./ttl')
  */
 function startArchiving({ client, collection, env = process.env }) {
     client.on('message', async function (topic, message) {
-        const record = buildRecord(topic, message)
-        if (record.payload[ERROR_FIELD]) {
+        let built
+        try {
+            built = buildRecord(topic, message)
+        } catch (err) {
+            // buildRecord is written not to throw, but nothing enforces that
+            // invariant. This backstop makes the guarantee structural: an
+            // exception here would be a rejected promise, which
+            // NODE_OPTIONS="--unhandled-rejections=strict" turns into exit 1.
+            // Losing one message is strictly better than losing the archiver.
+            console.error('Failed to build record for topic', topic,
+                `"${payloadPreview(message)}"`, err)
+            return
+        }
+        if (built.error) {
             console.error('Failed to parse payload for topic', topic,
-                `"${payloadPreview(message)}"`, record.payload[ERROR_FIELD], '- archiving raw')
+                `"${payloadPreview(message)}"`, built.error, '- archiving raw')
         }
         try {
-            await collection.insertOne(record)
+            await collection.insertOne(built.record)
         } catch (err) {
             console.error('Failure writing to mongo', err)
             process.exit(1)
