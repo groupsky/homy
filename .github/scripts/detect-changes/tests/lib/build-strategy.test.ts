@@ -13,7 +13,11 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { partitionBuildStrategy } from '../../src/lib/build-strategy.js';
+import {
+  imageNamesNeedingShaTag,
+  partitionBuildStrategy,
+  servicesNeedingShaTag,
+} from '../../src/lib/build-strategy.js';
 
 describe('partitionBuildStrategy', () => {
   test('directly-changed non-test service is force-built and NOT retag-eligible', () => {
@@ -98,5 +102,114 @@ describe('partitionBuildStrategy', () => {
 
     expect(result.mustBuild).toEqual([]);
     expect(result.retagEligible).toEqual([]);
+  });
+});
+
+describe('servicesNeedingShaTag', () => {
+  // deploy.sh pins IMAGE_TAG to the commit SHA for EVERY service in
+  // docker-compose.yml, so every service needs an image at that tag - not just
+  // the ones this run rebuilt. Before issue #1544 the retag list only ever held
+  // changed/affected services, so on a typical commit ~28 unchanged services got
+  // no SHA tag and a default deploy died on `manifest unknown`.
+  test('lists every service that is not being rebuilt', () => {
+    const result = servicesNeedingShaTag({
+      allServices: ['automations', 'dmx-driver', 'grafana', 'ha', 'mqtt-mongo-history'],
+      toBuild: ['dmx-driver', 'mqtt-mongo-history'],
+    });
+
+    expect(result).toEqual(['automations', 'grafana', 'ha']);
+  });
+
+  test('returns every service when nothing is rebuilt', () => {
+    expect(
+      servicesNeedingShaTag({ allServices: ['automations', 'grafana'], toBuild: [] })
+    ).toEqual(['automations', 'grafana']);
+  });
+
+  test('returns nothing when every service is rebuilt', () => {
+    expect(
+      servicesNeedingShaTag({ allServices: ['automations'], toBuild: ['automations'] })
+    ).toEqual([]);
+  });
+
+  test('is sorted and free of duplicates so the CI matrix is stable', () => {
+    const result = servicesNeedingShaTag({
+      allServices: ['zigbee', 'automations', 'zigbee', 'grafana'],
+      toBuild: [],
+    });
+
+    expect(result).toEqual(['automations', 'grafana', 'zigbee']);
+  });
+
+  test('ignores a service listed in toBuild that is not a compose service', () => {
+    expect(
+      servicesNeedingShaTag({ allServices: ['automations'], toBuild: ['ghost-service'] })
+    ).toEqual(['automations']);
+  });
+});
+
+describe('imageNamesNeedingShaTag', () => {
+  // Stage 5B writes tags on IMAGE names while its matrix used to be SERVICE
+  // names. Five modbus-serial services share one image, so a run that rebuilt
+  // one of them had stage 5A and stage 5B writing `modbus-serial:<sha>` in
+  // parallel, and spawned four redundant runners to do it.
+  const serviceImageNames = {
+    'modbus-serial-monitoring': 'modbus-serial',
+    'modbus-serial-monitoring2': 'modbus-serial',
+    'modbus-serial-dry-switches': 'modbus-serial',
+    'mqtt-mongo-history': 'mqtt-mongo',
+    'mqtt-mongo-ioniq': 'mqtt-mongo',
+    automations: 'automations',
+    grafana: 'grafana',
+  };
+
+  test('collapses services sharing an image to a single entry', () => {
+    const result = imageNamesNeedingShaTag({
+      serviceImageNames,
+      toRetag: Object.keys(serviceImageNames).sort(),
+      toBuild: [],
+    });
+
+    expect(result).toEqual(['automations', 'grafana', 'modbus-serial', 'mqtt-mongo']);
+  });
+
+  test('drops an image that stage 5A is already tagging via a sibling service', () => {
+    // monitoring2 and dry-switches are in to_retag, but their image is being
+    // built for monitoring. Retagging it would race stage 5A on the same tag.
+    const result = imageNamesNeedingShaTag({
+      serviceImageNames,
+      toRetag: ['modbus-serial-monitoring2', 'modbus-serial-dry-switches', 'grafana'],
+      toBuild: ['modbus-serial-monitoring'],
+    });
+
+    expect(result).toEqual(['grafana']);
+  });
+
+  test('returns nothing when every retagged image is also being built', () => {
+    expect(
+      imageNamesNeedingShaTag({
+        serviceImageNames,
+        toRetag: ['mqtt-mongo-ioniq'],
+        toBuild: ['mqtt-mongo-history'],
+      })
+    ).toEqual([]);
+  });
+
+  test('falls back to the service name when it has no mapped image', () => {
+    // getImageName already falls back to the service name for a non-homy image;
+    // an absent key must not become the string "undefined" in a docker tag.
+    expect(
+      imageNamesNeedingShaTag({ serviceImageNames: {}, toRetag: ['ha'], toBuild: [] })
+    ).toEqual(['ha']);
+  });
+
+  test('is sorted so the CI matrix is stable across runs', () => {
+    const result = imageNamesNeedingShaTag({
+      serviceImageNames: { c: 'zeta', a: 'alpha', b: 'mid' },
+      toRetag: ['c', 'a', 'b'],
+      toBuild: [],
+    });
+
+    expect(result).toEqual(['alpha', 'mid', 'zeta']);
   });
 });

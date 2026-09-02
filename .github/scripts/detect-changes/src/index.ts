@@ -18,7 +18,11 @@ import { buildReverseDependencyMap, detectAffectedServices } from './lib/depende
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
-import { partitionBuildStrategy } from './lib/build-strategy.js';
+import {
+  imageNamesNeedingShaTag,
+  partitionBuildStrategy,
+  servicesNeedingShaTag,
+} from './lib/build-strategy.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
 import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
 
@@ -145,6 +149,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     // Build strategy outputs
     to_build: JSON.stringify(result.to_build),
     to_retag: JSON.stringify(result.to_retag),
+    retag_image_names: JSON.stringify(result.retag_image_names),
     to_pull_for_testing: JSON.stringify(result.to_pull_for_testing),
     build_groups: JSON.stringify(result.build_groups),
     service_image_names: JSON.stringify(result.service_image_names),
@@ -263,8 +268,11 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   const checkResult = await checkAllServices(servicesForCheck, options.baseSha);
   // Force-build directly-changed non-test services regardless of GHCR existence.
   const toBuild = Array.from(new Set([...mustBuild, ...checkResult.toBuild]));
-  const toRetag = checkResult.toRetag;
-  console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
+  // Services whose base-SHA image was found in GHCR. This answers "can this
+  // image be reused", which is NOT the same question as "which services need a
+  // tag at the new SHA" - see servicesNeedingShaTag below and issue #1544.
+  const existsAtBaseSha = checkResult.toRetag;
+  console.error(`To build: ${toBuild.length}, reusable at base SHA: ${existsAtBaseSha.length}`);
 
   // Step 10.5: Detect test-only changes
   console.error('Step 10.5: Detecting test-only changes...');
@@ -278,9 +286,9 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
 
     // Check if this is a test-only change (reuse precomputed status)
     if (testOnlyByService.get(serviceName)) {
-      // Verify that image exists in toRetag (already checked by Step 10)
-      // If image exists at base SHA, we can pull it for testing
-      if (toRetag.includes(serviceName)) {
+      // Verify the image exists at the base SHA (already checked by Step 10).
+      // If it does, we can pull it for testing instead of building.
+      if (existsAtBaseSha.includes(serviceName)) {
         toPullForTesting.push(serviceName);
       } else {
         // Image doesn't exist, must build despite test-only change
@@ -291,6 +299,27 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   }
 
   console.error(`Test-only changes: ${toPullForTesting.length}`);
+
+  // Every service NOT being rebuilt still needs an image at this commit's SHA,
+  // because deploy.sh pins IMAGE_TAG to the SHA for every compose service.
+  // Computed after the test-only loop above, which can still add to toBuild.
+  const toRetag = servicesNeedingShaTag({
+    allServices: services.map((s) => s.service_name),
+    toBuild,
+  });
+
+  // Stage 5B tags by GHCR image name, and several services share one image, so
+  // the retag matrix is driven by the distinct image names rather than by
+  // service names. Anything stage 5A will tag is subtracted: both jobs run in
+  // parallel and would otherwise race on the same `<image>:<sha>` tag.
+  const serviceImageNames = Object.fromEntries(
+    services.map((s) => [s.service_name, getImageName(s)])
+  );
+  const retagImageNames = imageNamesNeedingShaTag({ serviceImageNames, toRetag, toBuild });
+  console.error(
+    `To build: ${toBuild.length}, To retag: ${toRetag.length} ` +
+      `(${retagImageNames.length} distinct images)`
+  );
 
   console.error('Step 10.6: Grouping services by build context...');
   // Group services that share the same build context
@@ -381,6 +410,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     affected_services: affectedServices,
     to_build: toBuild,
     to_retag: toRetag,
+    retag_image_names: retagImageNames,
     to_pull_for_testing: toPullForTesting.sort(),
     testable_services: testableServices,
     healthcheck_services: healthcheckServices,
@@ -388,7 +418,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     build_groups: buildGroups,
     // Map every GHCR service to its compose image name so CI can publish/pull/tag
     // by shared image name (services sharing an image share the GHCR package).
-    service_image_names: Object.fromEntries(services.map((s) => [s.service_name, getImageName(s)])),
+    service_image_names: serviceImageNames,
   };
 }
 

@@ -119,6 +119,8 @@ export interface DetectionResult {
   to_build: string[];
   /** Services that can be retagged */
   to_retag: string[];
+  /** Distinct GHCR image names stage 5B must retag at this commit's SHA */
+  retag_image_names: string[];
   /** Services that need testing but can use existing images from GHCR */
   to_pull_for_testing: string[];
   /** Services with tests that should be run */
