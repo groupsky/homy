@@ -123,7 +123,9 @@ fi
 
 # Fetch latest and determine new version
 log "Fetching latest changes from origin..."
-git fetch origin master
+# Non-recursive for the same reason as the pull below - `git fetch` is one of
+# the commands submodule.recurse applies to. See git_no_submodules(), #1406.
+git_no_submodules fetch origin master
 
 NEW_VERSION="${IMAGE_TAG:-$(git rev-parse origin/master)}"
 log "Target version: $NEW_VERSION"
@@ -178,9 +180,11 @@ fi
 
 # Update code (only if not using IMAGE_TAG override)
 if [ -z "$IMAGE_TAG" ]; then
-    log "Pulling latest code..."
-    git checkout master
-    git pull origin master
+    if ! update_code; then
+        error "Failed to update code to origin/master"
+        notify "Deployment failed: could not update code"
+        exit 1
+    fi
     NEW_VERSION=$(git rev-parse HEAD)
 fi
 

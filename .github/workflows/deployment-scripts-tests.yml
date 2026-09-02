@@ -64,6 +64,11 @@ jobs:
           cd scripts/tests
           ./bats-core/bin/bats restore.bats
 
+      - name: Run deploy.sh tests
+        run: |
+          cd scripts/tests
+          ./bats-core/bin/bats deploy.bats
+
       - name: Test Summary
         if: always()
         run: |

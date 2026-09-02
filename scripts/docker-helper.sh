@@ -521,6 +521,61 @@ is_detached_head() {
     [ "$branch" = "HEAD" ]
 }
 
+# Run git with submodule recursion disabled for this invocation
+# Usage: git_no_submodules pull origin master
+#
+# routy's global git config sets submodule.recurse=true, which makes git pull
+# recurse into this repository's submodules. On a clean, fast-forward-only pull
+# that touches no submodule pointer, that recursion dies with
+#   fatal: bad object 0000000000000000000000000000000000000000
+# before anything is updated, so every default (no --tag) deploy is blocked at
+# the code-update step. Running the same pull with submodule.recurse=false
+# fast-forwards cleanly - the evidence, from routy, is in issue #1406.
+#
+# -c applies to this invocation only: it does not change the host's config, and
+# it keeps working on a host where submodule.recurse was never set.
+# Submodules are updated afterwards by update_submodules(), explicitly.
+git_no_submodules() {
+    git -c submodule.recurse=false "$@"
+}
+
+# Bring submodules to the commits the superproject records
+# Usage: update_submodules [log_file]
+# Always returns 0 - a stale submodule must not abort a deploy
+#
+# git_no_submodules() takes submodule updates out of the pull, so they have to
+# happen here instead. They cannot simply be dropped: docker-compose.yml
+# bind-mounts docker/homeassistant/custom_components/sunseeker-lawn-mower into
+# the Home Assistant container, so a submodule pointer bump on master has to
+# reach the working tree to take effect.
+#
+# Non-fatal on purpose. By this point the deploy has already fetched its images
+# and is about to back up and restart; failing here would abort a deploy over
+# submodules that no service needs to be at their newest recorded commit.
+update_submodules() {
+    local log_file="${1:-${LOG_FILE:-/dev/null}}"
+
+    log "Updating submodules..."
+    if ! git submodule update --init --recursive 2>&1 | tee -a "$log_file"; then
+        log "WARNING: submodule update failed. Continuing with the submodules already checked out."
+    fi
+    return 0
+}
+
+# Update the working tree to origin/master
+# Usage: update_code
+# Returns 0 on success, non-zero if the checkout or pull failed
+#
+# The deploy path's only writer of the working tree. Kept here rather than
+# inline in deploy.sh so the submodule handling above has one home and can be
+# tested. See issue #1406.
+update_code() {
+    log "Pulling latest code..."
+    git_no_submodules checkout master || return $?
+    git_no_submodules pull origin master || return $?
+    update_submodules
+}
+
 # Format version string for display (truncate long git SHAs)
 # Usage: short_version=$(format_version_short "$version")
 format_version_short() {
@@ -625,9 +680,12 @@ checkout_git_version() {
     log "Checking out version: $version"
     log "WARNING: This will put the repository in detached HEAD state"
 
-    if ! git checkout "$version" 2>&1 | tee -a "$log_file"; then
+    # Non-recursive: submodule.recurse applies to checkout too, and a rollback
+    # that fails here degrades to "continuing with current code" - a rollback
+    # that silently does not roll the code back. See git_no_submodules(), #1406.
+    if ! git_no_submodules checkout "$version" 2>&1 | tee -a "$log_file"; then
         log "WARNING: git checkout failed. Trying with --force..."
-        if ! git checkout --force "$version" 2>&1 | tee -a "$log_file"; then
+        if ! git_no_submodules checkout --force "$version" 2>&1 | tee -a "$log_file"; then
             log "WARNING: Could not checkout version. Continuing with current code."
             return 1
         fi
@@ -670,6 +728,9 @@ export -f save_backup_reference
 export -f get_git_commit
 export -f get_git_branch
 export -f is_detached_head
+export -f git_no_submodules
+export -f update_submodules
+export -f update_code
 export -f format_version_short
 export -f determine_backup_name
 export -f validate_backup_or_exit
