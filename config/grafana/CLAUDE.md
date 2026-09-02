@@ -32,6 +32,65 @@ This directory contains Grafana configuration, dashboards, and provisioning for 
 - **General dashboards**: 1m-5m for regular use
 - **Historical dashboards**: 1h for analysis views
 
+### SI-prefixed units change unit below 1
+
+**A Grafana unit built with `SIPrefix` is not a fixed suffix.** It is a
+thousand-based scale in *both* directions: the formatter takes
+`Math.floor(log1000(|value|))`, and for any value below 1 that exponent is
+negative, so the number is multiplied by 1000 and the suffix picks up a smaller
+prefix. Nothing warns you; the panel just changes unit.
+
+The worked example is `pressurebar` (`SIPrefix('bar')`), verified against the
+value formatter in `ghcr.io/groupsky/homy/grafana:9.5.21`:
+
+| value | `"unit": "pressurebar"` | `"unit": "suffix: bar"` |
+|---|---|---|
+| 2.07 | `2.070 bar` | `2.070 bar` |
+| 0.80 | `800.000 mbar` | `0.800 bar` |
+| 0.21 | `210.000 mbar` | `0.210 bar` |
+
+The four raw tyre tiles on `Ioniq EV / Overview` used `pressurebar`. Normal
+readings looked right; a genuinely flat tyre rendered `800.00 mbar` — coloured
+red, correctly, and in a different unit from the alert text, the door placard
+and the three healthy tiles beside it. That is the one moment the tile most
+needed to be unambiguous. Issue #1481.
+
+**Which units do this:** `volt`, `mvolt`, `amp`, `watt`, `kwatt`, `kwatth`,
+`pressurebar`, `pressurepa`, `ohm`, `hertz`, `litre` and about ninety more —
+the full list is `SI_SCALING_UNITS` in
+`.github/scripts/validate-grafana-alerts/src/lib/units.ts`, derived from the
+deployed image. The dynamic `"unit": "si: bar"` spelling does it too: Grafana
+turns it into the same `SIPrefix` formatter for an arbitrary base unit.
+
+**Which do not:** `celsius`, `kelvin`, `percent`, `percentunit`, `humidity`,
+`degree`, `none` and every custom `suffix: x` / `prefix: x` are fixed strings.
+`short` and `pressurepsi` are scaled but clamp at zero, so they scale up and
+never down.
+
+**What to do:**
+- A series that must always read in one unit gets a fixed suffix. The pattern
+  in this repository is `"unit": "suffix: bar"`, alongside `"suffix: km"`,
+  `"suffix: V"`, `"suffix: A"`, `"suffix: W"` and `"suffix: kΩ"`.
+- A series that genuinely spans decades — appliance power from standby to
+  kilowatts — should keep the SI unit; auto-scaling is the reason to use it.
+- **A panel whose own thresholds are written below 1 in magnitude must be
+  fixed, not excused.** A threshold is written in the base unit, so a step at
+  `0.1` (or `-0.5` — the formatter scales on `|value|`) says the interesting
+  part of the series lies exactly where the formatter switches:
+  the tile reads `100.00 mV` beside a threshold written `0.1`. The two `12 V
+  Sag` panels on `Ioniq EV / 12 V & LDC` were that case, and so were the two
+  mower current panels (thresholds 5 A and 10 A, idle current below 1 A) and
+  the heat-pump `Power` panel (25 W / 3000 W).
+- Either way the decision is recorded. `SI_UNIT_EXCEPTIONS` in the file above
+  lists every panel that keeps an SI-scaling unit, with the reason, and
+  `npm run validate` fails on any panel that uses one without an entry. It
+  reads `fieldConfig.defaults.unit`, per-series unit overrides
+  (`{ id: "unit", value: … }`), and `yaxes[].format` on legacy angular `graph`
+  panels — and it refuses an exception outright when the panel has a threshold
+  below 1 in magnitude. It also fails when `docker/grafana/Dockerfile` no longer
+  pins the Grafana version the unit list was derived from, since a bump can add
+  or re-base a unit without anything else noticing.
+
 ### Dashboard Navigation
 
 **Connected Dashboards:**
@@ -566,6 +625,9 @@ Grafana's own internal state (users, dashboard metadata, alert rule state, ngale
 ### Testing and Validation
 
 **Dashboard Testing:**
+- Run `npm run validate` in `.github/scripts/validate-grafana-alerts` — it
+  checks alert evaluator types and dashboard panel units (see
+  "SI-prefixed units change unit below 1")
 - Verify all panels load data correctly
 - Test variable interactions and filtering
 - Confirm time range handling and refresh behavior

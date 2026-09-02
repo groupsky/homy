@@ -1,8 +1,13 @@
 name: Validate Grafana Alerts
 
-# Rejects evaluator types Grafana cannot build, in provisioned alert rules.
-# An unsupported type (`gte`, `lte`) does not fail provisioning - the rule is
-# created, looks healthy, and silently never evaluates. See issues #1472, #1475.
+# Rejects Grafana provisioning that loads cleanly and is wrong at run time.
+#
+# 1. Evaluator types Grafana cannot build, in provisioned alert rules. An
+#    unsupported type (`gte`, `lte`) does not fail provisioning - the rule is
+#    created, looks healthy, and silently never evaluates. Issues #1472, #1475.
+# 2. Self-rescaling units on dashboard panels. Grafana's SIPrefix units
+#    multiply by 1000 and change their suffix below 1, so a tyre-pressure tile
+#    in `pressurebar` shows a flat tyre as `800.00 mbar`. Issue #1481.
 #
 # NOTE: this is not currently a required status check on `master`. A red result
 # reports but does not block merge until it is added to the branch ruleset.
@@ -11,18 +16,20 @@ on:
   push:
     paths:
       - 'config/grafana/provisioning/alerting/**'
+      - 'config/grafana/dashboards/**'
       - '.github/scripts/validate-grafana-alerts/**'
       - '.github/workflows/validate-grafana-alerts.yml'
   pull_request:
     paths:
       - 'config/grafana/provisioning/alerting/**'
+      - 'config/grafana/dashboards/**'
       - '.github/scripts/validate-grafana-alerts/**'
       - '.github/workflows/validate-grafana-alerts.yml'
   workflow_dispatch:
 
 jobs:
   validate-evaluators:
-    name: Validate Alert Evaluators
+    name: Validate Alert Evaluators and Dashboard Units
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -46,6 +53,6 @@ jobs:
         working-directory: .github/scripts/validate-grafana-alerts
         run: npm test
 
-      - name: Validate alert rule evaluators
+      - name: Validate alert rule evaluators and dashboard units
         working-directory: .github/scripts/validate-grafana-alerts
         run: npm run validate

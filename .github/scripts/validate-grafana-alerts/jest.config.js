@@ -11,6 +11,10 @@ export default {
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
+      // tsconfig.json pins rootDir to src/ for the build. Tests live outside
+      // it and may import a helper of their own (tests/lib/grafana-value-format.ts),
+      // which tsc rejects under that rootDir. Widen it for compilation only.
+      tsconfig: { rootDir: '.' },
     }],
   },
   collectCoverageFrom: [
