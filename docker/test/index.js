@@ -42,6 +42,9 @@ client.on('message', (topic, message) => {
     console.log(`< [${topic}]: ${message}`)
     // message is Buffer
     if (topic === '/modbus/dry-switches/relays00-15/write') {
+        // Deliberately unguarded, unlike the live services fixed in #1526: this
+        // is the integration-test harness (docker-compose.test.yml), where a
+        // malformed payload means the run has failed and crashing is the signal.
         const msg = JSON.parse(message)
         if (msg.out8 === true) {
             clearTimeout(timer)

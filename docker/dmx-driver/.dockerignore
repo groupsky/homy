@@ -5,3 +5,7 @@ Dockerfile.old
 .nvmrc
 .git
 .github
+jest.config.js
+__tests__
+*.test.js
+coverage

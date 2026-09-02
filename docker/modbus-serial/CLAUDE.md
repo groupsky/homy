@@ -92,6 +92,48 @@ node cli/test-device.js
 npm test
 ```
 
+## MQTT Integration
+
+The `mqtt` integration (`integrations/mqtt.js`) publishes readings to
+`publishTopic` and, when `subscribeTopic` is configured, subscribes each writable
+device to its own `.../write` command topic. Five instances subscribe in
+production (`monitoring`, `monitoring2`, `dry-switches`, `solar`, `inverter`).
+
+### Malformed Payload Handling
+
+The `message` listener runs inside the MQTT client's stream: `handlePublish`
+emits `message` from `writable._write`. An exception escaping it surfaces as an
+unhandled `error` event on that stream and **kills the process** — which stops
+the bus *reader* as well as the writer, so readings stop too. The service is
+`restart: unless-stopped`, so a payload published with `retain` is redelivered on
+reconnect and the service crash-loops. Issue #1526 was exactly that, a bare
+`JSON.parse`.
+
+A parse failure and a subscriber failure are two distinct faults and are handled
+and logged separately, so a broken publisher and a broken device driver are
+distinguishable in the log:
+
+- **A payload that is not valid JSON is dropped, not fatal.** The listener logs
+  ``[mqtt] failed to parse payload for topic <topic> "<preview>" <error>`` and
+  returns without invoking the subscriber. Later messages on that topic, and on
+  every other topic, are unaffected.
+- **A failing subscriber is contained too.** The subscriber is `async` and is
+  invoked without `await`, so it can fail either by throwing synchronously or by
+  rejecting — and the Dockerfile's `NODE_OPTIONS="--unhandled-rejections=strict"`
+  makes an unhandled rejection fatal as well. Both are caught and logged as
+  ``[mqtt] error in subscriber for topic <topic> <error>``. The next message is
+  still delivered.
+- **The log carries a bounded preview.** `payload-preview.js` renders at most
+  the first 100 characters and appends `... (N chars)` when it truncates, so a
+  chatty broken publisher cannot flood the log. It is a copy of
+  `docker/automations/lib/payload-preview.js` — the services are separate npm
+  packages with separate `node_modules`, so it cannot be shared by `require`; the
+  behaviour and its test suite are kept identical.
+
+A device driver's `write` must still validate the *shape* of what it receives:
+valid JSON is not necessarily the command the driver expects, and `null` is valid
+JSON.
+
 ## Monitoring and Debugging
 
 ### Health Checks

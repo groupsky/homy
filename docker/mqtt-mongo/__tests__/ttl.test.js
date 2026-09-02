@@ -35,7 +35,9 @@ describe('ttlIndexArgsFromEnv', () => {
 
 describe('TTL index / record alignment (regression guard for the broken ttl__ts index)', () => {
     it('the TTL index field path resolves to the BSON Date buildRecord stamps', () => {
-        const doc = buildRecord('ioniq/parsed/bms/2101', '{"_type":"ioniq","soc":36}', new Date('2026-07-14T00:00:00.000Z'))
+        // `record` is the document archive.js inserts, so the index path is
+        // walked over exactly what Mongo will hold.
+        const { record: doc } = buildRecord('ioniq/parsed/bms/2101', '{"_type":"ioniq","soc":36}', new Date('2026-07-14T00:00:00.000Z'))
         const value = TTL_FIELD_PATH.split('.').reduce((o, k) => (o == null ? o : o[k]), doc)
         // If the index targeted top-level "_ts" (the production bug), this would be
         // undefined and Mongo's TTL monitor would never expire anything.

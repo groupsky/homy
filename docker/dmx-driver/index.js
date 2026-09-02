@@ -2,6 +2,7 @@
 /* eslint-env node */
 const { DMX } = require('dmx')
 const mqtt = require('mqtt')
+const { createMessageHandler } = require('./message-handler')
 
 const mqttUrl = process.env.BROKER
 const topic = process.env.TOPIC
@@ -43,16 +44,7 @@ client.on('connect', function () {
   })
 })
 
-const st = [0, 0, 0, 0]
-
-client.on('message', function (topic, message) {
-  const { inputs } = JSON.parse(message)
-  st[1] = (inputs & 32) ? 128 : 0
-  st[2] = (inputs & 512) ? 128 : 0
-  st[3] = (inputs & 2048) ? 128 : 0
-  dmx.set(st.slice(1))
-  console.log(st)
-})
+client.on('message', createMessageHandler(dmx))
 
 dmx.setHz(20)
 dmx.step(5)

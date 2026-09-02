@@ -328,7 +328,9 @@ The following standalone workflows run unit tests independently from the unified
 |----------|---------|-------------|
 | `test-automations.yml` | automations | `docker/automations/**` |
 | `test-automation-events-processor.yml` | automation-events-processor | `docker/automation-events-processor/**` |
+| `test-dmx-driver.yml` | dmx-driver | `docker/dmx-driver/**` |
 | `test-modbus-serial.yml` | modbus-serial | `docker/modbus-serial/**` |
+| `test-mqtt-mongo.yml` | mqtt-mongo | `docker/mqtt-mongo/**` |
 | `test-sunseeker-monitoring.yml` | sunseeker-monitoring | `docker/sunseeker-monitoring/**` |
 | `test-telegram-bridge.yml` | telegram-bridge | `docker/telegram-bridge/**` |
 
@@ -340,7 +342,12 @@ The following standalone workflows run unit tests independently from the unified
 - **npm caching**: Configured for optimal performance
 - **Coverage reporting**: Upload to Codecov with service-specific flags
 
-**Workflow Structure** (consistent across all 5):
+**Exception**: `test-dmx-driver.yml` installs with `npm ci --ignore-scripts`. The
+`dmx` dependency is a native addon built against libftdi, which the runner does
+not have; the unit tests exercise `message-handler.js`, which does not require
+it.
+
+**Workflow Structure** (consistent across all 7):
 ```yaml
 on:
   push:

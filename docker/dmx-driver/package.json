@@ -6,10 +6,14 @@
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "start": "index.js"
+    "start": "index.js",
+    "test": "jest"
   },
   "dependencies": {
     "dmx": "https://github.com/groupsky/node-dmx.git#v1.0.2",
     "mqtt": "^5.15.1"
+  },
+  "devDependencies": {
+    "jest": "^30.5.1"
   }
 }
