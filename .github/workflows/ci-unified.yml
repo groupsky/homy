@@ -1326,7 +1326,7 @@ jobs:
           #      head, and HEAD^ is an intermediate commit that never had a run,
           #      so it will never have images.
           #   c) A red run. Nothing is tagged at that commit, so the next commit
-          #      would bootstrap from a :latest older than the changes between.
+          #      would have sourced a :latest older than the changes between.
           #
           # In every case the fallback produces a SHA tag that EXISTS and whose
           # CONTENT is stale, which stage 5C cannot tell apart from a correct one
@@ -1372,10 +1372,11 @@ jobs:
           # backward case it is actively harmful - the master concurrency group
           # is per-SHA (see the top of this file), so a re-run or a
           # workflow_dispatch of an OLDER master commit would move :latest back to
-          # that commit's manifest for every image it did not rebuild. :latest is
-          # also what the bootstrap above reads, so that would corrupt the source
-          # of every later retag. Stage 5A still writes :latest, but only for
-          # images it actually built from this commit's source.
+          # that commit's manifest for every image it did not rebuild, for no
+          # gain at all. Stage 5A still writes :latest, but only for images it
+          # actually built from this commit's source; that residual is real and
+          # is documented under "Residual risk" in CLAUDE.md - :latest still has
+          # readers (rollback.sh's fallback, restore.sh, the lights test).
           TAGS="$REPO:$SHA $REPO:${SHA:0:12}"
 
           # imagetools create is manifest-only: no layers are downloaded.

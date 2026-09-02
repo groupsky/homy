@@ -467,13 +467,25 @@ tags"), and it has the same exposure the argument above describes: a re-run or a
 actually built from that commit's source, so the tag is never *invented*, only older than
 the tip.
 
-What makes it tolerable is that nothing in the deploy path reads `:latest` any more.
-`deploy.sh` pins the commit SHA; `${IMAGE_TAG:-latest}` falls back to `:latest` only when
-`IMAGE_TAG` is unset, which the script never leaves it. Since the `bootstrap_sha_tags` input
-was dropped, no CI job reads `:latest` either. It survives as a convenience tag for humans
-and for `docker compose` runs outside `deploy.sh`, and those can be stale after a re-run of
-an old commit. Closing it properly means gating 5A's `:latest` on `github.sha` being the
-current tip; that is not done here.
+**`:latest` still has readers.** A default `deploy.sh` is not one of them — it always
+exports `IMAGE_TAG` (`scripts/deploy.sh:192`), so `${IMAGE_TAG:-latest}` never falls back.
+But four other paths do read it, and none has `deploy.sh`'s loud pull guard:
+
+| reader | how it gets there |
+|---|---|
+| `scripts/rollback.sh:188` | `determine_previous_version` (`docker-helper.sh:656,658`) returns the literal string `latest` when there is no saved previous version and none can be derived from git. `rollback.sh` then exports `IMAGE_TAG=latest`, and a failed pull only **warns** (`rollback.sh:194`) before `dc_run up -d`. |
+| `scripts/restore.sh:167` | `dc_run up -d` with no `IMAGE_TAG` exported at all — the file contains zero references to it. |
+| `docker-helper.sh:442` | the interrupt cleanup's `dc_run up -d || true`, which inherits whatever `IMAGE_TAG` the caller had, or none. |
+| `ci-unified.yml` lights integration test | pulls `<image>:latest` and locally `docker tag`s it to `:$SHA` when the SHA tag is absent. Local only — nothing is pushed — but the job can then validate `:latest` content while reporting it tested the commit. |
+
+So a `restore.sh`, or a `rollback.sh` that fell back, can bring up **older** code than the
+tip after a re-run of an old master commit moved `:latest` back. That is a pre-existing
+exposure which this change narrows (5B no longer writes `:latest` at all) rather than
+widens, and it is why the "a missing tag fails loudly" argument that underpins Stage 5B's
+strictness must not be extended to those scripts — it holds for `deploy.sh:196-208` only.
+
+Closing it properly means gating 5A's `:latest` on `github.sha` being the current tip, and
+giving `rollback.sh`/`restore.sh` a real pin. Neither is done here.
 
 #### The invariant is checked, not argued
 
@@ -493,6 +505,15 @@ each injected: the grep saw 38 services / 20 images, the parser saw 40 / 22.
 **What 5C does not check is content.** It verifies that a manifest exists at the commit SHA,
 not that the manifest was built from that commit's source. That is why Stage 5B's source
 rule above has to be strict — 5C cannot be the backstop for a stale tag.
+
+**Nor does it mean the commit passed CI.** Stage 3 pushes `<image>:<sha>` and
+`<image>:<short-sha>` itself, with `--push`, and depends only on
+`[detect-changes, prepare-base-images]` — it runs *before* any test. So the SHA tags exist as
+soon as the builds finish, whatever the tests then do; only `:latest` is test-gated, which is
+what the "Critical rule" comment in the Stage 5 header means. Since `deploy.sh` deploys by
+SHA and never by `:latest`, **test-gating protects only the tag nobody deploys** — filed as
+issue #1550. This is also what makes the `force_rebuild` recovery terminate: it needs all 20
+builds to succeed, not a fully green run.
 
 It also enumerates services by their `image:` field, so a service that CI *builds* but that
 carries no homy image would be absent from 5C's count and silently reported as covered. The
