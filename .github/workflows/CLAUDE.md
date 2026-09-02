@@ -390,12 +390,55 @@ other ~19 images at the new SHA, producing a commit that *looks* deployable and 
 because the services that actually changed have no image at it. The SHA tag is
 all-or-nothing.
 
-#### Bootstrap fallback
+#### Stage 5B sources ONLY the base commit's SHA tag
 
-Stage 5B sources the manifest from the previous commit's SHA tag, falling back to `:latest`
-with a warning for an image that has never been SHA-tagged. For an image that was not
-rebuilt those are the same manifest, and the fallback stops being taken once every image has
-been tagged once.
+The first version of this fix fell back to `:latest` whenever the base commit had no SHA
+tag, on the argument that *"this image was not rebuilt, so `:latest` is its current
+content"*. **That argument is false, and false silently.** "Not rebuilt in this run" is not
+"not rebuilt since `:latest` was written", and they come apart routinely:
+
+| shape | what the fallback would have done |
+|---|---|
+| Two master merges minutes apart | Master runs do not serialize, so run C reaches 5B while run B is still building. B's images are not pushed yet, so `<image>:<C>` gets **A's** manifest — shipping code that predates B. |
+| A push of several commits at once | One run fires, for the head. `HEAD^` is an intermediate commit that never had a run, so it will never have images. The detector has the same blind spot — issue #1549. |
+| A red run, then a green one | Nothing was tagged at the red commit, so the next commit bootstraps from a `:latest` older than the changes between. |
+
+In each case the SHA tag **exists** and its **content is stale**, and Stage 5C cannot tell
+the difference — it inspects for a manifest. Before #1544 those commits failed loudly at
+`deploy.sh`'s pull guard. A silent stale deploy is strictly worse than a loud
+`manifest unknown`, so Stage 5B now **fails** instead.
+
+Recovery: re-run the base commit's workflow to create its SHA tags, then re-run the newer
+one. Do not deploy the newer commit until it is green.
+
+#### Bootstrapping the SHA chain
+
+There is one legitimate cold start — no image has ever been SHA-tagged by 5B, because the
+job never created SHA tags before #1544. It is a **deliberate one-shot**, not an
+always-armed fallback:
+
+```
+gh workflow run ci-unified.yml --ref master -f bootstrap_sha_tags=true
+```
+
+Only do this on an **idle, green master**: no other `ci-unified` run in flight, and the tip
+commit's own run green. Those two conditions are exactly what makes `:latest` equal to the
+base commit's content; the table above is what happens when they do not hold. Stage 5C runs
+on the dispatch and will fail if the seed did not cover everything.
+
+After one successful seed the chain is self-sustaining: every master run tags every image at
+its own SHA, so the next run always finds its base.
+
+#### Residual risk: Stage 5A can still move `:latest` backward
+
+Stage 5B no longer writes `:latest`, but **Stage 5A does** (`ci-unified.yml`, "Determine
+tags"), and it has the same exposure the argument above describes: a re-run or a
+`workflow_dispatch` of an older master commit rebuilds that commit's images and re-points
+`:latest` at them. This is not closed, only narrowed — 5A writes `:latest` for images it
+actually built from that commit's source, so the tag is never *invented*, just older than
+the tip. It matters because `:latest` is what the `bootstrap_sha_tags` one-shot reads, which
+is why that one-shot requires an idle, green master. Re-running an old master commit and
+then bootstrapping in the same window would seed from that old content.
 
 #### The invariant is checked, not argued
 
@@ -405,6 +448,16 @@ report on themselves: a service in neither list, a service dropped by the detect
 `build:` directive filter, an empty matrix that skipped silently, and a single failed matrix
 leg. `tests/integration/sha-tag-coverage.integration.test.ts` asserts the same invariant
 against the committed compose file at PR time.
+
+It parses the compose file with `yaml.safe_load`, **not** `grep`. A grep for
+`image: ghcr.io/...` anchors on the registry being the first token after the key, so a
+legal `image: "ghcr.io/..."` or an `image: >-` folded scalar is invisible to it — and an
+invisible service is reported as verified. Measured on a copy of the real file with one of
+each injected: the grep saw 38 services / 20 images, the parser saw 40 / 22.
+
+**What 5C does not check is content.** It verifies that a manifest exists at the commit SHA,
+not that the manifest was built from that commit's source. That is why Stage 5B's source
+rule above has to be strict — 5C cannot be the backstop for a stale tag.
 
 ### Standalone Unit Test Workflows
 

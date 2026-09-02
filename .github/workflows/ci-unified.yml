@@ -18,6 +18,13 @@ on:
         description: 'PR number (required when publish_pr_images=true)'
         type: string
         default: ''
+      bootstrap_sha_tags:
+        description: >-
+          One-shot: let stage 5B seed SHA tags from :latest when the base commit
+          has none. Master only. See "Bootstrapping the SHA chain" in
+          .github/workflows/CLAUDE.md - do NOT enable this routinely.
+        type: boolean
+        default: false
 
 # Concurrency control
 concurrency:
@@ -1236,6 +1243,11 @@ jobs:
     name: Retag Unchanged Images
     timeout-minutes: 5
     needs: [detect-changes, build-app-images, version-consistency-check, healthcheck-tests, lights-integration-test]
+    # Master only. The SHA tag is the deploy contract and only master is deployed
+    # from; on a branch `workflow_dispatch` this job would mint
+    # <image>:<branch-sha> tags whose contents came from master, which
+    # `deploy.sh --tag <sha>` would happily pull as if they were the branch's.
+    #
     # `build-app-images` is a dependency even though this job builds nothing.
     # Stage 5A skips when the build fails, but without this gate stage 5B would
     # still tag every OTHER service at the new SHA - producing a commit that
@@ -1246,6 +1258,7 @@ jobs:
       needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.retag_image_names != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/master' &&
       (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
       (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
       (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
@@ -1302,22 +1315,50 @@ jobs:
           REPO="ghcr.io/groupsky/homy/$IMAGE_NAME"
           BASE_IMAGE="$REPO:$BASE_SHA"
 
-          # Pick the source manifest. Normally the previous commit's SHA tag.
+          # The source manifest is the BASE COMMIT'S SHA TAG, and nothing else.
           #
-          # Before issue #1544 this job never created SHA tags at all, so an image
-          # that has not been rebuilt since may have nothing at the base SHA. Fall
-          # back to :latest to bootstrap it - for an image that was NOT rebuilt,
-          # :latest IS its current content, so the two are the same manifest. Once
-          # an image has been tagged here the SHA chain is self-sustaining and
-          # this branch stops being taken.
+          # It is tempting to fall back to :latest when the base has no tag - the
+          # first version of this fix did. That is wrong, and wrong silently. The
+          # tempting argument is "this image was not rebuilt, so :latest is its
+          # current content", but "not rebuilt in THIS run" is not "not rebuilt
+          # since :latest was written", and there are three routine ways they
+          # differ:
+          #
+          #   a) Two master merges land minutes apart. Master runs do NOT
+          #      serialize (the concurrency group is per-SHA), so run C can reach
+          #      this step while run B is still building. B's images are not
+          #      pushed yet, so the fallback would mint <image>:<C> from A's
+          #      manifest - shipping code that predates B.
+          #   b) A push of several commits at once. GitHub fires one run, for the
+          #      head, and HEAD^ is an intermediate commit that never had a run,
+          #      so it will never have images.
+          #   c) A red run. Nothing is tagged at that commit, so the next commit
+          #      would bootstrap from a :latest older than the changes between.
+          #
+          # In every case the fallback produces a SHA tag that EXISTS and whose
+          # CONTENT is stale, which stage 5C cannot tell apart from a correct one
+          # - it inspects for a manifest. Before issue #1544 these commits failed
+          # loudly at deploy.sh's pull guard; a silent stale deploy is strictly
+          # worse than that. So this job fails instead.
+          #
+          # Recovery is to re-run the base commit's workflow, which creates its
+          # SHA tags, then re-run this one. The one legitimate cold start - no
+          # image has EVER been SHA-tagged, because this job never created them
+          # before #1544 - is a deliberate one-shot: dispatch this workflow on
+          # master with bootstrap_sha_tags=true. See "Bootstrapping the SHA chain"
+          # in .github/workflows/CLAUDE.md.
           if docker buildx imagetools inspect "$BASE_IMAGE" >/dev/null 2>&1; then
             SOURCE="$BASE_IMAGE"
             echo "Source: $SOURCE (base SHA)"
-          elif docker buildx imagetools inspect "$REPO:latest" >/dev/null 2>&1; then
+          elif [ "${{ github.event.inputs.bootstrap_sha_tags }}" == "true" ] \
+            && docker buildx imagetools inspect "$REPO:latest" >/dev/null 2>&1; then
             SOURCE="$REPO:latest"
-            echo "::warning::No image at $BASE_IMAGE; bootstrapping from $REPO:latest (see issue #1544)"
+            echo "::warning::BOOTSTRAP: no image at $BASE_IMAGE, seeding $IMAGE_NAME from $REPO:latest. This was requested explicitly via bootstrap_sha_tags and is only correct on an idle, green master. See issue #1544."
           else
-            echo "::error::No image to retag for $IMAGE_NAME: neither $BASE_IMAGE nor $REPO:latest exists"
+            echo "::error::No image at $BASE_IMAGE for $IMAGE_NAME."
+            echo "The base commit's images were never pushed - its run failed, was cancelled, is still running, or it is an intermediate commit in a multi-commit push."
+            echo "Re-run the workflow for $BASE_SHA, then re-run this one. Do NOT deploy $SHA until this is green."
+            echo "Cold start only (no image has ever been SHA-tagged): dispatch this workflow on master with bootstrap_sha_tags=true."
             exit 1
           fi
 
@@ -1367,12 +1408,14 @@ jobs:
     name: Verify SHA Tag Coverage
     timeout-minutes: 10
     needs: [check-relevant-paths, detect-changes, push-built-images, retag-unchanged-images]
-    # Master pushes only: this is the deploy contract, and only master is
-    # deployed from. Runs even when 5A/5B skipped - a skip is one of the failure
-    # shapes it is here to catch.
+    # Master only: this is the deploy contract, and only master is deployed from.
+    # workflow_dispatch is included because stage 5B writes SHA tags on a
+    # dispatch too - including the bootstrap_sha_tags one-shot, which is exactly
+    # the run whose output most needs checking. Runs even when 5A/5B skipped: a
+    # silent skip is one of the failure shapes it is here to catch.
     if: |
       always() &&
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
@@ -1408,31 +1451,45 @@ jobs:
         run: |
           set -uo pipefail
 
-          # Every homy GHCR image field, straight out of the compose file.
+          # Parse the compose file as YAML rather than grepping it. A grep for
+          # `image: ghcr.io/...` anchors on the registry being the first token
+          # after the key, so a perfectly legal `image: "ghcr.io/..."` or an
+          # `image: >-` folded scalar is invisible to it - and an invisible
+          # service is silently reported as verified, which is the one failure
+          # shape this job exists to prevent.
+          #
           # Read from the raw YAML rather than `docker compose config`: that
           # needs the full .env, which CI has no business reconstructing, and
           # variable substitution never touches the image basename anyway.
-          #
-          # Matching is anchored to `image:` lines so a homy reference in a
-          # comment or a build arg cannot invent an image to verify.
-          IMAGE_LINES=$(grep -E '^[[:space:]]+image:[[:space:]]*ghcr\.io/groupsky/homy/' docker-compose.yml || true)
+          python3 - <<'PY' > /tmp/compose-images.txt
+          import sys, yaml
 
-          # An empty match means the compose file moved out from under this check
-          # (renamed field, different registry, wrong working directory).
-          # Reporting "all 0 images verified" would be the exact failure shape
-          # this job exists to prevent, so bail out loudly instead.
-          if [ -z "$IMAGE_LINES" ]; then
-            echo "::error::Found no homy GHCR image fields in docker-compose.yml - this check cannot be trusted"
+          PREFIX = 'ghcr.io/groupsky/homy/'
+          with open('docker-compose.yml') as fh:
+              compose = yaml.safe_load(fh)
+
+          services = (compose or {}).get('services') or {}
+          rows = []
+          for name, config in services.items():
+              image = ((config or {}).get('image') or '').strip()
+              if image.startswith(PREFIX):
+                  rows.append((name, image[len(PREFIX):].split(':')[0]))
+
+          if not rows:
+              print('NONE', file=sys.stderr)
+              sys.exit(1)
+
+          for name, image in rows:
+              print(f'{name}\t{image}')
+          PY
+
+          if [ ! -s /tmp/compose-images.txt ]; then
+            echo "::error::Found no homy GHCR images in docker-compose.yml - this check cannot be trusted"
             exit 1
           fi
 
-          SERVICE_COUNT=$(printf '%s\n' "$IMAGE_LINES" | grep -c .)
-
-          mapfile -t IMAGES < <(
-            printf '%s\n' "$IMAGE_LINES" |
-              sed -E 's|^.*ghcr\.io/groupsky/homy/([a-zA-Z0-9._-]+).*$|\1|' |
-              sort -u
-          )
+          SERVICE_COUNT=$(wc -l < /tmp/compose-images.txt)
+          mapfile -t IMAGES < <(cut -f2 /tmp/compose-images.txt | sort -u)
 
           echo "Compose services on a homy image: $SERVICE_COUNT"
           echo "Distinct images to verify:        ${#IMAGES[@]}"
