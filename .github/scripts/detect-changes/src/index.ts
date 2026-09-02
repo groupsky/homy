@@ -18,7 +18,11 @@ import { buildReverseDependencyMap, detectAffectedServices } from './lib/depende
 import { detectChangedBaseImages, detectChangedServices, isTestOnlyChange } from './lib/change-detection.js';
 import { hasHealthcheck, extractFinalStageBase } from './lib/dockerfile-parser.js';
 import { checkAllServices, validateForkPrBaseImages } from './lib/ghcr-client.js';
-import { partitionBuildStrategy, servicesNeedingShaTag } from './lib/build-strategy.js';
+import {
+  imageNamesNeedingShaTag,
+  partitionBuildStrategy,
+  servicesNeedingShaTag,
+} from './lib/build-strategy.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
 import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
 
@@ -145,6 +149,7 @@ function convertToGitHubOutputs(result: DetectionResult): GitHubActionsOutputs {
     // Build strategy outputs
     to_build: JSON.stringify(result.to_build),
     to_retag: JSON.stringify(result.to_retag),
+    retag_image_names: JSON.stringify(result.retag_image_names),
     to_pull_for_testing: JSON.stringify(result.to_pull_for_testing),
     build_groups: JSON.stringify(result.build_groups),
     service_image_names: JSON.stringify(result.service_image_names),
@@ -302,7 +307,19 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     allServices: services.map((s) => s.service_name),
     toBuild,
   });
-  console.error(`To build: ${toBuild.length}, To retag: ${toRetag.length}`);
+
+  // Stage 5B tags by GHCR image name, and several services share one image, so
+  // the retag matrix is driven by the distinct image names rather than by
+  // service names. Anything stage 5A will tag is subtracted: both jobs run in
+  // parallel and would otherwise race on the same `<image>:<sha>` tag.
+  const serviceImageNames = Object.fromEntries(
+    services.map((s) => [s.service_name, getImageName(s)])
+  );
+  const retagImageNames = imageNamesNeedingShaTag({ serviceImageNames, toRetag, toBuild });
+  console.error(
+    `To build: ${toBuild.length}, To retag: ${toRetag.length} ` +
+      `(${retagImageNames.length} distinct images)`
+  );
 
   console.error('Step 10.6: Grouping services by build context...');
   // Group services that share the same build context
@@ -393,6 +410,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     affected_services: affectedServices,
     to_build: toBuild,
     to_retag: toRetag,
+    retag_image_names: retagImageNames,
     to_pull_for_testing: toPullForTesting.sort(),
     testable_services: testableServices,
     healthcheck_services: healthcheckServices,
@@ -400,7 +418,7 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
     build_groups: buildGroups,
     // Map every GHCR service to its compose image name so CI can publish/pull/tag
     // by shared image name (services sharing an image share the GHCR package).
-    service_image_names: Object.fromEntries(services.map((s) => [s.service_name, getImageName(s)])),
+    service_image_names: serviceImageNames,
   };
 }
 

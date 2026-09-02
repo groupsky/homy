@@ -59,7 +59,20 @@ export function partitionBuildStrategy(input: BuildStrategyInput): BuildStrategy
 }
 
 export interface ShaTagInput {
-  /** Every service in docker-compose.yml that has a GHCR image. */
+  /**
+   * Every compose service the detector discovered, i.e. the output of
+   * `filterGhcrServices(discoverServicesFromCompose(...))`.
+   *
+   * That is NOT literally "every service in docker-compose.yml": discovery drops
+   * any service without a `build:` directive, because `extractServiceMetadata`
+   * returns null for one. All 38 compose services have a build directive today,
+   * so the two sets coincide — but a service that reused an existing GHCR image
+   * without building it would fall out of this list and therefore out of
+   * `to_retag` as well, and would silently never be SHA-tagged. Stage 5C in
+   * `ci-unified.yml` reads the compose file directly and fails the run if any
+   * service is missing its SHA tag, so that gap is caught rather than assumed
+   * away.
+   */
   allServices: string[];
   /** Services this run rebuilds; they get their SHA tag from the build itself. */
   toBuild: string[];
@@ -84,5 +97,38 @@ export function servicesNeedingShaTag(input: ShaTagInput): string[] {
   const building = new Set(input.toBuild);
   return Array.from(new Set(input.allServices))
     .filter((name) => !building.has(name))
+    .sort();
+}
+
+export interface ShaTagImageInput {
+  /** Compose service name -> GHCR image name, for every discovered service. */
+  serviceImageNames: Record<string, string>;
+  /** Services needing a SHA tag by retag (the `servicesNeedingShaTag` output). */
+  toRetag: string[];
+  /** Services this run rebuilds. Stage 5A tags their image at the SHA already. */
+  toBuild: string[];
+}
+
+/**
+ * The distinct GHCR image names stage 5B must retag at this commit's SHA.
+ *
+ * Every tag stage 5B writes addresses an *image name*, not a service name, and
+ * several services share one image (the five `modbus-serial` instances, both
+ * `mqtt-mongo` archivers). Driving the matrix by service name therefore spawns
+ * up to 38 runners to perform at most ~20 distinct manifest copies, and — worse
+ * — an image shared by a rebuilt service and an untouched one would be written
+ * by stage 5A and stage 5B concurrently, both claiming `<image>:<sha>`.
+ *
+ * Collapsing to distinct image names and subtracting everything stage 5A owns
+ * removes both problems: one runner per image, and no image written twice.
+ */
+export function imageNamesNeedingShaTag(input: ShaTagImageInput): string[] {
+  const { serviceImageNames, toRetag, toBuild } = input;
+
+  const imageOf = (service: string): string => serviceImageNames[service] ?? service;
+  const builtImages = new Set(toBuild.map(imageOf));
+
+  return Array.from(new Set(toRetag.map(imageOf)))
+    .filter((image) => !builtImages.has(image))
     .sort();
 }

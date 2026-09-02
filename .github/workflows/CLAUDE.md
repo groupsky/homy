@@ -318,27 +318,93 @@ The repository uses a unified CI/CD pipeline (`ci-unified.yml`) that implements 
 - ✅ **Efficient Change Detection**: Only rebuilds affected services
 - ✅ **Cascading Updates**: Base image changes automatically rebuild dependent services
 
-### Stage 5B: image tags and the deploy contract
+### Stage 5: image tags and the deploy contract
 
 `deploy.sh` exports `IMAGE_TAG="$NEW_VERSION"` (the full commit SHA) and every service in
 `docker-compose.yml` resolves `${IMAGE_TAG:-latest}`. **A default deploy therefore needs a
-SHA-tagged image for every service in the compose file, not just the ones a run rebuilt.**
+SHA-tagged image for every service in the compose file, not just the ones a run rebuilt** —
+and for *every commit that can become `origin/master`'s tip*, because that is what
+`deploy.sh` targets.
 
 - Stage 5A (`Tag Built Images`) supplies that tag for services this run built.
 - Stage 5B (`Retag Unchanged Images`) supplies it for everything else, by retagging the
   existing manifest. `to_retag` is *all compose services minus `to_build`* — see
   `servicesNeedingShaTag` in `.github/scripts/detect-changes/src/lib/build-strategy.ts`.
+- Stage 5C (`Verify SHA Tag Coverage`) re-reads `docker-compose.yml` and fails the run if
+  any service has no manifest at the commit SHA. It trusts neither list.
 
-Do not confuse `to_retag` with retag *eligibility*. `partitionBuildStrategy` answers a
-different question — "may this service's image be reused rather than rebuilt?" — and its
-answer covers only changed and affected services. Using it for tagging was issue #1544: it
-left ~28 untouched services with no SHA tag, and every default deploy died on
-`manifest unknown` before it could stop a single container.
+#### Issue #1544: two independent causes, not one
+
+The issue's evidence table listed four master commits whose `Retag Unchanged Images` job
+was `skipped` and read them as one failure. They are two:
+
+| commit | Detect Changes | Retag Unchanged Images | cause |
+|---|---|---|---|
+| `15e926d` | **skipped** | skipped | Stage 0 skipped the whole pipeline |
+| `57437ba` | success | skipped | `to_retag` was empty |
+| `70a0cd7` | success | skipped | `to_retag` was empty |
+| `c92cae9` | success | skipped | `to_retag` was empty |
+
+**Cause 1 — `to_retag` answered a different question.** `partitionBuildStrategy` answers
+"may this service's image be reused rather than rebuilt?", over changed and affected
+services only. Untouched services were never in that pool, so on a typical commit ~27 of
+them landed in neither `to_build` nor `to_retag`. Do not confuse the two: the reuse decision
+keeps its own name, `existsAtBaseSha`, where the test-only optimisation consumes it.
+
+**Cause 2 — Stage 0 skipped the pipeline entirely.** `RELEVANT_PATHS` covered
+`base-images`, `docker`, `ci-unified.yml` and `detect-changes`. A commit touching only
+`config/`, `docs/` or `scripts/` set `should_run=false`, which skipped `detect-changes` and
+stages 5A and 5B with it — **zero** of the 38 services tagged, not 27. Over the 40 commits
+ending at `c92cae9`, 12 changed none of those paths, mostly Grafana dashboard and alert
+work. `docker-compose.yml` was also absent, so adding a new service skipped CI and that
+service was never tagged at all.
+
+Fixing only cause 1 would have left every one of those 12 commits undeployable. A push to
+master now always runs, whatever changed, and `docker-compose.yml` is a relevant path. PRs
+keep path filtering — nothing is deployed from them.
+
+#### Why Stage 5B writes only immutable tags
+
+The master concurrency group is `ci-master-{sha}`: **per commit, so master runs do not
+serialize.** A re-run or `workflow_dispatch` of an older master commit overlaps freely with
+newer runs. If Stage 5B wrote `:latest` for images it did not rebuild, that replay would
+move `:latest` *backward* for ~20 images — and `:latest` is the bootstrap source Stage 5B
+reads, so the corruption would propagate into later retags. Stage 5B writes only
+`:<sha>` and `:<short-sha>`. For an image it did not rebuild, `:latest` already points at
+that same manifest, so nothing is lost. Stage 5A still writes `:latest`, for images built
+from this commit's source.
+
+#### Why Stage 5B matrixes on image names
+
+Every tag Stage 5B writes addresses a GHCR *image*, and several services share one (five
+`modbus-serial` instances, two `mqtt-mongo` archivers): 38 services, 20 images. A
+service-name matrix spawned up to 38 runners for 20 manifest copies, and — worse — an image
+shared by a rebuilt service and an untouched one was written by Stage 5A and Stage 5B
+*concurrently*, both claiming `<image>:<sha>`. `imageNamesNeedingShaTag` collapses to
+distinct images and subtracts everything Stage 5A owns.
+
+#### Why Stage 5B depends on `build-app-images`
+
+Stage 5A skips when the build fails. Without the same gate, Stage 5B would still tag the
+other ~19 images at the new SHA, producing a commit that *looks* deployable and is not,
+because the services that actually changed have no image at it. The SHA tag is
+all-or-nothing.
+
+#### Bootstrap fallback
 
 Stage 5B sources the manifest from the previous commit's SHA tag, falling back to `:latest`
-with a warning for a service that has never been SHA-tagged. For a service that was not
-rebuilt those are the same manifest, and the fallback stops being taken once every service
-has been tagged once.
+with a warning for an image that has never been SHA-tagged. For an image that was not
+rebuilt those are the same manifest, and the fallback stops being taken once every image has
+been tagged once.
+
+#### The invariant is checked, not argued
+
+Stage 5C is the only thing that verifies the actual contract. It reads `docker-compose.yml`
+directly rather than trusting `to_build`/`to_retag`, so it catches what those lists cannot
+report on themselves: a service in neither list, a service dropped by the detector's
+`build:` directive filter, an empty matrix that skipped silently, and a single failed matrix
+leg. `tests/integration/sha-tag-coverage.integration.test.ts` asserts the same invariant
+against the committed compose file at PR time.
 
 ### Standalone Unit Test Workflows
 
@@ -355,6 +421,7 @@ The following standalone workflows run unit tests independently from the unified
 | `test-mqtt-mongo.yml` | mqtt-mongo | `docker/mqtt-mongo/**` |
 | `test-sunseeker-monitoring.yml` | sunseeker-monitoring | `docker/sunseeker-monitoring/**` |
 | `test-telegram-bridge.yml` | telegram-bridge | `docker/telegram-bridge/**` |
+| `test-detect-changes.yml` | detect-changes (CI's own change detector) | `.github/scripts/detect-changes/**`, `docker-compose.yml` |
 
 **Key Characteristics:**
 - **Fast execution**: ~3-4 minutes (no Docker build required)
@@ -369,7 +436,14 @@ The following standalone workflows run unit tests independently from the unified
 not have; the unit tests exercise `message-handler.js`, which does not require
 it.
 
-**Workflow Structure** (consistent across all 7):
+**Exception**: `test-detect-changes.yml` covers CI's own tooling rather than a compose
+service, and also runs `npm run typecheck`. Until issue #1544 nothing ran this suite at all
+— `ci-unified.yml` invokes `npm run detect-changes` (the CLI) and never `npm test` — so the
+tests deciding which images get built and tagged were green only on a developer's machine.
+It triggers on `docker-compose.yml` too, because
+`tests/integration/sha-tag-coverage.integration.test.ts` reads the real compose file.
+
+**Workflow Structure** (consistent across the 7 service workflows):
 ```yaml
 on:
   push:
@@ -890,7 +964,9 @@ Stage 1 uses TypeScript-based detection (`.github/scripts/detect-changes/`) with
 - `changed_base_images`: Base images with Dockerfile changes (JSON array)
 - `base_images_needed`: Dependencies for changed services (JSON array)
 - `to_build`: Services requiring build (JSON array)
-- `to_retag`: Unchanged services to retag :latest (JSON array)
+- `to_retag`: Every compose service NOT in `to_build`, needing a SHA tag (JSON array)
+- `retag_image_names`: `to_retag` collapsed to distinct GHCR image names, minus every
+  image `to_build` covers — this is what drives the Stage 5B matrix (JSON array)
 - `testable_services`: Services with test suites (JSON array)
 - `healthcheck_services`: Services with HEALTHCHECK (JSON array)
 
@@ -908,12 +984,12 @@ if (serviceDockerfileChanged || serviceCodeChanged) {
   if (!imageExistsInGHCR(baseImage)) {
     base_images_needed.push(baseImage);
   }
-} else {
-  // Service unchanged, but may need retagging on master
-  if (isMasterBranch && imageExistsInGHCR(sha)) {
-    to_retag.push(service);
-  }
 }
+
+// Separately, and NOT from the branch above: every compose service that is not
+// being built needs its existing image tagged at this commit's SHA, because
+// deploy.sh pins IMAGE_TAG to that SHA for all of them. See issue #1544.
+to_retag = allComposeServices.filter((s) => !to_build.includes(s));
 ```
 
 ### Environment Variables

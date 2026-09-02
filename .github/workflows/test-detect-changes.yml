@@ -1,0 +1,60 @@
+# The detect-changes suite decides which services CI builds, retags and tags at
+# the commit SHA, and until issue #1544 nothing ran it: `ci-unified.yml` invokes
+# `npm run detect-changes` (the CLI) and never `npm test`. Its 393 tests -
+# including the compose-file coverage tests that guard the deploy contract - were
+# green only on a developer's machine.
+name: Test Detect Changes
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/scripts/detect-changes/**'
+      - '.github/workflows/test-detect-changes.yml'
+      # The coverage tests read the real compose file, so a service added there
+      # must re-run them even when the script itself is untouched.
+      - 'docker-compose.yml'
+  pull_request:
+    paths:
+      - '.github/scripts/detect-changes/**'
+      - '.github/workflows/test-detect-changes.yml'
+      - 'docker-compose.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test detect-changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.github/scripts/detect-changes/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: '.github/scripts/detect-changes/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: .github/scripts/detect-changes
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: .github/scripts/detect-changes
+        run: npm run typecheck
+
+      - name: Run tests
+        working-directory: .github/scripts/detect-changes
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5
+        continue-on-error: true
+        with:
+          directory: .github/scripts/detect-changes/coverage
+          flags: detect-changes

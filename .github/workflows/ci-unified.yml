@@ -21,7 +21,13 @@ on:
 
 # Concurrency control
 concurrency:
-  # Master builds: serialize to prevent race conditions on latest tag
+  # Master builds: one group PER COMMIT, so concurrent master runs do NOT
+  # serialize. Two runs for different commits, or a re-run of an older commit,
+  # overlap freely and race on any mutable tag they both write. That is why
+  # stage 5B writes only immutable SHA tags and never :latest - see the comment
+  # on its TAGS list. Grouping by SHA is deliberate: it keeps a re-run of a
+  # commit from cancelling itself while a queue-by-branch group would stall the
+  # pipeline behind an unrelated build.
   # PR builds: cancel in-progress to save resources
   group: ${{ github.ref == 'refs/heads/master' && format('ci-master-{0}', github.sha) || format('ci-pr-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
@@ -86,6 +92,7 @@ jobs:
           RELEVANT_PATHS=(
             "base-images"
             "docker"
+            "docker-compose.yml"
             ".github/workflows/ci-unified.yml"
             ".github/scripts/detect-changes"
           )
@@ -101,9 +108,40 @@ jobs:
             fi
           done
 
+          # A push to master must ALWAYS run, whatever changed.
+          #
+          # deploy.sh targets origin/master's tip and pins IMAGE_TAG to that
+          # commit's SHA for EVERY compose service, so every commit that can
+          # become the tip needs a full set of SHA-tagged images - including the
+          # commits that touch none of the paths above. When this job set
+          # should_run=false it skipped detect-changes, and stages 5A and 5B with
+          # it, so that commit ended up with ZERO of the 38 services tagged and
+          # `docker compose pull` aborted at deploy.sh's pull guard.
+          #
+          # This is not a rare corner. Measured over the 40 commits ending at
+          # c92cae9, by diffing each against its first parent for the paths
+          # above, 12 changed none of them - 15e926d, 3a84a67, aad4ce9, e39e236,
+          # 370a994, 0cb9365, acd6d55, aedf23f, f343a80, 820d042, 47b3864,
+          # 1efbb45 - mostly Grafana dashboard and alert work, which is a live
+          # workstream. Confirmed on the real run for 15e926d (33571193232):
+          # "Check Relevant Paths: success, Detect Changes: skipped".
+          #
+          # Path filtering is kept for pull requests, where nothing is deployed
+          # from and CI quota is the only consideration. On master, correctness
+          # of the deploy contract wins.
+          #
+          # The cost is small: with no relevant change `to_build` is empty, so
+          # the base-image, build and test stages all still skip on their own
+          # conditions. Only change detection and the manifest-only retag run,
+          # and a retag downloads no layers.
+          if [[ "$CHANGED" != "true" && "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/master" ]]; then
+            CHANGED=true
+            echo "ℹ️  No relevant path changed, but this is a master push - running so every service is tagged at this SHA"
+          fi
+
           if [[ "$CHANGED" == "true" ]]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
-            echo "✅ Relevant Docker paths changed - running full pipeline"
+            echo "✅ Running pipeline"
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
             echo "⏩ No Docker-related changes - skipping build pipeline"
@@ -142,6 +180,9 @@ jobs:
       to_build: ${{ steps.detect.outputs.to_build }}
       # Services that can be retagged (existing image in GHCR)
       to_retag: ${{ steps.detect.outputs.to_retag }}
+      # Distinct GHCR image names stage 5B must retag at this commit's SHA
+      # (to_retag collapsed by shared image, minus everything stage 5A builds)
+      retag_image_names: ${{ steps.detect.outputs.retag_image_names }}
       # Services with test-only changes (pull existing image for testing)
       to_pull_for_testing: ${{ steps.detect.outputs.to_pull_for_testing }}
       # Services with real test scripts in package.json
@@ -280,6 +321,7 @@ jobs:
           echo "To build: ${{ steps.detect.outputs.to_build }}"
           echo "To pull for testing: ${{ steps.detect.outputs.to_pull_for_testing }}"
           echo "To retag: ${{ steps.detect.outputs.to_retag }}"
+          echo "Retag image names: ${{ steps.detect.outputs.retag_image_names }}"
           echo ""
           echo "Testable services: ${{ steps.detect.outputs.testable_services }}"
           echo "Healthcheck services: ${{ steps.detect.outputs.healthcheck_services }}"
@@ -1081,10 +1123,12 @@ jobs:
   # ============================================================================
   # Stage 5: Push and Tag Images
   # ============================================================================
-  # Two jobs that ONLY run after Stage 3 AND all Stage 4 tests succeed:
+  # Three jobs that ONLY run after Stage 3 AND all Stage 4 tests succeed:
   # A) Push Built Images - Tags and pushes newly built images to GHCR
-  # B) Retag Unchanged Images - Tags every service NOT rebuilt at this commit's
-  #    SHA (plus latest/branch), so a default deploy can pull the whole stack
+  # B) Retag Unchanged Images - Tags every image NOT rebuilt at this commit's SHA
+  #    so a default deploy can pull the whole stack
+  # C) Verify SHA Tag Coverage - Reads docker-compose.yml and fails the run if any
+  #    service is missing its image at this commit's SHA
   # Critical rule: :latest tag ONLY applied after ALL tests pass
   # ============================================================================
 
@@ -1191,13 +1235,18 @@ jobs:
   retag-unchanged-images:
     name: Retag Unchanged Images
     timeout-minutes: 5
-    needs: [detect-changes, version-consistency-check, healthcheck-tests, lights-integration-test]
-    # Only retag if all test dependencies completed successfully or were skipped
+    needs: [detect-changes, build-app-images, version-consistency-check, healthcheck-tests, lights-integration-test]
+    # `build-app-images` is a dependency even though this job builds nothing.
+    # Stage 5A skips when the build fails, but without this gate stage 5B would
+    # still tag every OTHER service at the new SHA - producing a commit that
+    # looks deployable, and is not, because the services that actually changed
+    # have no image at it. The SHA tag has to be all-or-nothing.
     if: |
       always() &&
       needs.detect-changes.result == 'success' &&
-      needs.detect-changes.outputs.to_retag != '[]' &&
+      needs.detect-changes.outputs.retag_image_names != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.build-app-images.result == 'success' || needs.build-app-images.result == 'skipped') &&
       (needs.version-consistency-check.result == 'success' || needs.version-consistency-check.result == 'skipped') &&
       (needs.healthcheck-tests.result == 'success' || needs.healthcheck-tests.result == 'skipped') &&
       (needs.lights-integration-test.result == 'success' || needs.lights-integration-test.result == 'skipped')
@@ -1206,8 +1255,14 @@ jobs:
       contents: read
       packages: write
     strategy:
+      # Matrix over distinct GHCR IMAGE names, not service names. Every tag below
+      # addresses an image, and several services share one (five modbus-serial
+      # instances, two mqtt-mongo archivers), so a service-name matrix spawned up
+      # to 38 runners for ~20 distinct manifest copies. The list also excludes
+      # every image stage 5A builds; the two jobs run in parallel and would
+      # otherwise both write <image>:<sha>. See imageNamesNeedingShaTag.
       matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.to_retag) }}
+        image: ${{ fromJson(needs.detect-changes.outputs.retag_image_names) }}
       fail-fast: false
 
     steps:
@@ -1229,37 +1284,32 @@ jobs:
       - name: Determine base ref SHA
         id: base-sha
         run: |
-          echo "=== Determining base SHA for retagging ==="
-
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            echo "Using PR base SHA: $BASE_SHA"
-          else
-            # For push events, use previous commit
-            BASE_SHA=$(git rev-parse HEAD^)
-            echo "Using previous commit SHA: $BASE_SHA"
-          fi
-
+          # This job runs on push and workflow_dispatch only (see the `if` above),
+          # so the previous commit is always the right base. There is no
+          # pull_request case to handle.
+          BASE_SHA=$(git rev-parse HEAD^)
+          echo "Using previous commit SHA: $BASE_SHA"
           echo "sha=$BASE_SHA" >> $GITHUB_OUTPUT
 
       - name: Retag existing image
         env:
-          # Retag by shared GHCR image name (services sharing an image share the package).
-          IMAGE_NAME: ${{ fromJson(needs.detect-changes.outputs.service_image_names)[matrix.service] }}
+          IMAGE_NAME: ${{ matrix.image }}
+          SHA: ${{ github.sha }}
+          BASE_SHA: ${{ steps.base-sha.outputs.sha }}
         run: |
-          echo "=== Retagging existing image for ${{ matrix.service }} (image: $IMAGE_NAME) ==="
+          echo "=== Retagging existing image: $IMAGE_NAME ==="
 
           REPO="ghcr.io/groupsky/homy/$IMAGE_NAME"
-          BASE_IMAGE="$REPO:${{ steps.base-sha.outputs.sha }}"
+          BASE_IMAGE="$REPO:$BASE_SHA"
 
           # Pick the source manifest. Normally the previous commit's SHA tag.
           #
-          # Before issue #1544 this job never created SHA tags at all, so a
-          # service that has not been rebuilt since may have no image at the base
-          # SHA. Fall back to :latest to bootstrap it - for a service that was NOT
-          # rebuilt, :latest IS its current content, so the two are the same
-          # manifest. Once a service has been tagged here the SHA chain is
-          # self-sustaining and this branch stops being taken.
+          # Before issue #1544 this job never created SHA tags at all, so an image
+          # that has not been rebuilt since may have nothing at the base SHA. Fall
+          # back to :latest to bootstrap it - for an image that was NOT rebuilt,
+          # :latest IS its current content, so the two are the same manifest. Once
+          # an image has been tagged here the SHA chain is self-sustaining and
+          # this branch stops being taken.
           if docker buildx imagetools inspect "$BASE_IMAGE" >/dev/null 2>&1; then
             SOURCE="$BASE_IMAGE"
             echo "Source: $SOURCE (base SHA)"
@@ -1267,21 +1317,24 @@ jobs:
             SOURCE="$REPO:latest"
             echo "::warning::No image at $BASE_IMAGE; bootstrapping from $REPO:latest (see issue #1544)"
           else
-            echo "::error::No image to retag for ${{ matrix.service }}: neither $BASE_IMAGE nor $REPO:latest exists"
+            echo "::error::No image to retag for $IMAGE_NAME: neither $BASE_IMAGE nor $REPO:latest exists"
             exit 1
           fi
 
           # The commit SHA tag is what deploy.sh pins IMAGE_TAG to, so EVERY
           # service needs one or a default deploy dies on `manifest unknown`.
-          TAGS="$REPO:${{ github.sha }}"
-          TAGS="$TAGS $REPO:$(echo '${{ github.sha }}' | cut -c1-12)"
-
-          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
-            TAGS="$TAGS $REPO:latest"
-          else
-            BRANCH=$(echo "${{ github.ref }}" | sed 's/refs\/heads\///' | sed 's/[^a-zA-Z0-9_.-]/-/g' | cut -c1-100)
-            TAGS="$TAGS $REPO:$BRANCH"
-          fi
+          #
+          # ONLY immutable tags are written here. :latest is deliberately absent:
+          # this job did not rebuild the image, so :latest already points at this
+          # exact manifest and writing it is a no-op in the forward case. In the
+          # backward case it is actively harmful - the master concurrency group
+          # is per-SHA (see the top of this file), so a re-run or a
+          # workflow_dispatch of an OLDER master commit would move :latest back to
+          # that commit's manifest for every image it did not rebuild. :latest is
+          # also what the bootstrap above reads, so that would corrupt the source
+          # of every later retag. Stage 5A still writes :latest, but only for
+          # images it actually built from this commit's source.
+          TAGS="$REPO:$SHA $REPO:${SHA:0:12}"
 
           # imagetools create is manifest-only: no layers are downloaded.
           for TAG in $TAGS; do
@@ -1296,6 +1349,115 @@ jobs:
           done
 
           echo "✅ Retag successful"
+
+  # Stage 5C: Verify SHA Tag Coverage
+  # ============================================================================
+  # The invariant stages 5A and 5B exist to uphold, checked directly against the
+  # file deploy.sh actually pulls: every service in docker-compose.yml must
+  # resolve at this commit's full SHA in GHCR.
+  #
+  # This is deliberately independent of detect-changes. It re-reads the compose
+  # file rather than trusting to_build/to_retag, so it catches the failures those
+  # lists cannot report on themselves: a service that never entered either list
+  # (issue #1544's original bug), a service dropped by the detector's build
+  # directive filter, an empty matrix that skipped silently, and a stage 5A or 5B
+  # matrix leg that failed for one image while the rest succeeded.
+  # ============================================================================
+  verify-sha-tag-coverage:
+    name: Verify SHA Tag Coverage
+    timeout-minutes: 10
+    needs: [check-relevant-paths, detect-changes, push-built-images, retag-unchanged-images]
+    # Master pushes only: this is the deploy contract, and only master is
+    # deployed from. Runs even when 5A/5B skipped - a skip is one of the failure
+    # shapes it is here to catch.
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report upstream stage results
+        run: |
+          echo "Check Relevant Paths should_run: ${{ needs.check-relevant-paths.outputs.should_run }}"
+          echo "Detect Changes:                  ${{ needs.detect-changes.result }}"
+          echo "Tag Built Images (5A):           ${{ needs.push-built-images.result }}"
+          echo "Retag Unchanged Images (5B):     ${{ needs.retag-unchanged-images.result }}"
+          echo "To build:            ${{ needs.detect-changes.outputs.to_build }}"
+          echo "Retag image names:   ${{ needs.detect-changes.outputs.retag_image_names }}"
+
+      - name: Verify every compose service resolves at this commit SHA
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+
+          # Every homy GHCR image field, straight out of the compose file.
+          # Read from the raw YAML rather than `docker compose config`: that
+          # needs the full .env, which CI has no business reconstructing, and
+          # variable substitution never touches the image basename anyway.
+          #
+          # Matching is anchored to `image:` lines so a homy reference in a
+          # comment or a build arg cannot invent an image to verify.
+          IMAGE_LINES=$(grep -E '^[[:space:]]+image:[[:space:]]*ghcr\.io/groupsky/homy/' docker-compose.yml || true)
+
+          # An empty match means the compose file moved out from under this check
+          # (renamed field, different registry, wrong working directory).
+          # Reporting "all 0 images verified" would be the exact failure shape
+          # this job exists to prevent, so bail out loudly instead.
+          if [ -z "$IMAGE_LINES" ]; then
+            echo "::error::Found no homy GHCR image fields in docker-compose.yml - this check cannot be trusted"
+            exit 1
+          fi
+
+          SERVICE_COUNT=$(printf '%s\n' "$IMAGE_LINES" | grep -c .)
+
+          mapfile -t IMAGES < <(
+            printf '%s\n' "$IMAGE_LINES" |
+              sed -E 's|^.*ghcr\.io/groupsky/homy/([a-zA-Z0-9._-]+).*$|\1|' |
+              sort -u
+          )
+
+          echo "Compose services on a homy image: $SERVICE_COUNT"
+          echo "Distinct images to verify:        ${#IMAGES[@]}"
+          echo ""
+
+          MISSING=()
+          for IMAGE in "${IMAGES[@]}"; do
+            TAG="ghcr.io/groupsky/homy/$IMAGE:$SHA"
+            if docker buildx imagetools inspect "$TAG" >/dev/null 2>&1; then
+              echo "  ✅ $IMAGE"
+            else
+              echo "  ❌ $IMAGE - no manifest at $TAG"
+              MISSING+=("$IMAGE")
+            fi
+          done
+
+          echo ""
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            echo "::error::${#MISSING[@]} of ${#IMAGES[@]} images have no manifest at $SHA: ${MISSING[*]}"
+            echo "A default ./scripts/deploy.sh at this commit would abort on 'manifest unknown'."
+            echo "See issue #1544 and .github/workflows/CLAUDE.md 'Stage 5: image tags and the deploy contract'."
+            exit 1
+          fi
+
+          echo "✅ All ${#IMAGES[@]} images covering $SERVICE_COUNT compose services resolve at $SHA"
 
   # ============================================================================
   # Stage 6: Workflow Summary
@@ -1321,6 +1483,7 @@ jobs:
       - lights-integration-test
       - push-built-images
       - retag-unchanged-images
+      - verify-sha-tag-coverage
     if: always()  # Always run to provide summary even on failure
     runs-on: ubuntu-latest
     permissions:
@@ -1350,6 +1513,7 @@ jobs:
             echo "lights=skipped" >> $GITHUB_OUTPUT
             echo "push=skipped" >> $GITHUB_OUTPUT
             echo "retag=skipped" >> $GITHUB_OUTPUT
+            echo "verify=skipped" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -1363,6 +1527,7 @@ jobs:
           LIGHTS_STATUS="${{ needs.lights-integration-test.result }}"
           PUSH_STATUS="${{ needs.push-built-images.result }}"
           RETAG_STATUS="${{ needs.retag-unchanged-images.result }}"
+          VERIFY_STATUS="${{ needs.verify-sha-tag-coverage.result }}"
 
           echo "detect=$DETECT_STATUS" >> $GITHUB_OUTPUT
           echo "validate=$VALIDATE_STATUS" >> $GITHUB_OUTPUT
@@ -1373,20 +1538,23 @@ jobs:
           echo "lights=$LIGHTS_STATUS" >> $GITHUB_OUTPUT
           echo "push=$PUSH_STATUS" >> $GITHUB_OUTPUT
           echo "retag=$RETAG_STATUS" >> $GITHUB_OUTPUT
+          echo "verify=$VERIFY_STATUS" >> $GITHUB_OUTPUT
 
           # Determine overall status
           if [[ "$DETECT_STATUS" == "failure" || "$VALIDATE_STATUS" == "failure" || \
                 "$PREPARE_STATUS" == "failure" || "$BUILD_STATUS" == "failure" || \
                 "$VERSION_STATUS" == "failure" || \
                 "$HEALTH_STATUS" == "failure" || "$LIGHTS_STATUS" == "failure" || \
-                "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" ]]; then
+                "$PUSH_STATUS" == "failure" || "$RETAG_STATUS" == "failure" || \
+                "$VERIFY_STATUS" == "failure" ]]; then
             echo "overall=failure" >> $GITHUB_OUTPUT
             exit 1
           elif [[ "$DETECT_STATUS" == "cancelled" || "$VALIDATE_STATUS" == "cancelled" || \
                   "$PREPARE_STATUS" == "cancelled" || "$BUILD_STATUS" == "cancelled" || \
                   "$VERSION_STATUS" == "cancelled" || \
                   "$HEALTH_STATUS" == "cancelled" || "$LIGHTS_STATUS" == "cancelled" || \
-                  "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" ]]; then
+                  "$PUSH_STATUS" == "cancelled" || "$RETAG_STATUS" == "cancelled" || \
+                  "$VERIFY_STATUS" == "cancelled" ]]; then
             echo "overall=cancelled" >> $GITHUB_OUTPUT
             exit 1
           else
@@ -1417,6 +1585,7 @@ jobs:
           | 4️⃣D Lights Integration Test | ${{ steps.status.outputs.lights }} |
           | 5️⃣A Push Images | ${{ steps.status.outputs.push }} |
           | 5️⃣B Retag Images | ${{ steps.status.outputs.retag }} |
+          | 5️⃣C Verify SHA Tag Coverage | ${{ steps.status.outputs.verify }} |
 
           EOF
 
@@ -1431,6 +1600,7 @@ jobs:
           - **Services to Build**: ${{ needs.detect-changes.outputs.to_build }}
           - **Services to Pull for Testing**: ${{ needs.detect-changes.outputs.to_pull_for_testing }}
           - **Services to Retag**: ${{ needs.detect-changes.outputs.to_retag }}
+          - **Images to Retag**: ${{ needs.detect-changes.outputs.retag_image_names }}
           - **Testable Services**: ${{ needs.detect-changes.outputs.testable_services }}
           - **Healthcheck Services**: ${{ needs.detect-changes.outputs.healthcheck_services }}
           - **Unused Base Images**: ${{ needs.detect-changes.outputs.unused_base_images }}
