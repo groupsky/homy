@@ -74,3 +74,10 @@ change under `docker/dmx-driver/`.
 
 Jest is a devDependency only; the runtime image installs with `npm ci --omit=dev`,
 so it is not shipped.
+
+**Regenerate `package-lock.json` with node 18.20.8**, the version in `.nvmrc` and in
+the Dockerfile's base image. A lockfile written by a newer npm resolves jest's
+optional platform bindings differently, and npm 10.8.2 then rejects it with
+`npm ci can only install packages when your package.json and package-lock.json are
+in sync` / `Missing: @emnapi/core@... from lock file` — which breaks both the test
+workflow and the image build.
