@@ -3,3 +3,5 @@ Dockerfile
 *jest*
 *.test.js
 *.spec.js
+__fixtures__
+coverage

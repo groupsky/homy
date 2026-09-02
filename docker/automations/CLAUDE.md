@@ -251,9 +251,55 @@ const subscribe = (topic, callback) => {
 
 ### MQTT Subscription
 - **Important**: The `mqtt.subscribe()` callback receives parsed JavaScript objects, not JSON strings
-- The framework automatically parses incoming JSON payloads using `JSON.parse(payload.toString())`
+- The framework automatically parses incoming JSON payloads with `contentProcessors.json.read()`
 - **Correct**: `mqtt.subscribe(topic, (payload) => { const value = payload.state })`
 - **Incorrect**: `mqtt.subscribe(topic, (payload) => { const data = JSON.parse(payload) })`
+
+### Malformed Payload Handling
+
+The single `message` handler in `index.js` dispatches every subscribed topic,
+and it runs inside the MQTT client's stream: `handlePublish` emits `message`
+from `writable._write`. An exception escaping the handler therefore surfaces as
+an unhandled `error` event on that stream and **kills the process** — verified
+against `mqtt@5.15.1` by throwing from a `message` listener, which exits node
+with code 1 and this trace:
+
+```
+Error: boom from message handler
+    at MqttClient.emit (node:events)
+    at handlePublish (mqtt/build/lib/handlers/publish.js)
+    at writable._write (mqtt/build/lib/client.js)
+Emitted 'error' event on Writable instance
+```
+
+The service has `restart: unless-stopped`, so it comes back — and if the
+malformed payload was published with `retain`, the broker redelivers it on
+reconnect and the service crash-loops. Issue #1224 was exactly that, a bare
+`JSON.parse`; its write-up understated the impact as "continues running but
+silently fails".
+
+What the framework guarantees, and what a bot can rely on:
+
+- **A payload that is not valid JSON is dropped, not fatal.** The handler logs
+  `Failed to parse payload for topic <topic> "<preview>" <error>` and returns.
+  Later messages on that topic, and on every other topic, are unaffected.
+- **The log carries a bounded preview.** `lib/payload-preview.js` renders at
+  most the first 100 characters and appends `... (N chars)` when it truncates,
+  so a chatty broken publisher cannot flood the log.
+- **A throwing subscriber is also contained.** Each subscription is invoked in
+  its own `try`/`catch`; one bot throwing does not stop the others from seeing
+  the message.
+- **`contentProcessors.json` still throws, with context.** `read()` raises
+  ``Invalid JSON payload "<preview>": <reason>`` and `write()` raises
+  `Payload cannot be serialized to JSON: <reason>` (circular structures,
+  `BigInt`). Serialization is a programming error, so it is not swallowed — but
+  the message names the payload rather than leaving a bare `SyntaxError`. The
+  original error is kept as `err.cause`, so a caller that already logs its own
+  preview (as the message handler does) can report the reason without printing
+  the payload twice.
+
+A bot must still validate the *shape* of what it receives: valid JSON is not
+necessarily the object the bot expects, and `null` is valid JSON.
 
 ### Feature Integration
 - Use the features service for device abstraction

@@ -39,6 +39,7 @@ const playground = {
 }
 
 const contentProcessors = require('./lib/content-processors')
+const { payloadPreview } = require('./lib/payload-preview')
 
 playground.gates.mqtt.setMaxListeners(1000)
 const mqttSubscriptions = {}
@@ -66,7 +67,22 @@ playground.gates.mqtt.on('message', (msgTopic, payload) => {
     return
   }
 
-  const payloadJson = JSON.parse(payload.toString())
+  // A malformed payload must not take the handler down with it. This callback
+  // runs inside the MQTT client's stream - handlePublish emits `message` from
+  // writable._write - so an exception escaping here becomes an unhandled
+  // `error` event on that stream and kills the process. With
+  // `restart: unless-stopped` and a retained bad payload, that is a crash loop.
+  // See issue #1224.
+  let payloadJson
+  try {
+    payloadJson = contentProcessors.json.read(payload.toString())
+  } catch (err) {
+    // `err.cause` is the raw SyntaxError. The wrapper's own message repeats the
+    // preview already logged here, so report the underlying reason instead.
+    console.error('Failed to parse payload for topic', msgTopic, `"${payloadPreview(payload)}"`, err.cause ?? err)
+    return
+  }
+
   for (const subscription of mqttSubscriptions[msgTopic]) {
     try {
       subscription(payloadJson)
