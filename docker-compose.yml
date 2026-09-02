@@ -862,6 +862,48 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Records the Zigbee mesh. Nothing from zigbee2mqtt reached InfluxDB before
+  # this service: every other mqtt-influx instance is bound to a Modbus bus or
+  # to the Ioniq, so the mesh was invisible to any historical correlation.
+  #
+  # TOPIC is two patterns because zigbee2mqtt splits a device across them, and
+  # `<device>/availability` is the half that shows a device dropping off the
+  # mesh - a silent device publishes no state at all. `+` matches exactly one
+  # level, so neither pattern matches the `bridge/#` topics.
+  #
+  # The base topic is `z2m/house1`. It is NOT `zigbee2mqtt`: a subscription to
+  # `zigbee2mqtt/#` matches nothing and is indistinguishable from a dead mesh.
+  # It is also already used in config/automations/config.js.
+  mqtt-influx-zigbee:
+    image: ghcr.io/groupsky/homy/mqtt-influx:${IMAGE_TAG:-latest}
+    build: docker/mqtt-influx
+    depends_on:
+      - broker
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      - BROKER=mqtt://broker
+      - TOPIC=z2m/house1/+,z2m/house1/+/availability
+      - CONVERTER=zigbee
+      - MQTT_CLIENT_ID=mqtt-influx-zigbee
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      - TAGS={"mesh":"house1"}
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   automation-events-processor:
     image: ghcr.io/groupsky/homy/automation-events-processor:${IMAGE_TAG:-latest}
     build: docker/automation-events-processor

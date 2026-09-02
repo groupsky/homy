@@ -15,6 +15,7 @@ The mqtt-influx service bridges MQTT messages to InfluxDB time-series storage. M
 - **mqtt-influx-dry-switches**: Digital I/O bus (`/modbus/dry-switches/+/reading`) — decomposes packed input/output words into per-bit boolean fields for contact-sensor and RS485 bus-health diagnostics
 - **mqtt-influx-ioniq**: Hyundai Ioniq OBD telemetry (`ioniq/parsed/#`) → `ioniq` measurement
 - **mqtt-influx-ioniq-sessions**: Ioniq session records from the `ioniq-sessions` automations bot (`ioniq/derived/#`) → `ioniq_sessions` measurement (one record per closed trip/charge/park session)
+- **mqtt-influx-zigbee**: Zigbee mesh via zigbee2mqtt (`z2m/house1/+` and `z2m/house1/+/availability`) → `zigbee` measurement. Uses `CONVERTER=zigbee` rather than payload dispatch, because zigbee2mqtt does not stamp a `_type` into its payloads
 - **Water System Integration**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, boiler, and heat pump energy monitoring
 
 ### Data Flow
@@ -56,6 +57,7 @@ module.exports = (data) => {
 - **mbsl32di**: MBSL32DI digital-input module — raw word + per-input boolean fields (`dry_switch_input`)
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data
+- **zigbee**: zigbee2mqtt device state and availability → `zigbee` measurement (tag `device` = friendly name from the topic, plus `mesh` from `TAGS`). Flattens attributes like `ioniq` does; adds boolean `state_on` for ON/OFF devices and numeric `last_seen_ms`. **Drops any message whose device segment is an IEEE address** — see the privacy note below
 
 ## Adding New Converters
 
@@ -130,7 +132,8 @@ For comprehensive InfluxDB schema documentation including all measurements, fiel
 
 ### Environment Variables
 - **BROKER**: MQTT broker URL (e.g., `mqtt://broker`)
-- **TOPIC**: MQTT topic pattern to subscribe to (supports wildcards)
+- **TOPIC**: MQTT topic pattern(s) to subscribe to (supports wildcards). **Comma-separated for more than one** — needed when a producer splits a device across topics, as zigbee2mqtt does with state and availability
+- **CONVERTER**: optional. When set, every message on `TOPIC` goes to this one converter, which receives `(payload, topic)`. Required for producers that do not stamp `_type` into the payload — anything not written by this project. Unset keeps the original `data._type` dispatch, which is what the five Modbus/Ioniq instances use
 - **MQTT_CLIENT_ID**: Unique client identifier
 - **INFLUXDB_URL**: InfluxDB connection URL
 - **INFLUXDB_DATABASE**: Database name
@@ -139,6 +142,28 @@ For comprehensive InfluxDB schema documentation including all measurements, fiel
 ### Docker Secrets
 - **influxdb_write_user**: InfluxDB username file
 - **influxdb_write_user_password**: InfluxDB password file
+
+## Privacy: IEEE addresses must never be written
+
+**This repository is public and `CLAUDE.md` forbids MAC addresses in it. A
+Zigbee IEEE address is an EUI-64 — a MAC address.**
+
+zigbee2mqtt defaults a device's `friendly_name` to its IEEE address, so a
+device that has never been named publishes on
+`<base_topic>/0x................/availability`. The obvious implementation of
+a Zigbee bridge — take the device name from the topic — therefore writes a MAC
+as an InfluxDB tag value, from where it reaches every dashboard and export.
+This is not hypothetical: on 2026-09-01, one of the nine devices on the
+`house1` mesh was in exactly that state.
+
+`converters/zigbee.js` drops such messages and logs a warning, rather than
+substituting a placeholder — a placeholder would silently merge every unnamed
+device into one series and hide that a device is going unrecorded. The rule is
+enforced by tests in `converters/__tests__/zigbee.test.js`, including one that
+asserts no emitted point's line protocol can ever match an IEEE address.
+
+**To record such a device, give it a `friendly_name` in zigbee2mqtt.** It then
+starts recording on its next message with no change here.
 
 ## Monitoring and Debugging
 

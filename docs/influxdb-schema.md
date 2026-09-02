@@ -107,6 +107,42 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
 query this measurement's `v` field. See
 `docs/superpowers/specs/2026-07-12-per-phase-power-outage-alerting-design.md`.
 
+#### `zigbee` Measurement (from mqtt-influx-zigbee)
+**Source**: zigbee2mqtt on the `house1` mesh, base topic **`z2m/house1`**
+(**not** `zigbee2mqtt` — a subscription to `zigbee2mqtt/#` matches nothing and
+looks identical to a dead mesh).
+
+**Tag Structure**: `mesh: "house1"`, `device: [friendly_name]`.
+
+**Topics**: `z2m/house1/+` (state) and `z2m/house1/+/availability`. Both are
+needed — availability is published separately and is the signal that shows a
+device dropping off the mesh; a silent device publishes no state at all.
+
+**Key Fields**:
+- `available` (boolean) — from the availability topic, the only field on it
+- `linkquality` (float) — LQI on the last message
+- `state` (string, e.g. `ON`/`OFF`/`OPEN`) and `state_on` (boolean, only for
+  ON/OFF devices; `state` stays a string so one field name never holds two
+  types across device classes)
+- `last_seen_ms` (float) — the device's own last-seen, epoch ms, taken from the
+  **MQTT payload**. Never read `last_seen` or `linkquality` out of
+  zigbee2mqtt's `state.json`: `State.set()` caches a copy before
+  `controller.js` attaches those two fields to the other object, so both are
+  frozen in that file at whatever was last written
+- device attributes, flattened into dotted keys (`temperature`, `battery`,
+  `position`, `update.state`, …). Numbers are stored uniformly as floats to
+  avoid InfluxDB int/float type conflicts
+
+**Privacy**: a device with no `friendly_name` in zigbee2mqtt publishes under
+its IEEE address, which is an EUI-64 — a MAC address, forbidden in this public
+repo. Such messages are **dropped, not renamed**; see
+`docker/mqtt-influx/CLAUDE.md`. Naming the device in zigbee2mqtt is what makes
+it recordable.
+
+**Use Cases**: correlating Zigbee relay state and device availability against
+power and metering history — impossible before 2026-09-02, when nothing from
+the mesh reached InfluxDB at all.
+
 #### `raw` Measurement (from modbus-serial-secondary)
 **Source**: modbus-serial-secondary → Individual appliance monitoring
 **Tag Structure**: `bus: "secondary"`, `device.name: [device_name]`
