@@ -222,7 +222,7 @@
               }
             ]
           },
-          "unit": "volt"
+          "unit": "suffix: V"
         },
         "overrides": []
       },
@@ -734,7 +734,7 @@
               }
             ]
           },
-          "unit": "volt"
+          "unit": "suffix: V"
         },
         "overrides": []
       },

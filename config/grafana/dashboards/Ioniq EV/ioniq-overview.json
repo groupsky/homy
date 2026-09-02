@@ -615,7 +615,7 @@
               }
             ]
           },
-          "unit": "pressurebar"
+          "unit": "suffix: bar"
         },
         "overrides": []
       },
@@ -689,7 +689,7 @@
               }
             ]
           },
-          "unit": "pressurebar"
+          "unit": "suffix: bar"
         },
         "overrides": []
       },
@@ -763,7 +763,7 @@
               }
             ]
           },
-          "unit": "pressurebar"
+          "unit": "suffix: bar"
         },
         "overrides": []
       },
@@ -837,7 +837,7 @@
               }
             ]
           },
-          "unit": "pressurebar"
+          "unit": "suffix: bar"
         },
         "overrides": []
       },

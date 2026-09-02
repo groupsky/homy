@@ -39,3 +39,43 @@ export interface ScanResult {
   findings: EvaluatorFinding[];
   problems: EvaluatorProblem[];
 }
+
+/** One `unit` resolved from a provisioned dashboard. */
+export interface UnitFinding {
+  /** Dashboard path relative to the dashboards directory, `/`-separated. */
+  file: string;
+  /** Location within the document, e.g. `panels[3].fieldConfig.defaults.unit`. */
+  path: string;
+  /** `id` of the panel the unit belongs to. */
+  panelId: number;
+  /** Panel `title`, or a placeholder when the panel has none. */
+  panelTitle: string;
+  /** The unit id exactly as written - Grafana looks it up case-sensitively. */
+  unit: string;
+  /**
+   * Numeric steps of the panel's `fieldConfig.defaults.thresholds`.
+   *
+   * A threshold is written in the panel's base unit, so a step below 1 is
+   * direct evidence that the series lives where an SI-prefixed unit rescales.
+   * Taken from the panel defaults even for a unit set through an override -
+   * approximate on purpose, and only ever used to refuse an exception.
+   */
+  thresholds: number[];
+}
+
+/**
+ * Something that stopped a unit from being attributed to a panel.
+ *
+ * Every problem fails the run, for the same reason an unreadable evaluator
+ * does: a unit this tool cannot place is a unit it cannot vouch for.
+ */
+export interface UnitProblem {
+  file: string;
+  path: string;
+  message: string;
+}
+
+export interface UnitScanResult {
+  findings: UnitFinding[];
+  problems: UnitProblem[];
+}

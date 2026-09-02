@@ -222,7 +222,7 @@
               }
             ]
           },
-          "unit": "amp"
+          "unit": "suffix: A"
         },
         "overrides": []
       },
@@ -658,7 +658,7 @@
               }
             ]
           },
-          "unit": "amp"
+          "unit": "suffix: A"
         },
         "overrides": []
       },

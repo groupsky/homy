@@ -153,6 +153,60 @@ describe('Content Processors', () => {
       }).toThrow()
     })
 
+    // Issue #1224: the bare SyntaxError from JSON.parse names neither the
+    // payload nor its shape, which is what a caller needs to find the
+    // publisher that sent it.
+    test('should name the offending payload when reading invalid JSON', () => {
+      expect(() => {
+        contentProcessors.json.read('{"state": ')
+      }).toThrow('Invalid JSON payload "{"state": "')
+    })
+
+    test('should truncate a long payload in the read error', () => {
+      const long = `{"state": "${'x'.repeat(500)}`
+
+      expect(() => contentProcessors.json.read(long)).toThrow(long.slice(0, 100))
+      expect(() => contentProcessors.json.read(long)).toThrow(`(${long.length} chars)`)
+      expect(() => contentProcessors.json.read(long)).not.toThrow(long)
+    })
+
+    test('should keep the underlying parse error as the cause', () => {
+      let thrown
+      try {
+        contentProcessors.json.read('{"state": ')
+      } catch (err) {
+        thrown = err
+      }
+
+      expect(thrown.cause).toBeInstanceOf(SyntaxError)
+      expect(thrown.message).toContain(thrown.cause.message)
+    })
+
+    test('should throw a descriptive error when a payload cannot be serialized', () => {
+      const circular = { name: 'loop' }
+      circular.self = circular
+
+      expect(() => contentProcessors.json.write(circular)).toThrow('Payload cannot be serialized to JSON')
+    })
+
+    test('should throw a descriptive error for values JSON cannot represent', () => {
+      expect(() => contentProcessors.json.write({ counter: 1n })).toThrow('Payload cannot be serialized to JSON')
+    })
+
+    test('should keep the underlying serialization error as the cause', () => {
+      const circular = { name: 'loop' }
+      circular.self = circular
+
+      let thrown
+      try {
+        contentProcessors.json.write(circular)
+      } catch (err) {
+        thrown = err
+      }
+
+      expect(thrown.cause).toBeInstanceOf(TypeError)
+    })
+
     test('should handle complex nested objects', () => {
       const payload = {
         state: true,

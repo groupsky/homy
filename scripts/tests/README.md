@@ -48,6 +48,7 @@ cd scripts/tests
 - `docker-helper.bats` - Tests for core helper functions
 - `backup.bats` - Tests for backup script
 - `restore.bats` - Tests for restore script
+- `deploy.bats` - Tests for the deploy script's code-update step
 - `test_helper.bash` - Common test utilities and mocks
 
 ### Test Helper Functions
@@ -154,6 +155,18 @@ Current test coverage:
 - ✅ Service state validation
 - ✅ Error handling with error function
 - ✅ Backup reference resolution
+
+### deploy.sh
+- ✅ Code update runs with submodule recursion disabled (issue #1406)
+- ✅ Checkout precedes pull, submodules are updated afterwards
+- ✅ A failed submodule update warns instead of aborting the deploy
+- ✅ A genuinely failed checkout or pull stops the deploy
+- ✅ `--tag` skips the code update entirely
+
+`deploy.bats` mocks `git` as a host with `submodule.recurse=true` in its global
+config: the mock's `pull` fails with `fatal: bad object 0000...0` unless the
+caller disabled recursion for the invocation. That is the failure observed on
+routy, so the tests fail against a `deploy.sh` that pulls plainly.
 
 ## Debugging Tests
 

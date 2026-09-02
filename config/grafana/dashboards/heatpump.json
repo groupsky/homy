@@ -853,7 +853,7 @@
               }
             ]
           },
-          "unit": "watt"
+          "unit": "suffix: W"
         },
         "overrides": []
       },
