@@ -1,0 +1,51 @@
+name: Test DMX Driver
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docker/dmx-driver/**'
+      - '.github/workflows/test-dmx-driver.yml'
+  pull_request:
+    paths:
+      - 'docker/dmx-driver/**'
+      - '.github/workflows/test-dmx-driver.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test dmx-driver
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: 'docker/dmx-driver/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/dmx-driver/package-lock.json'
+
+      # --ignore-scripts skips the node-gyp build of the `dmx` native addon,
+      # which needs libftdi headers (the Dockerfile installs them for the real
+      # image). The unit tests cover message-handler.js, which does not require
+      # `dmx`, so the addon is not needed here.
+      - name: Install dependencies
+        working-directory: docker/dmx-driver
+        run: npm ci --ignore-scripts
+
+      - name: Run tests
+        working-directory: docker/dmx-driver
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5
+        continue-on-error: true
+        with:
+          directory: docker/dmx-driver/coverage
+          flags: dmx-driver

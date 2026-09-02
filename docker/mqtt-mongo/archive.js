@@ -1,4 +1,5 @@
-const { buildRecord } = require('./record')
+const { buildRecord, ERROR_FIELD } = require('./record')
+const { payloadPreview } = require('./payload-preview')
 const { ttlIndexArgsFromEnv } = require('./ttl')
 
 /**
@@ -11,10 +12,21 @@ const { ttlIndexArgsFromEnv } = require('./ttl')
  * an existing collection. Index creation is best-effort: it never blocks
  * archiving and a failure is logged rather than fatal. A write failure, by
  * contrast, stays fatal (process exit) so the container restarts and retries.
+ *
+ * A payload that is not valid JSON is archived raw, not dropped: this is the
+ * only record of the topics it covers. `buildRecord` never throws, which matters
+ * because this listener is `async` — a throw here would be a rejected promise,
+ * and NODE_OPTIONS="--unhandled-rejections=strict" in the Dockerfile makes that
+ * fatal (issue #1526). The failure is logged with a bounded payload preview so a
+ * broken publisher cannot flood the log.
  */
 function startArchiving({ client, collection, env = process.env }) {
     client.on('message', async function (topic, message) {
         const record = buildRecord(topic, message)
+        if (record.payload[ERROR_FIELD]) {
+            console.error('Failed to parse payload for topic', topic,
+                `"${payloadPreview(message)}"`, record.payload[ERROR_FIELD], '- archiving raw')
+        }
         try {
             await collection.insertOne(record)
         } catch (err) {

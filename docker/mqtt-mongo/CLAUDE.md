@@ -67,11 +67,65 @@ in place with `collMod`:
 
 (or drop `ttl_payload__ts` and let the service recreate it on next restart).
 
+## Malformed Payload Handling
+
+The message listener in `archive.js` is `async`, so anything thrown inside it
+becomes a rejected promise that `EventEmitter.emit` discards — and the Dockerfile
+sets `NODE_OPTIONS="--unhandled-rejections=strict"`, which turns that into an
+uncaught exception and exit 1. With `restart: unless-stopped` and a retained bad
+payload, that is a crash loop. `mqtt-mongo-ioniq` subscribes to `ioniq/#`, so any
+producer anywhere under that tree could take the archiver down and stop every
+topic's history, not just the offending one. Issue #1526 was exactly that, a bare
+`JSON.parse` in `buildRecord`.
+
+**An unparseable payload is archived raw, not dropped.** This archive is the only
+record of the topics it covers, so discarding a message would be real data loss —
+and a payload that fails to parse is often the one worth keeping. `buildRecord`
+wraps it instead of throwing:
+
+```js
+{ topic, payload: { _raw: '<payload as it arrived>', _parseError: '<reason>', _tz, _ts } }
+```
+
+The wrapper is a plain object stamped with the usual `_ts`/`_tz`, so retention
+still applies to it — a bare string would not be TTL-eligible, since the TTL
+index expires on `payload._ts`.
+
+The same wrapper is used for a payload that *is* valid JSON but cannot carry the
+timestamps: `null`, a scalar, or an array. Assigning `_ts` to a scalar is a silent
+no-op and properties set on an array do not survive BSON serialization, so a
+document built from one would never expire — the same class of bug as the
+top-level-`_ts` index described above. `_parseError` then reads
+`payload is not a JSON object (<typeof>)`.
+
+`_raw` is bounded at 65536 characters (`RAW_LENGTH`), with the truncation marked
+in-band as `... (N chars)`. The bound exists so an oversized publish cannot push
+the document past MongoDB's 16 MB limit: `insertOne` failing is fatal by design
+(the container restarts and retries), which would reintroduce the crash the guard
+removes.
+
+`archive.js` logs `Failed to parse payload for topic <topic> "<preview>" <reason>
+- archiving raw`. The preview comes from `payload-preview.js`, at most the first
+100 characters with `... (N chars)` appended, so a chatty broken publisher cannot
+flood the log. That module is a copy of
+`docker/automations/lib/payload-preview.js` — the services are separate npm
+packages with separate `node_modules`, so it cannot be shared by `require`; the
+behaviour and its test suite are kept identical.
+
+A consumer reading this archive must expect `_raw`/`_parseError` documents
+alongside normal ones and skip or handle them.
+
 ## Testing
 
-Unit tests cover `record.js#buildRecord` (Jest, minimal mocking):
+Unit tests cover `record.js#buildRecord`, `archive.js#startArchiving`, the TTL
+index arguments and `payload-preview.js` (Jest, minimal mocking — the MQTT client
+is a plain `EventEmitter` and the Mongo collection a small fake):
 
+    npm ci
     npm test
 
 Run from `docker/mqtt-mongo/`. Jest is a devDependency only; the runtime image
 installs with `npm ci --omit=dev`, so it is not shipped.
+
+`.github/workflows/test-mqtt-mongo.yml` runs the suite on every change under
+`docker/mqtt-mongo/`.

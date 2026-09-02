@@ -58,3 +58,76 @@ describe('startArchiving', () => {
         expect(collection.indexCalls).toHaveLength(0)
     })
 })
+
+// The message listener is `async`, so anything thrown inside it became a
+// rejected promise that EventEmitter.emit discards — and the Dockerfile sets
+// NODE_OPTIONS="--unhandled-rejections=strict", which turns that into an
+// uncaught exception and exit 1. The listener is invoked directly here (rather
+// than through emit) precisely so its promise can be asserted on. Issue #1526.
+describe('startArchiving with a malformed payload', () => {
+    // The registered listener, so the promise emit() would have thrown away is
+    // observable.
+    function messageListener(client) {
+        const [listener] = client.listeners('message')
+        return listener
+    }
+
+    it('does not reject when the payload is not valid JSON', async () => {
+        const client = new EventEmitter()
+        startArchiving({ client, collection: fakeCollection(), env: {} })
+
+        await expect(messageListener(client)('ioniq/raw/obc', 'not json')).resolves.toBeUndefined()
+    })
+
+    it('archives the raw payload rather than dropping it', async () => {
+        const client = new EventEmitter()
+        const collection = fakeCollection()
+        startArchiving({ client, collection, env: {} })
+
+        await messageListener(client)('ioniq/raw/obc', '{"truncated')
+
+        expect(collection.inserted).toHaveLength(1)
+        expect(collection.inserted[0].topic).toBe('ioniq/raw/obc')
+        expect(collection.inserted[0].payload._raw).toBe('{"truncated')
+        expect(collection.inserted[0].payload._ts).toBeInstanceOf(Date)
+    })
+
+    it('logs the topic and a bounded preview of the payload', async () => {
+        const client = new EventEmitter()
+        const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+        startArchiving({ client, collection: fakeCollection(), env: {} })
+
+        await messageListener(client)('ioniq/raw/obc', 'z'.repeat(250))
+
+        expect(errors).toHaveBeenCalledTimes(1)
+        const line = errors.mock.calls[0].join(' ')
+        expect(line).toContain('ioniq/raw/obc')
+        expect(line).toContain(`${'z'.repeat(100)}... (250 chars)`)
+        // Bounded: the full 250-character payload never reaches the log.
+        expect(line).not.toContain('z'.repeat(101))
+    })
+
+    it('still archives a later well-formed message on the same topic', async () => {
+        const client = new EventEmitter()
+        const collection = fakeCollection()
+        jest.spyOn(console, 'error').mockImplementation(() => {})
+        startArchiving({ client, collection, env: {} })
+
+        await messageListener(client)('ioniq/raw/obc', 'not json')
+        await messageListener(client)('ioniq/raw/obc', '{"_type":"ioniq","raw":"62BC03"}')
+
+        expect(collection.inserted).toHaveLength(2)
+        expect(collection.inserted[1].payload.raw).toBe('62BC03')
+        expect(collection.inserted[1].payload._parseError).toBeUndefined()
+    })
+
+    it('does not log for a well-formed payload', async () => {
+        const client = new EventEmitter()
+        const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+        startArchiving({ client, collection: fakeCollection(), env: {} })
+
+        await messageListener(client)('ioniq/parsed/bms/2101', '{"_type":"ioniq","soc":36}')
+
+        expect(errors).not.toHaveBeenCalled()
+    })
+})

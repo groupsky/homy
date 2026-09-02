@@ -189,7 +189,7 @@ The CI/CD pipeline uses a hybrid approach combining the unified pipeline with st
   - **Test-only optimization**: Services with only test file changes pull existing images instead of rebuilding (50-60% faster)
 
 - **Unit Testing**: Standalone workflows for fast feedback (50-60% faster than dockerized tests)
-  - `test-automations.yml`, `test-automation-events-processor.yml`, `test-modbus-serial.yml`, `test-sunseeker-monitoring.yml`, `test-telegram-bridge.yml`
+  - `test-automations.yml`, `test-automation-events-processor.yml`, `test-dmx-driver.yml`, `test-modbus-serial.yml`, `test-mqtt-mongo.yml`, `test-sunseeker-monitoring.yml`, `test-telegram-bridge.yml`
   - Triggered on service file changes with path filtering
   - Run independently and in parallel with ci-unified.yml
   - **Branch protection recommended**: Configure required status checks to enforce test passage before merge
