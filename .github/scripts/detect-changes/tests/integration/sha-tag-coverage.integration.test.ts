@@ -74,6 +74,24 @@ describe('SHA tag coverage of the real docker-compose.yml', () => {
     expect(withoutBuild).toEqual([]);
   });
 
+  test('every service with a build directive also has a homy image', () => {
+    // The mirror of the test above, and the gap stage 5C cannot see: 5C
+    // enumerates services by their `image:` field, so a service that CI builds
+    // but that carries no image (or a non-homy one) is absent from 5C's count
+    // entirely and is silently reported as covered. Meanwhile the detector WOULD
+    // put it in to_build or to_retag, since discovery keys on `build:`.
+    //
+    // Every service in the stack is built by us and pulled from our registry, so
+    // the two sets must stay identical. If this ever fails, decide deliberately
+    // which side is right before touching either.
+    const buildWithoutHomyImage = Object.entries(readComposeServices())
+      .filter(([, config]) => config.build)
+      .filter(([, config]) => !(config.image ?? '').startsWith(HOMY_PREFIX))
+      .map(([name]) => name);
+
+    expect(buildWithoutHomyImage).toEqual([]);
+  });
+
   test('every homy-image service pins ${IMAGE_TAG}', () => {
     // The contract only holds for services whose tag actually follows IMAGE_TAG.
     const unpinned = Object.entries(deployableServices())

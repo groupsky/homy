@@ -411,34 +411,69 @@ the difference — it inspects for a manifest. Before #1544 those commits failed
 Recovery: re-run the base commit's workflow to create its SHA tags, then re-run the newer
 one. Do not deploy the newer commit until it is green.
 
-#### Bootstrapping the SHA chain
+#### Cold start and unwedging: `force_rebuild=true`
 
-There is one legitimate cold start — no image has ever been SHA-tagged by 5B, because the
-job never created SHA tags before #1544. It is a **deliberate one-shot**, not an
-always-armed fallback:
+There is exactly one recovery, and it is not a seed from `:latest`:
 
 ```
-gh workflow run ci-unified.yml --ref master -f bootstrap_sha_tags=true
+gh workflow run ci-unified.yml --ref master -f force_rebuild=true
 ```
 
-Only do this on an **idle, green master**: no other `ci-unified` run in flight, and the tip
-commit's own run green. Those two conditions are exactly what makes `:latest` equal to the
-base commit's content; the table above is what happens when they do not hold. Stage 5C runs
-on the dispatch and will fail if the seed did not cover everything.
+`force_rebuild` compares against the empty tree, so every service lands in `to_build`,
+`to_retag` is empty, **Stage 5B skips entirely**, and Stage 5A tags all 20 images from real
+builds of that commit's source. Verified against the real repo:
 
-After one successful seed the chain is self-sustaining: every master run tags every image at
-its own SHA, so the next run always finds its base.
+```
+To build: 38, To retag: 0 (0 distinct images)
+```
+
+Nothing reads `:latest`, so there is no way for it to produce a tag whose content does not
+match the commit. It costs a full rebuild — that is the price of the guarantee, and it is
+the right trade whenever the alternative is a manifest nobody can verify.
+
+Use it for **all** of these:
+
+- **Cold start** — no image has ever been SHA-tagged, because Stage 5B never created SHA
+  tags before #1544. This is the state at the moment this change merges.
+- **A red or cancelled run at commit N**, which leaves N with SHA tags only for the images
+  Stage 3 happened to build. Re-running N's workflow just re-runs the same failing tests, so
+  it does not help; rebuild N+1 instead.
+- **An intermediate commit in a multi-commit push** (issue #1549), which never had a run at
+  all and so can never be re-run.
+- **Two master merges that overlapped**, where the older run had not finished pushing when
+  the newer one reached Stage 5B. Waiting for the older run and re-running the newer one
+  also works here, and is cheaper.
+
+**The chain is only self-sustaining while every master run is green through Stage 5.** Each
+green run tags every image at its own SHA, so the next run finds its base — but one flaky
+healthcheck, one cancelled run or one overlapping merge breaks the link, and the next commit
+fails at Stage 5B by design rather than inventing a manifest. That failure is loud and does
+not compound silently: `force_rebuild=true` restores the chain from source in one run.
+
+An earlier draft of this change added a `bootstrap_sha_tags` dispatch input that let Stage
+5B seed from `:latest`. It was removed. It bought nothing `force_rebuild` does not already
+do, and it was re-runnable: "Re-run all jobs" preserves `github.sha` and the inputs, so
+re-running an old bootstrap weeks later would have sourced today's `:latest` and minted
+`<image>:<old-sha>` containing *newer* code — the same silent-stale failure as the one
+above, running backwards in time, and `deploy.sh --tag <old-sha>` and `rollback.sh` would
+both have believed it.
 
 #### Residual risk: Stage 5A can still move `:latest` backward
 
 Stage 5B no longer writes `:latest`, but **Stage 5A does** (`ci-unified.yml`, "Determine
 tags"), and it has the same exposure the argument above describes: a re-run or a
 `workflow_dispatch` of an older master commit rebuilds that commit's images and re-points
-`:latest` at them. This is not closed, only narrowed — 5A writes `:latest` for images it
-actually built from that commit's source, so the tag is never *invented*, just older than
-the tip. It matters because `:latest` is what the `bootstrap_sha_tags` one-shot reads, which
-is why that one-shot requires an idle, green master. Re-running an old master commit and
-then bootstrapping in the same window would seed from that old content.
+`:latest` at them. This is **not closed, only narrowed** — 5A writes `:latest` for images it
+actually built from that commit's source, so the tag is never *invented*, only older than
+the tip.
+
+What makes it tolerable is that nothing in the deploy path reads `:latest` any more.
+`deploy.sh` pins the commit SHA; `${IMAGE_TAG:-latest}` falls back to `:latest` only when
+`IMAGE_TAG` is unset, which the script never leaves it. Since the `bootstrap_sha_tags` input
+was dropped, no CI job reads `:latest` either. It survives as a convenience tag for humans
+and for `docker compose` runs outside `deploy.sh`, and those can be stale after a re-run of
+an old commit. Closing it properly means gating 5A's `:latest` on `github.sha` being the
+current tip; that is not done here.
 
 #### The invariant is checked, not argued
 
@@ -458,6 +493,11 @@ each injected: the grep saw 38 services / 20 images, the parser saw 40 / 22.
 **What 5C does not check is content.** It verifies that a manifest exists at the commit SHA,
 not that the manifest was built from that commit's source. That is why Stage 5B's source
 rule above has to be strict — 5C cannot be the backstop for a stale tag.
+
+It also enumerates services by their `image:` field, so a service that CI *builds* but that
+carries no homy image would be absent from 5C's count and silently reported as covered. The
+integration test asserts both directions — every homy-image service has a `build:`, and
+every `build:` service has a homy image — so the two sets cannot drift apart unnoticed.
 
 ### Standalone Unit Test Workflows
 

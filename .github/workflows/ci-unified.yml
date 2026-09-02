@@ -18,13 +18,6 @@ on:
         description: 'PR number (required when publish_pr_images=true)'
         type: string
         default: ''
-      bootstrap_sha_tags:
-        description: >-
-          One-shot: let stage 5B seed SHA tags from :latest when the base commit
-          has none. Master only. See "Bootstrapping the SHA chain" in
-          .github/workflows/CLAUDE.md - do NOT enable this routinely.
-        type: boolean
-        default: false
 
 # Concurrency control
 concurrency:
@@ -1341,26 +1334,34 @@ jobs:
           # loudly at deploy.sh's pull guard; a silent stale deploy is strictly
           # worse than that. So this job fails instead.
           #
-          # Recovery is to re-run the base commit's workflow, which creates its
-          # SHA tags, then re-run this one. The one legitimate cold start - no
-          # image has EVER been SHA-tagged, because this job never created them
-          # before #1544 - is a deliberate one-shot: dispatch this workflow on
-          # master with bootstrap_sha_tags=true. See "Bootstrapping the SHA chain"
-          # in .github/workflows/CLAUDE.md.
-          if docker buildx imagetools inspect "$BASE_IMAGE" >/dev/null 2>&1; then
-            SOURCE="$BASE_IMAGE"
-            echo "Source: $SOURCE (base SHA)"
-          elif [ "${{ github.event.inputs.bootstrap_sha_tags }}" == "true" ] \
-            && docker buildx imagetools inspect "$REPO:latest" >/dev/null 2>&1; then
-            SOURCE="$REPO:latest"
-            echo "::warning::BOOTSTRAP: no image at $BASE_IMAGE, seeding $IMAGE_NAME from $REPO:latest. This was requested explicitly via bootstrap_sha_tags and is only correct on an idle, green master. See issue #1544."
-          else
+          # There is no fallback, and deliberately no bootstrap flag either. The
+          # cold start this job needs already exists and is content-correct:
+          # `workflow_dispatch` with force_rebuild=true compares against the
+          # empty tree, so every service lands in `to_build`, `to_retag` is
+          # empty, THIS JOB SKIPS, and stage 5A tags all 20 images from real
+          # builds of that commit's source. Verified against the real repo:
+          # "To build: 38, To retag: 0 (0 distinct images)". Seeding from
+          # :latest instead would buy one avoided rebuild in exchange for
+          # reopening the silent-stale hole above, and nothing downstream can
+          # detect a bad seed - stage 5C checks that a manifest exists, not what
+          # is in it.
+          if ! docker buildx imagetools inspect "$BASE_IMAGE" >/dev/null 2>&1; then
             echo "::error::No image at $BASE_IMAGE for $IMAGE_NAME."
-            echo "The base commit's images were never pushed - its run failed, was cancelled, is still running, or it is an intermediate commit in a multi-commit push."
-            echo "Re-run the workflow for $BASE_SHA, then re-run this one. Do NOT deploy $SHA until this is green."
-            echo "Cold start only (no image has ever been SHA-tagged): dispatch this workflow on master with bootstrap_sha_tags=true."
+            echo "The base commit's images were never pushed - its run failed, was cancelled, is still running, or it is an intermediate commit in a multi-commit push (issue #1549)."
+            echo "Do NOT deploy $SHA until this is green."
+            echo ""
+            echo "Recovery, in order of preference:"
+            echo "  1. If $BASE_SHA's run is still in flight, wait for it and re-run this workflow."
+            echo "  2. Otherwise rebuild this commit from source:"
+            echo "       gh workflow run ci-unified.yml --ref master -f force_rebuild=true"
+            echo "     That rebuilds every service and tags all images at this commit's SHA"
+            echo "     without reusing any existing manifest. It is also the cold start for a"
+            echo "     repository where nothing has been SHA-tagged yet."
             exit 1
           fi
+
+          SOURCE="$BASE_IMAGE"
+          echo "Source: $SOURCE (base SHA)"
 
           # The commit SHA tag is what deploy.sh pins IMAGE_TAG to, so EVERY
           # service needs one or a default deploy dies on `manifest unknown`.
@@ -1409,10 +1410,10 @@ jobs:
     timeout-minutes: 10
     needs: [check-relevant-paths, detect-changes, push-built-images, retag-unchanged-images]
     # Master only: this is the deploy contract, and only master is deployed from.
-    # workflow_dispatch is included because stage 5B writes SHA tags on a
-    # dispatch too - including the bootstrap_sha_tags one-shot, which is exactly
-    # the run whose output most needs checking. Runs even when 5A/5B skipped: a
-    # silent skip is one of the failure shapes it is here to catch.
+    # workflow_dispatch is included because stages 5A and 5B write SHA tags on a
+    # dispatch too - including the force_rebuild=true cold start, which is
+    # exactly the run whose output most needs checking. Runs even when 5A/5B
+    # skipped: a silent skip is one of the failure shapes it is here to catch.
     if: |
       always() &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
