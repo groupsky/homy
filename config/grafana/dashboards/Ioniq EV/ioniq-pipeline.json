@@ -49,7 +49,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Per-group ingest rate — samples landing per 1-minute bucket, one line per MQTT group. Groups carry disjoint field sets, so this is deliberately one query per group counting that group's always-populated field (not one generic query). count()-per-time(1m) is correct HERE (a rate over the awake window, not a liveness check). While awake, bms telemetry is ~0.5 s cadence (~120/min); while the car sleeps every group drops to 0 across all lines together — that is the car sleeping, not a pipeline outage. Use the last-seen tiles below to judge staleness.",
+      "description": "Per-group ingest rate — samples landing per 1-minute bucket, one line per MQTT group. Groups carry disjoint field sets, so this is deliberately one query per group counting that group's always-populated field (not one generic query). count()-per-time(1m) is correct HERE (a rate over the awake window, not a liveness check). While awake, bms telemetry is ~0.5 s cadence (~120/min); while the car sleeps every group drops to 0 across all lines together — that is the car sleeping, not a pipeline outage. Use the last-seen tiles below to judge staleness.\n\nA FLAT ZERO IS NORMAL. The OBD logger is powered by the car and stops about 30 s after locking, so every period the car is not driven reads as nothing at all. The three-day blank over 2026-08-31 to 09-02 was a car sitting on the drive. Nothing alerts on absence of BMS frames for exactly this reason -- a staleness rule here would page on every long weekend.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -892,6 +892,201 @@
       ],
       "title": "Pending DTC Codes",
       "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Daily BMS frame count. This is a usage record, not a health check: bars appear on days the car was driven and are absent on days it sat. Use it to tell \"the car was parked\" apart from \"the logger stopped\" when a panel elsewhere looks empty -- if neighbouring days are also blank, the car was simply not used.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum",
+            "mean"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "refId": "A",
+          "alias": "frames/day",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT count(\"soc\") AS \"frames\" FROM \"ioniq\"\nWHERE \"group\"='bms/2101' AND $timeFilter\nGROUP BY time(1d) fill(0)",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "BMS frames per day (car in use)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Frames whose decoded pack voltage is physically impossible (over 500 V on a 96-cell pack that tops out near 403 V). These are ECU \"no data\" responses decoded as real values, and they are the failure mode worth watching here -- unlike a quiet period, which just means the car is parked.\n\nExactly one occurred in the 7.5 weeks to 2026-09-05: on 2026-08-27 a frame read hv_v 5838 V, hv_a 1280 A, hv_kw 7472 kW and temp_max 59 C while parked. It was the only sample above 55 C in the whole history and tripped the pack-temperature critical rule on a pack that was sitting at ambient.\n\nSuch frames are now dropped at ingest by isGarbageBmsFrame in docker/mqtt-influx/converters/ioniq.js, so this panel should stay at zero. A non-zero bar means a new mis-decode shape is getting past that guard.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "refId": "A",
+          "alias": "mis-decoded frames",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT count(\"hv_v\") AS \"bad_frames\" FROM \"ioniq\"\nWHERE \"group\"='bms/2101' AND \"hv_v\" > 500 AND $timeFilter\nGROUP BY time(1d) fill(0)",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Mis-decoded BMS frames per day",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",

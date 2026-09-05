@@ -201,28 +201,24 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Latest derived 12 V sag magnitude (derived/aux12v_drop) — how far the aux battery has dropped below its expected resting level. 0 = healthy; the alert fires above 0. Threshold coloring turns red at ≥0.1 V because a value of exactly 0 is the normal, healthy state. Dense signal.",
+      "description": "The 12 V sag signal is a 0/1 latch, and on this car it is normally 1 a lot of the time: it was raised on about 17% of all samples over the 7.5 weeks to 2026-09-05 (~18,800 events), overwhelmingly while DRIVING, where a momentary dip under load is ordinary behaviour.\n\nIt is deliberately not an alarm. The three rules that once consumed it (ioniq-12v-low-parked, ioniq-12v-critical-parked, ioniq-12v-sag) were deleted as false-positive generators -- see delete-ioniq-12v-transient-alerts.yaml. These panels used to colour it red at 0.1, which made them read as a standing fault; they now show the RATE instead, because a rising sag rate over weeks is the early sign of a tiring 12 V battery, while any single event means nothing.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 2,
+          "decimals": 0,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "text",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 0.1
               }
             ]
           },
-          "unit": "suffix: V"
+          "unit": "none"
         },
         "overrides": []
       },
@@ -234,7 +230,7 @@
       },
       "id": 3,
       "options": {
-        "colorMode": "background",
+        "colorMode": "none",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "horizontal",
@@ -250,16 +246,18 @@
       "pluginVersion": "9.5.2",
       "targets": [
         {
+          "refId": "A",
+          "alias": "sag events",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"aux12v_drop\" FROM \"ioniq\" WHERE \"group\"='derived/aux12v_drop' AND $timeFilter",
+          "query": "SELECT count(\"value\") AS \"sag_events\" FROM \"ioniq\"\nWHERE \"group\"='derived/aux12v_drop' AND \"value\" > 0 AND $timeFilter",
           "rawQuery": true,
-          "refId": "A"
+          "resultFormat": "time_series"
         }
       ],
-      "title": "12 V Sag (latest)",
+      "title": "12 V sag events (window)",
       "type": "stat"
     },
     {
@@ -682,7 +680,103 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Derived 12 V sag over time (derived/aux12v_drop) — depth below the expected resting voltage. Dense. Healthy at 0; the alert fires above 0, so any sustained positive excursion is worth investigating. As with all fill(previous) trends here, this can render empty over a fully-parked 6 h window because fill(previous) does not seed from before the window — the latest known value is on the \"12 V Sag (latest)\" stat tile.",
+      "description": "The 12 V sag signal is a 0/1 latch, and on this car it is normally 1 a lot of the time: it was raised on about 17% of all samples over the 7.5 weeks to 2026-09-05 (~18,800 events), overwhelmingly while DRIVING, where a momentary dip under load is ordinary behaviour.\n\nIt is deliberately not an alarm. The three rules that once consumed it (ioniq-12v-low-parked, ioniq-12v-critical-parked, ioniq-12v-sag) were deleted as false-positive generators -- see delete-ioniq-12v-transient-alerts.yaml. These panels used to colour it red at 0.1, which made them read as a standing fault; they now show the RATE instead, because a rising sag rate over weeks is the early sign of a tiring 12 V battery, while any single event means nothing.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "refId": "A",
+          "alias": "sag events/day",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT count(\"value\") AS \"sag_events\" FROM \"ioniq\"\nWHERE \"group\"='derived/aux12v_drop' AND \"value\" > 0 AND $timeFilter\nGROUP BY time(1d) fill(0)",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "12 V sag events per day",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Daily mean 12 V rail voltage while driving with the HV load under 0.5 kW -- i.e. what the DC-DC converter holds the rail at when nothing else is pulling it around. This is the slow signal: a failing LDC or a tiring 12 V battery shows up as a drift here long before any instantaneous threshold trips.\n\nBaseline to 2026-09-05: 13.67 V in mid-July rising to about 13.90 V in late August. The rise is expected -- the LDC raises its target as it gets colder -- so judge this against the season, not against a fixed number. A sustained FALL, especially in cold weather, is the thing to worry about.\n\nOverall means by state for reference: active 13.42 V, charging 13.22 V, parked 12.47 V.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -704,50 +798,49 @@
             },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
+            "pointSize": 6,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
-            "spanNulls": false,
+            "showPoints": "always",
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "line"
+              "mode": "off"
             }
           },
           "decimals": 2,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 0.1
               }
             ]
           },
-          "unit": "suffix: V"
+          "unit": "volt"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 21
+        "w": 24,
+        "x": 0,
+        "y": 29
       },
-      "id": 8,
+      "id": 9,
       "options": {
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "mean",
+            "min",
+            "max"
+          ],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
@@ -760,17 +853,18 @@
       "pluginVersion": "9.5.2",
       "targets": [
         {
-          "alias": "12 V sag",
+          "refId": "A",
+          "alias": "LDC on-voltage (daily mean)",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"value\") AS \"aux12v_drop\" FROM \"ioniq\" WHERE \"group\"='derived/aux12v_drop' AND $timeFilter GROUP BY time($__interval) fill(previous)",
+          "query": "SELECT mean(\"aux_12v\") AS \"ldc_on_v\" FROM \"ioniq\"\nWHERE \"group\"='bms/2101' AND \"state\"='active' AND \"hv_kw\" < 0.5 AND $timeFilter\nGROUP BY time(1d) fill(none)",
           "rawQuery": true,
-          "refId": "A"
+          "resultFormat": "time_series"
         }
       ],
-      "title": "12 V Drop / Sag (derived)",
+      "title": "LDC on-voltage, daily trend (low HV load)",
       "type": "timeseries"
     }
   ],

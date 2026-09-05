@@ -88,4 +88,46 @@ describe('ioniq converter', () => {
         }
         expect(ioniq(frame)).toHaveLength(1)
     })
+
+    it('drops a bms/2101 frame whose pack voltage is physically impossible', () => {
+        // Observed in production 2026-08-27: a single frame decoded hv_v 5838 V,
+        // hv_a 1280 A, hv_kw 7472 kW, temp_max 59 C while parked. The pack is 96
+        // cells in series, so it cannot exceed ~403 V. That frame was the only
+        // sample above 55 C in the whole history and tripped the pack-temp
+        // critical rule; it also poisons any max() over hv_kw on a dashboard.
+        const frame = {
+            _type: 'ioniq', group: 'bms/2101', state: 'parked', ts: 1720000000008,
+            hv_v: 5838, hv_a: 1280, hv_kw: 7472.64, temp_max: 59, temp_min: 0,
+            cell_min_v: 3.7, cell_max_v: 3.7,
+        }
+        expect(ioniq(frame)).toEqual([])
+    })
+
+    it('drops a bms/2101 frame whose pack current is physically impossible', () => {
+        const frame = {
+            _type: 'ioniq', group: 'bms/2101', state: 'active', ts: 1720000000009,
+            hv_v: 360, hv_a: 1280,
+        }
+        expect(ioniq(frame)).toEqual([])
+    })
+
+    it('keeps the real-world extremes of pack voltage and current', () => {
+        // Widest values seen in 7.5 weeks of production data once the single
+        // garbage frame is excluded: -207.9 A to 278.7 A, 0 V to 396.1 V.
+        // hv_v legitimately reads 0 on some parked frames (contactors open),
+        // so only the high side is bounded.
+        for (const [hv_v, hv_a] of [[396.1, 278.7], [356.8, -207.9], [0, 0]]) {
+            const frame = {
+                _type: 'ioniq', group: 'bms/2101', state: 'active', ts: 1720000000010, hv_v, hv_a,
+            }
+            expect(ioniq(frame)).toHaveLength(1)
+        }
+    })
+
+    it('does not apply the pack-plausibility guard to other groups', () => {
+        // Only bms/2101 carries hv_v/hv_a with this meaning; a different group
+        // that happens to use the same key must pass through untouched.
+        const frame = { _type: 'ioniq', group: 'mcu', state: 'active', ts: 1720000000011, hv_v: 5838 }
+        expect(ioniq(frame)).toHaveLength(1)
+    })
 })

@@ -42,6 +42,15 @@ function addField(point, key, value) {
     }
 }
 
+// Physical bounds on the traction pack, used to recognise a mis-decoded frame.
+// The pack is 96 cells in series, so it cannot exceed ~403 V; the motor draws at
+// most ~280 A and regen/rapid-charge returns at most ~210 A. Both limits sit far
+// outside the widest values in 7.5 weeks of production data (0 to 396.1 V,
+// -207.9 A to 278.7 A) so a healthy frame can never reach them. hv_v reads a
+// legitimate 0 on some parked frames (contactors open), hence no lower bound.
+const MAX_PLAUSIBLE_PACK_V = 500
+const MAX_PLAUSIBLE_PACK_A = 600
+
 /**
  * The OBD logger occasionally gets a "no data" response from the ECU for the
  * primary BMS query (raw frame `6101FFFFFFFF...`) and decodes it as literal
@@ -50,9 +59,25 @@ function addField(point, key, value) {
  * destroyed/disconnected at once), so this is an unambiguous garbage-frame
  * signature — not a real vehicle state. Dropping the whole point here stops
  * it from tripping Grafana's raw-field thresholds (cell under-voltage, etc).
+ *
+ * A mis-decode does not always zero the cell voltages. On 2026-08-27 one frame
+ * arrived with plausible cell voltages but hv_v 5838 V, hv_a 1280 A and
+ * temp_max 59 degC while parked - the only sample above 55 degC in the entire
+ * history, and enough to trip the pack-temperature critical rule. Bounding the
+ * pack voltage and current catches that shape too, and keeps a 7472 kW spike
+ * out of every max() on a dashboard.
  */
 function isGarbageBmsFrame(data) {
-    return data.group === 'bms/2101' && data.cell_min_v === 0 && data.cell_max_v === 0
+    if (data.group !== 'bms/2101') {
+        return false
+    }
+    if (data.cell_min_v === 0 && data.cell_max_v === 0) {
+        return true
+    }
+    if (Number.isFinite(data.hv_v) && Math.abs(data.hv_v) > MAX_PLAUSIBLE_PACK_V) {
+        return true
+    }
+    return Number.isFinite(data.hv_a) && Math.abs(data.hv_a) > MAX_PLAUSIBLE_PACK_A
 }
 
 /**
