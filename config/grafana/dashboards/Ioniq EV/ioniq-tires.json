@@ -197,7 +197,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "This wheel's most recent cold-start pressure (derived/tire_rl_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.",
+      "description": "This wheel's most recent cold-start pressure (derived/tire_rl_bar_coldstart) — the raw pressure from the first fresh TPMS frame after a park of 6 h or more, published at most once per local calendar day. The tyre has equilibrated with ambient overnight, so it is directly comparable to the 2.5 bar cold placard with no compensation, and the bands (red <1.90, orange <2.20) are the alert thresholds. ONE POINT PER DRIVING DAY: it stays frozen between mornings, and nothing is published on a day the car is not driven, on a second long park later the same day, or for a reading the bot judges implausible. NOT IDENTICAL TO THE ALERT: this tile shows the LAST reading over 30 days, the rules take the MINIMUM over 7 days. So (a) a tile that has recovered above 2.20 while an alert is still firing is expected — the rule needs a full week of good readings to clear; and (b) past 7 days of not driving the rules go NoData and read Normal while this tile still shows the last known value. The >2.90 red band is a sanity guide only: the over-inflation rule evaluates the normalised series in the trend panel.\n\nREAR-LEFT SUN: the RL wheel catches the morning sun, and it is measurable. RL temp-excess by local hour averages +1.4 at 07:00, +1.7 at 08:00, +1.4 at 09:00, ~0 by midday and -1.7 to -2.1 in the late afternoon, while FL over the same hours is flat at about -1. A warm RL in the morning is sunlight, not a dragging brake or a failing bearing.\n\nIt has a side effect on pressure. tire_rl_bar_cold normalises using the SENSOR temperature, so an over-read temperature over-corrects the pressure DOWNWARD: RL has the lowest mean cold pressure of any wheel (2.385 bar) despite having the second HIGHEST cold-start pressure (2.493 bar). Cold-start is the unbiased series -- it is taken after a 6 h park, before the sun gets to it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -477,7 +477,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "How much hotter the rear-left tire runs than the mean of the other three wheels (derived/tire_rl_temp_excess). Healthy near 0 °C; the \"tire hot\" alert fires above 8 °C sustained for 10 min (a dragging brake, a failing bearing, or under-inflation). The bot suppresses this signal unless all four wheels refreshed within one window and the car rolled recently, so gaps are expected. Driving-gated like the pressure tiles — last known value shown via a 30-day lookback while parked.",
+      "description": "How much hotter the rear-left tire runs than the mean of the other three wheels (derived/tire_rl_temp_excess). Healthy near 0 °C; the \"tire hot\" alert fires above 8 °C sustained for 10 min (a dragging brake, a failing bearing, or under-inflation). The bot suppresses this signal unless all four wheels refreshed within one window and the car rolled recently, so gaps are expected. Driving-gated like the pressure tiles — last known value shown via a 30-day lookback while parked.\n\nREAR-LEFT SUN: the RL wheel catches the morning sun, and it is measurable. RL temp-excess by local hour averages +1.4 at 07:00, +1.7 at 08:00, +1.4 at 09:00, ~0 by midday and -1.7 to -2.1 in the late afternoon, while FL over the same hours is flat at about -1. A warm RL in the morning is sunlight, not a dragging brake or a failing bearing.\n\nIt has a side effect on pressure. tire_rl_bar_cold normalises using the SENSOR temperature, so an over-read temperature over-corrects the pressure DOWNWARD: RL has the lowest mean cold pressure of any wheel (2.385 bar) despite having the second HIGHEST cold-start pressure (2.493 bar). Cold-start is the unbiased series -- it is taken after a 6 h park, before the sun gets to it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -609,7 +609,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "The signal the under-inflation alerts evaluate: each wheel's raw cold-start pressure (derived/tire_*_bar_coldstart), one point per wheel per driving morning, taken from the first fresh TPMS frame after a park of 6 h or more. Dashed reference lines are the alert thresholds (1.90 critical / 2.20 low bar) against the 2.5 bar cold placard. Drawn as points with no connecting line, because the series genuinely is one sample a day and a gap is information: the car was not driven, or its first drive that day followed an already-warm park. PINNED TO 30 DAYS regardless of the dashboard time picker (timeFrom), because at the dashboard's 6 h default this panel would always be empty. The RULES look back only 7 days and take the MINIMUM over that span, so a point here that sits below a threshold keeps its alert firing for a week. Beware reading a trend off this panel: the cold-start value tracks overnight ambient at about 0.011 bar/°C, which over a 16-35 °C summer is a 0.2 bar swing — several months of permeation. The Cold Pressure Trend panel below is the one to read a leak from.",
+      "description": "The signal the under-inflation alerts evaluate: each wheel's raw cold-start pressure (derived/tire_*_bar_coldstart), one point per wheel per driving morning, taken from the first fresh TPMS frame after a park of 6 h or more. Dashed reference lines are the alert thresholds (1.90 critical / 2.20 low bar) against the 2.5 bar cold placard. Drawn as points with no connecting line, because the series genuinely is one sample a day and a gap is information: the car was not driven, or its first drive that day followed an already-warm park. PINNED TO 30 DAYS regardless of the dashboard time picker (timeFrom), because at the dashboard's 6 h default this panel would always be empty. The RULES look back only 7 days and take the MINIMUM over that span, so a point here that sits below a threshold keeps its alert firing for a week. Beware reading a trend off this panel: the cold-start value tracks overnight ambient at about 0.011 bar/°C, which over a 16-35 °C summer is a 0.2 bar swing — several months of permeation. The Cold Pressure Trend panel below is the one to read a leak from.\n\nSPARSITY: this is one point per wheel per day at most -- it needs a fresh TPMS frame after a 6 h park, and the car is not driven every day. Over the 25 days from 2026-08-11 (when the signal started) to 2026-09-05 there were 22 points per wheel. The under-inflation rules take min() over 7 days, so they typically decide on about three readings.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -739,7 +739,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Temperature-normalised cold-equivalent pressure trend for all four wheels (derived/tire_*_bar_cold), compensated to a 15 C reference by the gas law. Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. THIS IS NOT THE UNDER-INFLATION SIGNAL: the placard is defined at ambient, not at 15 C, so a normalised value sits about 0.12 bar low at a 25 C August ambient and about 0.19 bar high at 0 C in January — the low/critical alerts moved to the cold-start panel above (issue #1479). Only the over-inflation rule (>2.90 bar, the dashed line) still reads this series; use it for trend shape and for comparing wheels against each other, where the reference temperature cancels. However, fill(previous) only carries a value forward from within the queried window: if the window opens before the most recent sample (a fully-parked 6 h stretch with no new reading), this panel can render completely EMPTY rather than flat — that is expected, not a broken feed.",
+      "description": "Temperature-normalised cold-equivalent pressure trend for all four wheels (derived/tire_*_bar_cold), compensated to a 15 C reference by the gas law. Driving-gated: values change only when the car is driven, and fill(previous) carries the last reading across parked gaps, so long flat segments are normal. THIS IS NOT THE UNDER-INFLATION SIGNAL: the placard is defined at ambient, not at 15 C, so a normalised value sits about 0.12 bar low at a 25 C August ambient and about 0.19 bar high at 0 C in January — the low/critical alerts moved to the cold-start panel above (issue #1479). Only the over-inflation rule (>2.90 bar, the dashed line) still reads this series; use it for trend shape and for comparing wheels against each other, where the reference temperature cancels. However, fill(previous) only carries a value forward from within the queried window: if the window opens before the most recent sample (a fully-parked 6 h stretch with no new reading), this panel can render completely EMPTY rather than flat — that is expected, not a broken feed.\n\nREAR-LEFT SUN: the RL wheel catches the morning sun, and it is measurable. RL temp-excess by local hour averages +1.4 at 07:00, +1.7 at 08:00, +1.4 at 09:00, ~0 by midday and -1.7 to -2.1 in the late afternoon, while FL over the same hours is flat at about -1. A warm RL in the morning is sunlight, not a dragging brake or a failing bearing.\n\nIt has a side effect on pressure. tire_rl_bar_cold normalises using the SENSOR temperature, so an over-read temperature over-corrects the pressure DOWNWARD: RL has the lowest mean cold pressure of any wheel (2.385 bar) despite having the second HIGHEST cold-start pressure (2.493 bar). Cold-start is the unbiased series -- it is taken after a 6 h park, before the sun gets to it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -864,7 +864,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Per-wheel temperature-excess trend (derived/tire_*_temp_excess) — each wheel against the mean of the other three. Healthy near 0 °C; the dashed line at 8 °C is the \"tire hot\" alert threshold. One wheel diverging upward points at that corner (brake drag or low pressure). Driving-gated + fill(previous): fill(previous) only carries a value forward from within the queried window, so a fully-parked 6 h window can render this panel completely EMPTY rather than flat — that is expected, not a broken feed; the per-wheel temp-excess stat tiles above show the last known value via a 30-day lookback.",
+      "description": "Per-wheel temperature-excess trend (derived/tire_*_temp_excess) — each wheel against the mean of the other three. Healthy near 0 °C; the dashed line at 8 °C is the \"tire hot\" alert threshold. One wheel diverging upward points at that corner (brake drag or low pressure). Driving-gated + fill(previous): fill(previous) only carries a value forward from within the queried window, so a fully-parked 6 h window can render this panel completely EMPTY rather than flat — that is expected, not a broken feed; the per-wheel temp-excess stat tiles above show the last known value via a 30-day lookback.\n\nREAR-LEFT SUN: the RL wheel catches the morning sun, and it is measurable. RL temp-excess by local hour averages +1.4 at 07:00, +1.7 at 08:00, +1.4 at 09:00, ~0 by midday and -1.7 to -2.1 in the late afternoon, while FL over the same hours is flat at about -1. A warm RL in the morning is sunlight, not a dragging brake or a failing bearing.\n\nIt has a side effect on pressure. tire_rl_bar_cold normalises using the SENSOR temperature, so an over-read temperature over-corrects the pressure DOWNWARD: RL has the lowest mean cold pressure of any wheel (2.385 bar) despite having the second HIGHEST cold-start pressure (2.493 bar). Cold-start is the unbiased series -- it is taken after a 6 h park, before the sun gets to it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1144,6 +1144,138 @@
       ],
       "title": "Tires Last Seen",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Each wheel minus the mean of all four, from the same TPMS frame, so ambient temperature and ordinary permeation cancel out. All four tyres lose pressure together and that tells you nothing; ONE wheel walking away from the other three is a leak. Watch for a line drifting steadily downward while the other three stay flat.\n\nBaseline over the 7.5 weeks to 2026-09-05: no wheel is leaking. Cold-start means were FL 2.506, FR 2.490, RL 2.493, RR 2.454 bar, and all four fell at the same 0.08-0.12 bar per 30 days, part of it the falling ambient at the measured ~0.011 bar/degC. RR sits about 0.05 bar below the others and is the first that will reach the 2.20 bar warning.\n\nRaw sensor pressure is used deliberately, not the 15 degC-normalised series: normalisation injects the rear-left sun bias described on the RL panels, and for a DIFFERENCE between wheels there is nothing to normalise away anyway.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": true,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 6,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              }
+            ]
+          },
+          "unit": "suffix: bar"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "min"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "refId": "A",
+          "alias": "FL",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT (\"fl.psi\" - (\"fl.psi\" + \"fr.psi\" + \"rl.psi\" + \"rr.psi\") / 4) * 0.0689476 AS \"fl\" FROM \"ioniq\"\nWHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        },
+        {
+          "refId": "B",
+          "alias": "FR",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT (\"fr.psi\" - (\"fl.psi\" + \"fr.psi\" + \"rl.psi\" + \"rr.psi\") / 4) * 0.0689476 AS \"fr\" FROM \"ioniq\"\nWHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        },
+        {
+          "refId": "C",
+          "alias": "RL",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT (\"rl.psi\" - (\"fl.psi\" + \"fr.psi\" + \"rl.psi\" + \"rr.psi\") / 4) * 0.0689476 AS \"rl\" FROM \"ioniq\"\nWHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        },
+        {
+          "refId": "D",
+          "alias": "RR",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT (\"rr.psi\" - (\"fl.psi\" + \"fr.psi\" + \"rl.psi\" + \"rr.psi\") / 4) * 0.0689476 AS \"rr\" FROM \"ioniq\"\nWHERE \"group\"='tpms' AND $timeFilter",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Deviation from 4-wheel mean — the leak signal",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",

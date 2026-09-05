@@ -463,7 +463,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Age of the newest BMS telemetry sample (the timestamp of last(soc) on bms/2101). The car only reports while awake, so an age of hours is normal while it sleeps and does NOT mean the pipeline is broken. Uses a fixed 30-day lookback rather than $timeFilter so the age stays meaningful regardless of the dashboard's time range — a liveness panel that reads \"No data\" as soon as the car sleeps past the selected window would defeat its own purpose. last() is used rather than count() because last() reports the AGE of the newest sample, whereas count() reports only presence and cannot tell 5-minutes-stale from 20-hours-stale. (Over a fully empty window both return no row at all.)",
+      "description": "Age of the newest BMS frame. The OBD logger only runs while the car is awake, so this grows whenever the car simply is not being driven -- a three-day gap over 2026-08-31 to 09-02 was exactly that, a car sitting still. Absence here is NOT a fault, which is why no alert rule watches it and why the tile carries no red threshold.\n\nFixed 30-day lookback rather than the dashboard time range, so the tile still reports an age when the picker is set to a window with no data in it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -586,7 +586,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-left tire pressure — RAW, temperature-uncompensated (tpms \"fl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_fl_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
+      "description": "Cold-start pressure for the front-left tyre: the first fresh TPMS frame after a park of 6 h or more, when the tyre has actually reached ambient.\n\nThis tile used to show the RAW, temperature-uncompensated sensor pressure while the alert rules read the cold-start series, so the tile could sit green while an alert was firing, or turn amber straight after a motorway run on a tyre that was perfectly fine. It now reads the SAME series the ioniq-tpms-<wheel>-psi-low and -psi-crit rules read, so colour and alert state cannot disagree.\n\nThe value can be up to a day or two old -- it needs an overnight park and the car is not driven every day. For live pressure and the four-wheel trends, follow the Ioniq EV link to the Tires dashboard.\n\nPlacard is 2.5 bar at ambient. Thresholds match the alert rules: warning under 2.20 bar, critical under 1.90 bar, over-inflated above 2.90 bar.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -643,16 +643,18 @@
       "pluginVersion": "9.5.2",
       "targets": [
         {
+          "refId": "A",
+          "alias": "FL cold-start",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"fl.psi\") * 0.0689476 AS \"fl_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"value\") AS \"fl_bar_coldstart\" FROM \"ioniq\"\nWHERE \"group\"='derived/tire_fl_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
-          "refId": "A"
+          "resultFormat": "time_series"
         }
       ],
-      "title": "Tire FL",
+      "title": "Tire FL (cold-start)",
       "type": "stat"
     },
     {
@@ -660,7 +662,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Front-right tire pressure — RAW, temperature-uncompensated (tpms \"fr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_fr_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
+      "description": "Cold-start pressure for the front-right tyre: the first fresh TPMS frame after a park of 6 h or more, when the tyre has actually reached ambient.\n\nThis tile used to show the RAW, temperature-uncompensated sensor pressure while the alert rules read the cold-start series, so the tile could sit green while an alert was firing, or turn amber straight after a motorway run on a tyre that was perfectly fine. It now reads the SAME series the ioniq-tpms-<wheel>-psi-low and -psi-crit rules read, so colour and alert state cannot disagree.\n\nThe value can be up to a day or two old -- it needs an overnight park and the car is not driven every day. For live pressure and the four-wheel trends, follow the Ioniq EV link to the Tires dashboard.\n\nPlacard is 2.5 bar at ambient. Thresholds match the alert rules: warning under 2.20 bar, critical under 1.90 bar, over-inflated above 2.90 bar.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -717,16 +719,18 @@
       "pluginVersion": "9.5.2",
       "targets": [
         {
+          "refId": "A",
+          "alias": "FR cold-start",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"fr.psi\") * 0.0689476 AS \"fr_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"value\") AS \"fr_bar_coldstart\" FROM \"ioniq\"\nWHERE \"group\"='derived/tire_fr_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
-          "refId": "A"
+          "resultFormat": "time_series"
         }
       ],
-      "title": "Tire FR",
+      "title": "Tire FR (cold-start)",
       "type": "stat"
     },
     {
@@ -734,7 +738,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-left tire pressure — RAW, temperature-uncompensated (tpms \"rl.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_rl_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
+      "description": "Cold-start pressure for the rear-left tyre: the first fresh TPMS frame after a park of 6 h or more, when the tyre has actually reached ambient.\n\nThis tile used to show the RAW, temperature-uncompensated sensor pressure while the alert rules read the cold-start series, so the tile could sit green while an alert was firing, or turn amber straight after a motorway run on a tyre that was perfectly fine. It now reads the SAME series the ioniq-tpms-<wheel>-psi-low and -psi-crit rules read, so colour and alert state cannot disagree.\n\nThe value can be up to a day or two old -- it needs an overnight park and the car is not driven every day. For live pressure and the four-wheel trends, follow the Ioniq EV link to the Tires dashboard.\n\nPlacard is 2.5 bar at ambient. Thresholds match the alert rules: warning under 2.20 bar, critical under 1.90 bar, over-inflated above 2.90 bar.\n\nThe rear-left catches the morning sun; a warm RL reading is sunlight, not a fault. Cold-start is taken before the sun reaches it, so this tile is unaffected -- but the normalised \"cold\" series on the Tires dashboard reads about 0.05 bar low on this wheel because of it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -791,16 +795,18 @@
       "pluginVersion": "9.5.2",
       "targets": [
         {
+          "refId": "A",
+          "alias": "RL cold-start",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"rl.psi\") * 0.0689476 AS \"rl_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"value\") AS \"rl_bar_coldstart\" FROM \"ioniq\"\nWHERE \"group\"='derived/tire_rl_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
-          "refId": "A"
+          "resultFormat": "time_series"
         }
       ],
-      "title": "Tire RL",
+      "title": "Tire RL (cold-start)",
       "type": "stat"
     },
     {
@@ -808,7 +814,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Rear-right tire pressure — RAW, temperature-uncompensated (tpms \"rr.psi\", converted from psi to bar in-query: x0.0689476). TPMS only transmits while the wheels turn, so this stays frozen at its last reading while the car is parked — expected, not stale. The colour bands (red <1.90, orange <2.20, green 2.20-2.90, red >2.90 bar) are a rough sanity guide ONLY. The shipped under-inflation alerts do NOT evaluate this value: they evaluate the cold-start reading (derived/tire_rr_bar_coldstart), the raw pressure from the first fresh frame after a park of 6 h or more, one point per driving morning. This tile shows whatever the sensor last said, which after a drive is a hot tire — measured over the 27 days to 2026-08-10, raw pressure rose a median 0.23 bar (p90 0.28) between the morning cold reading and the highest reading later that same calendar day. Tile colour and alert state can therefore legitimately disagree — trust the alert. Per-wheel cold-start and cold-normalised pressure belong on the Ioniq EV - Tires dashboard.",
+      "description": "Cold-start pressure for the rear-right tyre: the first fresh TPMS frame after a park of 6 h or more, when the tyre has actually reached ambient.\n\nThis tile used to show the RAW, temperature-uncompensated sensor pressure while the alert rules read the cold-start series, so the tile could sit green while an alert was firing, or turn amber straight after a motorway run on a tyre that was perfectly fine. It now reads the SAME series the ioniq-tpms-<wheel>-psi-low and -psi-crit rules read, so colour and alert state cannot disagree.\n\nThe value can be up to a day or two old -- it needs an overnight park and the car is not driven every day. For live pressure and the four-wheel trends, follow the Ioniq EV link to the Tires dashboard.\n\nPlacard is 2.5 bar at ambient. Thresholds match the alert rules: warning under 2.20 bar, critical under 1.90 bar, over-inflated above 2.90 bar.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -865,16 +871,18 @@
       "pluginVersion": "9.5.2",
       "targets": [
         {
+          "refId": "A",
+          "alias": "RR cold-start",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"rr.psi\") * 0.0689476 AS \"rr_bar\" FROM \"ioniq\" WHERE \"group\"='tpms' AND $timeFilter",
+          "query": "SELECT last(\"value\") AS \"rr_bar_coldstart\" FROM \"ioniq\"\nWHERE \"group\"='derived/tire_rr_bar_coldstart' AND time > now() - 30d",
           "rawQuery": true,
-          "refId": "A"
+          "resultFormat": "time_series"
         }
       ],
-      "title": "Tire RR",
+      "title": "Tire RR (cold-start)",
       "type": "stat"
     },
     {

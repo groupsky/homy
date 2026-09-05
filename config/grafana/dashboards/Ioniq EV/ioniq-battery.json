@@ -49,7 +49,185 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Traction-battery state of charge (pack SoC, bms/2101) and state of health (bms/2105 soh). SoH updates infrequently (~daily; its alert evaluates a 24 h window) so over a 6 h range it reads as a single flat step carried forward with fill(previous) — that is expected, not stale. SoH ~100 is healthy; the shipped alerts fire below 98 (reduced) and 85 (critical). Note: fill(previous) only carries a value forward from within the queried window — if the window opens before any SoH sample lands in it (for example, a fully parked 6 h stretch with no new BMS report), the SoH line can render completely empty rather than flat; the current SoH value is always available via a direct last() query even when this panel shows nothing.",
+      "description": "The only real capacity-fade signal this system has. Each point is one charge session: charge_ah divided by the SoC it added, i.e. pack amp-hours per 100 points of raw BMS SoC. The BMS-reported SoH cannot be used for this -- it is pinned at exactly 100.0 and has never moved (see the SoC & SoH panel below).\n\nMeasured 2026-09-05 over 32 sessions with a SoC delta of 14 points or more: 84.3 Ah per 100 raw-SoC points, with AC (28 sessions, ~1 kW) and DC rapid (4 sessions, 44-56 kW) charging agreeing to within 0.8%. Scatter between sessions is about 2.3 Ah, so read the trend, never a single point.\n\nSessions below 14 SoC points are excluded: the same absolute coulomb-counting error over a smaller denominator makes them far noisier (a 1.5-point session came out at 86.7 Ah, a 2-point one at 95.0 Ah).\n\nRaw-SoC is not the dashboard percentage. Measured over 2861 paired samples, display = -1.687 + 1.0665 x raw, so the window the driver sees is 93.77 raw points wide. Multiply by that to convert this axis into usable capacity.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "points",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 8,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": 95,
+          "min": 60,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "green",
+                "value": 78
+              }
+            ]
+          },
+          "unit": "suffix: Ah"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "min",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "refId": "A",
+          "alias": "Pack Ah per 100% SoC",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"charge_ah\" / \"soc_delta_pct\" * 100 AS \"cap_ah\" FROM \"ioniq_sessions\"\nWHERE \"kind\"='charge' AND \"soc_delta_pct\" >= 14 AND $timeFilter",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Usable capacity per charge session",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Mean of the per-session capacity estimates in the selected time range. Averaging is what makes this number usable: a single session carries about 2.3 Ah of scatter, ten of them carry well under one.\n\nCompare against 78 Ah nominal, adjusted for the 93.77-point usable window -- i.e. a healthy pack reads about 83 Ah here. Widen the time range to a year before reading anything into a change.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "green",
+                "value": 82
+              }
+            ]
+          },
+          "unit": "suffix: Ah"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "refId": "A",
+          "alias": "Pack Ah per 100% SoC",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"charge_ah\" / \"soc_delta_pct\" * 100 AS \"cap_ah\" FROM \"ioniq_sessions\"\nWHERE \"kind\"='charge' AND \"soc_delta_pct\" >= 14 AND $timeFilter",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Mean capacity over window",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "SoH here is what the BMS reports, and it is PINNED: all 6007 samples in the 7.5 weeks to 2026-09-05 read exactly 100.0, the single exception being a garbage 0 on 2026-08-28. The OVMS-era cac series agreed from the other side, a flat 78.0 Ah for the eleven months to 2025-09-11.\n\nSo a flat green SoH line is not evidence of a healthy pack -- it is evidence of nothing at all. Read \"Usable capacity per charge session\" at the top of this dashboard for the measurement that can actually move.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -106,7 +284,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 8
       },
       "id": 1,
       "options": {
@@ -203,7 +381,7 @@
               },
               {
                 "color": "green",
-                "value": 3.0
+                "value": 3
               }
             ]
           },
@@ -246,7 +424,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 8
       },
       "id": 2,
       "options": {
@@ -292,7 +470,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Max-minus-min cell voltage at rest (derived/cell_spread_mv). GENUINELY SPARSE: emitted only when the car is at rest (state charging/parked) — historically only a handful of points all-time — so over a 6 h daytime window this panel is often EMPTY. That is expected, not a broken feed; widen the range to a rest window to see points. Axis is pinned to 0-150 mV so a rogue point cannot flatten the real 0-40 mV signal (it clips off-scale instead); the historical 260-3800 mV artefacts were fixed in #1418 by deriving the value from the single bms/2101 cell_max_v/cell_min_v pair. Alerts: warning >50 mV, critical >100 mV. A second \"Outlier cell #\" series (right axis, 1-96, no threshold coloring) marks which cell index deviates most from the pack mean; it is sparser than the spread value because it is only published when the three cells/* segments and the bms/2101 frame share a freshness window (#1418), and it holds its last known reading otherwise.",
+      "description": "Rest-only cell spread, from the BMS max/min pair.\n\nREAD THE QUANTISATION FIRST: the BMS reports cell voltages in 0.02 V steps, so this series can only ever take the values 0, 20, 40, 60 mV and so on. Over the 7.5 weeks to 2026-09-05 the mean was 10.5 mV, i.e. it alternates between 0 and one step -- every one of the 96 cells sits in the same bin. The 50 mV warning threshold therefore means \"three steps or more\", and a drifting cell is invisible here until it has drifted a full 20 mV.\n\n\"Outlier cell #\" is meaningless while the spread is 0: with every cell in one bin the tie-break resolves to the lowest index, which is why it reads 1 or 2 so often. Trust it only when the spread is at least 40 mV.\n\nThe y-axis is capped at 150 mV. The only five readings above 50 mV in the whole history (260, 440 and 3800 mV) were all garbage frames between 2026-07-15 and 2026-07-24, before the plausibility guard added in #1421; there have been none since.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -384,7 +562,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 16
       },
       "id": 3,
       "options": {
@@ -493,7 +671,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 16
       },
       "id": 4,
       "options": {
@@ -603,7 +781,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 24
       },
       "id": 5,
       "options": {
@@ -702,7 +880,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 24
       },
       "id": 6,
       "options": {
@@ -799,7 +977,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 32
       },
       "id": 7,
       "options": {
@@ -845,7 +1023,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Lifetime cumulative energy counters (bms/2101). NOTE: these counters appear to have been reset at some point (they do not span full vehicle life), so treat them as running totals since the last reset, not odometer-style lifetime figures. Use the windowed panel below for a rate you can trust.",
+      "description": "Lifetime BMS counters. NOTE: these were reset at some point and do not span the car's whole life -- the energy they report is far less than the odometer implies at the measured consumption.\n\nEquivalent full cycles is discharge Ah over the 78 Ah nominal capacity. Round-trip efficiency is lifetime energy out over energy in, measured at the pack terminals, so it excludes charger and cable losses.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -931,6 +1109,38 @@
                 "value": 1
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Equivalent full cycles"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Round-trip eff (%)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
           }
         ]
       },
@@ -938,7 +1148,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 32
       },
       "id": 8,
       "options": {
@@ -947,13 +1157,14 @@
       "pluginVersion": "9.5.2",
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"cum_chg_ah\") AS \"Charge (Ah)\", last(\"cum_dis_ah\") AS \"Discharge (Ah)\", last(\"cum_in_kwh\") AS \"Energy In (kWh)\", last(\"cum_out_kwh\") AS \"Energy Out (kWh)\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND time > now() - 30d",
+          "query": "SELECT last(\"cum_chg_ah\") AS \"Charge (Ah)\", last(\"cum_dis_ah\") AS \"Discharge (Ah)\", last(\"cum_in_kwh\") AS \"Energy In (kWh)\", last(\"cum_out_kwh\") AS \"Energy Out (kWh)\", last(\"cum_dis_ah\") / 78 AS \"Equivalent full cycles\", (last(\"cum_out_kwh\") / last(\"cum_in_kwh\")) * 100 AS \"Round-trip eff (%)\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND time > now() - 30d",
           "rawQuery": true,
-          "refId": "A"
+          "resultFormat": "time_series"
         }
       ],
       "title": "Cumulative Counters",
@@ -1073,7 +1284,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 40
       },
       "id": 9,
       "options": {
@@ -1093,6 +1304,106 @@
       ],
       "title": "Windowed Throughput & Approx Round-trip Efficiency",
       "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Hottest module, banded by what the car was doing. Rapid charging and sustained motorway driving both push an air-cooled pack well past its resting temperature, and that is not a fault -- this panel exists so the difference is visible at a glance.\n\nReference: over the 7.5 weeks to 2026-09-05 the pack exceeded 45 C on 996 samples, essentially all of them on 2026-08-30 (two DC rapid charges plus 141 km of motorway), peaking at 49 C. The warning rule was moved from 45 C to 50 C sustained for 15 minutes as a result.\n\nhv_v < 500 excludes mis-decoded frames: one on 2026-08-27 read 59 C, 5838 V and 1280 A while parked, and was the only sample above 55 C ever recorded.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 55
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "refId": "A",
+          "alias": "$tag_state",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT max(\"temp_max\") AS \"temp_max\" FROM \"ioniq\"\nWHERE \"group\"='bms/2101' AND \"hv_v\" < 500 AND $timeFilter\nGROUP BY time($__interval), \"state\" fill(none)",
+          "rawQuery": true,
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Pack Temperature by state",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",

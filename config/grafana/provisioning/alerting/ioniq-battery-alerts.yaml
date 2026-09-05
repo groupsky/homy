@@ -191,6 +191,23 @@ groups:
           summary: "🚗 Maximum cell voltage above 4.15 V"
           description: "Cell over-voltage. Stop charging; read DTC + cell dump; service."
 
+      # Retuned 2026-09-05 (threshold 45 -> 50 degC, for 5m -> 15m, last() -> min(),
+      # plus the hv_v plausibility guard).
+      #
+      # At 45 degC this fired on ordinary use. Over the 7.5 weeks of history to
+      # 2026-09-05, 996 samples read above 45 degC and essentially all of them
+      # fall on 2026-08-30 -- two DC rapid charges plus 141 km of motorway at
+      # 84-111 kph average -- peaking at 49 degC. That is an air-cooled pack
+      # doing what it does under sustained load, not a fault. The real peak of
+      # 49 degC now sits below the threshold, so the rule speaks only about
+      # something hotter than anything yet observed.
+      #
+      # min() over the window rather than last(): see "last() Over a Long Window
+      # Defeats for:" in config/grafana/CLAUDE.md. With last(), one spurious
+      # sample becomes the newest point and every subsequent evaluation returns
+      # it until a real frame overwrites it -- so `for:` cannot filter it and the
+      # rule pages. With min() on a gt threshold, every sample in the window must
+      # exceed the threshold, which is what "the pack is running hot" means.
       - uid: ioniq-pack-temp-high
         title: "🚗 Ioniq Pack Temperature High"
         condition: A
@@ -200,8 +217,8 @@ groups:
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("temp_max") FROM "ioniq"
-                WHERE "group"='bms/2101' AND time >= now() - 10m
+                SELECT min("temp_max") FROM "ioniq"
+                WHERE "group"='bms/2101' AND "hv_v" < 500 AND time >= now() - 10m
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -214,7 +231,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: gt, params: [45] }
+                - evaluator: { type: gt, params: [50] }
                   operator: { type: and }
                   query: { params: [tmax] }
                   reducer: { type: last }
@@ -222,12 +239,22 @@ groups:
               expression: tmax
         noDataState: OK
         execErrState: OK
-        for: 5m
+        for: 15m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
-          summary: "🚗 Pack temperature above 45 °C"
-          description: "Battery running hot. Avoid fast-charging until it cools."
+          summary: "🚗 Pack temperature above 50 °C"
+          description: "Battery has held above 50 °C for a quarter of an hour. The hottest the pack has ever run in normal use — including DC rapid charging followed by motorway driving on a hot day — is 49 °C, so this is beyond anything seen so far. Stop fast-charging and let it cool."
 
+      # min() + hv_v guard added 2026-09-05, same reasoning as the warning rule
+      # above. This one has a concrete incident behind it: on 2026-08-27 a single
+      # mis-decoded frame arrived reading hv_v 5838 V, hv_a 1280 A, hv_kw 7472 kW
+      # and temp_max 59 degC while the car was parked. It is the only sample above
+      # 55 degC in the entire history. With last() over a 10m window that frame
+      # stayed the newest point across every evaluation, so `for: 5m` elapsed with
+      # the condition continuously true and the rule fired on a pack that was
+      # actually sitting at ambient. The frame is now dropped at ingest too
+      # (isGarbageBmsFrame in docker/mqtt-influx/converters/ioniq.js), but the
+      # rule should not depend on the converter catching every future shape.
       - uid: ioniq-pack-temp-critical
         title: "🚗 Ioniq Pack Temperature Critical"
         condition: A
@@ -237,8 +264,8 @@ groups:
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("temp_max") FROM "ioniq"
-                WHERE "group"='bms/2101' AND time >= now() - 10m
+                SELECT min("temp_max") FROM "ioniq"
+                WHERE "group"='bms/2101' AND "hv_v" < 500 AND time >= now() - 10m
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -265,6 +292,30 @@ groups:
           summary: "🚗 Pack temperature above 55 °C"
           description: "Pack over-temp. Stop charging/driving; investigate cooling."
 
+      # BOTH SoH rules retuned 2026-09-05: last() -> max(), plus `AND "soh" > 0`.
+      #
+      # The BMS-reported SoH does not move. All 6007 samples in the 7.5 weeks to
+      # 2026-09-05 read exactly 100.0, with one exception: a single garbage 0 on
+      # 2026-08-28. The OVMS-era `cac` series says the same thing from the other
+      # side -- a flat 78.0 Ah, zero variance, across the eleven months to
+      # 2025-09-11. So a mis-decoded zero was the ONLY value that could trip
+      # either rule, and it would trip both at once.
+      #
+      # max() over the 24h window is the fix config/grafana/CLAUDE.md prescribes
+      # verbatim for this rule ("last() Over a Long Window Defeats for:"): a lone
+      # low outlier can no longer drive an lt threshold. `AND "soh" > 0` is the
+      # belt to that braces. The cost is detection latency -- a genuine step down
+      # is only reported once it dominates the whole 24h window -- which is
+      # irrelevant for a quantity that moves over months.
+      #
+      # NEITHER RULE CAN DETECT REAL CAPACITY FADE, because the BMS never moves
+      # the number. Fade is measured instead on "Usable capacity per charge
+      # session" on the battery dashboard, which divides charge_ah by
+      # soc_delta_pct over each charge session. Measured 2026-09-05 over 32
+      # sessions: 84.3 Ah per 100 raw-SoC points, agreeing to 0.8% between AC and
+      # DC charging. No alert is attached to that panel yet -- 39 sessions with
+      # 2.3 Ah of scatter cannot separate a trend from noise, and a rule on a
+      # single session would be pure false positive. Revisit after a year.
       - uid: ioniq-soh-step
         title: "🚗 Ioniq State of Health Reduced"
         condition: A
@@ -274,8 +325,8 @@ groups:
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("soh") FROM "ioniq"
-                WHERE "group"='bms/2105' AND time >= now() - 24h
+                SELECT max("soh") FROM "ioniq"
+                WHERE "group"='bms/2105' AND "soh" > 0 AND time >= now() - 24h
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -296,12 +347,13 @@ groups:
               expression: soh
         noDataState: OK
         execErrState: OK
-        # Formality, not a transient filter: last() over 24h keeps returning a
-        # spurious low sample for the whole window, so the pending period elapses
-        # and the rule fires anyway (issue #1419). Kept because SoH moves over
-        # months and the 24h window is needed to survive the car sleeping (~12h
-        # gaps observed); the guard against garbage frames is the all-zero drop
-        # in the mqtt-influx converter (issue #1413).
+        # Was a formality while the query used last(): a spurious low sample
+        # became the newest point and every evaluation returned it, so the
+        # pending period elapsed and the rule fired anyway (issue #1419). Now
+        # that the query aggregates with max(), a lone low outlier can no longer
+        # drive the threshold at all, and `for:` is a genuine second line rather
+        # than the only one. The 24h window stays because SoH moves over months
+        # and the car sleeps for ~12h at a time.
         for: 1h
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
@@ -317,8 +369,8 @@ groups:
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("soh") FROM "ioniq"
-                WHERE "group"='bms/2105' AND time >= now() - 24h
+                SELECT max("soh") FROM "ioniq"
+                WHERE "group"='bms/2105' AND "soh" > 0 AND time >= now() - 24h
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -339,8 +391,9 @@ groups:
               expression: soh
         noDataState: OK
         execErrState: OK
-        # Formality, not a transient filter -- see ioniq-soh-step above and
-        # "last() Over a Long Window Defeats for:" in config/grafana/CLAUDE.md.
+        # A genuine second line now that the query aggregates with max() --
+        # see ioniq-soh-step above and "last() Over a Long Window Defeats for:"
+        # in config/grafana/CLAUDE.md.
         for: 1h
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:

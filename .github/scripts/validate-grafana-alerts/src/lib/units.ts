@@ -116,6 +116,7 @@ export const SI_UNIT_EXCEPTIONS: readonly UnitException[] = [
   { file: 'Ioniq EV/ioniq-12v-ldc.json', panelId: 4, unit: 'volt', reason: REASONS.VOLT_ABOVE_ONE },
   { file: 'Ioniq EV/ioniq-12v-ldc.json', panelId: 5, unit: 'volt', reason: REASONS.VOLT_ABOVE_ONE },
   { file: 'Ioniq EV/ioniq-12v-ldc.json', panelId: 6, unit: 'volt', reason: REASONS.VOLT_ABOVE_ONE },
+  { file: 'Ioniq EV/ioniq-12v-ldc.json', panelId: 9, unit: 'volt', reason: REASONS.VOLT_ABOVE_ONE },
 
   // Ioniq EV - traction battery
   { file: 'Ioniq EV/ioniq-battery.json', panelId: 2, unit: 'volt', reason: REASONS.VOLT_ABOVE_ONE },
