@@ -42,13 +42,39 @@ const statPanel = (id: number, title: string, unit: string) => ({
  */
 describe('Ioniq EV / Overview tyre tiles', () => {
   const dashboard = JSON.parse(readFileSync(OVERVIEW, 'utf8')) as {
-    panels: Array<{ id: number; title: string; fieldConfig: { defaults: { unit: string; decimals: number } } }>;
+    panels: Array<{
+      id: number;
+      title: string;
+      fieldConfig: { defaults: { unit: string; decimals: number } };
+      targets?: Array<{ query?: string }>;
+    }>;
   };
   const tyreTiles = dashboard.panels.filter((p) => [9, 10, 11, 12].includes(p.id));
 
-  it('still has all four raw per-wheel tiles', () => {
-    expect(tyreTiles.map((p) => p.title)).toEqual(['Tire FL', 'Tire FR', 'Tire RL', 'Tire RR']);
+  it('still has all four per-wheel tiles', () => {
+    expect(tyreTiles.map((p) => p.title)).toEqual([
+      'Tire FL (cold-start)',
+      'Tire FR (cold-start)',
+      'Tire RL (cold-start)',
+      'Tire RR (cold-start)',
+    ]);
   });
+
+  /**
+   * These tiles used to read the raw, temperature-uncompensated `<w>.psi` field
+   * while the ioniq-tpms-<w>-psi-low/-psi-crit rules read
+   * `derived/tire_<w>_bar_coldstart`. A tile could therefore sit green while its
+   * own alert was firing, or turn amber straight after a motorway run on a tyre
+   * that was perfectly fine. Colour and alert state must come from one series.
+   */
+  it.each([[9, 'fl'], [10, 'fr'], [11, 'rl'], [12, 'rr']])(
+    'reads panel %i from the same cold-start series the alert rules read',
+    (id, wheel) => {
+      const query = tyreTiles.find((p) => p.id === id)!.targets![0].query!;
+
+      expect(query).toContain(`derived/tire_${wheel}_bar_coldstart`);
+      expect(query).not.toContain('.psi');
+    });
 
   it.each([9, 10, 11, 12])('renders panel %i in bar at every value', (id) => {
     const tile = tyreTiles.find((p) => p.id === id)!;
@@ -100,8 +126,6 @@ describe('the repository\'s own dashboards', () => {
   });
 
   it.each([
-    ['Ioniq EV/ioniq-12v-ldc.json', 3, 'suffix: V'],
-    ['Ioniq EV/ioniq-12v-ldc.json', 8, 'suffix: V'],
     ['sunseeker-battery.json', 3, 'suffix: A'],
     ['sunseeker-battery.json', 8, 'suffix: A'],
     ['heatpump.json', 2, 'suffix: W'],
@@ -112,6 +136,22 @@ describe('the repository\'s own dashboards', () => {
     expect(panel.length).toBeGreaterThan(0);
     expect(panel.every((f) => !isSelfRescaling(f.unit))).toBe(true);
     expect(panel.some((f) => f.unit === unit)).toBe(true);
+  });
+
+  /**
+   * The two 12 V sag panels used to display volts against a 0.1 V threshold --
+   * exactly where an SI unit rescales, so they were pinned to `suffix: V`. They
+   * now show the sag EVENT COUNT rather than a latched level, because the signal
+   * is raised on ~17% of samples while driving and no alert rule consumes it, so
+   * colouring it red read as a standing fault. A count is dimensionless; what
+   * must not come back is an SI unit on either panel.
+   */
+  it.each([3, 8])('keeps Ioniq EV/ioniq-12v-ldc.json panel %i off a self-rescaling unit', (panelId) => {
+    const { findings } = scanDashboards(REAL_DASHBOARD_DIR);
+    const panel = findings.filter((f) => f.file === 'Ioniq EV/ioniq-12v-ldc.json' && f.panelId === panelId);
+
+    expect(panel.length).toBeGreaterThan(0);
+    expect(panel.every((f) => !isSelfRescaling(f.unit))).toBe(true);
   });
 
   it('leaves no exception standing for a panel with a sub-1 threshold', () => {
@@ -296,6 +336,6 @@ describe('runDashboardUnits', () => {
     const result = runDashboardUnits(REAL_DASHBOARD_DIR);
 
     expect(result.out.join('\n')).toContain('Ioniq EV/ioniq-overview.json');
-    expect(result.out.join('\n')).toContain('Checking units in 12 dashboard(s)');
+    expect(result.out.join('\n')).toContain('Checking units in 13 dashboard(s)');
   });
 });
