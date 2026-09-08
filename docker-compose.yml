@@ -10,6 +10,10 @@ services:
     container_name: $INGRESS_NAME
     networks:
       ingress:
+        # Required, not defaulted: if this interpolated to an empty string
+        # compose would silently drop it, nginx would take a dynamic address and
+        # HA would trust nothing — reproducing #1555 on a green deploy.
+        ipv4_address: ${PROXY_BACKEND_ADDRESS:?set PROXY_BACKEND_ADDRESS in .env (see example.env)}
       dmz:
         ipv4_address: $INGRESS_ADDRESS
     security_opt:
@@ -100,7 +104,7 @@ services:
       - TZ=${TZ}
       - EXTERNAL_URL=http://${HOMEASSISTANT_DOMAIN}
       - INTERNAL_URL=http://${HOMEASSISTANT_DOMAIN}
-      - TRUSTED_PROXIES=${HOMEASSISTANT_TRUSTED_PROXIES}
+      - TRUSTED_PROXIES=${PROXY_BACKEND_ADDRESS:?set PROXY_BACKEND_ADDRESS in .env (see example.env)}
       - VIRTUAL_HOST=${HOMEASSISTANT_DOMAIN}
       - VIRTUAL_PORT=8123
     volumes:
@@ -1168,9 +1172,18 @@ networks:
   # internal for the automation services - mqtt, automations, features, ha
   automation:
     internal: true
-  # ingress proxy and exposed services
+  # ingress proxy and exposed services.
+  # Pinned: nginx's address here is what Home Assistant checks against
+  # trusted_proxies, so Docker must not be free to renumber it (#1555).
   ingress:
     internal: true
+    ipam:
+      config:
+        - subnet: ${PROXY_BACKEND_SUBNET:?set PROXY_BACKEND_SUBNET in .env (see example.env)}
+          # Confine Docker's dynamic allocation to the upper half, so it can
+          # never hand PROXY_BACKEND_ADDRESS (in the lower half) to some other
+          # container before nginx asks for it.
+          ip_range: ${PROXY_BACKEND_DYNAMIC_RANGE:?set PROXY_BACKEND_DYNAMIC_RANGE in .env (see example.env)}
   # egress for containers needing access to external networks
   egress:
   # vpn, proxy

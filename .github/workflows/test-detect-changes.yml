@@ -13,13 +13,18 @@ on:
       - '.github/scripts/detect-changes/**'
       - '.github/workflows/test-detect-changes.yml'
       # The coverage tests read the real compose file, so a service added there
-      # must re-run them even when the script itself is untouched.
+      # must re-run them even when the script itself is untouched. The same goes
+      # for example.env: the #1555 proxy-pinning test reads it, and its values
+      # invite editing ("change if it clashes"), so an example.env-only PR must
+      # not slip past the guard.
       - 'docker-compose.yml'
+      - 'example.env'
   pull_request:
     paths:
       - '.github/scripts/detect-changes/**'
       - '.github/workflows/test-detect-changes.yml'
       - 'docker-compose.yml'
+      - 'example.env'
   workflow_dispatch:
 
 jobs:
