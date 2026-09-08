@@ -118,7 +118,10 @@ Key patterns:
 #### `bath-lights` - Occupancy-based lighting
 - **Purpose**: Bathroom lighting automation with timeout logic
 - **Features**: Door/lock sensors, toggle switches, multiple timeout scenarios
-- **State**: Uses persistent cache for timeout management and light verification
+- **State**: In-memory only - the door, lock, toggle and unlocked timers, and the
+  command-verification retry state, live in the `start()` closure. This bot does not
+  declare a `persistedCache` hook, so a restart drops every pending timeout: a light
+  switched on before the restart stays on until the next door, lock or toggle event
 - **Configuration**:
   ```javascript
   {
@@ -319,6 +322,11 @@ necessarily the object the bot expects, and `null` is valid JSON.
 - **Reactive persistence**: Direct property mutations trigger automatic persistence with debouncing
 - **Version-based migration**: Migration function handles schema changes
 - **Deterministic serialization**: Uses fast-json-stable-stringify for consistent JSON output
+- **Globally gated**: Persistence only happens when `gates.state.enabled` is true in the
+  automations config; `index.js` defaults it to `false`. With the gate off, a declared
+  `persistedCache` still works in memory but is never read from or written to disk
+- **Opt-in per bot**: A bot that reads `persistedCache` without declaring the hook gets
+  `null` and a logged warning - it does not silently get an unpersisted object
 
 **Reactive Pattern:**
 ```javascript

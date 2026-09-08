@@ -140,7 +140,9 @@ The system is actively running in production with:
 - Telegram alerting for system alarms and critical events
 
 ### Known Limitations
-1. **Stateless Automations**: Automation bots lack persistent state, limiting complex scenarios
+1. **Opt-in Automation State**: Bots persist state only when they declare a `persistedCache`
+   hook (see `docker/automations/lib/state-manager.js`). Bots that do not - `bath-lights`
+   among them - keep everything in memory and lose in-flight timers on restart
 2. **No Event Sourcing**: State changes are not historically tracked or replayable  
 3. **Limited Reactivity**: No reactive programming model for dependent computations
 4. **Basic Feature Layer**: No device-specific protection mechanisms implemented yet
