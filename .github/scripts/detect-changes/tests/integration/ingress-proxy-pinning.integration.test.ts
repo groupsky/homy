@@ -60,15 +60,21 @@ function readCompose(): ComposeFile {
   return yaml.load(fs.readFileSync(composeFile, 'utf-8')) as ComposeFile;
 }
 
-/** Parse example.env into a map, ignoring comments and blank lines. */
-function readExampleEnv(): Record<string, string> {
-  const out: Record<string, string> = {};
+/**
+ * Parse example.env into a map, ignoring comments and blank lines.
+ *
+ * A Map rather than a plain object: the keys come from file content, and
+ * assigning them as object properties would let a `__proto__=` line in
+ * example.env reach the prototype.
+ */
+function readExampleEnv(): Map<string, string> {
+  const out = new Map<string, string>();
   for (const line of fs.readFileSync(exampleEnvFile, 'utf-8').split('\n')) {
     const trimmed = line.trim();
     if (trimmed === '' || trimmed.startsWith('#')) continue;
     const eq = trimmed.indexOf('=');
     if (eq === -1) continue;
-    out[trimmed.slice(0, eq)] = trimmed.slice(eq + 1);
+    out.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
   }
   return out;
 }
@@ -106,13 +112,13 @@ function envEntry(service: ComposeService, name: string): string | undefined {
  * leave the `:?message}` tail glued to the value, which silently turns an
  * address into a non-address and makes CIDR assertions fail for the wrong reason.
  */
-function expand(value: string, env: Record<string, string>): string {
+function expand(value: string, env: Map<string, string>): string {
   return value
     .replace(/\$\{([A-Z0-9_]+)(?::-([^}]*))?\}/g, (_m, name: string, dflt?: string) =>
-      env[name] !== undefined && env[name] !== '' ? env[name]! : (dflt ?? '')
+      env.get(name) !== undefined && env.get(name) !== '' ? env.get(name)! : (dflt ?? '')
     )
-    .replace(/\$\{([A-Z0-9_]+):\?[^}]*\}/g, (_m, name: string) => env[name] ?? '')
-    .replace(/\$([A-Z0-9_]+)/g, (_m, name: string) => env[name] ?? '');
+    .replace(/\$\{([A-Z0-9_]+):\?[^}]*\}/g, (_m, name: string) => env.get(name) ?? '')
+    .replace(/\$([A-Z0-9_]+)/g, (_m, name: string) => env.get(name) ?? '');
 }
 
 /** IPv4 dotted quad to a uint32, or null if malformed. */
@@ -195,7 +201,7 @@ describe('ingress network is pinned (#1555)', () => {
     const env = readExampleEnv();
 
     expect(varName).not.toBeNull();
-    expect(env[varName!]).toBeDefined();
+    expect(env.get(varName!)).toBeDefined();
   });
 
   test('the ingress subnet does not overlap the dmz subnet', () => {
@@ -206,13 +212,13 @@ describe('ingress network is pinned (#1555)', () => {
 
     // Assert both resolve before comparing, so this cannot pass merely because
     // the ingress pin is missing and both sides read as undefined.
-    expect(env[ingressVar]).toBeDefined();
-    expect(env[dmzVar]).toBeDefined();
+    expect(env.get(ingressVar)).toBeDefined();
+    expect(env.get(dmzVar)).toBeDefined();
 
     // Overlap, not string inequality: 10.28.0.0/16 and 10.28.29.0/24 are
     // different strings that still collide, and Docker reports that only at
     // `docker compose up` time on the host, mid-deploy.
-    expect(cidrsOverlap(env[ingressVar]!, env[dmzVar]!)).toBe(false);
+    expect(cidrsOverlap(env.get(ingressVar)!, env.get(dmzVar)!)).toBe(false);
   });
 
   test('the ingress subnet does not overlap the WireGuard tunnel range', () => {
@@ -222,10 +228,10 @@ describe('ingress network is pinned (#1555)', () => {
 
     // VPN_SUBNET is stored without a prefix length (the linuxserver image derives
     // the interface from it), so compare it as the /24 it actually describes.
-    const vpn = `${env['VPN_SUBNET']}/24`;
+    const vpn = `${env.get('VPN_SUBNET')}/24`;
 
-    expect(env[ingressVar]).toBeDefined();
-    expect(cidrsOverlap(env[ingressVar]!, vpn)).toBe(false);
+    expect(env.get(ingressVar)).toBeDefined();
+    expect(cidrsOverlap(env.get(ingressVar)!, vpn)).toBe(false);
   });
 });
 
@@ -266,8 +272,8 @@ describe('nginx has a pinned address HA can trust (#1555)', () => {
     // Without this, an absent variable makes the containment and coverage
     // assertions below compare '' against '' and pass vacuously.
     expect(addressVar).not.toBeNull();
-    expect(env[addressVar!]).toBeDefined();
-    expect(env[addressVar!]).not.toEqual('');
+    expect(env.get(addressVar!)).toBeDefined();
+    expect(env.get(addressVar!)).not.toEqual('');
   });
 
   test("nginx's pinned address lies inside the pinned ingress subnet", () => {
@@ -276,7 +282,7 @@ describe('nginx has a pinned address HA can trust (#1555)', () => {
     const nginxNetworks = compose.services?.['ingress']?.networks as ComposeServiceNetworks;
     const address = expand(nginxNetworks['ingress']!.ipv4_address!, env);
     const subnetVar = referencedVar(compose.networks?.['ingress']?.ipam?.config?.[0]?.subnet)!;
-    const subnet = env[subnetVar]!;
+    const subnet = env.get(subnetVar)!;
 
     // Docker refuses to start the container otherwise, but the failure lands on
     // the host mid-deploy rather than here.
@@ -289,7 +295,7 @@ describe('nginx has a pinned address HA can trust (#1555)', () => {
     const nginxNetworks = compose.services?.['ingress']?.networks as ComposeServiceNetworks;
     const address = expand(nginxNetworks['ingress']!.ipv4_address!, env);
     const rangeVar = referencedVar(compose.networks?.['ingress']?.ipam?.config?.[0]?.ip_range)!;
-    const range = env[rangeVar]!;
+    const range = env.get(rangeVar)!;
 
     // Docker hands out dynamic addresses sequentially from ip_range. If nginx's
     // fixed address sat inside that range, a sufficiently busy network would
@@ -299,7 +305,7 @@ describe('nginx has a pinned address HA can trust (#1555)', () => {
     expect(ipInCidr(address, range)).toBe(false);
     // ...but still inside the subnet, or Docker rejects it outright.
     const subnetVar = referencedVar(compose.networks?.['ingress']?.ipam?.config?.[0]?.subnet)!;
-    expect(ipInCidr(address, env[subnetVar]!)).toBe(true);
+    expect(ipInCidr(address, env.get(subnetVar)!)).toBe(true);
   });
 });
 
@@ -359,7 +365,7 @@ describe("HA's trusted_proxies cannot drift from the proxy's address (#1555)", (
 
     // Leaving it defined invites someone to set it on a host and wonder why it
     // has no effect.
-    expect(env['HOMEASSISTANT_TRUSTED_PROXIES']).toBeUndefined();
+    expect(env.get('HOMEASSISTANT_TRUSTED_PROXIES')).toBeUndefined();
     expect(composeRaw).not.toContain('HOMEASSISTANT_TRUSTED_PROXIES');
   });
 });
