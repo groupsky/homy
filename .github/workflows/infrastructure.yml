@@ -11,6 +11,8 @@ on:
       - 'docker/ingressgen/**'
       - 'config/ingressgen/**'
       - 'docker-compose.yml'
+      # The network pin and the trusted-proxy address live here (#1555).
+      - 'example.env'
       - '.github/workflows/infrastructure.yml'
 
   pull_request:
@@ -20,6 +22,8 @@ on:
       - 'docker/ingressgen/**'
       - 'config/ingressgen/**'
       - 'docker-compose.yml'
+      # The network pin and the trusted-proxy address live here (#1555).
+      - 'example.env'
       - '.github/workflows/infrastructure.yml'
 
   # Weekly validation (catch indirect failures from base image updates)
@@ -87,6 +91,60 @@ jobs:
             sleep 1
           done
 
+          # Issue #1555: Home Assistant answers 400 to every proxied request if
+          # trusted_proxies does not cover the address nginx reaches it from. The
+          # ingress network used to be unpinned, so Docker renumbered it on a
+          # network recreate and the stack came up green while every request
+          # through the proxy failed. The static wiring is asserted in
+          # tests/integration/ingress-proxy-pinning.integration.test.ts; this is
+          # the runtime half — that Docker actually honoured the pin.
+          echo "Verifying the ingress network pin took effect..."
+          # Read each variable in its own step so a missing one names itself,
+          # rather than a pipeline whose grep failure `cut` would swallow (the
+          # step runs under `bash -e`, not `-eo pipefail`).
+          read_env_var() {
+            local name="$1" line
+            line=$(grep -E "^${name}=" example.env) || {
+              echo "FAIL: ${name} is not defined in example.env" >&2
+              return 1
+            }
+            printf '%s' "${line#*=}"
+          }
+          expected_subnet=$(read_env_var PROXY_BACKEND_SUBNET)
+          expected_address=$(read_env_var PROXY_BACKEND_ADDRESS)
+
+          # Separator matters: with a second (e.g. IPv6) ipam entry an unseparated
+          # concatenation would silently compare as one nonsense string.
+          actual_subnet=$(docker network inspect homy_ingress \
+            -f '{{range $i, $c := .IPAM.Config}}{{if $i}},{{end}}{{$c.Subnet}}{{end}}')
+          if [ "$actual_subnet" != "$expected_subnet" ]; then
+            echo "FAIL: homy_ingress subnet is '$actual_subnet', expected '$expected_subnet'"
+            echo "      The ingress network is not pinned as configured."
+            exit 1
+          fi
+          echo "✓ homy_ingress subnet is pinned to $actual_subnet"
+
+          nginx_cid=$(docker compose --env-file example.env ps -q ingress)
+          actual_address=$(docker inspect "$nginx_cid" \
+            -f '{{(index .NetworkSettings.Networks "homy_ingress").IPAddress}}')
+          if [ "$actual_address" != "$expected_address" ]; then
+            echo "FAIL: nginx is at '$actual_address' on homy_ingress, expected '$expected_address'"
+            exit 1
+          fi
+          echo "✓ nginx holds its pinned address $actual_address"
+
+          # The invariant that actually matters: what HA trusts must be the
+          # address nginx really has, not merely what example.env claims.
+          ha_cid=$(docker compose --env-file example.env ps -q ha)
+          ha_trusted=$(docker inspect "$ha_cid" \
+            -f '{{range .Config.Env}}{{println .}}{{end}}' | grep '^TRUSTED_PROXIES=' | cut -d= -f2-)
+          if [ "$ha_trusted" != "$actual_address" ]; then
+            echo "FAIL: HA trusts '$ha_trusted' but nginx reaches it from '$actual_address'"
+            echo "      Every proxied request would return 400."
+            exit 1
+          fi
+          echo "✓ HA trusts exactly the address nginx proxies from ($ha_trusted)"
+
           echo "Starting ingressgen to generate nginx config..."
           docker compose --env-file example.env up -d ingressgen
 
@@ -146,3 +204,39 @@ jobs:
           echo "Checking ingressgen logs for critical errors..."
           docker compose --env-file example.env logs ingressgen
           echo "✓ Ingress template validation complete"
+
+      - name: Verify a proxied request is not rejected as an untrusted proxy
+        run: |
+          # Everything above proves the wiring. This proves the outcome, which is
+          # the only thing #1555 was ever about: HA returning 400 to every request
+          # arriving through nginx. Any *other* status is a pass here — 401, 302
+          # and 404 all mean the request was accepted and routed. Only 400 is the
+          # signature of trusted_proxies not covering the proxy's address.
+          domain=$(docker compose --env-file example.env config \
+            --format json | jq -r '.services.ha.environment.VIRTUAL_HOST')
+          proxy=$(grep -E '^INGRESS_ADDRESS=' example.env | cut -d= -f2-)
+          echo "Requesting http://${proxy}/ with Host: ${domain}"
+
+          status=""
+          for i in $(seq 1 60); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+              -H "Host: ${domain}" "http://${proxy}/" || echo 000)
+            # 000 = no connection yet, 502/503 = nginx up but HA still booting.
+            case "$status" in
+              000|502|503) sleep 5 ;;
+              *) break ;;
+            esac
+          done
+
+          if [ "$status" = "400" ]; then
+            echo "FAIL: proxied request returned 400 — the #1555 signature."
+            echo "      HA is rejecting nginx as an untrusted proxy."
+            docker compose --env-file example.env logs ha | grep -i "untrusted proxy" | tail -5 || true
+            exit 1
+          fi
+          if [ "$status" = "000" ] || [ "$status" = "502" ] || [ "$status" = "503" ]; then
+            echo "FAIL: backend never became reachable through nginx (last status: $status)."
+            docker compose --env-file example.env logs ha | tail -30
+            exit 1
+          fi
+          echo "✓ Proxied request returned $status — accepted and routed, not rejected as an untrusted proxy"

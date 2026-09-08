@@ -244,6 +244,43 @@ docker compose stop
 
 **Note:** The backup script uses `docker compose stop` instead of `docker compose down` to preserve container state and networks, allowing for faster restart with `docker compose start`.
 
+### Network topology changes need a manual network recreate
+
+Preserving networks has a consequence: **`deploy.sh` cannot apply a change to a
+network's `ipam` settings** (subnet, `ip_range`, gateway). Compose compares only
+whether a network *exists*, never whether its settings still match the compose
+file, so it reuses the old network and then fails when a container asks for a
+static `ipv4_address` the old subnet does not contain:
+
+```
+Error response from daemon: invalid config for network homy_ingress:
+user specified IP address is supported only when connecting to networks with user configured subnets
+```
+
+Because `deploy.sh` has already run `backup.sh --stop` by then, this leaves the
+whole stack down, and its emergency handler retries the identical failing
+command. Deploy such a change by hand instead:
+
+```bash
+# 1. Add any new variables to .env FIRST, and confirm nothing is unset.
+docker compose config >/dev/null   # aborts on a missing required variable
+
+# 2. Stop only the services attached to the network being changed.
+docker compose stop ingress ha grafana z2m-home1 mongo-express
+
+# 3. Remove it. This succeeds once its containers are stopped.
+docker network rm homy_ingress
+
+# 4. Bring them back; compose recreates the network from the compose file.
+docker compose up -d
+```
+
+Required variables use the `${VAR:?message}` form, so step 1 fails loudly and
+touches nothing if `.env` is incomplete. Do not skip it: with the network still
+present from a previous deploy, an empty value would otherwise be accepted
+silently, leaving the network unpinned and the stack green but broken — this is
+exactly how issue #1555 happened.
+
 ## Image Management
 
 ### Built Images
