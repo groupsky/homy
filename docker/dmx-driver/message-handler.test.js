@@ -43,6 +43,37 @@ describe('createMessageHandler', () => {
     expect(universe.frames).toEqual([[128, 0, 0]])
   })
 
+  // `inputs` is a signed 32-bit word: the mbsl32di driver builds it as
+  // `data[1] << 16 | data[0]`, so it is negative exactly when input bit 31 is
+  // closed. Bit 31 is a door contact in production, and rejecting negatives
+  // froze all three channels for as long as that one door was in that state.
+  // See issue #1586.
+  describe('with input bit 31 closed, which makes `inputs` negative', () => {
+    it('drives the channels from the bits of a reading captured on routy', () => {
+      // -39828385 >>> 0 is 0b11111101101000000100010001011111: bit 31 set, and
+      // all three mapped bits (32, 512, 2048) clear.
+      handle(TOPIC, '{"inputs":-39828385}')
+
+      expect(universe.frames).toEqual([[0, 0, 0]])
+      expect(errors).not.toHaveBeenCalled()
+    })
+
+    it('still lights the mapped channels closed alongside bit 31', () => {
+      // (2592 | 1 << 31) | 0 - every mapped input closed, and bit 31 too.
+      handle(TOPIC, '{"inputs":-2147481056}')
+
+      expect(universe.frames).toEqual([[128, 128, 128]])
+      expect(errors).not.toHaveBeenCalled()
+    })
+
+    // -1 is every one of the 32 inputs closed, the unsigned 0xFFFFFFFF.
+    it('treats -1 as all inputs closed, not as a malformed reading', () => {
+      handle(TOPIC, '{"inputs":-1}')
+
+      expect(universe.frames).toEqual([[128, 128, 128]])
+    })
+  })
+
   // The listener runs inside the mqtt client's stream - handlePublish emits
   // `message` from writable._write - so an exception escaping it becomes an
   // unhandled `error` event on that stream. This service's own `error` handler
@@ -77,19 +108,28 @@ describe('createMessageHandler', () => {
       expect(errors).toHaveBeenCalledTimes(1)
     })
 
-    // `inputs` is an unsigned 32-bit flag field. A fractional value is silently
-    // truncated by the bitwise operators and a negative one turns every mapped
-    // channel on, so neither is a reading this driver should act on.
+    // `inputs` is a 32-bit flag field, signed or unsigned. A fractional value is
+    // silently truncated by the bitwise operators, and a value outside the
+    // 32-bit range is wrapped by them into a different reading, so neither is
+    // something this driver should act on.
     it('drops a fractional inputs field', () => {
       handle(TOPIC, '{"inputs":32.7}')
 
       expect(universe.frames).toHaveLength(0)
     })
 
-    it('drops a negative inputs field rather than lighting every channel', () => {
-      handle(TOPIC, '{"inputs":-1}')
+    it('drops an inputs field above the unsigned 32-bit range', () => {
+      handle(TOPIC, '{"inputs":4294967296}')
 
       expect(universe.frames).toHaveLength(0)
+      expect(errors).toHaveBeenCalledTimes(1)
+    })
+
+    it('drops an inputs field below the signed 32-bit range', () => {
+      handle(TOPIC, '{"inputs":-2147483649}')
+
+      expect(universe.frames).toHaveLength(0)
+      expect(errors).toHaveBeenCalledTimes(1)
     })
 
     it('leaves the universe untouched rather than blanking it', () => {
@@ -103,6 +143,12 @@ describe('createMessageHandler', () => {
 
       expect(universe.frames).toHaveLength(0)
       expect(errors).toHaveBeenCalledTimes(1)
+    })
+
+    it('names the 32-bit range it enforced, so the log matches the guard', () => {
+      handle(TOPIC, '{"inputs":4294967296}')
+
+      expect(errors.mock.calls[0].join(' ')).toContain('32-bit integer inputs field')
     })
 
     it('logs the topic and a bounded preview of the payload', () => {

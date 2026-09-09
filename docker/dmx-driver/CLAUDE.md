@@ -32,6 +32,13 @@ The reading is a single `inputs` bit field produced by the `mbsl32di` driver in
 input drives its channel to level 128. Channel state is kept across messages, so
 a message that cannot be used leaves the lights as they were.
 
+`inputs` is a **signed** 32-bit word — `mbsl32di` builds it as
+`data[1] << 16 | data[0]`, so it is negative exactly when input bit 31 is closed.
+Bit 31 is a door contact in production (`config/automations/config.js`), so
+negative readings are routine, not malformed. The handler normalises with
+`>>> 0` before the bit tests, the same way `docker/mqtt-influx/converters/mbsl32di.js`
+does.
+
 ## Malformed Payload Handling
 
 The `message` listener runs inside the MQTT client's stream: `handlePublish`
@@ -49,16 +56,21 @@ What the handler guarantees:
 - **Valid JSON that is not a usable reading is also dropped.** `null` has no
   properties to destructure, and an object without a usable `inputs` would
   otherwise silently blank every channel — worse than ignoring the message. Both
-  log `Ignoring payload without an unsigned integer inputs field for topic
+  log `Ignoring payload without a 32-bit integer inputs field for topic
   <topic> "<preview>"` and return.
-- **`inputs` must be an unsigned safe integer, not merely a number.** A
-  `typeof === 'number'` check admits `Infinity`, and `Infinity & bit` is 0 for
-  every bit — the exact silent blanking the guard exists to prevent, reachable
-  from JSON as `1e999`. It also admits fractional values (truncated by the
-  bitwise operators) and negatives (`-1` lights every mapped channel). Note that
-  `Number.isSafeInteger(-1)` is `true`, so the explicit `>= 0` check is what
-  closes negatives. `NaN` cannot arrive — it is not valid JSON — so the parse
-  guard stops it first.
+- **`inputs` must be a safe integer inside the 32-bit range, not merely a
+  number.** A `typeof === 'number'` check admits `Infinity`, and `Infinity & bit`
+  is 0 for every bit — the exact silent blanking the guard exists to prevent,
+  reachable from JSON as `1e999`. It also admits fractional values (truncated by
+  the bitwise operators) and values beyond 32 bits (wrapped by them into a
+  different reading). `Number.isSafeInteger` closes `Infinity` and fractions; the
+  range check `-2147483648 … 4294967295` closes the rest. `NaN` cannot arrive —
+  it is not valid JSON — so the parse guard stops it first.
+- **A negative `inputs` is accepted, not dropped.** Both signs of the same
+  32-bit word are valid; `>>> 0` normalises before the bit tests. An earlier
+  version of this guard rejected `inputs < 0`, which dropped *every* reading for
+  as long as bit 31 was closed and froze all three lights — issue #1586. Only
+  values outside the 32-bit range are out of contract.
 - **The universe is left untouched on a dropped message.** The previous frame
   stands; one bad publish does not reset the lights.
 - **The log carries a bounded preview.** `payload-preview.js` renders at most
