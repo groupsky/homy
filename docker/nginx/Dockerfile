@@ -1,1 +1,1 @@
-FROM ghcr.io/groupsky/homy/nginx:1.29.7-alpine
+FROM ghcr.io/groupsky/homy/nginx:1.31.3-alpine
