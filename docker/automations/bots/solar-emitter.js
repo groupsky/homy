@@ -2,6 +2,17 @@ const SunCalc = require('suncalc')
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000
 
+// SunCalc reports an event that does not happen on a given day - polar day or
+// polar night, or a twilight phase the sun never reaches - as `null` in
+// suncalc 2.x and as an invalid Date in suncalc 1.x. Both must be skipped:
+// calling .getTime() on null throws, and on an invalid Date it yields NaN,
+// which then poisons the comparisons that pick the current and next state.
+const timestampOf = (time) => {
+  if (time == null) return null
+  const ms = time.getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
 module.exports = (name, {
   statusTopic,
   commandTopic,
@@ -35,18 +46,28 @@ module.exports = (name, {
       const timesTomorrow = SunCalc.getTimes(tomorrow, lat, lon)
       const states = []
       for (const state in solarTimeStates) {
-        states.push({ state, eta: timesYesterday[state].getTime() - now.getTime() })
-        states.push({ state, eta: timesToday[state].getTime() - now.getTime() })
-        states.push({ state, eta: timesTomorrow[state].getTime() - now.getTime() })
+        for (const times of [timesYesterday, timesToday, timesTomorrow]) {
+          const timestamp = timestampOf(times[state])
+          if (timestamp === null) continue
+          states.push({ state, eta: timestamp - now.getTime() })
+        }
       }
-      const current = states.reduce((best, current) => best.eta > 0 || current.eta <= 0 && best.eta < current.eta ? current : best)
-      const next = states.reduce((best, current) => best.eta <= 0 || current.eta > 0 && best.eta > current.eta ? current : best)
+      const passed = states.filter(({ eta }) => eta <= 0)
+      const upcoming = states.filter(({ eta }) => eta > 0)
+      // The most recent event that has already happened is the current state;
+      // the soonest one still ahead is when to look again.
+      const current = passed.length ? passed.reduce((best, candidate) => best.eta < candidate.eta ? candidate : best) : null
+      const next = upcoming.length ? upcoming.reduce((best, candidate) => best.eta > candidate.eta ? candidate : best) : null
       if (verbose) {
-        console.log(`[${name}] current state`, current.state, 'since', -Math.round(current.eta / 60000), 'm')
-        console.log(`[${name}] next state`, next.state, 'in', Math.round(next.eta / 60000), 'm')
+        if (current) console.log(`[${name}] current state`, current.state, 'since', -Math.round(current.eta / 60000), 'm')
+        else console.log(`[${name}] no configured solar event has happened in the last day, keeping`, wantedStatus)
+        if (next) console.log(`[${name}] next state`, next.state, 'in', Math.round(next.eta / 60000), 'm')
+        else console.log(`[${name}] no configured solar event ahead, checking again in a day`)
       }
-      wantedStatus = solarTimeStates[current.state]
-      setTimeout(computeWantedStatus, next.eta)
+      if (current) wantedStatus = solarTimeStates[current.state]
+      // With every configured event missing - a full polar day or night - there
+      // is nothing to schedule against, so retry once a day until one returns.
+      setTimeout(computeWantedStatus, next ? next.eta : MS_IN_DAY)
       update()
     }
 
