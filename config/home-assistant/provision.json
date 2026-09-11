@@ -1,0 +1,29 @@
+{
+  "exposure": {
+    "conversation": {
+      "switch.1217_mariboli": false
+    }
+  },
+  "dashboards": {
+    "lovelace": {
+      "rows": [
+        {
+          "entity": "switch.1217_mariboli",
+          "type": "simple-entity",
+          "name": "Контакт сървър",
+          "icon": "mdi:power-plug",
+          "secondary_info": "last-changed",
+          "tap_action": {
+            "action": "toggle",
+            "confirmation": {
+              "text": "This switches mains to the server's UPS. Continue?"
+            }
+          },
+          "hold_action": {
+            "action": "none"
+          }
+        }
+      ]
+    }
+  }
+}

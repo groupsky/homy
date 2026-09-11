@@ -36,6 +36,9 @@ This directory contains technical documentation for the home automation system.
 ### Wireless Device Integration
 - **[Zigbee2MQTT Service](../docker/zigbee2mqtt/CLAUDE.md)** - Zigbee wireless device integration, multi-instance setup, network coordinator configuration, and Home Assistant discovery
 
+### Home Assistant Provisioning
+- **[ha-provision](../scripts/ha-provision/README.md)** - Applies the dashboard rows and assistant exposure that Home Assistant keeps only in `.storage`, from `config/home-assistant/provision.json`
+
 ## Quick Reference
 
 ### Monitoring Topics

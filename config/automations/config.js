@@ -425,6 +425,35 @@ module.exports = {
       verbose: false
     },
 
+    // 1217-mariboli switches mains to the UPS in front of a server. Its settings
+    // are held in the relay itself; re-assert them whenever it comes online - on
+    // automations start (availability is retained), on every zigbee2mqtt start
+    // and when the relay comes back - so this file, not the relay's memory, is
+    // the record. None of these writes toggles the relay.
+    // - power_on_behavior 'on': the UPS gets mains back after an outage
+    // - delayed_power_on_state false: no wait on battery after a supply blip
+    // - inching auto-ON 1800 s after any OFF, enforced inside the relay even when
+    //   zigbee2mqtt or Home Assistant is down. inching_mode 'ON' is "turn back on
+    //   after off" - on firmware 1.0.1 an OFF with 10 s inching reported ON again
+    //   9.9 s later (2026-09-11). 1800 s stands until the UPS runtime is measured.
+    mariboliRelaySettings: {
+      type: 'mqtt-transform',
+      inputTopic: 'z2m/house1/1217-mariboli/availability',
+      filterInput: (payload) => payload?.state === 'online',
+      // plain: the json writer adds _bot/_tz, which zigbee2mqtt logs as errors
+      transform: () => JSON.stringify({
+        power_on_behavior: 'on',
+        delayed_power_on_state: false,
+        inching_control_set: {
+          inching_control: 'ENABLE',
+          inching_time: 1800,
+          inching_mode: 'ON'
+        }
+      }),
+      outputTopic: 'z2m/house1/1217-mariboli/set',
+      outputContent: 'plain',
+    },
+
     // TV IR Control - Physical Button Triggers
     tvLivingVolumeUpFromButton: {
       type: 'mqtt-transform',
