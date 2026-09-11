@@ -76,6 +76,18 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Test execution completed. Check individual steps for details." >> $GITHUB_STEP_SUMMARY
 
+  ha-provision:
+    name: Test ha-provision
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Run tests on the Node version it runs with on routy
+        run: docker run --rm -v "$PWD":/w -w /w ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 node --test scripts/ha-provision/lib.test.mjs
+
   validate-scripts:
     name: Validate Script Syntax
     runs-on: ubuntu-latest
