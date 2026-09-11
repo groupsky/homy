@@ -117,6 +117,6 @@ async function main () {
 
 main().then(
   (code) => { process.exitCode = code },
-  // Newlines are stripped so an error carrying remote text stays one log line.
-  (err) => { console.error(String(err.message).replace(/[\n\r]/g, ' ')); process.exitCode = 1 }
+  // Line breaks are removed so an error carrying text from HA stays one log line.
+  (err) => { console.error(String(err.message).replace(/\r/g, '').replace(/\n/g, '')); process.exitCode = 1 }
 )
