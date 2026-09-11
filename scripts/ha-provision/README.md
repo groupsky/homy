@@ -37,8 +37,7 @@ Run from the checkout, dry run first:
 ```bash
 docker run --rm --network homy_automation \
   -v "$PWD":/w:ro \
-  -v "$(realpath "${SECRETS_PATH:-./secrets}")/ha_provision_token":/run/secrets/ha_token:ro \
-  -e HA_TOKEN_FILE=/run/secrets/ha_token \
+  -v "$(realpath "${SECRETS_PATH:-./secrets}")/ha_provision_token":/run/secrets/ha_provision_token:ro \
   ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 \
   node /w/scripts/ha-provision/index.mjs --dry-run
 ```
@@ -46,12 +45,12 @@ docker run --rm --network homy_automation \
 Drop `--dry-run` to apply. No container is restarted; HA applies both changes
 live.
 
-| variable | default | meaning |
-|---|---|---|
-| `HA_TOKEN` / `HA_TOKEN_FILE` | none | access token, or the file holding it |
-| `HA_WS_URL` | `ws://ha:8123/api/websocket` | HA websocket, reached over the `automation` network |
+Nothing about the run can be configured, on purpose:
 
-`--desired=<file>` reads a different desired-state file.
+- **HA endpoint:** always `ws://ha:8123/api/websocket`, reached over the
+  `automation` network.
+- **Desired state:** always the repo's `config/home-assistant/provision.json`.
+- **Token:** always read from `/run/secrets/ha_provision_token`.
 
 ## Tests
 

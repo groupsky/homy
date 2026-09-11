@@ -6,13 +6,19 @@
 import { readFileSync } from 'node:fs'
 import { applyRows, planExposure } from './lib.mjs'
 
-const DEFAULT_URL = 'ws://ha:8123/api/websocket'
-const DEFAULT_DESIRED = new URL('../../config/home-assistant/provision.json', import.meta.url)
+// Fixed on purpose, not configurable: the script only ever talks to the HA
+// container over the automation network, reads the repo's desired state and
+// takes its admin token from the Docker secret mount.
+const HA_URL = 'ws://ha:8123/api/websocket'
+const TOKEN_FILE = '/run/secrets/ha_provision_token'
+const DESIRED = new URL('../../config/home-assistant/provision.json', import.meta.url)
 
 function readToken () {
-  if (process.env.HA_TOKEN) return process.env.HA_TOKEN.trim()
-  if (process.env.HA_TOKEN_FILE) return readFileSync(process.env.HA_TOKEN_FILE, 'utf8').trim()
-  throw new Error('set HA_TOKEN or HA_TOKEN_FILE to a long-lived access token of an admin user')
+  try {
+    return readFileSync(TOKEN_FILE, 'utf8').trim()
+  } catch {
+    throw new Error(`mount a long-lived access token of an admin user at ${TOKEN_FILE}`)
+  }
 }
 
 function connect (url, token) {
@@ -93,13 +99,10 @@ async function provisionDashboard (ha, urlPath, rows, dryRun) {
 }
 
 async function main () {
-  const args = process.argv.slice(2)
-  const dryRun = args.includes('--dry-run')
-  const desiredArg = args.find((a) => a.startsWith('--desired='))
-  const desired = JSON.parse(readFileSync(desiredArg ? desiredArg.slice('--desired='.length) : DEFAULT_DESIRED, 'utf8'))
-  const url = process.env.HA_WS_URL || DEFAULT_URL
+  const dryRun = process.argv.slice(2).includes('--dry-run')
+  const desired = JSON.parse(readFileSync(DESIRED, 'utf8'))
 
-  const ha = await connect(url, readToken())
+  const ha = await connect(HA_URL, readToken())
   try {
     await provisionExposure(ha, desired.exposure ?? {}, dryRun)
     let ok = true
@@ -114,5 +117,6 @@ async function main () {
 
 main().then(
   (code) => { process.exitCode = code },
-  (err) => { console.error(err.message); process.exitCode = 1 }
+  // Newlines are stripped so an error carrying remote text stays one log line.
+  (err) => { console.error(String(err.message).replace(/[\n\r]/g, ' ')); process.exitCode = 1 }
 )
