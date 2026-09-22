@@ -80,6 +80,26 @@ groups:
           summary: "🚗 Cell voltage spread {{ $values.spread.Value }} mV at rest (> 100 mV)"
           description: "Rest cell-voltage spread is critically high. A cell is likely failing — inspect the outlier cell and have the pack serviced."
 
+      # Retuned 2026-09-22 (threshold 8 -> 12 degC, last() -> min()), issue #1597.
+      #
+      # At 8 degC this fired on any long motorway drive. Air-cooled modules do
+      # not all get the same airflow, so a steady load spreads their
+      # temperatures out even with a healthy pack -- modules 2 and 11 always run
+      # hottest, 5 and 8 always coldest, which is the normal airflow gradient,
+      # not one module failing. Daily maximum spread over a month of normal use:
+      # ordinary days 1-3 degC, 2026-09-03 6 degC, 2026-09-10 8 degC, 2026-09-14
+      # (motorway) 10 degC, 2026-08-30 (motorway + two DC rapid charges) 11 degC.
+      # 12 degC sits above all of these, so the rule now speaks about something
+      # wider than anything seen in a month of driving plus fast charging.
+      #
+      # min() over the window rather than last(): see "last() Over a Long
+      # Window Defeats for:" in config/grafana/CLAUDE.md. With last(), the
+      # newest sample inside the 30m window keeps being returned on every
+      # evaluation until a newer one arrives, so a single high sample from a
+      # drive that has since ended can hold the rule firing for the whole
+      # for: 10m window regardless of what the spread does afterwards. min()
+      # on a gt threshold requires every sample in the window to exceed it,
+      # so for: can actually filter a short-lived spike.
       - uid: ioniq-module-temp-spread-warning
         title: "🚗 Ioniq Module Temp Spread High (warning)"
         condition: A
@@ -89,7 +109,7 @@ groups:
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("value") FROM "ioniq"
+                SELECT min("value") FROM "ioniq"
                 WHERE "group"='derived/module_temp_spread_c' AND time >= now() - 30m
               rawQuery: true
               resultFormat: time_series
@@ -103,7 +123,7 @@ groups:
               refId: A
               hide: false
               conditions:
-                - evaluator: { type: gt, params: [8] }
+                - evaluator: { type: gt, params: [12] }
                   operator: { type: and }
                   query: { params: [spread] }
                   reducer: { type: last }
@@ -114,8 +134,8 @@ groups:
         for: 10m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
-          summary: "🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 8 °C)"
-          description: "Module temperatures are diverging (baseline ~2 °C). Uneven cooling or a hot module — watch for a rising trend."
+          summary: "🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 12 °C)"
+          description: "Module temperatures are diverging. Baseline is about 2 °C at rest and up to about 10-11 °C on a long motorway drive or DC rapid charge, where uneven airflow spreads the modules out even on a healthy pack. Uneven cooling or a hot module — watch for a rising trend."
 
       - uid: ioniq-module-temp-spread-critical
         title: "🚗 Ioniq Module Temp Spread Critical"
