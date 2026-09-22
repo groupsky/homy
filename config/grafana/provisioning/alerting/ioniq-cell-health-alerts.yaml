@@ -137,6 +137,20 @@ groups:
           summary: "🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 12 °C)"
           description: "Module temperatures are diverging. Baseline is about 2 °C at rest and up to about 10-11 °C on a long motorway drive or DC rapid charge, where uneven airflow spreads the modules out even on a healthy pack. Uneven cooling or a hot module — watch for a rising trend."
 
+      # Retuned 2026-09-22 (last() -> min()), issue #1599. Same flaw #1598
+      # fixed on the warning rule above: last() over the 30m window keeps
+      # returning one high sample on every evaluation until a newer one
+      # arrives, so a single spike can hold the rule firing for the whole
+      # for: 10m and for: filters nothing. min() on a gt threshold requires
+      # every sample in the window to exceed it, so for: can actually filter
+      # a short-lived spike. See "last() Over a Long Window Defeats for:" in
+      # config/grafana/CLAUDE.md.
+      #
+      # Threshold left at 15 degC: the highest daily spread seen in a month
+      # of normal use, including a motorway drive and two DC rapid charges
+      # (see the warning rule's comment above), is 11 degC. Warning is now
+      # 12 degC, so 15 degC keeps critical a clear step above both the data
+      # and the warning threshold.
       - uid: ioniq-module-temp-spread-critical
         title: "🚗 Ioniq Module Temp Spread Critical"
         condition: A
@@ -146,7 +160,7 @@ groups:
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("value") FROM "ioniq"
+                SELECT min("value") FROM "ioniq"
                 WHERE "group"='derived/module_temp_spread_c' AND time >= now() - 30m
               rawQuery: true
               resultFormat: time_series
