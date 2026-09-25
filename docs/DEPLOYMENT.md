@@ -11,7 +11,7 @@ The deployment system uses prebuilt Docker images stored in GitHub Container Reg
 - **Fast deployments**: No building on production servers
 - **Consistent images**: Same image tested in CI runs in production
 - **Version tracking**: Git SHA-based versioning for easy correlation
-- **Safe rollback**: Database backups before each upgrade enable full rollback
+- **Safe rollback**: Backups before each upgrade allow a manual data restore
 
 ## Architecture
 
@@ -176,6 +176,27 @@ The script will:
 6. Wait for health checks to pass (5 minutes timeout)
 7. If successful, save current version to `.previous-version` for easy rollback
 8. If unhealthy, automatically rollback to previous version
+
+### Where state lives, and `down`
+
+Every service with state keeps it in a host directory under `${DATA_PATH}` (a bind mount), never in a Docker volume:
+
+| Service | Host directory | Container path |
+|---|---|---|
+| `mongo` | `${DATA_PATH}/mongodb/db`, `${DATA_PATH}/mongodb/configdb` (owned by 999:999) | `/data/db`, `/data/configdb` |
+| `broker` | `${DATA_PATH}/mosquitto/data`, `${DATA_PATH}/mosquitto/log` | `/mosquitto/data`, `/mosquitto/log` |
+
+Why: an image that declares `VOLUME /x` gets an unnamed Docker volume unless the service mounts exactly `/x`. `docker compose up -d` keeps such a volume, but `docker compose down` does not. Until 2026-09-25 this made every `down` start MongoDB from an empty database and drop the broker's retained messages. A CI test (`scripts/compose-volumes.test.mjs`) now fails if any service has an unnamed volume.
+
+With the bind mounts, `docker compose down` keeps the data. **Never use `docker compose down -v`.** To stop a stateful service for a moment, prefer `docker compose stop <service>`.
+
+### MongoDB backup and restore
+
+`scripts/backup.sh` does not tar Mongo's files (a tar of a running `mongod` is not consistent). It runs `mongodump` and saves `mongo.archive.gz` in the backup directory. To restore, with `mongo` running (this merges the dump into the live database, it does not replace it; add `--drop` for that). `<backup dir>` is your `BACKUP_PATH` from `.env`:
+
+```bash
+docker compose exec -T mongo sh -c 'mongorestore --archive --gzip --nsInclude "$MONGO_INITDB_DATABASE.*" --authenticationDatabase admin -u "$(cat /run/secrets/mongo_root_username)" -p "$(cat /run/secrets/mongo_root_password)"' < <backup dir>/<backup>/mongo.archive.gz
+```
 
 ### Deploy Specific Version
 

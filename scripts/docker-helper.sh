@@ -229,6 +229,28 @@ notify() {
     return 0
 }
 
+# Dump the app database of the running mongo container into the backup
+# <name> as mongo.archive.gz, through volman (which owns the backup directory).
+# Waits up to a minute for mongod to accept connections, since it may have
+# just been started.
+# Usage: backup_mongo "backup_name"
+backup_mongo() {
+    local name="$1" try
+    for try in $(seq 1 30); do
+        if dc_run exec -T mongo sh -c 'mongosh --quiet --eval "db.adminCommand(\"ping\")" >/dev/null 2>&1'; then
+            break
+        fi
+        [ "$try" -eq 30 ] && return 1
+        sleep 2
+    done
+    # pipefail: a failed mongodump must fail the backup, not leave a short file
+    (
+        set -o pipefail
+        dc_run exec -T mongo sh -c 'mongodump --archive --gzip --db "$MONGO_INITDB_DATABASE" --authenticationDatabase admin -u "$(cat /run/secrets/mongo_root_username)" -p "$(cat /run/secrets/mongo_root_password)"' \
+            | dc_run run --rm -T volman store "$name" mongo.archive.gz >&2
+    )
+}
+
 # Directory holding the secret files. SECRETS_PATH from the environment, else
 # the last SECRETS_PATH= line of the project's .env (what docker-compose uses,
 # so both agree), else ./secrets (this script's own fallback). A relative value
@@ -795,6 +817,7 @@ export -f save_deployed_version
 export -f save_previous_version
 export -f get_backup_reference
 export -f save_backup_reference
+export -f backup_mongo
 export -f get_git_commit
 export -f get_git_branch
 export -f is_detached_head

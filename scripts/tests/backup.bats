@@ -147,3 +147,59 @@ EOF
     assert_success
     assert_output --partial "Backup created: 2024_01_27_153000"
 }
+
+@test "backup.sh: dumps MongoDB through volman into the new backup" {
+    cd "$PROJECT_DIR"
+    cat > "$TEST_DIR/docker" <<'MOCK'
+#!/bin/bash
+echo "$*" >> "$TEST_DIR/calls.log"
+if [ "$1" = "compose" ]; then
+    shift
+    if [ "$1" = "run" ] && [ "$4" = "backup" ]; then
+        echo "Creating backup 2024_01_27_153000"
+    fi
+    if [ "$1" = "run" ] && [ "$5" = "store" ]; then
+        cat > /dev/null
+    fi
+    if [ "$1" = "exec" ] && [[ "$*" == *mongodump* ]]; then
+        echo "dump-bytes"
+    fi
+fi
+exit 0
+MOCK
+    chmod +x "$TEST_DIR/docker"
+    export TEST_DIR
+
+    run scripts/backup.sh -y
+    assert_success
+    run grep -c "compose exec -T mongo sh -c mongodump" "$TEST_DIR/calls.log"
+    assert_output "1"
+    run grep "volman store 2024_01_27_153000 mongo.archive.gz" "$TEST_DIR/calls.log"
+    assert_success
+}
+
+@test "backup.sh: a failing mongodump fails the backup" {
+    cd "$PROJECT_DIR"
+    cat > "$TEST_DIR/docker" <<'MOCK'
+#!/bin/bash
+if [ "$1" = "compose" ]; then
+    shift
+    if [ "$1" = "run" ] && [ "$4" = "backup" ]; then
+        echo "Creating backup 2024_01_27_153000"
+    fi
+    # the ping succeeds, the dump does not
+    if [ "$1" = "run" ] && [ "$5" = "store" ]; then
+        cat > /dev/null
+    fi
+    if [ "$1" = "exec" ] && [[ "$*" == *mongodump* ]]; then
+        exit 1
+    fi
+fi
+exit 0
+MOCK
+    chmod +x "$TEST_DIR/docker"
+
+    run scripts/backup.sh -y
+    assert_failure
+    assert_output --partial "MongoDB dump failed"
+}

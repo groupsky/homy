@@ -17,7 +17,7 @@ Volman is a lightweight backup and restore service for Docker volumes. It create
 | Volume | Source | Priority | Contents | Recovery Impact |
 |--------|--------|----------|----------|-----------------|
 | `ha` | Home Assistant | HIGH | Config, entity registry, history DB | Must reconfigure all integrations |
-| `mongo` | MongoDB | HIGH | Historical device data | Loss of historical trends |
+| `mongo.archive.gz` | MongoDB | HIGH | Historical device data (a `mongodump`, made by `backup.sh`, not a tar) | Loss of historical trends |
 | `influxdb` | InfluxDB | HIGH | Time-series sensor data | Loss of all metrics history |
 | `grafana` | Grafana | HIGH | Dashboards, alerts, users | Must recreate all dashboards |
 | `z2m-home1` | Zigbee2MQTT | HIGH | Device database, network state | Must re-pair all Zigbee devices |
@@ -32,10 +32,9 @@ Volume names in `VOLUMES` environment variable **must match** the mount point ba
 
 ```yaml
 environment:
-  - VOLUMES=ha mongo influxdb  # Space-separated list
+  - VOLUMES=ha influxdb  # Space-separated list
 volumes:
   - ${HOMEASSISTANT_DATA_PATH}:/volumes/ha      # ✓ Matches 'ha'
-  - ${MONGO_DATA_PATH}:/volumes/mongo           # ✓ Matches 'mongo'
   - ${DATA_PATH}/influxdb:/volumes/influxdb     # ✓ Matches 'influxdb'
 ```
 
@@ -46,7 +45,7 @@ Backups are stored in timestamped directories:
 ${BACKUP_PATH}/
 ├── 2026_01_18_14_30_00/
 │   ├── ha.tar               # Home Assistant config
-│   ├── mongo.tar            # MongoDB data
+│   ├── mongo.archive.gz     # MongoDB mongodump (streamed in by `volman store`)
 │   ├── influxdb.tar         # InfluxDB time-series
 │   ├── grafana.tar          # Grafana dashboards
 │   ├── z2m-home1.tar        # Zigbee2MQTT devices
@@ -61,7 +60,7 @@ ${BACKUP_PATH}/
 - **Typical backup**: 900 MB - 2.5 GB (depends on InfluxDB retention)
 - **Individual volumes**:
   - `ha`: ~50-200 MB (config + entity registry + history)
-  - `mongo`: ~100-500 MB (historical device data)
+  - `mongo.archive.gz`: compressed dump of the app database
   - `influxdb`: ~500-2000 MB (time-series data, varies by retention)
   - `grafana`: ~5-20 MB (dashboards, alerts, users)
   - `z2m-home1`: ~1-5 MB (device database, network state)
@@ -133,7 +132,7 @@ When adding a new volume:
 1. **Update docker-compose.yml**:
    ```yaml
    environment:
-     - VOLUMES=ha mongo influxdb new-volume
+     - VOLUMES=ha influxdb new-volume
    volumes:
      - ${NEW_VOLUME_PATH}:/volumes/new-volume
    ```
@@ -193,7 +192,7 @@ When adding a new volume:
 - Check service logs: `docker compose logs service-name`
 - Verify restored data integrity: `ls -lh ${VOLUME_PATH}`
 - Common issues:
-  - MongoDB: May need to repair: `docker compose run mongo mongod --repair`
+  - MongoDB: restore `mongo.archive.gz` with `mongorestore` (see docs/DEPLOYMENT.md)
   - InfluxDB: Check data directory ownership matches container UID
   - Grafana: Verify database file permissions
 
