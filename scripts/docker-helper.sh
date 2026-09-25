@@ -755,7 +755,7 @@ duplicate_services() {
 
 # Seconds a single `docker compose up` or `start` may take before it counts
 # as failed. Longer than the slowest start period (influxdb, 300 s) plus the
-# gate margin: `up` waits for depends_on: service_healthy.
+# gate margin.
 COMPOSE_TIMEOUT="${COMPOSE_TIMEOUT:-600}"
 
 # docker compose under `timeout`; COMPOSE_FILE from the caller's environment.

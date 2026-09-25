@@ -279,7 +279,7 @@ Healthchecks with a start period:
 | `z2m-home1` | `docker-compose.yml` (the image cannot start without its adapter, so CI could not test it) | 120 s | 60 s × 5 |
 | `broker` | `docker/mosquitto/Dockerfile` | none | 30 s × 6 |
 
-`grafana` starts only after `influxdb` is healthy (`depends_on: condition: service_healthy`), so its alerts do not fire NoData while InfluxDB loads (#1365). This holds when the whole stack starts (after a reboot, `docker compose up -d`). A deploy passes `--no-deps`, so recreating `influxdb` does not restart `grafana`; the health gate waits for `influxdb` instead.
+`grafana` only lists `influxdb` in a plain `depends_on` (start order). A `service_healthy` condition is not used: it made CI's `up` fail when InfluxDB could not become healthy there, and #1365 stays open for it. The health gate still waits for a recreated `influxdb`.
 
 ### Automatic rollback
 
@@ -548,7 +548,7 @@ Deploy tuning (environment of `deploy.sh`):
 | `HEALTH_STABLE_SECONDS` | 30 | A service without a healthcheck passes after running this long without a restart |
 | `HEALTH_POLL_INTERVAL` | 5 | Seconds between health checks |
 | `HEALTH_GATE_MARGIN` | 60 | Seconds added to the gate's time limit |
-| `COMPOSE_TIMEOUT` | 600 | Seconds a `docker compose up` or `start` may take (it waits for `depends_on: service_healthy`); a timeout counts as a failure |
+| `COMPOSE_TIMEOUT` | 600 | Seconds a `docker compose up` or `start` may take ; a timeout counts as a failure |
 
 ### Docker Compose Dual-Mode
 

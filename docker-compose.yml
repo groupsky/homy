@@ -591,11 +591,8 @@ services:
       context: docker/grafana
       args:
         GF_INSTALL_IMAGE_RENDERER_PLUGIN: 'false'
-    # Wait for InfluxDB to answer, or every alert evaluates against a dead
-    # datasource and fires NoData (#1365)
     depends_on:
-      influxdb:
-        condition: service_healthy
+      - influxdb
     restart: unless-stopped
     networks:
       - automation
