@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/mongo:6.0.27
+FROM ghcr.io/groupsky/homy/mongo:7.0.41
 
 # ping needs no login. The start period covers journal recovery after a
 # restore from a (crash-consistent) deploy snapshot.
