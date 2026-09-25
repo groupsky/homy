@@ -3,7 +3,11 @@
 # Rollback Script
 #
 # This script handles rollback to a previous deployment version,
-# including database restoration from backup.
+# including database restoration from a volman backup. It stops the whole
+# stack and throws away everything written since that backup.
+#
+# deploy.sh does not call it: a failed deploy rolls back code and images
+# only, and data from a deploy snapshot is restored with restore-snapshot.sh.
 #
 
 set -euo pipefail
@@ -191,19 +195,23 @@ fi
 export IMAGE_TAG="$PREV_VERSION"
 log "Using IMAGE_TAG: $IMAGE_TAG"
 
+# The deploy override pins the images of the version being rolled back from;
+# go by IMAGE_TAG instead, and drop the stale pins (the next deploy writes new ones)
+rm -f "$DEPLOY_OVERRIDE_FILE"
+
 log "Pulling previous version images..."
-if ! dc_run pull 2>&1 | tee -a "$ROLLBACK_LOG"; then
+if ! dc_base pull 2>&1 | tee -a "$ROLLBACK_LOG"; then
     log "WARNING: Some images may not be available. Will use local build."
 fi
 
 # Start services
 log "Starting services with previous version..."
-dc_run up -d
+dc_base up -d
 mark_services_running
 
-# Health check with shorter timeout (2 minutes for rollback verification)
+# Health gate over the whole stack (it was all restarted)
 log "Verifying rollback health..."
-if wait_for_health "$HEALTH_CHECK_TIMEOUT_ROLLBACK"; then
+if wait_for_health; then
     # Update version file
     save_deployed_version "$PREV_VERSION"
 
@@ -213,7 +221,7 @@ if wait_for_health "$HEALTH_CHECK_TIMEOUT_ROLLBACK"; then
 
     notify "Rollback completed successfully to $BACKUP_NAME (version: $(format_version_short "$PREV_VERSION"))"
 else
-    error "Rollback health check failed after ${HEALTH_CHECK_TIMEOUT_ROLLBACK}s"
+    error "Rollback health check failed"
     log "Services status:"
     dc_run ps | tee -a "$ROLLBACK_LOG"
 

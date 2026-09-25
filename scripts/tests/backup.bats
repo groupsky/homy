@@ -203,3 +203,108 @@ MOCK
     assert_failure
     assert_output --partial "MongoDB dump failed"
 }
+
+# --- --stop must really stop, and only a complete backup is sealed (#1589, #1590)
+
+# A docker mock with one container whose state lives in $TEST_DIR/state
+# ("running<TAB>started"). `stop` stops it unless $TEST_DIR/stop-noop exists;
+# the volman backup starts it again when $TEST_DIR/start-during-backup exists.
+setup_stateful_mock() {
+    printf 'true\t2026-09-25T10:00:00Z\n' > "$TEST_DIR/state"
+    cat > "$TEST_DIR/docker" <<'MOCK'
+#!/bin/bash
+echo "$*" >> "$TEST_DIR/calls.log"
+S="$TEST_DIR/state"
+if [ "$1" = "compose" ]; then
+    shift
+    case "$1" in
+        version) echo "2.29.1" ;;
+        stop) [ -e "$TEST_DIR/stop-noop" ] || printf 'false\t%s\n' "$(cut -f2 "$S")" > "$S" ;;
+        start) ;;
+        ps) echo "c1" ;;
+        run)
+            if [ "$4" = "backup" ]; then
+                echo "Creating backup 2024_01_27_153000"
+                if [ -e "$TEST_DIR/start-during-backup" ]; then
+                    printf 'true\t2026-09-25T11:00:00Z\n' > "$S"
+                fi
+            fi
+            if [[ " $* " == *" store "* ]]; then cat > /dev/null; fi
+            ;;
+        exec) [[ "$*" == *mongodump* ]] && echo "dump-bytes" ;;
+    esac
+    exit 0
+fi
+if [ "$1" = "inspect" ]; then
+    IFS=$'\t' read -r running started < "$S"
+    echo "[{\"Name\":\"/homy-influxdb-1\",\"State\":{\"Running\":$running,\"StartedAt\":\"$started\"}}]"
+fi
+exit 0
+MOCK
+    chmod +x "$TEST_DIR/docker"
+    export TEST_DIR
+}
+
+@test "backup.sh --stop: seals a backup taken with everything stopped" {
+    cd "$PROJECT_DIR"
+    setup_stateful_mock
+
+    run scripts/backup.sh -s -y
+    assert_success
+    run grep "volman seal" "$TEST_DIR/calls.log"
+    assert_output --partial "compose run --rm volman seal 2024_01_27_153000 stopped"
+    # sealed only after the Mongo dump
+    run grep -n -e "mongodump" -e "volman seal" "$TEST_DIR/calls.log"
+    [[ "${lines[0]}" == *mongodump* ]]
+    [[ "${lines[1]}" == *"volman seal"* ]]
+    [ "$(cat "$BACKUP_REF_FILE")" = "2024_01_27_153000" ]
+}
+
+@test "backup.sh --stop: refuses to back up when a container is still running after stop" {
+    cd "$PROJECT_DIR"
+    setup_stateful_mock
+    touch "$TEST_DIR/stop-noop"
+
+    run scripts/backup.sh -s -y
+    assert_failure
+    assert_output --partial "Still running after stop; not backing up: /homy-influxdb-1"
+    run grep -c "volman backup" "$TEST_DIR/calls.log"
+    assert_output "0"
+    run grep -c "compose start" "$TEST_DIR/calls.log"
+    assert_output "1"
+}
+
+@test "backup.sh --stop: a container started during the copy leaves the backup unsealed" {
+    cd "$PROJECT_DIR"
+    setup_stateful_mock
+    touch "$TEST_DIR/start-during-backup"
+
+    run scripts/backup.sh -s -y
+    assert_failure
+    assert_output --partial "Containers started while backup 2024_01_27_153000 was being written"
+    assert_output --partial "left without its COMPLETE marker"
+    run grep -c "volman seal" "$TEST_DIR/calls.log"
+    assert_output "0"
+    [ ! -e "$BACKUP_REF_FILE" ]
+}
+
+@test "backup.sh: a backup of the running stack is sealed as such" {
+    cd "$PROJECT_DIR"
+    setup_stateful_mock
+
+    run scripts/backup.sh -y
+    assert_success
+    run grep "volman seal" "$TEST_DIR/calls.log"
+    assert_output --partial "volman seal 2024_01_27_153000 running"
+}
+
+@test "backup.sh: a failed Mongo dump leaves the backup unsealed" {
+    cd "$PROJECT_DIR"
+    setup_stateful_mock
+    sed -i 's/exec) \[\[ "\$\*" == \*mongodump\* \]\] && echo "dump-bytes" ;;/exec) [[ "$*" == *mongodump* ]] \&\& exit 1 ;;/' "$TEST_DIR/docker"
+
+    run scripts/backup.sh -s -y
+    assert_failure
+    run grep -c "volman seal" "$TEST_DIR/calls.log"
+    assert_output "0"
+}

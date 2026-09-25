@@ -166,3 +166,21 @@ EOF
     assert_failure
     assert_output --partial "No backup specified"
 }
+
+@test "restore.sh: surfaces volman's refusal of an incomplete backup" {
+    cd "$PROJECT_DIR"
+    cat > "$TEST_DIR/docker" <<'MOCK'
+#!/bin/bash
+if [ "$1" = "compose" ] && [ "$2" = "run" ]; then
+    echo "Backup 2026_09_08_06_58_54 is not complete: it has no COMPLETE manifest. Refusing to restore; nothing was extracted."
+    exit 1
+fi
+exit 0
+MOCK
+    chmod +x "$TEST_DIR/docker"
+
+    run scripts/restore.sh -y 2026_09_08_06_58_54
+    assert_failure
+    assert_output --partial "has no COMPLETE manifest"
+    assert_output --partial "Restore failed for backup: 2026_09_08_06_58_54 (the reason is printed above)"
+}

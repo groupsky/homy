@@ -53,6 +53,7 @@ Examples:
   $(basename "$0") -s -y                      # Restore and start services
 
 Warning:
+  - Only a complete backup (with its COMPLETE marker) is restored
   - Services must be stopped before restore
   - Any data written after the backup will be LOST
   - This includes sensor readings, state changes, and configs
@@ -154,8 +155,10 @@ fi
 
 # Run restore
 log "Restoring from backup: $BACKUP_NAME"
+# volman refuses, before extracting anything, a backup without its COMPLETE
+# marker or missing a volume, and names what is missing (#1590)
 if ! dc_run run --rm volman restore "$BACKUP_NAME"; then
-    error "Restore failed for backup: $BACKUP_NAME"
+    error "Restore failed for backup: $BACKUP_NAME (the reason is printed above)"
     exit 1
 fi
 

@@ -4,14 +4,14 @@ This document describes the deployment strategy for the homy home automation sys
 
 ## Overview
 
-The deployment system uses prebuilt Docker images stored in GitHub Container Registry (GHCR) to enable fast, reliable production deployments with database-aware rollback capability.
+The deployment system uses prebuilt Docker images stored in GitHub Container Registry (GHCR). A deploy does not stop the stack: it takes a ZFS snapshot of the data, recreates only the services whose image or configuration changed, and checks those services before it reports success. A normal deploy takes one to two minutes.
 
 ### Key Benefits
 
-- **Fast deployments**: No building on production servers
+- **Fast deployments**: No building on production servers, no backup copy, and unchanged services keep running
 - **Consistent images**: Same image tested in CI runs in production
 - **Version tracking**: Git SHA-based versioning for easy correlation
-- **Safe rollback**: Backups before each upgrade allow a manual data restore
+- **Safe rollback**: A failed deploy rolls code, config and images back without losing data; the snapshot allows a manual data restore
 
 ## Architecture
 
@@ -33,13 +33,13 @@ The deployment system uses prebuilt Docker images stored in GitHub Container Reg
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Production Server                           │
 ├─────────────────────────────────────────────────────────────────┤
-│  ./scripts/deploy.sh                                             │
-│    1. Record current version                                     │
-│    2. Pull new images from GHCR                                  │
-│    3. Stop services and backup databases                         │
-│    4. Start services                                             │
-│    5. Verify health                                              │
-│    6. On failure → automatic rollback                            │
+│  ./scripts/deploy.sh          (the stack keeps running)          │
+│    1. ZFS snapshot of all data (about a second)                  │
+│    2. Update code, pull new images                               │
+│    3. Pin images by digest, hash mounted config files            │
+│    4. docker compose up: only changed services are recreated    │
+│    5. Health gate on the recreated services                      │
+│    6. On failure → roll code, config and images back (no data)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -59,7 +59,8 @@ Options:
   -t, --tag TAG       Deploy specific image tag (git SHA, branch name, or 'latest')
   -f, --force         Force redeploy even if already at target version
   -y, --yes           Skip confirmation prompt
-  --skip-backup       Skip database backup (DANGEROUS - use only in emergencies)
+  --skip-snapshot     Deploy without the pre-deploy ZFS snapshot (DANGEROUS)
+  --skip-backup       Old name of --skip-snapshot
 ```
 
 **Examples:**
@@ -69,26 +70,41 @@ Options:
 ./scripts/deploy.sh --tag feature-x      # Deploy from branch
 ./scripts/deploy.sh --tag latest -f      # Force redeploy latest
 ./scripts/deploy.sh -t abc1234 -y        # Deploy without confirmation
-./scripts/deploy.sh --skip-backup        # Emergency deploy without backup (requires confirmation)
+./scripts/deploy.sh --skip-snapshot      # Deploy without a snapshot (requires confirmation)
 ```
 
-**Emergency Deployment (--skip-backup):**
+**Deploying without a snapshot (`--skip-snapshot`):**
 
-The `--skip-backup` option allows deployment without creating a database backup. This should **only** be used in emergencies where:
-- Backup creation is failing and blocking deployments
-- Immediate deployment is critical and data loss risk is acceptable
-- You have verified backups exist from a previous deployment
+Use it only on a host whose data is not on ZFS, or when the snapshot step itself is broken and the deploy cannot wait. You must type `yes-skip-snapshot` (unless `--yes` is given). Without a snapshot, a stateful service that breaks during the deploy cannot have its data restored from this deploy. `--skip-backup` is the old name of the same option; it does **not** stop the stack or run `docker compose down`.
 
-When using `--skip-backup`, you must type `yes-skip-backup` to confirm you understand the risks:
-- If deployment fails, automatic rollback will not be possible
-- You may lose data if something goes wrong
-- Manual recovery will be required in case of failure
+### snapshot.sh
 
-Services are still stopped cleanly before deployment even when skipping backup.
+Takes the pre-deploy snapshot; `deploy.sh` calls it. Run it by hand with `--check` to see whether a host is ready:
+
+```bash
+./scripts/snapshot.sh --check            # checks everything, takes no snapshot
+```
+
+See [The pre-deploy snapshot](#the-pre-deploy-snapshot).
+
+### restore-snapshot.sh
+
+Copies the data directories of chosen services back from a deploy snapshot. Manual only; see [Restoring data from a deploy snapshot](#restoring-data-from-a-deploy-snapshot).
+
+```
+Usage: restore-snapshot.sh [OPTIONS] SERVICE...
+
+Options:
+  -h, --help          Show help message
+  -l, --list          List the deploy snapshots
+  --snapshot NAME     Snapshot to restore from (default: the last deploy's)
+  --no-start          Leave the services stopped afterwards
+  -y, --yes           Do not ask for confirmation
+```
 
 ### rollback.sh
 
-Rollback to a previous version with database restoration.
+Rollback to a previous version with database restoration from a **volman backup** (not a snapshot). It stops the whole stack and throws away everything written since that backup. `deploy.sh` does not call it.
 
 ```
 Usage: rollback.sh [OPTIONS] [BACKUP_NAME]
@@ -109,7 +125,7 @@ Options:
 
 ### backup.sh
 
-Create a manual backup of all databases.
+Create an off-host-style backup (tar archives) of the stack's volumes and a MongoDB dump. It is for scheduled and manual backups; **deploys no longer use it**.
 
 ```
 Usage: backup.sh [OPTIONS] [BACKUP_NAME]
@@ -124,11 +140,16 @@ Options:
 **Examples:**
 ```bash
 ./scripts/backup.sh                      # Interactive backup with timestamp name
-./scripts/backup.sh pre-upgrade          # Create backup named 'pre-upgrade'
 ./scripts/backup.sh -s                   # Stop services for consistent backup
 ./scripts/backup.sh -s -y                # Stop services, no confirmation
 ./scripts/backup.sh -q                   # Quiet mode for scripts
 ```
+
+**What it costs.** Measured on routy on 2026-09-09: the `influxdb` archive alone is **99.5 GiB** and takes about **60 minutes**; the whole backup about 62 minutes. With `--stop` the stack is down for all of that time.
+
+**`--stop` is checked, not assumed** (#1589). After stopping, `backup.sh` checks that no container of the stack is running, and after the copy it checks that none was started meanwhile (a cron job or a restart policy can start one). If either check fails, the backup stops with an error and the backup is left without its completeness marker.
+
+**Completeness marker** (#1590). Only when every volume archive and the MongoDB dump are written does `backup.sh` run `volman seal`, which writes a `COMPLETE` manifest (file names, sizes, times, and whether the services were stopped). `restore.sh` refuses, before extracting anything, a backup without `COMPLETE` or missing a volume, and names what is missing. `volman list` shows `complete` or `INCOMPLETE` for each backup. Backups made before 2026-09-25 have no marker, so `restore.sh` refuses them all.
 
 ### restore.sh
 
@@ -167,15 +188,138 @@ cd /path/to/homy
 ./scripts/deploy.sh
 ```
 
-The script will:
-1. Show deployment plan and ask for confirmation
-2. Pull prebuilt images from GHCR (while services are still running)
-3. Stop all services (using `docker compose stop` to preserve container state)
-4. Create a backup of databases (InfluxDB, MongoDB, Home Assistant)
-5. Start services with new images
-6. Wait for health checks to pass (5 minutes timeout)
-7. If successful, save current version to `.previous-version` for easy rollback
-8. If unhealthy, automatically rollback to previous version
+The script:
+
+1. Checks that `docker compose` v2 is installed, and stops if it is not (see [Hosts without docker compose v2](#hosts-without-docker-compose-v2)).
+2. Shows the deployment plan and asks for confirmation.
+3. **Takes the snapshot** (`snapshot.sh`) before anything else. If it fails, the deploy stops here: the code, the images and every container are untouched.
+4. Updates the code to `origin/master` and pulls the images for that commit. If the pull fails, the code is put back and nothing is restarted.
+5. Writes `docker-compose.deploy.yml` (not in git): every service pinned to its image **digest** and labelled with a hash of the host files it mounts (see [Recreating only what changed](#recreating-only-what-changed)).
+6. Logs the services compose is expected to recreate, then runs `docker compose up -d --no-build --pull never` for the long-running services. Compose recreates only the services whose configuration differs. Nothing is stopped first.
+7. Runs the [health gate](#the-health-gate) on the services that were actually recreated, or started because they were not running. A container that restarted by itself is not counted.
+8. On success, saves the old version to `.previous-version` and the new one to `.deployed-version`, and sends the success message (with the recreated services and the snapshot name).
+9. On failure, [rolls back](#automatic-rollback) code, config and images.
+
+A deploy that changes nothing restarts nothing. The first deploy after this change is a special case: it moves every service from a tag to a digest, so it recreates all of them once.
+
+### The pre-deploy snapshot
+
+All persistent data of the stack lives in host directories (bind mounts, see [Where state lives](#where-state-lives-and-down)). When they are all on one ZFS dataset, one snapshot captures InfluxDB, Mongo, the broker, HA, zigbee2mqtt and Grafana **at the same instant**, in about a second, with the stack running.
+
+The snapshot is **crash-consistent**, like a power cut: fine for Mongo's journal, HA's SQLite WAL and InfluxDB's WAL, but InfluxDB may need to rebuild its index after a restore. It is not a backup copy: it lives on the same pool as the data.
+
+`snapshot.sh` finds everything at run time; nothing host-specific is in the repo:
+
+- It reads the writable bind mounts of every long-running service from `docker compose config` (system paths such as `/dev` and `/lib/modules`, read-only config mounts and one-shot services like `volman` are left out) and asks `zfs list -H -o name <dir>` for the dataset of each.
+- It **stops** when they are not all on one dataset, when a directory is not on ZFS, or when a service keeps state in a Docker volume (named, or an image `VOLUME` left unmounted), because the snapshot would miss it.
+- It **refuses** when the pool has less than `SNAPSHOT_MIN_FREE_GB` (default 20) GiB free.
+- It names the snapshot exactly `<dataset>@homy-deploy-<UTC yyyymmddThhmmssZ>-<short sha>`, for example `tank/homy@homy-deploy-20260925T101500Z-abc1234`, checks that it exists, and records the name in `.pre-deploy-snapshot`. The host prunes deploy snapshots by the `homy-deploy-` prefix, so keep the name exact.
+
+The deploy user needs permission to take snapshots, and nothing more (it cannot destroy them):
+
+```bash
+sudo zfs allow <deploy user> snapshot <dataset>
+```
+
+Pruning old snapshots is done on the host, not by these scripts.
+
+### Recreating only what changed
+
+`IMAGE_TAG` is the commit SHA, so the image reference of every service changes on every deploy even when its image does not. Compose recreates a container when the service's config hash changes, and the image reference is part of that hash. So `deploy.sh` writes an override, `docker-compose.deploy.yml`:
+
+- **Digest pins.** Each service's `image:` becomes `<repo>@sha256:<digest>`. CI's SHA retag copies the manifest, so an unchanged service keeps the same digest, the same config hash, and keeps running.
+- **Config-file hash label.** A changed `broker.conf`, automations `config.js`, Grafana provisioning file or secret file changes no image and nothing in the compose file. Each service gets a label `homy.config-files-hash` with a hash of the contents of its read-only bind mounts (every file under a mounted directory), its secret files and its `env_file`s. Data directories (writable mounts) are left out.
+- A change to `docker-compose.yml` or `.env` (environment, ports, mounts, healthchecks) changes the config hash by itself.
+
+`--no-build` matters: every service has a `build:` key, and without it compose would build on the host when an image is missing. `--pull never` makes compose use exactly the images just pulled.
+
+The override stays in the project directory after the deploy. A manual `docker compose up -d` without it would see a different image reference for every service and recreate them all. To run compose by hand with the same pins:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d <service>
+```
+
+Do not put the override into `COMPOSE_FILE` in `.env`: `rollback.sh` deletes it (its pins point at the version being rolled back from), and the next deploy writes a new one. If the host has a `docker-compose.override.yml`, or sets `COMPOSE_FILE` in the environment or `.env`, the scripts use those files as the base.
+
+The deploy does not pass `--remove-orphans`: a service that a new version removes from `docker-compose.yml` keeps running until it is removed by hand (`docker compose up -d --remove-orphans` with the override), and a service added by a failed version keeps running after the rollback.
+
+### The health gate
+
+The gate waits on the services the deploy recreated or started, not the whole stack:
+
+- A service **with a healthcheck** passes when Docker reports it `healthy`, and fails as soon as it is `unhealthy`, exited or dead. Failures inside its start period do not count.
+- A service **without a healthcheck** passes when it is running and its restart count has not changed for 30 s (`HEALTH_STABLE_SECONDS`).
+- **One-shot services** (`restart: "no"`, such as `volman` and the historians) are skipped; the deploy does not start them either.
+- The gate's time limit is the longest *start period + interval × retries + timeout* of the services it waits on, plus 60 s.
+- When the gate **cannot check at all** (no `docker compose` v2, no `jq`, a container missing, `docker inspect` failing), it fails loudly. The deploy then reports that the check could not be done, does not report success, does not record the new version, does not roll back, and [blocks further deploys](#automatic-rollback) until someone has looked.
+
+Healthchecks with a start period:
+
+| Service | Where | Start period | Interval × retries |
+|---|---|---|---|
+| `influxdb` | `docker/influxdb/Dockerfile` | 300 s (opening the shards takes about 2 minutes) | 1 s × 3 |
+| `ha` | `docker/homeassistant/Dockerfile` | 180 s | 30 s × 3 |
+| `mongo` | `docker/mongo/Dockerfile` | 120 s | 30 s × 3 |
+| `z2m-home1` | `docker-compose.yml` (the image cannot start without its adapter, so CI could not test it) | 120 s | 60 s × 5 |
+| `broker` | `docker/mosquitto/Dockerfile` | none | 30 s × 6 |
+
+`grafana` starts only after `influxdb` is healthy (`depends_on: condition: service_healthy`), so its alerts do not fire NoData while InfluxDB loads (#1365). When InfluxDB is recreated, `docker compose up` waits for it before it returns.
+
+### Automatic rollback
+
+When the gate fails, or `docker compose up` fails:
+
+- **Stateless services**: `deploy.sh` checks out the previous commit (compose file and config files), pulls the previous version's images, writes a new override pinned to them, and runs `up` again. The recreated services go through the gate again. **No data is restored**: that would throw away everything written since the deploy.
+- **A stateful service whose image changed** (labelled `homy.stateful: "true"`: `ha`, `z2m-home1`, `mongo`, `grafana`, `influxdb`): its data may already be migrated (HA recorder schema, zigbee2mqtt database, Mongo feature compatibility version, Grafana migrations), and the old image may not read it. The deploy **does not roll back at all**: it stops, sends a CRITICAL message with the snapshot name, and prints the recovery steps. The containers are left as they are, so a slow migration is not cut short.
+- A stateful service recreated only for a configuration change is rolled back with the rest.
+- The rollback target is the commit in `.deployed-version` (code, config and images of the last successful deploy). When that is not a commit SHA (for example `latest`, which may already point at the failed images), nothing is rolled back and a CRITICAL message is sent.
+
+**Blocked deploys.** When a failed deploy is not rolled back (a stateful image changed, the gate could not check, the previous version is unknown, or the rollback itself failed), `deploy.sh` writes `.deploy-blocked` with the reason, the snapshot and the recovery steps, and refuses to deploy until that file is removed. Without it, the next deploy would see nothing to recreate and report success on top of a broken service.
+
+**Going back after a stateful block.** The printed steps are, in this order:
+
+```bash
+# 1. restore the data from before the deploy, and leave the services stopped
+#    (started on the new image, they would migrate the data again)
+sudo ./scripts/restore-snapshot.sh --no-start --snapshot <snapshot> <services>
+# 2. the old code and config
+git -c submodule.recurse=false checkout <previous sha>
+git submodule update --init --recursive
+# 3. allow deploys again
+rm .deploy-blocked
+# 4. start everything the failed deploy changed on the old images
+./scripts/deploy.sh --tag <previous sha> --force
+```
+
+`--tag` does not update the code, which is why step 2 comes first. The other way out is to fix forward: remove `.deploy-blocked` and deploy a fixed version.
+
+The rollback never rolls back the ZFS dataset: it holds more than this stack.
+
+### Restoring data from a deploy snapshot
+
+`restore-snapshot.sh` is manual. It needs root, because the data belongs to several service users and must keep its owners.
+
+```bash
+sudo ./scripts/restore-snapshot.sh --list                 # the deploy snapshots
+sudo ./scripts/restore-snapshot.sh ha                     # from the last deploy's snapshot
+sudo ./scripts/restore-snapshot.sh --snapshot tank/homy@homy-deploy-20260925T101500Z-abc1234 influxdb mongo
+```
+
+It:
+
+1. finds the data directories of the named services (their writable bind mounts) and checks that each is in the snapshot and that the copy fits in the free space;
+2. shows the plan and **asks for confirmation**;
+3. stops **only** the services that use those directories (for example `automations` and `boiler-controller` share one), and checks that they stopped;
+4. renames each current directory to `<dir>.pre-restore-<UTC time>` (nothing is deleted) and copies the snapshot's copy from `<mountpoint>/.zfs/snapshot/<snapshot>/...` in its place;
+5. starts the services again, unless `--no-start` is given. If a copy fails, it moves the current data back and leaves the services stopped.
+
+A directory on a child dataset of the snapshot's dataset is refused: the parent's snapshot holds only an empty directory there.
+
+Delete the `.pre-restore-` directories by hand once the services work. Everything the restored services wrote since the snapshot is replaced.
+
+### Hosts without docker compose v2
+
+`deploy.sh` requires the `docker compose` v2 plugin and stops before touching anything when it only finds `docker-compose` 1.x: 1.x cannot report health through `ps --format json`, and a gate that cannot check must not pass (#1545). `rollback.sh` uses the same gate, so on such a host it reports the rollback as failed instead of healthy.
 
 ### Where state lives, and `down`
 
@@ -186,7 +330,7 @@ Every service with state keeps it in a host directory under `${DATA_PATH}` (a bi
 | `mongo` | `${DATA_PATH}/mongodb/db`, `${DATA_PATH}/mongodb/configdb` (owned by 999:999) | `/data/db`, `/data/configdb` |
 | `broker` | `${DATA_PATH}/mosquitto/data`, `${DATA_PATH}/mosquitto/log` | `/mosquitto/data`, `/mosquitto/log` |
 
-Why: an image that declares `VOLUME /x` gets an unnamed Docker volume unless the service mounts exactly `/x`. `docker compose up -d` keeps such a volume, but `docker compose down` does not. Until 2026-09-25 this made every `down` start MongoDB from an empty database and drop the broker's retained messages. A CI test (`scripts/compose-volumes.test.mjs`) now fails if any service has an unnamed volume.
+Why: an image that declares `VOLUME /x` gets an unnamed Docker volume unless the service mounts exactly `/x`. `docker compose up -d` keeps such a volume, but `docker compose down` does not. Until 2026-09-25 this made every `down` start MongoDB from an empty database and drop the broker's retained messages. A CI test (`scripts/compose-volumes.test.mjs`) now fails if any service has an unnamed volume, and `snapshot.sh` refuses to snapshot while a running container has one.
 
 With the bind mounts, `docker compose down` keeps the data. **Never use `docker compose down -v`.** To stop a stateful service for a moment, prefer `docker compose stop <service>`.
 
@@ -208,6 +352,8 @@ Deploy a specific git SHA or branch:
 ./scripts/deploy.sh --tag latest         # Latest from master
 ```
 
+With `--tag`, the code is not updated: the images of that tag run with the compose file already checked out.
+
 ### Force Redeploy
 
 Redeploy the current version (e.g., after configuration changes):
@@ -217,43 +363,30 @@ Redeploy the current version (e.g., after configuration changes):
 ./scripts/deploy.sh -t abc1234 -f        # Force specific version
 ```
 
-### Rollback
+A forced redeploy recreates only the services whose configuration (or config files) changed.
 
-#### Automatic Rollback
+### Deploys that restart a device or port holder
 
-The deploy script automatically rolls back if services are unhealthy after deployment.
+`influxdb`, `broker`, `z2m-home1`, `vpn` and the Modbus pollers hold host ports or USB/serial devices, so a second copy cannot run beside the old one. When their image or configuration changes, that deploy restarts them; for InfluxDB that is about 2 minutes. Such deploys are rare and should be announced.
 
-#### Manual Rollback
+### Manual Rollback from a volman backup
 
-Use the most recent pre-upgrade backup:
-
-```bash
-./scripts/rollback.sh
-```
-
-The rollback script automatically:
-- Restores databases from the most recent backup
-- Rolls back to the previous version (saved in `.previous-version` file during deployment)
-- Falls back to git history calculation if version file doesn't exist
-
-Rollback to a specific backup:
+`rollback.sh` restores the databases from a volman backup and starts the previous version. It stops the whole stack and loses everything written since that backup; prefer `restore-snapshot.sh` for one service.
 
 ```bash
-./scripts/rollback.sh 2026_01_17_14_30_00
+./scripts/rollback.sh                        # the most recent backup (.pre-upgrade-backup)
+./scripts/rollback.sh 2026_01_17_14_30_00    # a specific backup
+./scripts/rollback.sh --list                 # list backups
 ```
 
-List available backups:
-
-```bash
-./scripts/rollback.sh --list
-```
+It rolls back to the version in `.previous-version`, falling back to git history when that file does not exist.
 
 ### Manual Backup and Restore
 
 For maintenance or migration, you can backup and restore independently:
 
 ```bash
-# Create a backup before maintenance
+# Create a backup before maintenance (the stack is down for about an hour)
 ./scripts/backup.sh -s maintenance-backup
 
 # ... perform maintenance ...
@@ -278,9 +411,8 @@ Error response from daemon: invalid config for network homy_ingress:
 user specified IP address is supported only when connecting to networks with user configured subnets
 ```
 
-Because `deploy.sh` has already run `backup.sh --stop` by then, this leaves the
-whole stack down, and its emergency handler retries the identical failing
-command. Deploy such a change by hand instead:
+`deploy.sh` treats the failed `up` as a failed deploy and rolls back, but the
+change cannot be applied that way. Deploy such a change by hand instead:
 
 ```bash
 # 1. Add any new variables to .env FIRST, and confirm nothing is unset.
@@ -293,7 +425,7 @@ docker compose stop ingress ha grafana z2m-home1 mongo-express
 docker network rm homy_ingress
 
 # 4. Bring them back; compose recreates the network from the compose file.
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d
 ```
 
 Required variables use the `${VAR:?message}` form, so step 1 fails loudly and
@@ -334,6 +466,8 @@ Each push to master creates images with multiple tags:
 - `ghcr.io/groupsky/homy/SERVICE:SHORT_SHA` - First 7 characters of SHA
 - `ghcr.io/groupsky/homy/SERVICE:latest` - Most recent build
 
+A service whose image did not change is retagged with the new SHA; the retag copies the manifest, so its digest stays the same. `deploy.sh` relies on that.
+
 ### Manual Image Pull
 
 To manually pull a specific version:
@@ -346,25 +480,26 @@ IMAGE_TAG=abc1234 docker compose pull automations mqtt-influx
 
 ### Understanding Data Loss on Rollback
 
-When rolling back:
-1. **Code rollback** is straightforward - use older image
-2. **Database rollback** restores from pre-upgrade backup
+A failed deploy rolls back **code and images only**. Data is never rolled back automatically, so nothing written since the deploy is lost.
 
-**This means any data written after the upgrade will be lost.**
+Restoring data is a separate, manual decision:
+
+- `restore-snapshot.sh` restores chosen services from the deploy snapshot; only what those services wrote since the deploy is replaced.
+- `rollback.sh` restores the whole stack from a volman backup; everything written since that backup is lost.
 
 ### Database Types and Impact
 
-| Database | Type | Rollback Impact | Notes |
+| Database | Type | Impact of a restore | Notes |
 |----------|------|-----------------|-------|
-| InfluxDB | Time-series | Lose sensor readings since upgrade | Sensors will refill data |
-| MongoDB | Document | Lose historical records | Non-critical for operation |
-| HA SQLite | Config/state | Lose state changes | Automations reset cleanly |
+| InfluxDB | Time-series | Lose sensor readings since the snapshot/backup | Index may be rebuilt on start after a snapshot restore |
+| MongoDB | Document | Lose historical records | Journal recovery on start |
+| HA SQLite | Config/state | Lose state changes | WAL replay on start |
 
-### When Rollback is Acceptable
+### When a Data Restore is Acceptable
 
-Rollback is designed for emergency situations where:
-- Services are broken and unrecoverable
-- A critical bug was introduced
+A data restore is for emergencies where:
+- A stateful service cannot start on its migrated data
+- A critical bug corrupted data
 - System stability is more important than recent data
 
 For most home automation use cases, losing a few hours of sensor data is acceptable to restore system functionality.
@@ -388,6 +523,15 @@ IMAGE_TAG=abc1234
 
 **Note:** The CI workflow creates SHA-based tags only (full SHA, short SHA, and `latest`). Semantic version tags (v1.2.3) are not automatically created.
 
+Deploy tuning (environment of `deploy.sh`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SNAPSHOT_MIN_FREE_GB` | 20 | Refuse the snapshot when the pool has less free space (GiB) |
+| `HEALTH_STABLE_SECONDS` | 30 | A service without a healthcheck passes after running this long without a restart |
+| `HEALTH_POLL_INTERVAL` | 5 | Seconds between health checks |
+| `HEALTH_GATE_MARGIN` | 60 | Seconds added to the gate's time limit |
+
 ### Docker Compose Dual-Mode
 
 The docker-compose.yml supports both modes:
@@ -406,12 +550,20 @@ services:
 
 ### Deployment Logs
 
-Deployment logs are stored in `logs/deploy-*.log`:
+Deployment logs are stored in `logs/deploy-*.log`. They include the snapshot name, the services compose was expected to recreate, the ones it did recreate, and each service's health result:
 
 ```bash
 # View most recent deployment log
 ls -lt logs/deploy-*.log | head -1 | xargs cat
 ```
+
+### Snapshot Failures
+
+```bash
+./scripts/snapshot.sh --check
+```
+
+names what is wrong: data on more than one dataset, a directory not on ZFS, a Docker volume holding state, too little free space, or a missing `zfs allow ... snapshot` permission.
 
 ### Health Check Failures
 
@@ -422,9 +574,10 @@ If deployment fails due to health check:
    docker compose logs automations mqtt-influx
    ```
 
-2. Check container status:
+2. Check container status and health:
    ```bash
    docker compose ps
+   docker inspect --format '{{json .State.Health}}' <container>
    ```
 
 3. Review the deployment log for specific errors
@@ -451,7 +604,7 @@ If GHCR pull fails:
 
 ### Backup Issues
 
-List available backups:
+List available backups (with `complete` / `INCOMPLETE`):
 
 ```bash
 ./scripts/backup.sh --list
@@ -478,20 +631,25 @@ Direct volman commands (advanced):
 ```bash
 docker compose run --rm volman list
 docker compose run --rm volman backup
+docker compose run --rm volman seal BACKUP_NAME stopped
 docker compose run --rm volman restore BACKUP_NAME
 ```
 
 ## Prerequisites
 
-The following tools must be installed on the production server:
+The following must be in place on the production server:
 
-| Tool | Purpose | Installation |
+| Requirement | Purpose | Installation |
 |------|---------|--------------|
 | docker | Container runtime | https://docs.docker.com/engine/install/ |
-| docker compose | Container orchestration | Included with Docker Desktop or install plugin |
+| docker compose **v2** (plugin) | Orchestration, `--no-build`/`--pull never`, the health gate | https://docs.docker.com/compose/install/linux/ |
 | git | Version control | `apt install git` |
-| jq | JSON processing for health checks | `apt install jq` |
+| jq | JSON processing for the override and the health gate | `apt install jq` |
 | curl | API requests (notifications) | `apt install curl` |
+| ZFS | The stack's data on **one** dataset | host setup |
+| `zfs allow <deploy user> snapshot <dataset>` | Deploy snapshots without sudo | host setup |
+| Pruning of `@homy-deploy-*` snapshots | Snapshots are never destroyed by these scripts | host setup |
+| No cron job that runs `docker compose start` | It would restart services behind the deploy's and `backup.sh --stop`'s back (#1589) | host setup |
 
 ## Pre-Deployment Checklist
 
@@ -500,10 +658,10 @@ Before deploying to production:
 1. [ ] All tests pass in CI
 2. [ ] App images built and pushed to GHCR
 3. [ ] GHCR authentication configured on production server
-4. [ ] All prerequisites installed (docker, jq, git, curl)
-5. [ ] Sufficient disk space for backup
+4. [ ] All prerequisites installed (docker compose v2, jq, git, curl)
+5. [ ] `./scripts/snapshot.sh --check` passes
 6. [ ] Telegram notifications configured (optional)
-7. [ ] No critical processes running that require uninterrupted service
+7. [ ] A deploy that changes `influxdb`, `broker`, `z2m-home1`, `vpn` or a Modbus poller is announced
 
 ## Post-Deployment Verification
 
@@ -518,9 +676,9 @@ After successful deployment:
 
 The deployment scripts send Telegram notifications for:
 
-- Successful deployments
-- Deployment failures
-- Rollback completion
+- Successful deployments (with the recreated services and the snapshot name)
+- Deployment failures, including a snapshot that failed and a health gate that could not check
+- Rollback completion, and CRITICAL messages when a stateful service is left for a manual restore or the rollback itself fails
 
 Configure by creating the secrets:
 

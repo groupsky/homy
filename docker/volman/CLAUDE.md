@@ -44,6 +44,7 @@ Backups are stored in timestamped directories:
 ```
 ${BACKUP_PATH}/
 ├── 2026_01_18_14_30_00/
+│   ├── COMPLETE             # Manifest, written last (see below)
 │   ├── ha.tar               # Home Assistant config
 │   ├── mongo.archive.gz     # MongoDB mongodump (streamed in by `volman store`)
 │   ├── influxdb.tar         # InfluxDB time-series
@@ -57,15 +58,27 @@ ${BACKUP_PATH}/
 
 ### Expected Backup Sizes
 
-- **Typical backup**: 900 MB - 2.5 GB (depends on InfluxDB retention)
+Measured on routy on 2026-09-09 (backup `2026_09_09_06_44_27`):
+
+- **Whole backup**: about **100 GiB**, taking about **62 minutes**. It is almost all InfluxDB, and it grows with InfluxDB's retention (#1371).
 - **Individual volumes**:
-  - `ha`: ~50-200 MB (config + entity registry + history)
-  - `mongo.archive.gz`: compressed dump of the app database
-  - `influxdb`: ~500-2000 MB (time-series data, varies by retention)
-  - `grafana`: ~5-20 MB (dashboards, alerts, users)
-  - `z2m-home1`: ~1-5 MB (device database, network state)
-  - `wireguard`: <1 MB (peer configs)
-  - `automations-state`: ~1-10 MB (bot state files)
+  - `influxdb`: **99.5 GiB** (106,799,616,000 bytes; the live directory is about 83 GiB on disk), about 60 minutes to tar
+  - `ha`: ~600 MiB (630,056,960 bytes)
+  - `mongo.archive.gz`: compressed dump of the app database (the old `mongo.tar` was ~1.35 GiB)
+  - `grafana`: ~40 MiB
+  - `z2m-home1`: <1 MiB
+  - `wireguard`: <1 MiB
+  - `automations-state`: <1 MiB
+
+Budget disk for backups accordingly: each kept backup costs about 100 GiB.
+
+Checking the size by hand: the InfluxDB files belong to the container's user, so a plain `du -sh data/influxdb` as the login user shows only what it can read (a few MB) while permission errors scroll past. Use `sudo du -sh`.
+
+### Completeness Marker
+
+`volman backup` writes only the `.tar` files. `backup.sh` adds the Mongo dump and then runs `volman seal <name> stopped|running`, which writes `COMPLETE`: one `file=<name>\t<bytes>\t<time>` line per file, `sealed_at=` and `services=stopped|running`. `seal` refuses a backup that lacks any volume in `VOLUMES`.
+
+`volman restore` refuses, **before extracting anything**, a backup without `COMPLETE` or one whose manifest does not list a volume it is asked to restore, and names the missing volumes. It warns when the backup was taken with the services running. `volman list` shows `complete` or `INCOMPLETE` and the number of volume archives for each backup. Backups made before the marker existed are all refused.
 
 ## Usage
 
@@ -77,12 +90,15 @@ ${BACKUP_PATH}/
 # Creates timestamped backup: backup/YYYY_MM_DD_HH_MM_SS/
 ```
 
-**Safe backup** (stops services first, recommended):
+**Safe backup** (stops services first, recommended; the stack is down for about an hour):
 ```bash
 ./scripts/backup.sh -s -y
-# -s: Stop services before backup
+# -s: Stop services before backup; fails if a container is still running
+#     after the stop, or starts while the files are copied
 # -y: Auto-confirm (no prompt)
 ```
+
+Deploys do not use volman any more: they take a ZFS snapshot instead (see `docs/DEPLOYMENT.md`).
 
 **Named backup**:
 ```bash
@@ -216,10 +232,10 @@ du -sh backup/
 # Check individual backup sizes
 du -sh backup/*/ | sort -h
 
-# Alert if backup size exceeds threshold
+# Alert if backup size exceeds threshold (a normal backup is ~100 GiB)
 BACKUP_SIZE=$(du -sm backup/latest | cut -f1)
-if [ $BACKUP_SIZE -gt 3000 ]; then
-  echo "WARNING: Backup size ${BACKUP_SIZE}MB exceeds 3GB threshold"
+if [ $BACKUP_SIZE -gt 150000 ]; then
+  echo "WARNING: Backup size ${BACKUP_SIZE}MB exceeds 150 GB threshold"
 fi
 ```
 
@@ -237,6 +253,7 @@ fi
 - [ ] Backup encryption (GPG or age)
 - [ ] Remote backup upload (S3, rsync)
 - [ ] Incremental backups (rsync, restic)
-- [ ] Backup verification tests
+- [x] Completeness marker (`seal`), checked by `restore` (#1590)
+- [ ] Backup verification tests (a restore actually exercised)
 - [ ] Restore dry-run mode
 - [ ] Prometheus metrics for backup monitoring

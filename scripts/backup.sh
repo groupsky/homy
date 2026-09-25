@@ -41,7 +41,9 @@ Arguments:
 Options:
   -h, --help          Show this help message and exit
   -l, --list          List available backups and exit
-  -s, --stop          Stop services before backup (recommended for consistency)
+  -s, --stop          Stop services before backup (recommended for consistency).
+                      Fails if any container is still running, or starts
+                      while the files are copied
   -y, --yes           Skip confirmation prompt
   -q, --quiet         Suppress output except errors (for scripting)
 
@@ -55,6 +57,9 @@ Notes:
   - Backups are stored in the backup volume mounted by volman
   - Use 'rollback.sh --list' or 'restore.sh --list' to see available backups
   - For consistent backups, use --stop to stop services first
+  - A backup gets its COMPLETE marker only when every volume and the MongoDB
+    dump are in; restore.sh refuses a backup without it
+  - InfluxDB alone is about 100 GB and takes about an hour to copy
 
 EOF
     exit 0
@@ -143,12 +148,35 @@ fi
 
 # Stop services if requested
 # Note: Use local variable instead of global SERVICES_STOPPED to avoid
-# interfering with emergency restart trap when called from deploy.sh with --no-lock
+# interfering with emergency restart trap when called with --no-lock
 SERVICES_STOPPED_LOCAL=0
+STATE_BEFORE=""
+
+restart_stopped_services() {
+    if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+        log "Restarting services..."
+        dc_run start || error "Failed to restart services - manual intervention required"
+    fi
+}
+
 if [ "$STOP_SERVICES" -eq 1 ]; then
     log "Stopping services for consistent backup..."
     dc_run stop
     SERVICES_STOPPED_LOCAL=1
+
+    # --stop is a request: something else (a cron job, a restart policy) can
+    # start a container again. Check, and never tar a running database (#1589).
+    if ! STATE_BEFORE=$(stack_run_state); then
+        error "Could not check that the services stopped; not backing up"
+        restart_stopped_services
+        exit 1
+    fi
+    STILL_RUNNING=$(awk -F'\t' '$2 == "true" { print $1 }' <<<"$STATE_BEFORE")
+    if [ -n "$STILL_RUNNING" ]; then
+        error "Still running after stop; not backing up:" $STILL_RUNNING
+        restart_stopped_services
+        exit 1
+    fi
 fi
 
 # Run backup
@@ -159,13 +187,7 @@ BACKUP_ARGS=()
 if ! BACKUP_OUTPUT=$(dc_run run --rm volman backup "${BACKUP_ARGS[@]}" 2>&1); then
     error "Backup failed"
     echo "$BACKUP_OUTPUT" >&2
-    # Restart services if we stopped them
-    if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
-        log "Restarting services after backup failure..."
-        if ! dc_run start; then
-            error "Failed to restart services - manual intervention required"
-        fi
-    fi
+    restart_stopped_services
     exit 1
 fi
 
@@ -175,34 +197,48 @@ if [ -z "$ACTUAL_BACKUP_NAME" ]; then
     ACTUAL_BACKUP_NAME=$(date +%Y_%m_%d_%H_%M_%S)
 fi
 
-# Save backup reference
+# The copy is consistent only if nothing started while it ran: the same
+# containers, none running, none started since the check above.
+if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+    if ! STATE_AFTER=$(stack_run_state) || [ "$STATE_AFTER" != "$STATE_BEFORE" ]; then
+        error "Containers started while backup $ACTUAL_BACKUP_NAME was being written; it is not consistent and is left without its COMPLETE marker"
+        diff <(echo "$STATE_BEFORE") <(echo "${STATE_AFTER:-}") >&2 || true
+        restart_stopped_services
+        exit 1
+    fi
+fi
+
 # MongoDB: a tar of a running mongod is not consistent, so dump it instead.
 # The dump streams through volman into the backup directory.
 if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
     if ! dc_run start mongo; then
         error "Could not start mongo for the dump"
-        dc_run start || error "Failed to restart services - manual intervention required"
+        restart_stopped_services
         exit 1
     fi
 fi
 if ! backup_mongo "$ACTUAL_BACKUP_NAME"; then
     error "MongoDB dump failed"
-    if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
-        dc_run start || error "Failed to restart services - manual intervention required"
-    fi
+    restart_stopped_services
     exit 1
 fi
 
-# Only a complete backup (files and dump) becomes the one rollback points at
+# The COMPLETE manifest is what restore requires (#1590): written only now,
+# after every volume and the dump are in.
+SEAL_MODE=running
+[ "$SERVICES_STOPPED_LOCAL" -eq 1 ] && SEAL_MODE=stopped
+if ! dc_run run --rm volman seal "$ACTUAL_BACKUP_NAME" "$SEAL_MODE" >&2; then
+    error "Could not write the COMPLETE marker of backup $ACTUAL_BACKUP_NAME"
+    restart_stopped_services
+    exit 1
+fi
+
+# Only a complete backup (files, dump and marker) becomes the one rollback points at
 save_backup_reference "$ACTUAL_BACKUP_NAME"
 
 log "Backup created: $ACTUAL_BACKUP_NAME"
 
-# Restart services if we stopped them
-if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
-    log "Restarting services..."
-    dc_run start
-fi
+restart_stopped_services
 
 # Output backup name for scripting
 if [ "$QUIET" -eq 1 ]; then

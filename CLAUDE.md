@@ -34,7 +34,7 @@ docker compose up -d --build automations
 **Create Backup:**
 ```bash
 ./scripts/backup.sh                    # Auto-timestamped backup
-./scripts/backup.sh -s -y              # Stop services first (recommended)
+./scripts/backup.sh -s -y              # Stop services first (recommended; ~1 hour, InfluxDB is ~100 GB)
 ./scripts/backup.sh my-backup-name     # Named backup
 ```
 
@@ -56,7 +56,7 @@ For detailed documentation, see `docker/volman/CLAUDE.md`.
 
 ### Deployment Scripts Testing
 
-Deployment scripts (`backup.sh`, `restore.sh`, `deploy.sh`, `rollback.sh`) have comprehensive BATS (Bash Automated Testing System) test coverage to ensure reliability and prevent regressions.
+Deployment scripts (`deploy.sh`, `snapshot.sh`, `restore-snapshot.sh`, `backup.sh`, `restore.sh`, `rollback.sh`) and volman's entrypoint have comprehensive BATS (Bash Automated Testing System) test coverage to ensure reliability and prevent regressions. How a deploy works (snapshot, only changed services recreated, health gate, rollback) is in `docs/DEPLOYMENT.md`.
 
 **Run All Tests:**
 ```bash

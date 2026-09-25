@@ -129,6 +129,9 @@ services:
       - ${HOMEASSISTANT_CONFIG}/energy.json:/config/.storage/energy:ro
       - ${SECRETS_PATH}/ha_secrets.yaml:/config/secrets.yaml:ro
       - ./docker/homeassistant/custom_components/sunseeker-lawn-mower/custom_components/sunseeker:/config/custom_components/sunseeker:ro
+    labels:
+      # Recorder schema migrates forward only (scripts/deploy.sh)
+      homy.stateful: "true"
     logging: *default-logging
 
   z2m-home1:
@@ -169,6 +172,19 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ${Z2M_HOME1_DATA_PATH}:/app/data
     user: ${PUID}:${PGID}
+    # Here and not in the Dockerfile: the image cannot start without its
+    # adapter, so CI's standalone healthcheck test could never pass.
+    # 120 s start period for the coordinator to initialise.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      retries: 5
+    labels:
+      # Data format migrates forward only: a failed deploy never rolls its
+      # image back (scripts/deploy.sh)
+      homy.stateful: "true"
     logging: *default-logging
 
   mongo:
@@ -191,6 +207,9 @@ services:
       # them as unnamed volumes that `down` threw away.
       - ${DATA_PATH}/mongodb/db:/data/db
       - ${DATA_PATH}/mongodb/configdb:/data/configdb
+    labels:
+      # Feature compatibility version migrates forward only (scripts/deploy.sh)
+      homy.stateful: "true"
     logging: *default-logging
 
   mongo-express:
@@ -561,6 +580,9 @@ services:
       - ${INFLUXDB_CONFIG_FILE}:/etc/influxdb/influxdb.conf:ro
       - ${DATA_PATH}/influxdb:/var/lib/influxdb
       - /etc/localtime:/etc/localtime:ro
+    labels:
+      # Storage engine files are not rolled back with the image (scripts/deploy.sh)
+      homy.stateful: "true"
     logging: *default-logging
 
   grafana:
@@ -569,8 +591,11 @@ services:
       context: docker/grafana
       args:
         GF_INSTALL_IMAGE_RENDERER_PLUGIN: 'false'
+    # Wait for InfluxDB to answer, or every alert evaluates against a dead
+    # datasource and fires NoData (#1365)
     depends_on:
-      - influxdb
+      influxdb:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - automation
@@ -600,6 +625,9 @@ services:
       - ${GRAFANA_DATA_PATH}:/var/lib/grafana
       - /etc/localtime:/etc/localtime:ro
     user: ${PUID}:${PGID}
+    labels:
+      # Database migrations do not run backwards (scripts/deploy.sh)
+      homy.stateful: "true"
     logging: *default-logging
 
   telegram-bridge:
