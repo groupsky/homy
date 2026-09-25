@@ -489,3 +489,103 @@ second line"
         [ "$(sed -n 2p "$JOURNAL_FILE" | jq -r .text)" = "x" ]
     done
 }
+
+# Test: resolve_secrets_dir / load_notification_secrets
+@test "resolve_secrets_dir: defaults to secrets/ in the project" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH
+    assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/secrets"
+}
+
+@test "resolve_secrets_dir: environment wins over .env" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    echo 'SECRETS_PATH=./from-env-file' > "$PROJECT_DIR/.env"
+    SECRETS_PATH=/abs/from-env
+    assert_equal "$(resolve_secrets_dir)" "/abs/from-env"
+}
+
+@test "resolve_secrets_dir: reads a relative path from .env, relative to the project" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH
+    printf 'OTHER=1\nSECRETS_PATH=./secrets.local\nMORE=2\n' > "$PROJECT_DIR/.env"
+    assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/secrets.local"
+}
+
+@test "resolve_secrets_dir: handles quotes, CRLF and an absolute path in .env" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH
+    printf 'SECRETS_PATH="/srv/my secrets"\r\n' > "$PROJECT_DIR/.env"
+    assert_equal "$(resolve_secrets_dir)" "/srv/my secrets"
+}
+
+@test "resolve_secrets_dir: ignores a value with a dollar sign" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH
+    echo 'SECRETS_PATH=${SECRETS_PATH:-./secrets}' > "$PROJECT_DIR/.env"
+    assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/secrets"
+}
+
+@test "resolve_secrets_dir: ignores an empty value and a missing .env line" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH
+    echo 'SECRETS_PATH=' > "$PROJECT_DIR/.env"
+    assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/secrets"
+    echo 'FOO=bar' > "$PROJECT_DIR/.env"
+    assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/secrets"
+}
+
+@test "load_notification_secrets: takes the real files from SECRETS_PATH in .env, not the placeholders" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+    mkdir -p "$PROJECT_DIR/secrets.local"
+    echo "placeholder text" > "$PROJECT_DIR/secrets/telegram_bot_token"
+    echo "placeholder text" > "$PROJECT_DIR/secrets/telegram_chat_id"
+    echo "real-token" > "$PROJECT_DIR/secrets.local/telegram_bot_token"
+    echo "real-chat" > "$PROJECT_DIR/secrets.local/telegram_chat_id"
+    echo 'SECRETS_PATH=./secrets.local' > "$PROJECT_DIR/.env"
+
+    load_notification_secrets
+
+    assert_equal "$TELEGRAM_BOT_TOKEN" "real-token"
+    assert_equal "$TELEGRAM_CHAT_ID" "real-chat"
+}
+
+@test "resolve_secrets_dir: the last SECRETS_PATH line wins, like compose" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH
+    printf 'SECRETS_PATH=./first\nSECRETS_PATH=./second\n' > "$PROJECT_DIR/.env"
+    assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/second"
+}
+
+@test "resolve_secrets_dir: export prefix, spaces around =, trailing spaces and comments" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH
+    for line in 'export SECRETS_PATH=./x' '  SECRETS_PATH = ./x' 'SECRETS_PATH=./x   ' 'SECRETS_PATH=./x # comment' 'SECRETS_PATH="./x" # c' "SECRETS_PATH='./x'"; do
+        printf '%s\n' "$line" > "$PROJECT_DIR/.env"
+        assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/x"
+    done
+}
+
+@test "resolve_secrets_dir: a relative value in the environment is relative to the project; ~ is home" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    SECRETS_PATH=./rel
+    assert_equal "$(resolve_secrets_dir)" "$PROJECT_DIR/rel"
+    SECRETS_PATH='~/sec'
+    assert_equal "$(resolve_secrets_dir)" "$HOME/sec"
+}
+
+@test "resolve_secrets_dir: is safe under set -euo pipefail with no matching .env line" {
+    unset SECRETS_PATH
+    echo 'FOO=1' > "$PROJECT_DIR/.env"
+    run bash -c 'set -euo pipefail; PROJECT_DIR="$1"; source "$2"; resolve_secrets_dir' _ "$PROJECT_DIR" "$PROJECT_DIR/docker-helper.sh"
+    assert_success
+    assert_output "$PROJECT_DIR/secrets"
+}
+
+@test "load_notification_secrets: says where it looked when the files are missing, without printing secrets" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    unset SECRETS_PATH TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+    run load_notification_secrets
+    assert_success
+    assert_output --partial "Telegram secrets not found in $PROJECT_DIR/secrets"
+}

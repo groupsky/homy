@@ -507,3 +507,5 @@ Configure by creating the secrets:
 echo "your-bot-token" > secrets/telegram_bot_token
 echo "your-chat-id" > secrets/telegram_chat_id
 ```
+
+The scripts read them from the directory named by `SECRETS_PATH` (environment, else the `SECRETS_PATH=` line in `.env`, else `secrets/`), the same directory `docker-compose.yml` uses. Each message is also recorded as a `telegram.sent` JSON line: `journalctl -t homy-deploy` (`-t homy-rollback` for rollbacks).
