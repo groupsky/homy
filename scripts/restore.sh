@@ -2,7 +2,7 @@
 #
 # Restore Script
 #
-# Restores databases from a backup (InfluxDB, MongoDB, Home Assistant).
+# Restores volumes from a backup (InfluxDB, Home Assistant, ...). MongoDB is a dump, restored by hand.
 #
 
 set -euo pipefail
@@ -33,7 +33,7 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS] [BACKUP_NAME]
 
-Restore databases from a backup (InfluxDB, MongoDB, Home Assistant).
+Restore volumes from a backup (InfluxDB, Home Assistant, ...). MongoDB is a dump, restored by hand.
 
 Arguments:
   BACKUP_NAME         Name of backup to restore (format: YYYY_MM_DD_HH_MM_SS)
@@ -138,7 +138,7 @@ if [ "$QUIET" -eq 0 ]; then
     echo ""
     echo "  This will restore:"
     echo "    - InfluxDB data"
-    echo "    - MongoDB data"
+    echo "    - (MongoDB is not restored here: see docs/DEPLOYMENT.md)"
     echo "    - Home Assistant configuration"
     echo ""
     echo "  ⚠️  WARNING: Any data written after the backup will be LOST!"

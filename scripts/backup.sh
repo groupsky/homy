@@ -130,7 +130,7 @@ if [ "$QUIET" -eq 0 ]; then
     echo ""
     echo "  This will backup:"
     echo "    - InfluxDB data"
-    echo "    - MongoDB data"
+    echo "    - MongoDB (mongodump archive)"
     echo "    - Home Assistant configuration"
     echo ""
     echo "═══════════════════════════════════════════════════════════════"
@@ -176,6 +176,24 @@ if [ -z "$ACTUAL_BACKUP_NAME" ]; then
 fi
 
 # Save backup reference
+# MongoDB: a tar of a running mongod is not consistent, so dump it instead.
+# The dump streams through volman into the backup directory.
+if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+    if ! dc_run start mongo; then
+        error "Could not start mongo for the dump"
+        dc_run start || error "Failed to restart services - manual intervention required"
+        exit 1
+    fi
+fi
+if ! backup_mongo "$ACTUAL_BACKUP_NAME"; then
+    error "MongoDB dump failed"
+    if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
+        dc_run start || error "Failed to restart services - manual intervention required"
+    fi
+    exit 1
+fi
+
+# Only a complete backup (files and dump) becomes the one rollback points at
 save_backup_reference "$ACTUAL_BACKUP_NAME"
 
 log "Backup created: $ACTUAL_BACKUP_NAME"

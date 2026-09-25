@@ -96,6 +96,10 @@ services:
       - "1883:1883"
     volumes:
       - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
+      # The image declares both as VOLUMEs; without a mount here docker makes
+      # unnamed volumes that `down` throws away with the retained messages.
+      - ${DATA_PATH}/mosquitto/data:/mosquitto/data
+      - ${DATA_PATH}/mosquitto/log:/mosquitto/log
     logging: *default-logging
 
   ha:
@@ -183,7 +187,10 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD_FILE=/run/secrets/mongo_root_password
       - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
     volumes:
-      - ${MONGO_DATA_PATH}:/data
+      # Both paths are VOLUMEs of the image; mounting /data (as before) left
+      # them as unnamed volumes that `down` threw away.
+      - ${DATA_PATH}/mongodb/db:/data/db
+      - ${DATA_PATH}/mongodb/configdb:/data/configdb
     logging: *default-logging
 
   mongo-express:
@@ -1090,12 +1097,11 @@ services:
       - TZ=${TZ}
       - BACKUP_ROOT=/backup
       - VOLUMES_ROOT=/volumes
-      - VOLUMES=ha mongo influxdb grafana z2m-home1 wireguard automations-state
+      - VOLUMES=ha influxdb grafana z2m-home1 wireguard automations-state
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${BACKUP_PATH}:/backup
       - ${HOMEASSISTANT_DATA_PATH}:/volumes/ha
-      - ${MONGO_DATA_PATH}:/volumes/mongo
       - ${DATA_PATH}/influxdb:/volumes/influxdb
       # Extended backup coverage for critical data
       - ${GRAFANA_DATA_PATH}:/volumes/grafana
