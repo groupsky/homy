@@ -82,7 +82,7 @@ module.exports = function createIoniqDtc (name, config) {
             `${escapeHtml(code)} (${persistedCache.stored.includes(code) ? 'stored' : 'pending'})`)
           const message = `🚗 <b>DTC present</b>: ${parts.join(', ')}`
           try {
-            await httpPost(telegramWebhookUrl, { message })
+            await httpPost(telegramWebhookUrl, { source: name, message })
           } catch (err) {
             log('direct-flag POST failed:', err && err.message)
           }

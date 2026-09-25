@@ -225,6 +225,18 @@ The service provides structured console logging with emojis for visual parsing:
 - ✅ Success operations
 - ❌ Error conditions
 
+### Sent-message log
+
+Every Bot API call writes one JSON line to stdout (`docker logs telegram-bridge`), for successes and failures, with the full text. The Bot API cannot list what a bot sent, so this is the only history:
+
+```json
+{"event":"telegram.sent","sender":"telegram-bridge","source":"grafana","origin_host":"routy","ok":true,"message_id":4711,"error":null,"text":"<full text as sent>"}
+```
+
+- `source` is what asked for the message: a `source` string in the JSON body, or a `?source=` query parameter; default `grafana`. The `ioniq-dtc` bot sends `source: "ioniq-dtc"`.
+- `error` is the Bot API `description`, or the transport error. No chat id, and the bot token is stripped from errors.
+- Code: `src/sent-log.js`. Search: `docker logs telegram-bridge | grep '"event":"telegram.sent"'`.
+
 ### Debug Logging
 
 The service uses the [`debug`](https://www.npmjs.com/package/debug) package for detailed logging. Enable debug output with the `DEBUG` environment variable:

@@ -184,16 +184,49 @@ confirm() {
 # Notification function for Telegram (optional)
 # Usage: notify "message"
 # Requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to be set
+#
+# Each Bot API call is recorded as one JSON line in the journal, tagged with
+# NOTIFY_SENDER (default homy-deploy; rollback.sh sets homy-rollback):
+#   journalctl -t homy-deploy
+# The Bot API cannot list what a bot sent, so this line is the only history.
+# The line has the full text and never the bot token or the chat id.
+# Never fails the caller: a notification problem must not stop a deploy.
 notify() {
     local message="$1"
+    local sender="${NOTIFY_SENDER:-homy-deploy}"
 
-    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
-        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="$message" \
-            -d parse_mode="HTML" \
-            > /dev/null 2>&1 || true
+    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+        return 0
     fi
+
+    # No -f: on an API error the body carries the reason and is wanted.
+    # No -S: curl's own error text can echo the URL, which holds the token.
+    # --data-urlencode keeps & and + in the text intact.
+    local reply rc=0
+    reply=$(curl -s --max-time 30 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+        --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+        --data-urlencode "text=${message}" \
+        --data-urlencode "parse_mode=HTML" 2>/dev/null) || rc=$?
+
+    if command -v jq &> /dev/null && command -v systemd-cat &> /dev/null; then
+        jq -nc --arg sender "$sender" --arg text "$message" --arg reply "$reply" --arg rc "$rc" '
+            (try ($reply | fromjson) catch null | if type == "object" then . else {} end) as $r
+            | {
+                event: "telegram.sent",
+                sender: $sender,
+                source: null,
+                origin_host: "routy",
+                ok: ($r.ok == true),
+                message_id: (if $r.ok == true then (($r.result | objects | .message_id) // null) else null end),
+                error: (if $r.ok == true then null
+                        elif ($r.description | type) == "string" then $r.description
+                        elif $rc != "0" then "curl exit " + $rc
+                        else "unreadable reply from the Bot API" end),
+                text: $text
+            }' 2>/dev/null | systemd-cat -t "$sender" 2>/dev/null || true
+    fi
+
+    return 0
 }
 
 # Load Telegram notification secrets if available

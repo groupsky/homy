@@ -95,7 +95,7 @@ describe('ioniq-dtc bot — direct flag', () => {
     expect(config.httpPost).toHaveBeenCalledTimes(1)
     expect(config.httpPost).toHaveBeenCalledWith(
       'http://telegram-bridge:3000/webhook',
-      { message: '🚗 <b>DTC present</b>: P0AA6 (stored)' }
+      { source: 'ioniq-dtc', message: '🚗 <b>DTC present</b>: P0AA6 (stored)' }
     )
   })
 
@@ -129,10 +129,10 @@ describe('ioniq-dtc bot — direct flag', () => {
     expect(config.httpPost).toHaveBeenCalledTimes(2)
     expect(config.httpPost).toHaveBeenNthCalledWith(1,
       'http://telegram-bridge:3000/webhook',
-      { message: '🚗 <b>DTC present</b>: P0AA6 (stored)' })
+      { source: 'ioniq-dtc', message: '🚗 <b>DTC present</b>: P0AA6 (stored)' })
     expect(config.httpPost).toHaveBeenNthCalledWith(2,
       'http://telegram-bridge:3000/webhook',
-      { message: '🚗 <b>DTC present</b>: C1611 (pending)' })
+      { source: 'ioniq-dtc', message: '🚗 <b>DTC present</b>: C1611 (pending)' })
   })
 
   it('does not spuriously flag when one code clears while another persists', async () => {
@@ -152,7 +152,7 @@ describe('ioniq-dtc bot — direct flag', () => {
     await mqtt._trigger(STORED, { group: 'dtc/stored', state: 'active', ts: 1, codes: ['<b>&x'] })
     expect(config.httpPost).toHaveBeenCalledWith(
       'http://telegram-bridge:3000/webhook',
-      { message: '🚗 <b>DTC present</b>: &lt;b&gt;&amp;x (stored)' }
+      { source: 'ioniq-dtc', message: '🚗 <b>DTC present</b>: &lt;b&gt;&amp;x (stored)' }
     )
   })
 

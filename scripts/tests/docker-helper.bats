@@ -350,3 +350,142 @@ teardown() {
     run confirm "Test prompt"
     assert_success
 }
+
+# Test: notify
+# Mocks curl (records its arguments, answers with $CURL_REPLY, exits $CURL_RC)
+# and systemd-cat (appends stdin and its arguments to journal.log).
+setup_notify_mocks() {
+    mkdir -p "$TEST_DIR/bin"
+    cat > "$TEST_DIR/bin/curl" <<'MOCK'
+#!/bin/bash
+printf '%s\n' "$@" > "$CURL_ARGS_FILE"
+printf '%s' "${CURL_REPLY:-}"
+exit "${CURL_RC:-0}"
+MOCK
+    cat > "$TEST_DIR/bin/systemd-cat" <<'MOCK'
+#!/bin/bash
+echo "TAG:$*" >> "$JOURNAL_FILE"
+cat >> "$JOURNAL_FILE"
+MOCK
+    chmod +x "$TEST_DIR/bin/curl" "$TEST_DIR/bin/systemd-cat"
+    export PATH="$TEST_DIR/bin:$PATH"
+    export CURL_ARGS_FILE="$TEST_DIR/curl-args"
+    export JOURNAL_FILE="$TEST_DIR/journal.log"
+    export TELEGRAM_BOT_TOKEN="123:SECRET-TOKEN"
+    export TELEGRAM_CHAT_ID="-100999"
+}
+
+@test "notify: logs one telegram.sent line under the homy-deploy tag" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    export CURL_REPLY='{"ok":true,"result":{"message_id":4711}}'
+
+    run notify "Deployment successful"
+    assert_success
+
+    run cat "$JOURNAL_FILE"
+    assert_line --index 0 "TAG:-t homy-deploy"
+    line=$(sed -n 2p "$JOURNAL_FILE")
+    [ "$(jq -r .event <<<"$line")" = "telegram.sent" ]
+    [ "$(jq -r .sender <<<"$line")" = "homy-deploy" ]
+    [ "$(jq -r .source <<<"$line")" = "null" ]
+    [ "$(jq -r .origin_host <<<"$line")" = "routy" ]
+    [ "$(jq -r .ok <<<"$line")" = "true" ]
+    [ "$(jq -r .message_id <<<"$line")" = "4711" ]
+    [ "$(jq -r .error <<<"$line")" = "null" ]
+    [ "$(jq -r .text <<<"$line")" = "Deployment successful" ]
+    [ "$(wc -l < "$JOURNAL_FILE")" -eq 2 ]
+}
+
+@test "notify: NOTIFY_SENDER picks the tag and sender" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    export CURL_REPLY='{"ok":true,"result":{"message_id":1}}'
+    NOTIFY_SENDER=homy-rollback
+
+    notify "Rollback completed"
+
+    assert_equal "$(sed -n 1p "$JOURNAL_FILE")" "TAG:-t homy-rollback"
+    assert_equal "$(sed -n 2p "$JOURNAL_FILE" | jq -r .sender)" "homy-rollback"
+}
+
+@test "notify: an API error is logged with ok false and the description" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    export CURL_REPLY='{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}'
+
+    run notify "x"
+    assert_success
+
+    line=$(sed -n 2p "$JOURNAL_FILE")
+    [ "$(jq -r .ok <<<"$line")" = "false" ]
+    [ "$(jq -r .message_id <<<"$line")" = "null" ]
+    [ "$(jq -r .error <<<"$line")" = "Bad Request: chat not found" ]
+}
+
+@test "notify: a transport failure is logged and is not fatal" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    export CURL_REPLY='' CURL_RC=6
+
+    run notify "x"
+    assert_success
+
+    line=$(sed -n 2p "$JOURNAL_FILE")
+    [ "$(jq -r .ok <<<"$line")" = "false" ]
+    [ "$(jq -r .error <<<"$line")" = "curl exit 6" ]
+}
+
+@test "notify: text over 1 KiB with & and + is sent url-encoded and logged in full" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    export CURL_REPLY='{"ok":true,"result":{"message_id":2}}'
+    text="a&b+c $(printf 'x%.0s' $(seq 1 1500))
+second line"
+
+    notify "$text"
+
+    # curl got the text through --data-urlencode, not as a raw -d field
+    grep -qxF -- "--data-urlencode" "$CURL_ARGS_FILE"
+    grep -qF -- "text=a&b+c " "$CURL_ARGS_FILE"
+    run ! grep -qxF -- "-d" "$CURL_ARGS_FILE"
+    run ! grep -qxF -- "-f" "$CURL_ARGS_FILE"
+    # one journal record, full text
+    [ "$(wc -l < "$JOURNAL_FILE")" -eq 2 ]
+    [ "$(sed -n 2p "$JOURNAL_FILE" | jq -r .text)" = "$text" ]
+}
+
+@test "notify: neither the token nor the chat id reaches the journal" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    export CURL_REPLY='{"ok":true,"result":{"message_id":3}}'
+
+    notify "hello"
+
+    run grep -c -e "SECRET-TOKEN" -e "100999" "$JOURNAL_FILE"
+    assert_output "0"
+}
+
+@test "notify: does nothing without credentials" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    unset TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+
+    run notify "x"
+    assert_success
+    [ ! -e "$CURL_ARGS_FILE" ]
+    [ ! -e "$JOURNAL_FILE" ]
+}
+
+@test "notify: odd replies still produce one line and never fail" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    setup_notify_mocks
+    for reply in '[]' '5' '<html>502 Bad Gateway</html>' '{"ok":true,"result":true}'; do
+        rm -f "$JOURNAL_FILE"
+        export CURL_REPLY="$reply"
+        run notify "x"
+        assert_success
+        [ "$(wc -l < "$JOURNAL_FILE")" -eq 2 ]
+        [ "$(sed -n 2p "$JOURNAL_FILE" | jq -r .text)" = "x" ]
+    done
+}

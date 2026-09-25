@@ -2,6 +2,7 @@ import http from 'http'
 import debug from 'debug'
 import { extractMessageFromWebhook } from './message-utils.js'
 import { sendToTelegram } from './telegram.js'
+import { logSent, normalizeSource, DEFAULT_SOURCE } from './sent-log.js'
 
 // Create debug instances for server operations
 const debugServer = debug('telegram-bridge:server')
@@ -30,9 +31,17 @@ export function createTelegramBridgeServer(botToken, chatId) {
       return
     }
 
-    if (req.method === 'POST' && req.url === '/webhook') {
+    let url
+    try {
+      url = new URL(req.url, 'http://localhost')
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Bad request URL' }))
+      return
+    }
+    if (req.method === 'POST' && url.pathname === '/webhook') {
       debugServer('Webhook POST request received')
-      await handleWebhook(req, res, botToken, chatId)
+      await handleWebhook(req, res, botToken, chatId, url.searchParams.get('source'))
       return
     }
 
@@ -42,7 +51,7 @@ export function createTelegramBridgeServer(botToken, chatId) {
   })
 }
 
-async function handleWebhook(req, res, botToken, chatId) {
+async function handleWebhook(req, res, botToken, chatId, querySource) {
   try {
     // Read the webhook payload
     let body = ''
@@ -76,6 +85,11 @@ async function handleWebhook(req, res, botToken, chatId) {
     // Send to Telegram
     debugTelegram('Sending message to Telegram: %s', messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''))
     const telegramResult = await sendToTelegram(messageText, botToken, chatId)
+
+    // Callers name themselves with a `source` field in a JSON object body, or a
+    // ?source= query parameter; the bridge's default is Grafana.
+    const bodySource = webhookData && typeof webhookData === 'object' ? webhookData.source : undefined
+    logSent({ text: messageText, source: normalizeSource(bodySource) !== DEFAULT_SOURCE ? bodySource : querySource, result: telegramResult, botToken })
 
     if (telegramResult.success) {
       console.log('✅ Message sent to Telegram successfully')
