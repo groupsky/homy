@@ -20,6 +20,9 @@ source "$HELPER_SCRIPT" || {
     exit 1
 }
 
+# Tags the Telegram log line (journalctl -t homy-rollback); deploy.sh keeps homy-deploy
+NOTIFY_SENDER=homy-rollback
+
 # Lock file control
 SKIP_LOCK=0
 
