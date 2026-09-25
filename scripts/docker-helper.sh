@@ -229,10 +229,42 @@ notify() {
     return 0
 }
 
+# Directory holding the secret files. SECRETS_PATH from the environment, else
+# the last SECRETS_PATH= line of the project's .env (what docker-compose uses,
+# so both agree), else ./secrets (this script's own fallback). A relative value
+# is relative to the project directory, "~" is the home directory. The .env
+# line is read, not sourced; a value with a $ in it (as in example.env) is
+# ignored.
+# Usage: resolve_secrets_dir
+resolve_secrets_dir() {
+    local project_dir="${PROJECT_DIR:-$(pwd)}"
+    local dir="${SECRETS_PATH:-}"
+
+    if [ -z "$dir" ] && [ -f "$project_dir/.env" ]; then
+        dir=$(sed -n -E 's/^[[:space:]]*(export[[:space:]]+)?SECRETS_PATH[[:space:]]*=[[:space:]]*//p' "$project_dir/.env" 2>/dev/null | tail -n1 | tr -d '\r' || true)
+        case "$dir" in
+            \"*) dir="${dir#\"}"; dir="${dir%%\"*}" ;;
+            \'*) dir="${dir#\'}"; dir="${dir%%\'*}" ;;
+            *)   dir="${dir%%[[:space:]]#*}"; dir="${dir%"${dir##*[![:space:]]}"}" ;;
+        esac
+    fi
+
+    case "$dir" in
+        ''|*'$'*) dir="secrets" ;;
+    esac
+    case "$dir" in
+        /*) ;;
+        '~'|'~/'*) dir="$HOME${dir#\~}" ;;
+        *) dir="$project_dir/${dir#./}" ;;
+    esac
+    echo "$dir"
+}
+
 # Load Telegram notification secrets if available
 # Usage: load_notification_secrets
 load_notification_secrets() {
-    local secrets_dir="${PROJECT_DIR:-$(pwd)}/secrets"
+    local secrets_dir
+    secrets_dir=$(resolve_secrets_dir)
 
     if [ -f "$secrets_dir/telegram_bot_token" ]; then
         TELEGRAM_BOT_TOKEN=$(cat "$secrets_dir/telegram_bot_token")
@@ -240,6 +272,10 @@ load_notification_secrets() {
 
     if [ -f "$secrets_dir/telegram_chat_id" ]; then
         TELEGRAM_CHAT_ID=$(cat "$secrets_dir/telegram_chat_id")
+    fi
+
+    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+        echo "Telegram secrets not found in $secrets_dir; notifications are off" >&2
     fi
 }
 
@@ -737,6 +773,7 @@ export -f log
 export -f error
 export -f confirm
 export -f notify
+export -f resolve_secrets_dir
 export -f load_notification_secrets
 export -f acquire_lock
 export -f validate_backup_name
