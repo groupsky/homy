@@ -222,14 +222,16 @@ teardown() {
 }
 
 # --- deploy.sh end to end ---------------------------------------------------
+# --skip-snapshot: these tests are about the code-update step; the snapshot
+# that comes before it is covered by deploy-flow.bats.
 
 @test "deploy.sh: gets past the code-update step on a host with submodule.recurse=true" {
     cd "$PROJECT_DIR"
     export QUIET=0
 
     # The image pull is mocked to fail, so the deploy stops there - after the
-    # code update it must have completed, and well before backups or restarts.
-    run scripts/deploy.sh --yes
+    # code update it must have completed, and well before any restart.
+    run scripts/deploy.sh --yes --skip-snapshot
     assert_failure
     assert_output --partial "Pulling latest code..."
     assert_output --partial "Failed to pull images from GHCR"
@@ -243,7 +245,7 @@ teardown() {
     cd "$PROJECT_DIR"
     export QUIET=0
 
-    run scripts/deploy.sh --yes
+    run scripts/deploy.sh --yes --skip-snapshot
     refute_output --partial "bad object"
 
     run cat "$GIT_CALLS"
@@ -255,7 +257,7 @@ teardown() {
     cd "$PROJECT_DIR"
     export QUIET=0
 
-    run scripts/deploy.sh --yes
+    run scripts/deploy.sh --yes --skip-snapshot
 
     run cat "$GIT_CALLS"
     refute_line "pull origin master"
@@ -265,7 +267,7 @@ teardown() {
     cd "$PROJECT_DIR"
     export QUIET=0
 
-    run scripts/deploy.sh --yes --tag latest
+    run scripts/deploy.sh --yes --skip-snapshot --tag latest
     assert_failure
     refute_output --partial "Pulling latest code..."
 

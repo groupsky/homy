@@ -589,3 +589,23 @@ second line"
     assert_success
     assert_output --partial "Telegram secrets not found in $PROJECT_DIR/secrets"
 }
+
+@test "acquire_lock: opens the lock file read-only, so a file owned by someone else still locks" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    : > "$LOCK_FILE"
+    chmod 444 "$LOCK_FILE"
+
+    run bash -c 'source "$1"; acquire_lock 0; echo locked' _ "$PROJECT_DIR/docker-helper.sh"
+    assert_success
+    assert_output --partial "locked"
+}
+
+@test "acquire_lock: creates a missing lock file and refuses a second holder" {
+    source_docker_helper "$PROJECT_DIR/docker-helper.sh"
+    rm -f "$LOCK_FILE"
+
+    run bash -c 'source "$1"; acquire_lock 0; bash -c "source \"$1\"; acquire_lock 0" _ "$1"; exit $?' _ "$PROJECT_DIR/docker-helper.sh"
+    assert_failure
+    assert_output --partial "Another deployment operation is in progress"
+    [ -f "$LOCK_FILE" ]
+}

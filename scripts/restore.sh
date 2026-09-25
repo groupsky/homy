@@ -45,6 +45,8 @@ Options:
   -s, --start         Start services after restore
   -y, --yes           Skip confirmation prompt
   -q, --quiet         Suppress output except errors (for scripting)
+  --no-lock           Do not take the deployment lock (only when the caller
+                      already holds it)
 
 Examples:
   $(basename "$0") --list                     # List available backups
@@ -53,6 +55,7 @@ Examples:
   $(basename "$0") -s -y                      # Restore and start services
 
 Warning:
+  - Only a complete backup (with its COMPLETE marker) is restored
   - Services must be stopped before restore
   - Any data written after the backup will be LOST
   - This includes sensor readings, state changes, and configs
@@ -154,8 +157,10 @@ fi
 
 # Run restore
 log "Restoring from backup: $BACKUP_NAME"
+# volman refuses, before extracting anything, a backup without its COMPLETE
+# marker or missing a volume, and names what is missing (#1590)
 if ! dc_run run --rm volman restore "$BACKUP_NAME"; then
-    error "Restore failed for backup: $BACKUP_NAME"
+    error "Restore failed for backup: $BACKUP_NAME (the reason is printed above)"
     exit 1
 fi
 
@@ -164,6 +169,7 @@ log "Restore complete."
 # Start services if requested
 if [ "$START_SERVICES" -eq 1 ]; then
     log "Starting services..."
-    dc_run up -d
+    # `start` the existing containers; `up` could recreate them from other images
+    dc_timeout start
     log "Services started."
 fi

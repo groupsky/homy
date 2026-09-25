@@ -49,7 +49,16 @@ cd scripts/tests
 - `backup.bats` - Tests for backup script
 - `restore.bats` - Tests for restore script
 - `deploy.bats` - Tests for the deploy script's code-update step
+- `deploy-flow.bats` - deploy.sh end to end: snapshot first, only changed services, health gate, rollback
+- `snapshot.bats` - snapshot.sh: dataset resolution, one-dataset check, free space, exact name
+- `changed-services.bats` - digest override, config-file hash, which services changed
+- `health-gate.bats` - the health gate: start periods, 30 s rule, one-shot skip, cannot-check
+- `restore-snapshot.bats` - the manual data restore from a deploy snapshot, on a scratch directory
+- `volman.bats` - volman's COMPLETE marker (`seal`) and restore refusal
+- `rollback.bats` - rollback.sh requires an explicit backup and does not recreate on failure
+- `compose-real.sh` - not bats: runs the deploy's override and `up` against a real docker compose 2.18.1 on a throwaway project (CI job `compose-real`; needs docker and network)
 - `test_helper.bash` - Common test utilities and mocks
+- `mock_stack.bash` - A fake `docker` (compose, inspect, image inspect) and `zfs` backed by files
 
 ### Test Helper Functions
 
@@ -167,6 +176,23 @@ Current test coverage:
 config: the mock's `pull` fails with `fatal: bad object 0000...0` unless the
 caller disabled recursion for the invocation. That is the failure observed on
 routy, so the tests fail against a `deploy.sh` that pulls plainly.
+
+### Fast deploy (#1607)
+- ✅ A failed or impossible snapshot stops the deploy before code, images or containers are touched; `--skip-snapshot` goes on without one
+- ✅ The snapshot name is exactly `<dataset>@homy-deploy-<UTC yyyymmddThhmmssZ>-<short sha>`
+- ✅ Refused when data spans datasets, is not on ZFS, is in a Docker volume, or the pool is low on space
+- ✅ No stop, no `down`, no backup during a deploy; `up` runs with digest pins, `--no-build`, `--pull never`
+- ✅ Only services whose image, compose config or mounted config files changed are passed to `up` (`--no-deps`), recreated and gated
+- ✅ A service with two containers is refused; a hanging `up` times out and counts as failed
+- ✅ A failed service the rollback does not recreate (host-side cause) fails the rollback
+- ✅ Health gate: start periods, the 30 s restart-count rule, one-shot services skipped, fails loudly when it cannot check
+- ✅ Rollback: stateless = code and images back, no data restore; stateful with a new image = stop and alert
+- ✅ `restore-snapshot.sh` asks first, stops only the affected services, keeps the current data aside
+- ✅ `backup.sh --stop` refuses to copy a running stack and seals only complete backups; restore refuses unsealed ones
+
+`mock_stack.bash` keeps the fake stack in files under `$MOCK_DIR` (see its
+header). The health gate's clock and sleep are shell functions the tests
+replace, so waits of minutes run in milliseconds.
 
 ## Debugging Tests
 

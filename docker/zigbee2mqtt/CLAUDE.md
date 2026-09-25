@@ -371,12 +371,18 @@ The service is connected to three Docker networks:
 
 ## Health Check
 
-The service includes a Docker health check using Node.js to verify the web frontend is responding:
+The `z2m-home1` service has a health check using Node.js to verify the web frontend is responding. It is set in `docker-compose.yml`, not in the Dockerfile: the image cannot start without its adapter and secrets, so CI's standalone healthcheck test (which runs every changed image that has a `HEALTHCHECK`) could never pass. It overrides the simpler check of the base image.
 
-```dockerfile
-HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=5 \
-  CMD node -e "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+```yaml
+healthcheck:
+  test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+  interval: 60s
+  timeout: 10s
+  start_period: 120s
+  retries: 5
 ```
+
+The deploy's health gate waits for it to report `healthy` after the service is recreated (see `docs/DEPLOYMENT.md`).
 
 **Health Check Behavior:**
 - Checks every 60 seconds
