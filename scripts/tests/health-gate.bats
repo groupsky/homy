@@ -241,3 +241,24 @@ EOF
     assert_output --partial "automations: running"
     refute_output --partial "volman"
 }
+
+@test "health_gate: fails loudly (2) when a service has more than one container" {
+    {
+        mock_container automations c-auto img-1 running
+        mock_container automations c-auto-leftover img-0 exited
+    } | mock_containers
+
+    run health_gate automations
+    assert_failure 2
+    assert_output --partial "automations: it has more than one container"
+}
+
+@test "health_gate: names the failed services for the rollback" {
+    {
+        mock_container ha c-ha img-1 running unhealthy
+        mock_container automations c-auto img-2 running
+    } | mock_containers
+
+    health_gate ha automations || true
+    assert_equal "$HEALTH_GATE_FAILED_SERVICES" "ha "
+}

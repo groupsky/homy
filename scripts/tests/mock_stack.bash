@@ -16,6 +16,7 @@
 #                       with $now = the fake clock (file clock)
 #   fail-<subcommand>   `docker compose <subcommand>` exits 1
 #   fail-inspect        `docker inspect` exits 1
+#   fail-config-hash    `docker compose config --hash` exits 1
 #   stop-noop           `docker compose stop` leaves the containers running
 #   calls.log           every docker call, prefixed with COMPOSE_FILE and IMAGE_TAG
 #   zfs/...             see install_mock_zfs
@@ -54,6 +55,7 @@ if [ "$1" = "compose" ]; then
             ;;
         config)
             if [[ " $* " == *" --hash "* ]]; then
+                [ -e "$MOCK_DIR/fail-config-hash" ] && exit 1
                 cat "$MOCK_DIR/hashes"
             else
                 cat "$MOCK_DIR/config.json"

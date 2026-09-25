@@ -98,9 +98,16 @@ deploy() {
     scripts/deploy.sh --yes "$@"
 }
 
+# Compose's config hash for the service now differs from its container's
+# label, so the deploy predicts it and passes it to up
+mark_changed() {
+    sed -i "s/^$1 hash-$1\$/$1 hash-$1-NEW/" "$MOCK_DIR/hashes"
+}
+
 # up N replaces a service's container: new id, image and start time
 recreate_on_up() {
     local n="$1" svc="$2" image="$3" status="${4:-running}" health="${5:-}"
+    mark_changed "$svc"
     cat >> "$MOCK_DIR/up.$n.jq" <<EOF
 map(if .Config.Labels["com.docker.compose.service"] == "$svc"
     then .Id = (.Id + "-up$n") | .Image = "$image" | .State.StartedAt = "2026-09-25T1$n:00:00Z"
@@ -147,6 +154,7 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
 
 @test "deploy.sh: --skip-snapshot deploys without a snapshot" {
     : > "$MOCK_DIR/zfs/datasets"
+    mark_changed automations
 
     run deploy --skip-snapshot
     assert_success
@@ -194,13 +202,16 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
     assert_output --regexp "^0?$"
 }
 
-@test "deploy.sh: up uses the digest override, --no-build, --pull never and only long-running services" {
+@test "deploy.sh: up gets only the changed services, with the digest override, --no-deps, --no-build and --pull never" {
+    mark_changed automations
+
     run deploy
     assert_success
 
     run grep "compose up" "$MOCK_DIR/calls.log"
     assert_output --partial "COMPOSE_FILE=$PROJECT_DIR/docker-compose.yml:$PROJECT_DIR/docker-compose.deploy.yml"
-    assert_output --partial "compose up -d --no-build --pull never automations ha"
+    # --no-deps: compose 2.18 would otherwise also recreate every dependent
+    assert_output --regexp "compose up -d --no-build --pull never --no-deps automations$"
     refute_output --partial "volman"
 
     assert_equal "$(jq -r '.services.automations.image' "$PROJECT_DIR/docker-compose.deploy.yml")" "ghcr.io/groupsky/homy/automations@sha256:aaaa"
@@ -290,6 +301,7 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
 }
 
 @test "deploy.sh: a failed up is a failed deploy and is rolled back" {
+    mark_changed automations
     touch "$MOCK_DIR/up.1.fail"
 
     run deploy
@@ -440,6 +452,7 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
 }
 
 @test "deploy.sh: a failed up with unreadable containers never rolls a stateful image back" {
+    mark_changed automations
     touch "$MOCK_DIR/up.1.fail"
     echo 'touch "$MOCK_DIR/fail-inspect"' > "$MOCK_DIR/up.1.sh"
 
@@ -459,4 +472,97 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
     assert_output --partial "is not a known commit SHA"
     assert_equal "$(up_count)" "1"
     [ -f "$PROJECT_DIR/.deploy-blocked" ]
+}
+
+# --- review round 2 ------------------------------------------------------------
+
+@test "deploy.sh: nothing changed means no up at all" {
+    run deploy
+    assert_success
+    assert_output --partial "Nothing to recreate or start"
+    run grep -c "compose up" "$MOCK_DIR/calls.log"
+    assert_output "0"
+}
+
+@test "deploy.sh: a stopped service is started too" {
+    jq 'map(if .Id == "c-auto-1" then .State.Status = "exited" | .State.Running = false else . end)' \
+        "$MOCK_DIR/containers.json" > "$MOCK_DIR/c2" && mv "$MOCK_DIR/c2" "$MOCK_DIR/containers.json"
+    echo 'map(if .Id == "c-auto-1" then .State.Status = "running" | .State.Running = true | .State.StartedAt = "2026-09-25T12:00:00Z" else . end)' > "$MOCK_DIR/up.1.jq"
+
+    run deploy
+    assert_success
+    run grep "compose up" "$MOCK_DIR/calls.log"
+    assert_output --regexp "--no-deps automations$"
+}
+
+@test "deploy.sh: when the prediction fails, every long-running service goes to up" {
+    touch "$MOCK_DIR/fail-config-hash"
+
+    run deploy
+    assert_output --partial "passing all of them to up"
+    run grep "compose up" "$MOCK_DIR/calls.log"
+    assert_output --regexp "--no-deps automations ha$"
+}
+
+@test "deploy.sh: a service with two containers is refused before up" {
+    mock_container automations c-auto-old img-a0 exited | jq -s '.' > "$MOCK_DIR/extra.json"
+    jq -s 'add' "$MOCK_DIR/containers.json" "$MOCK_DIR/extra.json" > "$MOCK_DIR/c2" && mv "$MOCK_DIR/c2" "$MOCK_DIR/containers.json"
+    mark_changed automations
+
+    run deploy
+    assert_failure
+    assert_output --partial "more than one container: automations"
+    assert_equal "$(up_count)" "0"
+    # the pins of the running version are not replaced by the refused one
+    [ ! -e "$PROJECT_DIR/docker-compose.deploy.yml" ]
+}
+
+@test "deploy.sh: an up that hangs is stopped by the timeout and counts as failed" {
+    mark_changed automations
+    echo 'sleep 30 > /dev/null 2>&1' > "$MOCK_DIR/up.1.sh"
+    export COMPOSE_TIMEOUT=1
+
+    run deploy
+    assert_failure
+    assert_output --partial "docker compose up did not finish within 1s"
+    assert_output --partial "Rolling back"
+}
+
+@test "deploy.sh: a failed service the rollback does not recreate fails the rollback (host-side cause)" {
+    # automations breaks, and the old version recreates nothing: it is still
+    # the broken container
+    recreate_on_up 1 automations img-a2 exited
+
+    run deploy
+    assert_failure
+    assert_output --partial "the rollback did not recreate automations"
+    refute_output --partial "Rollback to $OLD complete"
+    [ -f "$PROJECT_DIR/.deploy-blocked" ]
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "CRITICAL: Rollback of 22222222"
+}
+
+@test "deploy.sh: a failed forced redeploy of the running version blocks instead of rolling back" {
+    echo "$NEW" > "$VERSION_FILE"
+    recreate_on_up 1 automations img-a2 exited
+
+    run deploy --force
+    assert_failure
+    assert_output --partial "nothing to roll back to"
+    assert_equal "$(up_count)" "1"
+    [ -f "$PROJECT_DIR/.deploy-blocked" ]
+}
+
+@test "deploy.sh: after a failed up, services compose never reached do not fail the rollback" {
+    # up is given automations and ha, recreates automations, then fails
+    mark_changed ha
+    recreate_on_up 1 automations img-a2 exited
+    touch "$MOCK_DIR/up.1.fail"
+    recreate_on_up 2 automations img-a1 running
+
+    run deploy
+    assert_failure
+    refute_output --partial "the rollback did not recreate"
+    assert_output --partial "Rollback to $OLD complete"
+    [ ! -e "$PROJECT_DIR/.deploy-blocked" ]
 }

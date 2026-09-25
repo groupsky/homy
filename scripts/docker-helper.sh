@@ -339,7 +339,17 @@ acquire_lock() {
     fi
 
     if [ "$skip_lock" -eq 0 ]; then
-        exec 200>"$LOCK_FILE"
+        # Opened for reading: with fs.protected_regular, even root may not
+        # open for writing a file another user owns in a sticky directory
+        # such as /var/lock. flock works on a read-only descriptor.
+        if [ ! -e "$LOCK_FILE" ] && ! : > "$LOCK_FILE" 2>/dev/null; then
+            error "Cannot create the lock file $LOCK_FILE"
+            exit 1
+        fi
+        if ! command exec 200<"$LOCK_FILE"; then
+            error "Cannot open the lock file $LOCK_FILE"
+            exit 1
+        fi
 
         if ! flock -n 200; then
             error "Another $lock_name operation is in progress"
@@ -541,7 +551,10 @@ service_config_files_hash() {
         | def overlaps($p): any($rw[]; . == $p or startswith($p + "/") or ($p | startswith(. + "/")));
         .services[$s] as $svc
         | ( ($svc.volumes // [])[] | select(.type == "bind" and (.read_only // false)) | .source
-            | select(overlaps(.) | not) | "mount\t" + . ),
+            | select(overlaps(.) | not)
+            # the host clock and time zone are not the service'"'"'s configuration
+            | select(test("^/(etc/localtime|etc/timezone|usr/share/zoneinfo)(/|$)") | not)
+            | "mount\t" + . ),
           ( ($svc.secrets // [])[] | "secret\t" + (($root.secrets // {})[.source].file // "") ),
           ( ($svc.env_file // [])[] | "env_file\t" + (if type == "string" then . else .path end) )
     ' "$config" | while IFS=$'\t' read -r kind path; do
@@ -704,12 +717,12 @@ container_states() {
 
 # Services the deploy changed, between two container_states files: a new or
 # replaced container (new id), or one that was not running before and was
-# started. A container that merely restarted by itself (already crash-looping
-# before the deploy) is not counted.
+# started. A container that merely restarted by itself (already running or
+# crash-looping, "restarting", before the deploy) is not counted.
 # Usage: changed_services <before file> <after file>
 changed_services() {
     awk -F'\t' 'FILENAME == ARGV[1] { id[$1] = $2; started[$1] = $4; status[$1] = $5; next }
-                !($1 in id) || id[$1] != $2 || (status[$1] != "running" && started[$1] != $4) { print $1 }' "$1" "$2" | LC_ALL=C sort -u
+                !($1 in id) || id[$1] != $2 || (status[$1] != "running" && status[$1] != "restarting" && started[$1] != $4) { print $1 }' "$1" "$2" | LC_ALL=C sort -u
 }
 
 # Services whose container now runs a different image (or is new) between
@@ -730,6 +743,69 @@ stack_run_state() {
     [ -n "$ids" ] || return 0
     # shellcheck disable=SC2086
     docker inspect $ids | jq -r '.[] | [.Name, (.State.Running | tostring), .State.StartedAt] | @tsv' | LC_ALL=C sort
+}
+
+# Services with more than one container in a container_states file (for
+# example a leftover "<id>_<name>" container from an interrupted recreate).
+# Which one is "the" service is then a guess, so the deploy refuses.
+# Usage: duplicate_services <states file>
+duplicate_services() {
+    cut -f1 "$1" | LC_ALL=C sort | uniq -d
+}
+
+# Seconds a single `docker compose up` or `start` may take before it counts
+# as failed. Longer than the slowest start period (influxdb, 300 s) plus the
+# gate margin: `up` waits for depends_on: service_healthy.
+COMPOSE_TIMEOUT="${COMPOSE_TIMEOUT:-600}"
+
+# docker compose under `timeout`; COMPOSE_FILE from the caller's environment.
+# Exit status 124 means it timed out.
+# Usage: dc_timeout [docker compose args...]
+dc_timeout() {
+    # shellcheck disable=SC2086  # "docker compose" is two words
+    timeout -k 30 "$COMPOSE_TIMEOUT" $DOCKER_COMPOSE_CMD "$@"
+}
+
+# Recreate (or start) only the services that need it, with the deploy
+# override: the predicted ones (new, or config hash differs) and those whose
+# container is not running. Compose 2.18 recreates every service that depends
+# on a recreated one when it is passed to `up` (a broker change would restart
+# some 26 containers), so only these services are passed, with --no-deps so
+# their dependencies are not touched either (scripts/tests/compose-real.sh
+# checks this against a real compose 2.18.1). When the prediction fails, every
+# given service is passed, and dependents may be recreated too.
+# Sets DEPLOY_UP_LIST.
+# Usage: deploy_up <service...>
+deploy_up() {
+    local predicted stopped rc=0
+    DEPLOY_UP_LIST=()
+
+    if predicted=$(predict_recreate "$@"); then
+        log "Services to recreate: $(tr '\n' ' ' <<<"${predicted:-none}")"
+        stopped=$(container_states 2>/dev/null | awk -F'\t' '$5 != "running" && $5 != "restarting" { print $1 }') || stopped=""
+        stopped=$(comm -12 <(printf '%s\n' "$@" | LC_ALL=C sort -u) <(printf '%s\n' "$stopped" | LC_ALL=C sort -u))
+        mapfile -t DEPLOY_UP_LIST < <(printf '%s\n%s\n' "$predicted" "$stopped" | sed '/^$/d' | LC_ALL=C sort -u)
+    else
+        warn "Could not work out which services to recreate; passing all of them to up"
+        DEPLOY_UP_LIST=("$@")
+    fi
+
+    if [ "${#DEPLOY_UP_LIST[@]}" -eq 0 ]; then
+        log "Nothing to recreate or start"
+        return 0
+    fi
+
+    log "Running up for: ${DEPLOY_UP_LIST[*]}"
+    if COMPOSE_FILE="$(compose_base_files):$DEPLOY_OVERRIDE_FILE" dc_timeout up -d --no-build --pull never --no-deps "${DEPLOY_UP_LIST[@]}" 2>&1 \
+            | tee -a "${LOG_FILE:-/dev/null}"; then
+        return 0
+    else
+        rc=$?
+    fi
+    if [ "$rc" -eq 124 ]; then
+        error "docker compose up did not finish within ${COMPOSE_TIMEOUT}s"
+    fi
+    return "$rc"
 }
 
 # Clock and sleep of the health gate; the tests replace these two.
@@ -768,6 +844,7 @@ _GATE_JQ='.[] | [
 # Usage: health_gate <service...>
 health_gate() {
     HEALTH_GATE_FAILURES=""
+    HEALTH_GATE_FAILED_SERVICES=""
     if [ "$#" -eq 0 ]; then
         log "Health gate: no service was recreated, nothing to check"
         return 0
@@ -787,7 +864,11 @@ health_gate() {
     local timeout="$HEALTH_STABLE_SECONDS" need pending=() still=() failed=() ids=()
 
     for svc in "$@"; do
-        id=$(dc_run ps -a -q "$svc" 2>/dev/null | head -n1) || id=""
+        id=$(dc_run ps -a -q "$svc" 2>/dev/null) || id=""
+        if [ "$(grep -c . <<<"$id")" -gt 1 ]; then
+            error "Health gate cannot check $svc: it has more than one container ($(tr '\n' ' ' <<<"$id"))"
+            return 2
+        fi
         if [ -z "$id" ]; then
             error "Health gate cannot check $svc: it has no container"
             return 2
@@ -903,6 +984,8 @@ health_gate() {
 
     # shellcheck disable=SC2034  # read by deploy.sh
     HEALTH_GATE_FAILURES="${failed[*]}"
+    # shellcheck disable=SC2034  # read by deploy.sh
+    HEALTH_GATE_FAILED_SERVICES=$(printf '%s\n' "${failed[@]}" | cut -d' ' -f1 | LC_ALL=C sort -u | tr '\n' ' ')
     error "Health gate failed: ${failed[*]}"
     return 1
 }
@@ -1017,7 +1100,8 @@ setup_emergency_restart() {
         local exit_code=$?
         if [ "${SERVICES_STOPPED:-0}" -eq 1 ]; then
             log "Script interrupted! Attempting to restart services..."
-            dc_run up -d || true
+            # start, not up: up would recreate containers from other images
+            dc_timeout start || true
             log "Emergency restart attempted. Check service status!"
         fi
         exit $exit_code
@@ -1337,6 +1421,9 @@ export -f container_states
 export -f stack_run_state
 export -f changed_services
 export -f image_changed_services
+export -f duplicate_services
+export -f dc_timeout
+export -f deploy_up
 export -f _gate_now
 export -f _gate_sleep
 export -f health_gate
@@ -1355,6 +1442,7 @@ export STATEFUL_LABEL
 export HEALTH_STABLE_SECONDS
 export HEALTH_POLL_INTERVAL
 export HEALTH_GATE_MARGIN
+export COMPOSE_TIMEOUT
 # shellcheck disable=SC2090
 export _GATE_JQ
 export SERVICES_STOPPED

@@ -7,7 +7,7 @@ function help {
   echo "  backup [volumes...] - backup volumes, defaults to all"
   echo "  restore <backup name> [volumes...] - restore from backup with name (latest points to last one)"
   echo "  store <backup name> <file> - save stdin as <file> inside an existing backup (used for database dumps)"
-  echo "  seal <backup name> [stopped|running] - write the COMPLETE manifest once every volume and dump is in"
+  echo "  seal <backup name> [stopped|running] [required file...] - write the COMPLETE manifest once every volume and the named files (dumps) are in"
   echo "  list - show backup names, whether each is complete, and how many volumes it holds"
   exit 1
 }
@@ -105,6 +105,9 @@ case $cmd in
       backupname=$1
       mode=${2:-unknown}
       [ -z "$backupname" ] && help
+      shift
+      [ $# -gt 0 ] && shift
+      # the rest: files that must be there too, such as mongo.archive.gz
       case "$mode" in
         stopped|running|unknown) ;;
         *) echo "Invalid mode $mode"; exit 1 ;;
@@ -117,6 +120,9 @@ case $cmd in
       cd "$dir"
       for vol in $VOLUMES; do
         [ -f "$vol.tar" ] || { echo "Backup $backupname has no $vol.tar; not sealing it"; exit 1; }
+      done
+      for f in "$@"; do
+        [ -f "$f" ] || { echo "Backup $backupname has no $f; not sealing it"; exit 1; }
       done
       # Written beside the final name and renamed, so a half-written manifest
       # never counts

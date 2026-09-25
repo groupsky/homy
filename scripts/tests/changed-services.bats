@@ -342,3 +342,32 @@ broker"
     assert_line --index 0 "$(printf 'automations\tc-auto\timg-a\t2026-09-25T10:00:00Z\texited')"
     assert_line --index 1 "$(printf 'broker\tc-broker\timg-b\t2026-09-25T10:00:00Z\trunning')"
 }
+
+@test "changed_services: a container already restarting before the deploy is not counted" {
+    STATE_FILE=before write_states "automations|c1|img-a|2026-09-25T10:00:00Z|restarting"
+    STATE_FILE=after write_states "automations|c1|img-a|2026-09-25T10:05:00Z|running"
+
+    run changed_services "$TEST_DIR/before" "$TEST_DIR/after"
+    assert_output ""
+}
+
+@test "duplicate_services: lists a service with more than one container" {
+    STATE_FILE=before write_states \
+        "automations|c1|img-a|2026-09-25T10:00:00Z|running" \
+        "automations|c0|img-a|2026-09-24T10:00:00Z|exited" \
+        "broker|c2|img-b|2026-09-25T10:00:00Z|running"
+
+    run duplicate_services "$TEST_DIR/before"
+    assert_output "automations"
+}
+
+@test "config hash: the host clock and time zone files are not configuration" {
+    jq '.services.broker.volumes += [{type: "bind", source: "/etc/localtime", target: "/etc/localtime", read_only: true},
+                                     {type: "bind", source: "/usr/share/zoneinfo", target: "/usr/share/zoneinfo", read_only: true},
+                                     {type: "bind", source: "/etc/timezone", target: "/etc/timezone", read_only: true}]' \
+        "$MOCK_DIR/config.json" > "$MOCK_DIR/c2"
+    cp "$MOCK_DIR/config.json" "$MOCK_DIR/c-plain"
+    mv "$MOCK_DIR/c2" "$MOCK_DIR/config.json"
+
+    assert_equal "$(service_config_files_hash "$MOCK_DIR/config.json" broker)" "$(service_config_files_hash "$MOCK_DIR/c-plain" broker)"
+}

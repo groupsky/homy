@@ -307,15 +307,7 @@ if ! dc_base config --format json > "$CONFIG_JSON" || \
     notify "Deployment of $(format_version_short "$NEW_VERSION") failed before restarting anything: could not prepare the deploy override"
     exit 1
 fi
-mv "$WORK_DIR/override.json" "$DEPLOY_OVERRIDE_FILE"
-
 mapfile -t SERVICES < <(long_running_services "$CONFIG_JSON")
-
-if PREDICTED=$(predict_recreate "${SERVICES[@]}"); then
-    log "Services to recreate: $(tr '\n' ' ' <<<"${PREDICTED:-none}")"
-else
-    warn "Could not work out in advance which services will be recreated"
-fi
 
 # 4. Recreate what changed, then gate it
 BEFORE_OK=1
@@ -324,9 +316,23 @@ if ! container_states > "$WORK_DIR/before"; then
     BEFORE_OK=0
 fi
 
+# Two containers for one service (a leftover from an interrupted recreate):
+# neither the change detection nor the gate could tell which one counts.
+# Checked before the new override replaces the old one, so a refusal leaves
+# the pins of the running version in place.
+mapfile -t DUPLICATES < <(duplicate_services "$WORK_DIR/before")
+if [ "${#DUPLICATES[@]}" -gt 0 ]; then
+    error "These services have more than one container: ${DUPLICATES[*]}. Remove the leftover ones (docker ps -a) and deploy again."
+    restore_previous_code || true
+    notify "Deployment of $(format_version_short "$NEW_VERSION") refused before restarting anything: more than one container for ${DUPLICATES[*]}"
+    exit 1
+fi
+
+mv "$WORK_DIR/override.json" "$DEPLOY_OVERRIDE_FILE"
+
 UP_OK=1
 log "Starting services (only changed ones are recreated)..."
-if ! dc_deploy up -d --no-build --pull never "${SERVICES[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+if ! deploy_up "${SERVICES[@]}"; then
     error "docker compose up failed"
     UP_OK=0
 fi
@@ -349,12 +355,16 @@ log "Recreated or started: ${CHANGED[*]:-none}"
 
 GATE_RC=1
 FAILURE="docker compose up failed"
+# What failed: the unhealthy services, or after a failed up what it did change
+# (not every service passed to it: compose may have stopped before reaching some)
+FAILED_SERVICES=("${CHANGED[@]}")
 if [ "$UP_OK" -eq 1 ] && [ "$AFTER_OK" -eq 0 ]; then
     GATE_RC=2
 elif [ "$UP_OK" -eq 1 ]; then
     GATE_RC=0
     health_gate "${CHANGED[@]}" || GATE_RC=$?
     FAILURE="unhealthy: ${HEALTH_GATE_FAILURES:-}"
+    read -r -a FAILED_SERVICES <<<"${HEALTH_GATE_FAILED_SERVICES:-}"
 fi
 
 SHORT_NEW=$(format_version_short "$NEW_VERSION")
@@ -431,6 +441,19 @@ if [ "${#BLOCKERS[@]}" -gt 0 ]; then
     exit 1
 fi
 
+rollback_failed() {
+    error "Rollback failed: $1"
+    block_deploys "the deploy failed ($FAILURE) and so did the rollback: $1"
+    notify "CRITICAL: Rollback of $SHORT_NEW to $(format_version_short "$CURRENT_VERSION") failed: $1. Manual intervention required. Snapshot: $SNAPSHOT_NOTE"
+    exit 1
+}
+
+# A forced redeploy of the running version that fails: the cause is on the
+# host (.env, a secret, config outside git), and the same commit cannot fix it
+if [ "$CURRENT_VERSION" = "$NEW_VERSION" ]; then
+    rollback_failed "the failed deploy was of the version already running ($SHORT_NEW), so there is nothing to roll back to; the cause is on the host (.env, secrets or config outside git)"
+fi
+
 # The rollback goes to the commit (code, config) and the images of the last
 # successful deploy. Only a commit SHA names both; a tag such as "latest" may
 # point at the failed images by now.
@@ -444,13 +467,6 @@ fi
 
 notify "Deployment of $SHORT_NEW failed ($FAILURE). Rolling code and images back to $(format_version_short "$CURRENT_VERSION"); no data is restored..."
 log "Rolling back code, config and images to $CURRENT_VERSION (no data is restored)..."
-
-rollback_failed() {
-    error "Rollback failed: $1"
-    block_deploys "the deploy failed ($FAILURE) and so did the rollback: $1"
-    notify "CRITICAL: Rollback of $SHORT_NEW to $(format_version_short "$CURRENT_VERSION") failed: $1. Manual intervention required. Snapshot: $SNAPSHOT_NOTE"
-    exit 1
-}
 
 log "Checking out $CURRENT_VERSION..."
 if checkout_git_version "$CURRENT_VERSION" "$LOG_FILE"; then
@@ -474,17 +490,34 @@ mv "$WORK_DIR/rollback-override.json" "$DEPLOY_OVERRIDE_FILE"
 mapfile -t SERVICES < <(long_running_services "$ROLLBACK_CONFIG")
 
 container_states > "$WORK_DIR/rollback-before" || : > "$WORK_DIR/rollback-before"
-if ! dc_deploy up -d --no-build --pull never "${SERVICES[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+if ! deploy_up "${SERVICES[@]}"; then
     rollback_failed "docker compose up failed"
 fi
 if ! container_states > "$WORK_DIR/rollback-after"; then
     rollback_failed "could not read the containers after up"
 fi
 # An empty "before" makes every service count as changed, so all are gated
-mapfile -t CHANGED < <(changed_services "$WORK_DIR/rollback-before" "$WORK_DIR/rollback-after")
-log "Rollback recreated: ${CHANGED[*]:-none}"
+mapfile -t ROLLBACK_CHANGED < <(changed_services "$WORK_DIR/rollback-before" "$WORK_DIR/rollback-after")
+log "Rollback recreated: ${ROLLBACK_CHANGED[*]:-none}"
 
-if health_gate "${CHANGED[@]}"; then
+# A failed service the rollback did not recreate is still the broken
+# container: its cause is not in the code (.env, a secret, config outside git)
+NOT_RECREATED=()
+for svc in "${FAILED_SERVICES[@]}"; do
+    if ! printf '%s\n' "${ROLLBACK_CHANGED[@]}" | grep -qxF -- "$svc"; then
+        NOT_RECREATED+=("$svc")
+    fi
+done
+if [ "${#NOT_RECREATED[@]}" -gt 0 ]; then
+    if [ "$AFTER_OK" -eq 0 ]; then
+        rollback_failed "the containers could not be read after the failed up, and the rollback did not recreate ${NOT_RECREATED[*]}; check them by hand"
+    fi
+    rollback_failed "the rollback did not recreate ${NOT_RECREATED[*]}, so they are still the failed containers; the cause is likely on the host (.env, secrets or config outside git)"
+fi
+
+# Gate what either the deploy or the rollback touched
+mapfile -t GATE_SERVICES < <(printf '%s\n' "${CHANGED[@]}" "${ROLLBACK_CHANGED[@]}" | sed '/^$/d' | LC_ALL=C sort -u)
+if health_gate "${GATE_SERVICES[@]}"; then
     log "Rollback to $CURRENT_VERSION complete; the deploy of $NEW_VERSION failed"
     notify "Rolled back to $(format_version_short "$CURRENT_VERSION") after the failed deployment of $SHORT_NEW. No data was restored."
     exit 1

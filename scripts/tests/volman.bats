@@ -116,3 +116,16 @@ new_backup() {
     assert_line --regexp "^2026_09_08_06_58_54	.*	INCOMPLETE	1 volumes$"
     assert_line --regexp "^2026_09_09_06_44_27	.*	complete  	2 volumes$"
 }
+
+@test "volman seal: refuses when a required file (the Mongo dump) is missing" {
+    name=$(new_backup)
+
+    run volman seal "$name" stopped mongo.archive.gz
+    assert_failure
+    assert_output --partial "has no mongo.archive.gz; not sealing it"
+    [ ! -e "$BACKUP_ROOT/$name/COMPLETE" ]
+
+    echo "dump" > "$BACKUP_ROOT/$name/mongo.archive.gz"
+    run volman seal "$name" stopped mongo.archive.gz
+    assert_success
+}

@@ -83,7 +83,7 @@ jobs:
       - name: Run restore-snapshot.sh and volman tests
         run: |
           cd scripts/tests
-          ./bats-core/bin/bats restore-snapshot.bats volman.bats
+          ./bats-core/bin/bats restore-snapshot.bats volman.bats rollback.bats
 
       - name: Test Summary
         if: always()
@@ -115,6 +115,18 @@ jobs:
 
       - name: Check docker-compose.yml uses the shared logging anchor
         run: docker run --rm -v "$PWD":/w -w /w ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 node --test scripts/compose-logging.test.mjs
+
+  compose-real:
+    name: Only changed services are recreated (real docker compose 2.18.1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Run the deploy's override and up against a throwaway project
+        run: scripts/tests/compose-real.sh
 
   compose-volumes:
     name: No service uses an unnamed volume

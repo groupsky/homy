@@ -107,21 +107,25 @@ Options:
 Rollback to a previous version with database restoration from a **volman backup** (not a snapshot). It stops the whole stack and throws away everything written since that backup. `deploy.sh` does not call it.
 
 ```
-Usage: rollback.sh [OPTIONS] [BACKUP_NAME]
+Usage: rollback.sh [OPTIONS] BACKUP_NAME
 
 Options:
   -h, --help          Show help message
   -l, --list          List available backups
   -y, --yes           Skip confirmation prompt
+  --no-lock           Do not take the deployment lock (only when the caller holds it)
 ```
+
+The backup name is **required**. `.pre-upgrade-backup` can be weeks older than the version in `.previous-version`, and restoring it would throw away everything since (InfluxDB alone is about 100 GB). Check the date with `--list` first.
 
 **Examples:**
 ```bash
-./scripts/rollback.sh                        # Rollback to most recent backup
-./scripts/rollback.sh 2026_01_17_14_30_00    # Rollback to specific backup
 ./scripts/rollback.sh --list                 # List available backups
-./scripts/rollback.sh -y                     # Rollback without confirmation
+./scripts/rollback.sh 2026_01_17_14_30_00    # Rollback to a specific backup
+./scripts/rollback.sh -y 2026_01_17_14_30_00 # ...without confirmation
 ```
+
+If the restore fails, it `start`s the existing (stopped) containers again rather than recreating them; the previous version is started with `up -d --no-build --pull never`, and the deploy override (whose pins point at the version being rolled back from) is deleted.
 
 ### backup.sh
 
@@ -135,6 +139,7 @@ Options:
   -s, --stop          Stop services before backup (recommended for consistency)
   -y, --yes           Skip confirmation prompt
   -q, --quiet         Quiet mode - output only backup name (for scripting)
+  --no-lock           Do not take the deployment lock (only when the caller holds it)
 ```
 
 **Examples:**
@@ -149,7 +154,13 @@ Options:
 
 **`--stop` is checked, not assumed** (#1589). After stopping, `backup.sh` checks that no container of the stack is running, and after the copy it checks that none was started meanwhile (a cron job or a restart policy can start one). If either check fails, the backup stops with an error and the backup is left without its completeness marker.
 
-**Completeness marker** (#1590). Only when every volume archive and the MongoDB dump are written does `backup.sh` run `volman seal`, which writes a `COMPLETE` manifest (file names, sizes, times, and whether the services were stopped). `restore.sh` refuses, before extracting anything, a backup without `COMPLETE` or missing a volume, and names what is missing. `volman list` shows `complete` or `INCOMPLETE` for each backup. Backups made before 2026-09-25 have no marker, so `restore.sh` refuses them all.
+**Completeness marker** (#1590). Only when every volume archive and the MongoDB dump are written does `backup.sh` run `volman seal`, which writes a `COMPLETE` manifest (file names, sizes, times, and whether the services were stopped). `restore.sh` refuses, before extracting anything, a backup without `COMPLETE` or missing a volume, and names what is missing. `volman list` shows `complete` or `INCOMPLETE` for each backup. `backup.sh` also names the Mongo dump as required, so `seal` refuses a backup without `mongo.archive.gz`.
+
+Backups made before 2026-09-25 have no marker, so `restore.sh` refuses them all. They are left that way on purpose. To make one restorable, first check it by hand: every volume archive is there and lists cleanly (`tar tf <file> > /dev/null`), and ideally a throwaway InfluxDB started on a scratch copy answers a query. Then seal it, saying it was taken with the services running (these were, see #1589):
+
+```bash
+docker compose run --rm volman seal <backup name> running
+```
 
 ### restore.sh
 
@@ -174,7 +185,7 @@ Options:
 ./scripts/restore.sh -s -y                   # Restore and start services
 ```
 
-**Note:** Services must be stopped before restore. Use `docker compose stop` first, or use `rollback.sh` which handles this automatically.
+**Note:** Services must be stopped before restore. Use `docker compose stop` first, or use `rollback.sh` which handles this automatically. `-s` `start`s the existing containers; it creates none, so after a `docker compose down` start them with `docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d` instead.
 
 ## Deployment Workflows
 
@@ -195,10 +206,11 @@ The script:
 3. **Takes the snapshot** (`snapshot.sh`) before anything else. If it fails, the deploy stops here: the code, the images and every container are untouched.
 4. Updates the code to `origin/master` and pulls the images for that commit. If the pull fails, the code is put back and nothing is restarted.
 5. Writes `docker-compose.deploy.yml` (not in git): every service pinned to its image **digest** and labelled with a hash of the host files it mounts (see [Recreating only what changed](#recreating-only-what-changed)).
-6. Logs the services compose is expected to recreate, then runs `docker compose up -d --no-build --pull never` for the long-running services. Compose recreates only the services whose configuration differs. Nothing is stopped first.
-7. Runs the [health gate](#the-health-gate) on the services that were actually recreated, or started because they were not running. A container that restarted by itself is not counted.
-8. On success, saves the old version to `.previous-version` and the new one to `.deployed-version`, and sends the success message (with the recreated services and the snapshot name).
-9. On failure, [rolls back](#automatic-rollback) code, config and images.
+6. Refuses (before restarting anything) when a service has more than one container, for example a leftover `<id>_<name>` container from an interrupted recreate: neither the change detection nor the gate could tell which one counts. Remove the leftover by hand.
+7. Works out which services to recreate: those whose config hash (`docker compose config --hash`) differs from the `com.docker.compose.config-hash` label of their container, those with no container, and those whose container is stopped. It logs them and runs `docker compose up -d --no-build --pull never --no-deps` for **only those services**, under a time limit (`COMPOSE_TIMEOUT`, 600 s; a timeout is a failed `up`). If nothing changed, `up` is not run at all. Nothing is stopped first.
+8. Runs the [health gate](#the-health-gate) on the services that were actually recreated, or started because they were not running. A container that restarted by itself (already running or `restarting` before) is not counted.
+9. On success, saves the old version to `.previous-version` and the new one to `.deployed-version`, and sends the success message (with the recreated services and the snapshot name).
+10. On failure, [rolls back](#automatic-rollback) code, config and images.
 
 A deploy that changes nothing restarts nothing. The first deploy after this change is a special case: it moves every service from a tag to a digest, so it recreates all of them once.
 
@@ -230,6 +242,10 @@ Pruning old snapshots is done on the host, not by these scripts.
 - **Digest pins.** Each service's `image:` becomes `<repo>@sha256:<digest>`. CI's SHA retag copies the manifest, so an unchanged service keeps the same digest, the same config hash, and keeps running.
 - **Config-file hash label.** A changed `broker.conf`, automations `config.js`, Grafana provisioning file or secret file changes no image and nothing in the compose file. Each service gets a label `homy.config-files-hash` with a hash of the contents of its read-only bind mounts (every file under a mounted directory), its secret files and its `env_file`s. Data directories (writable mounts) are left out.
 - A change to `docker-compose.yml` or `.env` (environment, ports, mounts, healthchecks) changes the config hash by itself.
+
+The time zone files (`/etc/localtime`, `/etc/timezone`, `/usr/share/zoneinfo`) are not part of the hash: they are the host's clock settings, not a service's configuration.
+
+**Why only the changed services are passed to `up`.** Compose 2.18 (what routy runs) recreates every service that depends on a recreated one when that dependent is passed to `up`, even with `--no-deps`: with every service passed, a broker change would restart some 26 containers. So `deploy.sh` passes only the services that need it, and `--no-deps` keeps compose from touching their dependencies. When the prediction itself fails, it falls back to passing every service, and dependents may then be recreated too. `scripts/tests/compose-real.sh` checks this against a real compose 2.18.1 in CI.
 
 `--no-build` matters: every service has a `build:` key, and without it compose would build on the host when an image is missing. `--pull never` makes compose use exactly the images just pulled.
 
@@ -263,7 +279,7 @@ Healthchecks with a start period:
 | `z2m-home1` | `docker-compose.yml` (the image cannot start without its adapter, so CI could not test it) | 120 s | 60 s × 5 |
 | `broker` | `docker/mosquitto/Dockerfile` | none | 30 s × 6 |
 
-`grafana` starts only after `influxdb` is healthy (`depends_on: condition: service_healthy`), so its alerts do not fire NoData while InfluxDB loads (#1365). When InfluxDB is recreated, `docker compose up` waits for it before it returns.
+`grafana` starts only after `influxdb` is healthy (`depends_on: condition: service_healthy`), so its alerts do not fire NoData while InfluxDB loads (#1365). This holds when the whole stack starts (after a reboot, `docker compose up -d`). A deploy passes `--no-deps`, so recreating `influxdb` does not restart `grafana`; the health gate waits for `influxdb` instead.
 
 ### Automatic rollback
 
@@ -273,6 +289,8 @@ When the gate fails, or `docker compose up` fails:
 - **A stateful service whose image changed** (labelled `homy.stateful: "true"`: `ha`, `z2m-home1`, `mongo`, `grafana`, `influxdb`): its data may already be migrated (HA recorder schema, zigbee2mqtt database, Mongo feature compatibility version, Grafana migrations), and the old image may not read it. The deploy **does not roll back at all**: it stops, sends a CRITICAL message with the snapshot name, and prints the recovery steps. The containers are left as they are, so a slow migration is not cut short.
 - A stateful service recreated only for a configuration change is rolled back with the rest.
 - The rollback target is the commit in `.deployed-version` (code, config and images of the last successful deploy). When that is not a commit SHA (for example `latest`, which may already point at the failed images), nothing is rolled back and a CRITICAL message is sent.
+- **A failed service the rollback does not recreate** is still the broken container: the cause is not in the code but on the host (`.env`, a secret, config outside git). The rollback is then reported as failed (CRITICAL), not as a success. The gate after a rollback covers everything the deploy or the rollback touched.
+- **A failed forced redeploy of the version already running** (`--force` with nothing new) has nothing to roll back to; it is reported as a failed rollback for the same reason.
 
 **Blocked deploys.** When a failed deploy is not rolled back (a stateful image changed, the gate could not check, the previous version is unknown, or the rollback itself failed), `deploy.sh` writes `.deploy-blocked` with the reason, the snapshot and the recovery steps, and refuses to deploy until that file is removed. Without it, the next deploy would see nothing to recreate and report success on top of a broken service.
 
@@ -374,9 +392,8 @@ A forced redeploy recreates only the services whose configuration (or config fil
 `rollback.sh` restores the databases from a volman backup and starts the previous version. It stops the whole stack and loses everything written since that backup; prefer `restore-snapshot.sh` for one service.
 
 ```bash
-./scripts/rollback.sh                        # the most recent backup (.pre-upgrade-backup)
-./scripts/rollback.sh 2026_01_17_14_30_00    # a specific backup
-./scripts/rollback.sh --list                 # list backups
+./scripts/rollback.sh --list                 # list backups; check the date
+./scripts/rollback.sh 2026_01_17_14_30_00    # the backup to restore (required)
 ```
 
 It rolls back to the version in `.previous-version`, falling back to git history when that file does not exist.
@@ -531,6 +548,7 @@ Deploy tuning (environment of `deploy.sh`):
 | `HEALTH_STABLE_SECONDS` | 30 | A service without a healthcheck passes after running this long without a restart |
 | `HEALTH_POLL_INTERVAL` | 5 | Seconds between health checks |
 | `HEALTH_GATE_MARGIN` | 60 | Seconds added to the gate's time limit |
+| `COMPOSE_TIMEOUT` | 600 | Seconds a `docker compose up` or `start` may take (it waits for `depends_on: service_healthy`); a timeout counts as a failure |
 
 ### Docker Compose Dual-Mode
 

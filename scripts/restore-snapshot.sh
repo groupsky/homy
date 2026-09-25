@@ -49,6 +49,8 @@ Options:
   --no-start            Leave the services stopped afterwards (for example to
                         start them on an older image with deploy.sh)
   -y, --yes             Do not ask for confirmation
+  --no-lock             Do not take the deployment lock (only when the caller
+                        already holds it)
 
 Examples:
   sudo $(basename "$0") --list
@@ -271,7 +273,7 @@ fi
 log "Stopping: ${AFFECTED[*]}"
 if ! dc_run stop "${AFFECTED[@]}"; then
     error "Could not stop ${AFFECTED[*]}; nothing was restored"
-    dc_run start "${AFFECTED[@]}" || true
+    dc_timeout start "${AFFECTED[@]}" || true
     exit 1
 fi
 
@@ -284,7 +286,7 @@ for svc in "${AFFECTED[@]}"; do
 done
 if [ "${#still_running[@]}" -gt 0 ]; then
     error "Still running after stop: ${still_running[*]}; nothing was restored"
-    dc_run start "${AFFECTED[@]}" || true
+    dc_timeout start "${AFFECTED[@]}" || true
     exit 1
 fi
 
@@ -330,7 +332,7 @@ if [ "$NO_START" -eq 1 ]; then
     log "Left stopped (--no-start): ${AFFECTED[*]}"
 else
     log "Starting: ${AFFECTED[*]}"
-    if ! dc_run start "${AFFECTED[@]}"; then
+    if ! dc_timeout start "${AFFECTED[@]}"; then
         error "Could not start ${AFFECTED[*]}; start them by hand"
         exit 1
     fi

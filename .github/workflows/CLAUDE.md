@@ -473,9 +473,9 @@ But four other paths do read it, and none has `deploy.sh`'s loud pull guard:
 
 | reader | how it gets there |
 |---|---|
-| `scripts/rollback.sh:188` | `determine_previous_version` (`docker-helper.sh:656,658`) returns the literal string `latest` when there is no saved previous version and none can be derived from git. `rollback.sh` then exports `IMAGE_TAG=latest`, and a failed pull only **warns** (`rollback.sh:194`) before `dc_run up -d`. |
-| `scripts/restore.sh:167` | `dc_run up -d` with no `IMAGE_TAG` exported at all — the file contains zero references to it. |
-| `docker-helper.sh:442` | the interrupt cleanup's `dc_run up -d || true`, which inherits whatever `IMAGE_TAG` the caller had, or none. |
+| `scripts/rollback.sh:188` | `determine_previous_version` (`docker-helper.sh:656,658`) returns the literal string `latest` when there is no saved previous version and none can be derived from git. `rollback.sh` then exports `IMAGE_TAG=latest`, and a failed pull only **warns** before `up -d --no-build --pull never` (since #1607 a missing image makes that `up` fail rather than build). |
+| `scripts/restore.sh` | Before #1607, `dc_run up -d` with no `IMAGE_TAG` exported at all. Since #1607 it only `start`s existing containers, so it no longer reads `:latest`. |
+| `docker-helper.sh` | Before #1607, the interrupt cleanup's `dc_run up -d || true`. Since #1607 it only `start`s existing containers. |
 | `ci-unified.yml` lights integration test | pulls `<image>:latest` and locally `docker tag`s it to `:$SHA` when the SHA tag is absent. Local only — nothing is pushed — but the job can then validate `:latest` content while reporting it tested the commit. |
 
 So a `restore.sh`, or a `rollback.sh` that fell back, can bring up **older** code than the

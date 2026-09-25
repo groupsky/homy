@@ -46,6 +46,8 @@ Options:
                       while the files are copied
   -y, --yes           Skip confirmation prompt
   -q, --quiet         Suppress output except errors (for scripting)
+  --no-lock           Do not take the deployment lock (only when the caller
+                      already holds it)
 
 Examples:
   $(basename "$0")                    # Create backup with timestamp name
@@ -155,7 +157,7 @@ STATE_BEFORE=""
 restart_stopped_services() {
     if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
         log "Restarting services..."
-        dc_run start || error "Failed to restart services - manual intervention required"
+        dc_timeout start || error "Failed to restart services - manual intervention required"
     fi
 }
 
@@ -211,7 +213,7 @@ fi
 # MongoDB: a tar of a running mongod is not consistent, so dump it instead.
 # The dump streams through volman into the backup directory.
 if [ "$SERVICES_STOPPED_LOCAL" -eq 1 ]; then
-    if ! dc_run start mongo; then
+    if ! dc_timeout start mongo; then
         error "Could not start mongo for the dump"
         restart_stopped_services
         exit 1
@@ -227,7 +229,7 @@ fi
 # after every volume and the dump are in.
 SEAL_MODE=running
 [ "$SERVICES_STOPPED_LOCAL" -eq 1 ] && SEAL_MODE=stopped
-if ! dc_run run --rm volman seal "$ACTUAL_BACKUP_NAME" "$SEAL_MODE" >&2; then
+if ! dc_run run --rm volman seal "$ACTUAL_BACKUP_NAME" "$SEAL_MODE" mongo.archive.gz >&2; then
     error "Could not write the COMPLETE marker of backup $ACTUAL_BACKUP_NAME"
     restart_stopped_services
     exit 1

@@ -252,7 +252,7 @@ MOCK
     run scripts/backup.sh -s -y
     assert_success
     run grep "volman seal" "$TEST_DIR/calls.log"
-    assert_output --partial "compose run --rm volman seal 2024_01_27_153000 stopped"
+    assert_output --partial "compose run --rm volman seal 2024_01_27_153000 stopped mongo.archive.gz"
     # sealed only after the Mongo dump
     run grep -n -e "mongodump" -e "volman seal" "$TEST_DIR/calls.log"
     [[ "${lines[0]}" == *mongodump* ]]

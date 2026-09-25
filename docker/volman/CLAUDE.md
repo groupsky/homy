@@ -76,7 +76,7 @@ Checking the size by hand: the InfluxDB files belong to the container's user, so
 
 ### Completeness Marker
 
-`volman backup` writes only the `.tar` files. `backup.sh` adds the Mongo dump and then runs `volman seal <name> stopped|running`, which writes `COMPLETE`: one `file=<name>\t<bytes>\t<time>` line per file, `sealed_at=` and `services=stopped|running`. `seal` refuses a backup that lacks any volume in `VOLUMES`.
+`volman backup` writes only the `.tar` files. `backup.sh` adds the Mongo dump and then runs `volman seal <name> stopped|running mongo.archive.gz`, which writes `COMPLETE`: one `file=<name>\t<bytes>\t<time>` line per file, `sealed_at=` and `services=stopped|running`. `seal` refuses a backup that lacks any volume in `VOLUMES` or any file named after the mode (here the Mongo dump).
 
 `volman restore` refuses, **before extracting anything**, a backup without `COMPLETE` or one whose manifest does not list a volume it is asked to restore, and names the missing volumes. It warns when the backup was taken with the services running. `volman list` shows `complete` or `INCOMPLETE` and the number of volume archives for each backup. Backups made before the marker existed are all refused.
 

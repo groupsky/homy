@@ -45,6 +45,8 @@ Options:
   -s, --start         Start services after restore
   -y, --yes           Skip confirmation prompt
   -q, --quiet         Suppress output except errors (for scripting)
+  --no-lock           Do not take the deployment lock (only when the caller
+                      already holds it)
 
 Examples:
   $(basename "$0") --list                     # List available backups
@@ -167,6 +169,7 @@ log "Restore complete."
 # Start services if requested
 if [ "$START_SERVICES" -eq 1 ]; then
     log "Starting services..."
-    dc_run up -d
+    # `start` the existing containers; `up` could recreate them from other images
+    dc_timeout start
     log "Services started."
 fi
