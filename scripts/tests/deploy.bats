@@ -70,6 +70,13 @@ case "${1:-}" in
         echo "Submodule paths checked out"
         ;;
     rev-parse)
+        # "latest" is a Docker tag, not a git ref: unlike a real SHA or
+        # branch name, `rev-parse --verify latest^{commit}` fails for it.
+        case "$*" in
+            *'latest^{commit}'*)
+                exit 1
+                ;;
+        esac
         echo "2222222222222222222222222222222222222222"
         ;;
 esac
@@ -263,14 +270,27 @@ teardown() {
     refute_line "pull origin master"
 }
 
-@test "deploy.sh: skips the code update when deploying a specific tag" {
+@test "deploy.sh: a tag that is not a git ref (e.g. a Docker-only tag like 'latest') skips the code update" {
     cd "$PROJECT_DIR"
     export QUIET=0
 
     run scripts/deploy.sh --yes --skip-snapshot --tag latest
     assert_failure
     refute_output --partial "Pulling latest code..."
+    assert_output --partial "is not a git commit"
 
     run cat "$GIT_CALLS"
     refute_line --partial "pull"
+    refute_line --partial "checkout"
+}
+
+@test "deploy.sh: --tag with a real commit checks out that commit (#1607: otherwise the deploy builds the override with whatever code happens to be on disk)" {
+    cd "$PROJECT_DIR"
+    export QUIET=0
+
+    run scripts/deploy.sh --yes --skip-snapshot --tag 2222222222222222222222222222222222222222
+    assert_output --partial "Checking out version: 2222222222222222222222222222222222222222"
+
+    run cat "$GIT_CALLS"
+    assert_line --partial "checkout 2222222222222222222222222222222222222222"
 }
