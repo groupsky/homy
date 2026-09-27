@@ -666,12 +666,15 @@ generate_deploy_override() {
     done < <(jq -r '.services | keys[]' "$config")
     rm -rf "$cache"
 
-    if ! jq --argjson pins "$pins" --argjson labels "$labels" --arg label "$CONFIG_HASH_LABEL" '
+    # jq 1.5 (routy's version) treats a variable literally named "label" as
+    # its `label $out | ...` keyword, even with the $ sigil, and refuses to
+    # parse the program. Call it $labelkey instead.
+    if ! jq --argjson pins "$pins" --argjson labels "$labels" --arg labelkey "$CONFIG_HASH_LABEL" '
         {
           "x-generated-by": "scripts/deploy.sh - do not edit",
           services: (.services | with_entries(.value =
             ((if .value.image then {image: $pins[.value.image]} else {} end)
-             + {labels: {($label): $labels[.key]}})))
+             + {labels: {($labelkey): $labels[.key]}})))
         }' "$config" > "$out.tmp.$$"; then
         rm -f "$out.tmp.$$"
         error "Could not write $out"

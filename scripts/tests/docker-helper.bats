@@ -609,3 +609,13 @@ second line"
     assert_output --partial "Another deployment operation is in progress"
     [ -f "$LOCK_FILE" ]
 }
+
+@test "jq programs never bind a variable literally named \$label" {
+    # jq 1.5 (routy's version, Ubuntu 18.04's package) treats a variable
+    # named "label" as its `label $out | ... break $out` keyword, even with
+    # the $ sigil, and refuses to parse the whole program (found on routy
+    # deploying #1607: "unexpected label, expecting IDENT or __loc__"). Any
+    # other name is fine; this guards against reintroducing it.
+    run grep -rnE -- '--arg(json)? label\b' "${BATS_TEST_DIRNAME}/.."
+    assert_failure
+}
