@@ -273,6 +273,23 @@ if [ -z "$IMAGE_TAG" ]; then
     fi
     CODE_UPDATED=1
     NEW_VERSION=$(git rev-parse HEAD)
+elif git rev-parse --verify -q "${IMAGE_TAG}^{commit}" >/dev/null 2>&1; then
+    # --tag names a commit we have (typically a SHA on master, just fetched
+    # above): check the working tree out to it too, or the scripts and
+    # compose file used to build the deploy override are whatever the host
+    # happened to have on disk, not what this deploy is meant to run (#1607:
+    # the first deploy used a fixed jq bug that was still on disk because
+    # only the image tag, not the code, had moved).
+    if ! checkout_git_version "$IMAGE_TAG" "$LOG_FILE"; then
+        error "Failed to check out code at $IMAGE_TAG"
+        notify "Deployment failed: could not check out code at $(format_version_short "$IMAGE_TAG")"
+        exit 1
+    fi
+    update_submodules
+    CODE_UPDATED=1
+    NEW_VERSION=$(git rev-parse HEAD)
+else
+    log "WARNING: '$IMAGE_TAG' is not a git commit reachable from origin/master; only the images for that tag are pulled. The scripts and compose file on disk are not changed."
 fi
 
 # Set image tag for prebuilt images
