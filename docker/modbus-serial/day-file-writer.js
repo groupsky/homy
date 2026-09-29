@@ -61,6 +61,19 @@ function requireSegment(value, what) {
   }
 }
 
+// Confirms `target` (already joined under `base`) really stays under it:
+// `path.relative` between the two cannot start with '..' or be absolute
+// unless it climbed out. requireSegment already guarantees this for a
+// well-formed stream/service, but `target` is the value used to open a file,
+// and that guarantee must not rest on requireSegment alone.
+function requireWithin(base, target) {
+  const relative = path.relative(base, target)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`day-file-writer: refusing to use a path outside ${base}: ${target}`)
+  }
+  return target
+}
+
 // Writes all of `buffer`, looping over short writes.
 function writeFully(fd, buffer) {
   let offset = 0
@@ -93,10 +106,7 @@ function createDayFileWriter({root, stream, service}) {
   }
   requireSegment(stream, 'stream')
   requireSegment(service, 'service')
-  // requireSegment above already guarantees a single path segment (no '/',
-  // no leading '.'); path.basename() here is belt-and-suspenders, and the
-  // pattern a static path-injection check can verify on its own.
-  const dir = path.join(root, path.basename(stream))
+  const dir = requireWithin(root, path.join(root, stream))
 
   let openDay = null
   let fd = null
@@ -116,7 +126,7 @@ function createDayFileWriter({root, stream, service}) {
 
   function open(day) {
     fs.mkdirSync(dir, {recursive: true})
-    const dayFile = path.join(dir, path.basename(`${day}.${service}.ndjson`))
+    const dayFile = requireWithin(dir, path.join(dir, `${day}.${service}.ndjson`))
     const dayFd = fs.openSync(dayFile, 'a')
     try {
       const {size} = fs.fstatSync(dayFd)
