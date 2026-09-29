@@ -56,7 +56,8 @@ it arrived. See `docker/mqtt-ndjson/CLAUDE.md`.
 The switch happens in steps, all tracked in #1622:
 
 1. **Overlap** (starts with the deploy of #1622's writers): MongoDB and the NDJSON files are written
-   side by side for at least 7 days, and their contents are compared.
+   side by side for at least 7 days, and their contents are compared with
+   `scripts/ndjson-overlap.sh` (see `scripts/ndjson-overlap/README.md`).
 2. **Cut-over**: the `mongodb` integration is removed from every
    `modbus-serial` config, and this service is removed.
 3. **Switch-off**: once the host side has exported the existing MongoDB
