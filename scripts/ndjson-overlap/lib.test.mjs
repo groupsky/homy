@@ -162,17 +162,14 @@ test('mongoScript uses payload._tz for {topic, payload} records', () => {
 })
 
 test('mongoScript evaluates to undefined, so mongosh prints only the documents', () => {
-  // A script whose last statement has a value makes mongosh print it too.
+  // A script whose last statement has a value makes mongosh print it too. This
+  // checks the script's shape rather than running it (mongo.test.mjs runs it
+  // for real, through real mongosh): it must be an IIFE with no `return`, so
+  // the call is an expression statement whose value is always undefined -
+  // mongosh's last-statement auto-print then has nothing to print.
   const script = mongoScript({ stream: 'main', day: DAY, shape: 'flat' })
-  const printed = []
-  const docs = [{ a: 1 }, { b: 2 }]
-  const cursor = { batchSize: () => cursor, hasNext: () => docs.length > 0, next: () => docs.shift() }
-  const db = { getCollection: () => ({ find: () => cursor }) }
-  // eslint-disable-next-line no-new-func
-  const result = new Function('db', 'ObjectId', 'EJSON', 'print', `return eval(${JSON.stringify(script)})`)(
-    db, (hex) => hex, { stringify: (d) => JSON.stringify(d) }, (s) => printed.push(s))
-  assert.equal(result, undefined)
-  assert.deepEqual(printed.join('\n').split('\n'), ['{"a":1}', '{"b":2}'])
+  assert.match(script, /^\(function \(\) \{[\s\S]*\}\)\(\);\n$/)
+  assert.doesNotMatch(script, /\breturn\b/)
 })
 
 // ---------------------------------------------------------------------------
