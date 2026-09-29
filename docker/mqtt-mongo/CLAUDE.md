@@ -24,13 +24,34 @@ payload with two ingest timestamps when absent:
 
 The logger's own event time remains available in `payload.ts`.
 
-## Retention — automatic TTL index
+## Retention
 
-Retention is opt-in via the `TTL_EXPIRE_SECONDS` environment variable. When set to
-a positive integer, the service ensures a TTL index at startup (idempotent, re-run
-safe on every reconnect); when unset, the archive is kept indefinitely (this is how
-`mqtt-mongo-history` behaves). The Ioniq archive sets `TTL_EXPIRE_SECONDS=7776000`
-(90 days) in `docker-compose.yml`.
+**Every MongoDB collection** — every archive here, and the raw modbus
+collections `modbus-serial` writes directly (see `docs/influxdb-schema.md`)
+— keeps **at least 60 days**. A host-side job, not yet running as of
+2026-09 (first run around 2026-11-30), exports each finished month once,
+one Parquet file per collection per month, verifies that export, and only
+then deletes that month from MongoDB — so a collection really holds
+somewhere between 60 and about 90 days, never less than 60. Nothing in this
+repo reads MongoDB automatically — a consumer that needs older data reads
+the Parquet archive (with DuckDB, for example), and `historian` only ever
+replays what is still in MongoDB. See #1618.
+
+Retention is **not** done with a TTL index: a TTL index deletes on its own
+schedule, so it could delete a month before the host-side job has archived
+and verified it. `ioniq` had a 90-day TTL index (`TTL_EXPIRE_SECONDS`, below)
+until #1618 dropped it and removed the setting, for exactly that reason —
+the TTL's first deletes would have landed on data the archive job had not
+reached yet.
+
+### The TTL_EXPIRE_SECONDS mechanism (opt-in, currently unused)
+
+The service still supports an opt-in TTL index via the `TTL_EXPIRE_SECONDS`
+environment variable, for a future archive that genuinely wants Mongo itself
+to expire old data (rather than the host-side archive-then-delete job). When
+set to a positive integer, the service ensures a TTL index at startup
+(idempotent, re-run safe on every reconnect); when unset, as every instance
+is today, the archive is kept until something else deletes from it.
 
 **The index is created on `payload._ts`, not top-level `_ts`.** Because every
 document is stored as `{ topic, payload }`, the BSON `Date` that `record.js` stamps
@@ -38,24 +59,17 @@ lives at `payload._ts`. A TTL index on top-level `_ts` matches no document and
 Mongo never expires anything — this was a real production bug. `ttl.js` derives the
 index path from `record.js`'s `TS_FIELD` constant so the two cannot drift, and
 `__tests__/ttl.test.js` guards the alignment. TTL uses ingest time (`payload._ts`);
-the logger's event time stays in `payload.ts`. InfluxDB (`homy.ioniq`) is the
-long-term compact store and is kept indefinitely.
+the logger's event time stays in `payload.ts`.
 
-Verify the index after deploy:
+To add one to a new instance, verify the index after deploy:
 
     docker compose exec -T mongo mongosh \
       "mongodb://localhost:27017/${MONGO_DATABASE:-power}?authSource=admin" \
       -u "$(cat secrets/mongo_root_username)" -p "$(cat secrets/mongo_root_password)" \
-      --eval 'db.ioniq.getIndexes()'
+      --eval 'db.<collection>.getIndexes()'
 
-You should see `ttl_payload__ts` on `{ "payload._ts": 1 }` with
-`expireAfterSeconds: 7776000`.
-
-**One-time cleanup of the stale index:** production created a broken
-`ttl__ts` index on top-level `{ _ts: 1 }` (never expired anything). After deploying
-this fix, drop it:
-
-    ... --eval 'db.ioniq.dropIndex("ttl__ts")'
+You should see `ttl_payload__ts` on `{ "payload._ts": 1 }` with the
+configured `expireAfterSeconds`.
 
 **Changing the retention period later:** the index name is fixed, so re-running
 `createIndex` with a different `TTL_EXPIRE_SECONDS` throws `IndexOptionsConflict`
@@ -63,7 +77,7 @@ this fix, drop it:
 carries on with the *old* period. To actually change retention, update the value
 in place with `collMod`:
 
-    ... --eval 'db.runCommand({ collMod: "ioniq", index: { name: "ttl_payload__ts", expireAfterSeconds: <new> } })'
+    ... --eval 'db.runCommand({ collMod: "<collection>", index: { name: "ttl_payload__ts", expireAfterSeconds: <new> } })'
 
 (or drop `ttl_payload__ts` and let the service recreate it on next restart).
 
@@ -130,12 +144,11 @@ behaviour and its test suite are kept identical.
 A consumer reading this archive must expect `_raw`/`_parseError` documents
 alongside normal ones and skip or handle them.
 
-**Retention caveat.** `mqtt-mongo-ioniq` sets `TTL_EXPIRE_SECONDS=7776000`, so
-wrapped documents expire with everything else. `mqtt-mongo-history` sets no TTL at
-all, so a persistently malformed publisher on `/homy/br1/temp` — which previously
-crash-looped the archiver, making the problem loud — now accumulates up to 64 KiB
-per message indefinitely. That is the deliberate cost of not dropping; watch the
-`history` collection size if a producer there starts misbehaving.
+**Retention caveat.** No instance sets a TTL index (see Retention above): a
+persistently malformed publisher accumulates up to 64 KiB per message
+indefinitely, until the host-side archive job exports and deletes that
+month. That is the deliberate cost of not dropping; watch a collection's
+size if a producer starts misbehaving.
 
 Separately, and pre-existing: an incoming payload that already carries `_ts` keeps
 it (see `buildRecord`), so a producer sending a *string* `_ts` still yields a

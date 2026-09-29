@@ -353,7 +353,7 @@ because it is the sensor that fails — issue #1472)
 - nested objects → recursively flattened into dotted field keys (e.g. `relays.main`)
 - arrays → JSON-stringified into a single string field
 - Representative fields: `soc`, `hv_v`, `hv_a`, `12v`, `speed`, `relays.main`, `dtc`
-**Retention**: kept indefinitely (compact numeric data). The bulky raw archive lives separately in MongoDB (`ioniq` collection, 90-day TTL on `_ts`) — see `docker/mqtt-mongo/CLAUDE.md`.
+**Retention**: kept indefinitely (compact numeric data). The bulky raw archive lives separately in MongoDB (`ioniq` collection, at least 60 days, older months archived to Parquet and then deleted — see `docker/mqtt-mongo/CLAUDE.md#retention`).
 **Use Cases**: Hyundai Ioniq OBD time-series (SoC, HV pack, speed, temps, TPMS) for Grafana and InfluxQL trip/charging analysis
 
 #### `ioniq_sessions` Measurement
@@ -628,6 +628,10 @@ Raw modbus data is also stored in MongoDB collections:
 - `secondary` - Raw boiler modbus data
 - `monitoring` - Raw solar controller data
 - `inverter` - Raw PV inverter data
+
+Every MongoDB collection, these included, keeps at least 60 days; older
+months are exported once, verified, and only then deleted by a host-side
+job — see `docker/mqtt-mongo/CLAUDE.md#retention`.
 
 ## Data Retention and Performance
 

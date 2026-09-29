@@ -693,8 +693,10 @@ services:
       - BROKER=mqtt://broker
       - TOPIC=ioniq/#
       - MQTT_CLIENT_ID=mqtt-mongo-ioniq
-      # 90-day retention: the service ensures a TTL index on payload._ts at startup
-      - TTL_EXPIRE_SECONDS=7776000
+      # No TTL here: MongoDB keeps at least 60 days, older months are
+      # exported to Parquet by a host-side job that deletes a month from
+      # MongoDB only after verifying that month's export. A TTL index
+      # racing that job could delete data before it is archived (#1618).
     logging: *default-logging
 
   mqtt-influx-primary:
