@@ -22,8 +22,10 @@ function ttlIndexArgs(field, expireSeconds) {
 
 /**
  * Resolves TTL configuration from the process environment. Retention is opt-in:
- * only archives that set a positive-integer TTL_EXPIRE_SECONDS get a TTL index,
- * so generic archives (e.g. mqtt-mongo-history) keep data indefinitely.
+ * only archives that set a positive-integer TTL_EXPIRE_SECONDS get a TTL index;
+ * every instance today leaves it unset, so old data is removed only by the
+ * host-side archive-then-delete job (see docker/mqtt-mongo/CLAUDE.md#retention),
+ * not by this index.
  * Returns the createIndex argument pair, or null when TTL is not configured.
  */
 function ttlIndexArgsFromEnv(env) {

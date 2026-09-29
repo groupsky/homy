@@ -9,9 +9,18 @@ MongoDB collection as `{ topic, payload }`. It is a lossless archive used for
 replay and ad-hoc queries. Multiple instances archive different topic trees.
 
 ### Service Instances
-- **mqtt-mongo-history**: legacy temperature history (`/homy/br1/temp` → `history`).
 - **mqtt-mongo-ioniq**: full Hyundai Ioniq OBD stream (`ioniq/#` → `ioniq`), covering
   parsed, raw, and status channels for replay / reverse-engineering.
+
+`mqtt-mongo-history` (legacy temperature history, `/homy/br1/temp` → `history`)
+was removed in #1619. Its only publisher was a Node-RED flow polling a Broadlink
+RM+ device's temperature sensor; the flow ran unedited from 2021-01-21 until
+Node-RED was fully removed from the stack on 2026-01-25 (#1185), but the
+device or its host stopped actually publishing on 2024-07-04 — 18 months
+earlier, and unexplained by anything in this repo's history. The
+`history` collection (3.4M documents, 2021-01-21 to 2024-07-04) is not
+deleted by this issue; it follows the same retention as every other
+MongoDB collection (see Retention, above).
 
 ## Record shape and timestamps
 

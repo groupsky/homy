@@ -125,7 +125,7 @@ Multiple interfaces for monitoring and control:
 ### Data Pipeline Services
 - **mqtt-influx-***: Multiple services bridging MQTT to InfluxDB
   - **mqtt-influx-primary/secondary/tetriary**: Modbus sensor data
-- **mqtt-mongo-history**: MQTT message logging to MongoDB
+- **mqtt-mongo-ioniq**: Lossless MQTT archive to MongoDB (Ioniq OBD stream)
 - **historian-***: Manual data migration utilities
 
 ## Current State & Architectural Challenges
