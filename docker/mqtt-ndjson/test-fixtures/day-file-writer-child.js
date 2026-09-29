@@ -7,8 +7,9 @@
  *   root, stream, service  passed to createDayFileWriter
  *   timestamp              epoch ms stamped on every line (picks the day file)
  *   run                    written into every line, to tell runs apart
- *   count                  lines to write, then process.exit(); -1 writes until
- *                          killed. Bounded (0 to 1000000) otherwise
+ *   count                  lines to write, then process.exit(); -1 means the
+ *                          caller intends to SIGKILL this process first and
+ *                          writes MAX_COUNT lines, a bound it never reaches
  *   pad                    characters of padding per line (default 16, max 16 MiB)
  *   tear                   after `count` lines, write the first half of one
  *                          more line and SIGKILL itself before finishing it —
@@ -35,10 +36,13 @@ if (count !== -1 && (!Number.isInteger(count) || count < 0 || count > MAX_COUNT)
 
 const padding = 'x'.repeat(pad)
 const writer = createDayFileWriter({root, stream, service})
-const runForever = count === -1
+// -1 means "until killed": write towards MAX_COUNT, a bound the caller's
+// SIGKILL always lands well before. One bounded loop, no separate
+// unbounded path.
+const target = count === -1 ? MAX_COUNT : count
 
 let file
-for (let seq = 0; runForever || seq < count; seq++) {
+for (let seq = 0; seq < target; seq++) {
   file = writer.write({run, seq, pad: padding}, timestamp)
   if (seq === 0) process.stdout.write('ready\n')
 }

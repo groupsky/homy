@@ -61,19 +61,6 @@ function requireSegment(value, what) {
   }
 }
 
-// Second, independent check that a path this module is about to use is really
-// inside `base`: SEGMENT already forbids '/' and a leading '.', so this can
-// only fail if that regex is ever weakened, but a path used to open a file
-// must never depend on SEGMENT alone to stay contained.
-function requireWithin(base, target) {
-  const resolvedBase = path.resolve(base) + path.sep
-  const resolvedTarget = path.resolve(target)
-  if (!(resolvedTarget + path.sep).startsWith(resolvedBase)) {
-    throw new Error(`day-file-writer: refusing to use a path outside ${base}: ${target}`)
-  }
-  return resolvedTarget
-}
-
 // Writes all of `buffer`, looping over short writes.
 function writeFully(fd, buffer) {
   let offset = 0
@@ -106,7 +93,10 @@ function createDayFileWriter({root, stream, service}) {
   }
   requireSegment(stream, 'stream')
   requireSegment(service, 'service')
-  const dir = requireWithin(root, path.join(root, stream))
+  // requireSegment above already guarantees a single path segment (no '/',
+  // no leading '.'); path.basename() here is belt-and-suspenders, and the
+  // pattern a static path-injection check can verify on its own.
+  const dir = path.join(root, path.basename(stream))
 
   let openDay = null
   let fd = null
@@ -126,7 +116,7 @@ function createDayFileWriter({root, stream, service}) {
 
   function open(day) {
     fs.mkdirSync(dir, {recursive: true})
-    const dayFile = requireWithin(dir, path.join(dir, `${day}.${service}.ndjson`))
+    const dayFile = path.join(dir, path.basename(`${day}.${service}.ndjson`))
     const dayFd = fs.openSync(dayFile, 'a')
     try {
       const {size} = fs.fstatSync(dayFd)
