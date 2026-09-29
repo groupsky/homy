@@ -6,10 +6,16 @@ on:
       - master
     paths:
       - 'docker/mqtt-ndjson/**'
+      - 'docker/modbus-serial/day-file-writer.js'
+      - 'docker/modbus-serial/day-file-writer.test.js'
+      - 'docker/modbus-serial/test-fixtures/day-file-writer-child.js'
       - '.github/workflows/test-mqtt-ndjson.yml'
   pull_request:
     paths:
       - 'docker/mqtt-ndjson/**'
+      - 'docker/modbus-serial/day-file-writer.js'
+      - 'docker/modbus-serial/day-file-writer.test.js'
+      - 'docker/modbus-serial/test-fixtures/day-file-writer-child.js'
       - '.github/workflows/test-mqtt-ndjson.yml'
   workflow_dispatch:
 
@@ -30,6 +36,15 @@ jobs:
           node-version-file: 'docker/mqtt-ndjson/.nvmrc'
           cache: 'npm'
           cache-dependency-path: 'docker/mqtt-ndjson/package-lock.json'
+
+      # day-file-writer.js is copied, not shared, between modbus-serial and
+      # mqtt-ndjson (separate npm packages). The copies, their test and its
+      # harness must stay identical.
+      - name: Check the day-file-writer copies are identical
+        run: |
+          cmp docker/modbus-serial/day-file-writer.js docker/mqtt-ndjson/day-file-writer.js
+          cmp docker/modbus-serial/day-file-writer.test.js docker/mqtt-ndjson/day-file-writer.test.js
+          cmp docker/modbus-serial/test-fixtures/day-file-writer-child.js docker/mqtt-ndjson/test-fixtures/day-file-writer-child.js
 
       - name: Install dependencies
         working-directory: docker/mqtt-ndjson

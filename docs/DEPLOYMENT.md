@@ -347,6 +347,11 @@ Every service with state keeps it in a host directory under `${DATA_PATH}` (a bi
 |---|---|---|
 | `mongo` | `${DATA_PATH}/mongodb/db`, `${DATA_PATH}/mongodb/configdb` (owned by 999:999) | `/data/db`, `/data/configdb` |
 | `broker` | `${DATA_PATH}/mosquitto/data`, `${DATA_PATH}/mosquitto/log` | `/mosquitto/data`, `/mosquitto/log` |
+| every `modbus-serial` service and `mqtt-ndjson-ioniq` (raw readings, #1622) | `${RAW_DATA_PATH}` = `${DATA_PATH}/raw`, owned by 1000:1000, shared by all of them | `/data/raw` |
+
+**The raw directory must be a plain subdirectory of `${DATA_PATH}`, on the same ZFS dataset — not a dataset of its own**, even though it grows by about 770 MB a day. `snapshot.sh` stops when the writable mounts are on more than one dataset, and it counts a child dataset as a different one: a separate dataset for it would stop every deploy at the snapshot step.
+
+**Restoring the raw directory restores it for every writer.** All nine writers share one directory, so `restore-snapshot.sh` for any one of them copies back the whole directory: every stream, and days the host-side job may already have handled. It also stops all nine writers while it runs. Restore it only on purpose, and tell the host-side job.
 
 Why: an image that declares `VOLUME /x` gets an unnamed Docker volume unless the service mounts exactly `/x`. `docker compose up -d` keeps such a volume, but `docker compose down` does not. Until 2026-09-25 this made every `down` start MongoDB from an empty database and drop the broker's retained messages. A CI test (`scripts/compose-volumes.test.mjs`) now fails if any service has an unnamed volume, and `snapshot.sh` refuses to snapshot while a running container has one.
 

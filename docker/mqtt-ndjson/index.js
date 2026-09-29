@@ -14,12 +14,16 @@ if (!mqttUrl || !topic) {
 }
 
 // Throws, and so stops the service at startup, when RAW_DIR, STREAM or
-// SERVICE_NAME is missing or not a plain name.
+// SERVICE_NAME is missing or not a plain name, or when the stream directory
+// cannot be written (a raw directory docker created as root, say): the
+// restart loop and the deploy gate then show it, instead of the service
+// running while no message is written.
 const writer = createDayFileWriter({
     root: process.env.RAW_DIR,
     stream: process.env.STREAM,
     service: process.env.SERVICE_NAME,
 })
+writer.ensureWritable()
 
 const client = mqtt.connect(mqttUrl, {
     clientId: process.env.MQTT_CLIENT_ID

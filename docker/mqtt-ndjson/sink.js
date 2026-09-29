@@ -2,14 +2,25 @@ const { buildRecord } = require('./record')
 const { payloadPreview } = require('./payload-preview')
 const { utcDay } = require('./day-file-writer')
 
+// How far a producer's own `_tz` may be from the arrival time and still pick
+// the file. Beyond it the record is filed by arrival time (and kept as sent).
+//
+// This deliberately narrows issue #1622's rule "day = the UTC day of `_tz`":
+// a `_tz` in seconds instead of milliseconds, or an old retained message
+// replayed on reconnect, would otherwise append to a day the host-side job has
+// already archived (or to 1970). 36 hours covers any real delay; the messages
+// this service stamps itself are always within it.
+const MAX_PRODUCER_SKEW_MS = 36 * 60 * 60 * 1000
+
 /**
  * Writes every message the MQTT client receives as one `{ topic, payload }`
  * line through `writer` (a day-file-writer).
  *
  * The line goes to the file of the UTC day of `payload._tz`: the time this
  * service received it, or the `_tz` the producer stamped itself (automations
- * bots do). If the producer's `_tz` is not a timestamp, the record is kept as
- * sent and filed by the time it arrived.
+ * bots do). A producer's `_tz` that is not epoch milliseconds, or is more than
+ * MAX_PRODUCER_SKEW_MS from the arrival time, does not pick the file: the
+ * record is kept as sent and filed by the time it arrived.
  *
  * Nothing may throw out of this listener: it runs inside the mqtt client's
  * stream, where an exception becomes an unhandled `error` event and kills the
@@ -37,8 +48,7 @@ function startWriting({ client, writer, now = () => new Date(), exit = (code) =>
       console.error('Failed to parse payload for topic', topic,
         `"${payloadPreview(message)}"`, built.error, '- writing raw')
     }
-    const stamped = built.record.payload._tz
-    const timestamp = utcDay(stamped) !== null ? stamped : receivedAt.getTime()
+    const timestamp = fileTimestamp(built.record.payload._tz, receivedAt.getTime())
     try {
       writer.write(built.record, timestamp)
     } catch (err) {
@@ -48,4 +58,11 @@ function startWriting({ client, writer, now = () => new Date(), exit = (code) =>
   })
 }
 
-module.exports = { startWriting }
+// The timestamp whose UTC day picks the file: the record's `_tz` if it is
+// epoch milliseconds close enough to the arrival time, else the arrival time.
+function fileTimestamp(stamped, arrived) {
+  const trusted = utcDay(stamped) !== null && Math.abs(stamped - arrived) <= MAX_PRODUCER_SKEW_MS
+  return trusted ? stamped : arrived
+}
+
+module.exports = { startWriting, MAX_PRODUCER_SKEW_MS }

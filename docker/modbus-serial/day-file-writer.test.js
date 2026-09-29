@@ -219,6 +219,50 @@ describe('createDayFileWriter', () => {
     expect(linesOf(fileOf('2026-09-28'))).toEqual(['{"a":1}', '{"los', '{"c":3}'])
   })
 
+  // Checked once at startup, so a raw directory the service cannot write stops
+  // it at once instead of every later reading failing unnoticed.
+  describe('ensureWritable', () => {
+    it('creates the stream directory', () => {
+      const writer = createDayFileWriter({root, stream: 'main', service: 'main-power'})
+
+      writer.ensureWritable()
+
+      expect(fs.statSync(path.join(root, 'main')).isDirectory()).toBe(true)
+    })
+
+    it('throws when the stream directory cannot be created', () => {
+      fs.writeFileSync(path.join(root, 'main'), '') // a file where the directory belongs
+      const writer = createDayFileWriter({root, stream: 'main', service: 'main-power'})
+
+      expect(() => writer.ensureWritable()).toThrow()
+    })
+
+    // Root ignores permission bits, so this can only be checked as another user.
+    const asRoot = typeof process.getuid === 'function' && process.getuid() === 0
+
+    ;(asRoot ? it.skip : it)('throws when the stream directory exists but is not writable', () => {
+      fs.mkdirSync(path.join(root, 'main'), {mode: 0o555})
+      const writer = createDayFileWriter({root, stream: 'main', service: 'main-power'})
+
+      try {
+        expect(() => writer.ensureWritable()).toThrow(/EACCES/)
+      } finally {
+        fs.chmodSync(path.join(root, 'main'), 0o755)
+      }
+    })
+
+    ;(asRoot ? it.skip : it)('throws when the root is not writable and the stream directory does not exist yet', () => {
+      fs.chmodSync(root, 0o555)
+      const writer = createDayFileWriter({root, stream: 'main', service: 'main-power'})
+
+      try {
+        expect(() => writer.ensureWritable()).toThrow(/EACCES/)
+      } finally {
+        fs.chmodSync(root, 0o755)
+      }
+    })
+  })
+
   describe('rejecting what it cannot file', () => {
     it.each([
       ['NaN', NaN],

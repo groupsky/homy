@@ -24,7 +24,9 @@
  *   next write reopens it and repairs the end.
  *
  * The writer never deletes, rotates or compresses anything; a host-side job
- * owns finished days.
+ * owns finished days. The repair above only runs when a file is opened, so a
+ * line cut short just before the day ends stays cut: a finished day's file can
+ * end with one partial line without '\n', and a reader must skip it.
  *
  * This file is copied, unchanged, into every service that writes these files
  * (`docker/modbus-serial`, `docker/mqtt-ndjson`). They are separate npm
@@ -83,7 +85,7 @@ function endsWithNewline(file, size) {
  * @param {string} options.root    directory holding one subdirectory per stream
  * @param {string} options.stream  subdirectory name, e.g. the Mongo collection name
  * @param {string} options.service compose service name, part of the file name
- * @returns {{write: (value: object, epochMs: number) => string, close: () => void}}
+ * @returns {{write: (value: object, epochMs: number) => string, close: () => void, ensureWritable: () => void}}
  */
 function createDayFileWriter({root, stream, service}) {
   if (typeof root !== 'string' || root === '') {
@@ -128,6 +130,18 @@ function createDayFileWriter({root, stream, service}) {
   }
 
   /**
+   * Creates the stream directory if needed and throws unless this process can
+   * write to it. Services call it once at startup, so a raw directory that
+   * docker created as root (or a read-only mount) stops the service right
+   * away, where the deploy gate and the restart loop show it, instead of
+   * every later write failing.
+   */
+  function ensureWritable() {
+    fs.mkdirSync(dir, {recursive: true})
+    fs.accessSync(dir, fs.constants.W_OK)
+  }
+
+  /**
    * Appends `value` as one line to the file of `epochMs`'s UTC day and returns
    * that file's path. Throws, before touching any file, if the timestamp names
    * no day or the value has no JSON form; throws after closing the file if the
@@ -157,7 +171,7 @@ function createDayFileWriter({root, stream, service}) {
     return file
   }
 
-  return {write, close}
+  return {write, close, ensureWritable}
 }
 
 module.exports = {createDayFileWriter, utcDay}

@@ -44,9 +44,18 @@ in its MongoDB collections. A host-side job turns finished days into Parquet
 and archives them; a consumer that needs the history reads that archive
 (with DuckDB, for example).
 
+A line goes to the file of the UTC day of its `payload._tz`, with one
+deliberate exception in `mqtt-ndjson` that narrows #1622's literal rule "day =
+the UTC day of `_tz`": a `_tz` the *producer* stamped picks the file only when
+it is epoch milliseconds within 36 hours of the arrival time; otherwise the
+file is picked by the arrival time (the record keeps the producer's `_tz`). So
+when the overlap compares this collection with the NDJSON files by `_tz`, a
+document with a far-off or malformed producer `_tz` is in the file of the day
+it arrived. See `docker/mqtt-ndjson/CLAUDE.md`.
+
 The switch happens in steps, all tracked in #1622:
 
-1. **Overlap** (from this change): MongoDB and the NDJSON files are written
+1. **Overlap** (starts with the deploy of #1622's writers): MongoDB and the NDJSON files are written
    side by side for at least 7 days, and their contents are compared.
 2. **Cut-over**: the `mongodb` integration is removed from every
    `modbus-serial` config, and this service is removed.
@@ -62,43 +71,19 @@ schedule, so it could delete data before the host-side job has exported it.
 `ioniq` had a 90-day TTL index (`TTL_EXPIRE_SECONDS`, below) until #1618
 dropped it and removed the setting, for exactly that reason.
 
-### The TTL_EXPIRE_SECONDS mechanism (opt-in, currently unused)
+### The TTL_EXPIRE_SECONDS code (unused; do not set it)
 
-The service still supports an opt-in TTL index via the `TTL_EXPIRE_SECONDS`
-environment variable, for an archive that genuinely wants Mongo itself to
-expire old data. No instance uses it, and none should while MongoDB is being
-retired (see Retention, above). When
-set to a positive integer, the service ensures a TTL index at startup
-(idempotent, re-run safe on every reconnect); when unset, as every instance
-is today, the archive is kept until something else deletes from it.
+The code still supports an opt-in TTL index via the `TTL_EXPIRE_SECONDS`
+environment variable (`ttl.js`). No instance sets it, and none should while
+MongoDB is being retired (see Retention, above): it would delete data before
+the host-side job has exported it. The code goes away with this service at the
+#1622 cut-over.
 
-**The index is created on `payload._ts`, not top-level `_ts`.** Because every
-document is stored as `{ topic, payload }`, the BSON `Date` that `record.js` stamps
-lives at `payload._ts`. A TTL index on top-level `_ts` matches no document and
-Mongo never expires anything — this was a real production bug. `ttl.js` derives the
-index path from `record.js`'s `TS_FIELD` constant so the two cannot drift, and
-`__tests__/ttl.test.js` guards the alignment. TTL uses ingest time (`payload._ts`);
-the logger's event time stays in `payload.ts`.
-
-To add one to a new instance, verify the index after deploy:
-
-    docker compose exec -T mongo mongosh \
-      "mongodb://localhost:27017/${MONGO_DATABASE:-power}?authSource=admin" \
-      -u "$(cat secrets/mongo_root_username)" -p "$(cat secrets/mongo_root_password)" \
-      --eval 'db.<collection>.getIndexes()'
-
-You should see `ttl_payload__ts` on `{ "payload._ts": 1 }` with the
-configured `expireAfterSeconds`.
-
-**Changing the retention period later:** the index name is fixed, so re-running
-`createIndex` with a different `TTL_EXPIRE_SECONDS` throws `IndexOptionsConflict`
-(MongoDB does not update a TTL via `createIndex`) and the service logs it and
-carries on with the *old* period. To actually change retention, update the value
-in place with `collMod`:
-
-    ... --eval 'db.runCommand({ collMod: "<collection>", index: { name: "ttl_payload__ts", expireAfterSeconds: <new> } })'
-
-(or drop `ttl_payload__ts` and let the service recreate it on next restart).
+For reading the code: when set, the index is created on `payload._ts`, not
+top-level `_ts`, because every document is stored as `{ topic, payload }`. A
+TTL index on top-level `_ts` matches no document — this was a real production
+bug. `ttl.js` derives the path from `record.js`'s `TS_FIELD` constant, and
+`__tests__/ttl.test.js` guards the alignment.
 
 ## Malformed Payload Handling
 

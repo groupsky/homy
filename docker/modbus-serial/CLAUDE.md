@@ -113,7 +113,14 @@ in `docker-compose.yml`:
   the `monitoring` stream; the service name keeps them in separate files, so
   every file has exactly one writer.
 
-A missing or unsafe value (a path, `..`) stops the service at startup.
+A missing or unsafe value (a path, `..`) stops the service at startup. So does
+a stream directory it cannot write: at startup the integration creates it and
+checks that it is writable (`ensureWritable`). `${RAW_DATA_PATH}` must exist and
+be owned by uid 1000, which the image runs as; if docker created it (owned by
+root), the service exits with an error, where the restart loop and the deploy
+gate show it, instead of running while no reading is written. Keep it a plain
+subdirectory of `DATA_PATH` on the same ZFS dataset (see `docs/DEPLOYMENT.md`,
+"Where state lives").
 
 **The line.** The same fields as the Mongo document, **without `_id`**. index.js
 hands the same object to every integration, and the `mongodb` integration's
@@ -121,9 +128,17 @@ hands the same object to every integration, and the `mongodb` integration's
 order the integrations run, without changing the shared object. The day is the
 **UTC** day of the reading's `_tz`. A reading taken just before midnight but
 written just after goes to the previous day's file, so the host-side job must
-leave a day alone for a short while after it ends. JSON has no `NaN` or
-`Infinity`: a driver value like that is written as `null`, where MongoDB kept the
-number.
+leave a day alone for a short while after it ends. (Here the day is always the
+UTC day of `_tz`, as #1622 says: `_tz` is stamped by this process. Only
+`docker/mqtt-ndjson` narrows the rule, for `_tz` values a producer sent.)
+
+Where the line and the Mongo document can differ, which matters when the
+overlap compares contents and not just counts:
+
+- JSON has no `NaN` or `Infinity`: a driver value like that is written as
+  `null`, where MongoDB kept the number.
+- A field set to `undefined` is left out of the line, where the MongoDB driver
+  stores it as `null` (its default `ignoreUndefined: false`).
 
 **How it writes** (`day-file-writer.js`):
 
@@ -135,13 +150,21 @@ number.
 - Opening a file whose last byte is not `\n` writes `\n` first. A process killed
   in the middle of a line leaves it cut short; without this, the next line would
   be glued onto it. The same repair runs after a failed write (a full disk).
-- A failed write is logged (`[ndjson] failed to write a reading ...`) and that
-  reading is skipped; the other integrations and the bus reader carry on.
+- That repair only runs when a file is opened. A day whose last line was cut
+  (a crash just before midnight, and the next reading on the new day) is never
+  opened again, so **a finished day's file can end with one partial line
+  without `\n`, and the host-side job must skip it** rather than fail on it.
+- A failed write after startup is logged (`[ndjson] failed to write a reading
+  ...`) and that reading is skipped; the other integrations and the bus reader
+  carry on. The same error is logged once, not for every reading, and
+  `[ndjson] writing to <stream> works again` marks the recovery.
 
 `day-file-writer.js` is also used by `docker/mqtt-ndjson`. The services are
 separate npm packages, so it cannot be shared by `require`: the file, its test
 `day-file-writer.test.js` and `test-fixtures/day-file-writer-child.js` are
-identical copies. Change them together. The test runs the writer in a real
+identical copies. Change them together: a `cmp` step in both
+`test-modbus-serial.yml` and `test-mqtt-ndjson.yml` fails when they differ. The
+test runs the writer in a real
 child process and kills it with `SIGKILL` in the middle of a line, then
 restarts it and checks that no line is glued to another.
 

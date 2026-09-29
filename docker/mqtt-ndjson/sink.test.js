@@ -3,8 +3,8 @@ const EventEmitter = require('events')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const {createDayFileWriter} = require('./day-file-writer')
-const {startWriting} = require('./sink')
+const {createDayFileWriter, utcDay} = require('./day-file-writer')
+const {startWriting, MAX_PRODUCER_SKEW_MS} = require('./sink')
 
 // The MQTT client is a plain EventEmitter (which the real client is) and the
 // writer is the real one, on a temporary directory.
@@ -57,6 +57,49 @@ describe('startWriting', () => {
       topic: 'ioniq/derived/session',
       payload: {kind: 'end', _tz: yesterday, _ts: NOW.toISOString()},
     }])
+  })
+
+  // A producer's own _tz is trusted only within MAX_PRODUCER_SKEW_MS of the
+  // arrival time. Otherwise a _tz in seconds, or an old retained message
+  // replayed on reconnect, would append to a day the host-side job has already
+  // archived (or to 1970).
+  describe('with a producer _tz far from the arrival time', () => {
+    it('trusts a _tz up to 36 hours before arrival', () => {
+      const {client} = start()
+      const early = NOW.getTime() - MAX_PRODUCER_SKEW_MS
+
+      client.emit('message', 'ioniq/derived/session', Buffer.from(JSON.stringify({_tz: early})))
+
+      expect(recordsIn(dayFile(utcDay(early)))).toHaveLength(1)
+    })
+
+    it('files a _tz more than 36 hours old by the arrival time, and keeps it as sent', () => {
+      const {client} = start()
+      const stale = NOW.getTime() - MAX_PRODUCER_SKEW_MS - 1
+
+      client.emit('message', 'ioniq/derived/session', Buffer.from(JSON.stringify({_tz: stale})))
+
+      expect(fs.readdirSync(path.join(root, 'ioniq'))).toEqual([path.basename(dayFile('2026-09-28'))])
+      expect(recordsIn(dayFile('2026-09-28'))[0].payload._tz).toBe(stale)
+    })
+
+    it('files a _tz more than 36 hours in the future by the arrival time', () => {
+      const {client} = start()
+
+      client.emit('message', 'ioniq/derived/session', Buffer.from(JSON.stringify({_tz: NOW.getTime() + MAX_PRODUCER_SKEW_MS + 1})))
+
+      expect(recordsIn(dayFile('2026-09-28'))).toHaveLength(1)
+    })
+
+    it('files a _tz in seconds instead of milliseconds by the arrival time', () => {
+      const {client} = start()
+      const seconds = Math.floor(NOW.getTime() / 1000)
+
+      client.emit('message', 'ioniq/derived/session', Buffer.from(JSON.stringify({_tz: seconds})))
+
+      expect(fs.readdirSync(path.join(root, 'ioniq'))).toEqual([path.basename(dayFile('2026-09-28'))])
+      expect(recordsIn(dayFile('2026-09-28'))[0].payload._tz).toBe(seconds)
+    })
   })
 
   it('files a message whose own _tz is not a timestamp by the time it arrived, and keeps it as sent', () => {

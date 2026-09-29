@@ -23,10 +23,12 @@ const reading = () => ({
 
 let root
 let errors
+let logs
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'ndjson-integration-'))
   errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+  logs = jest.spyOn(console, 'log').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -99,11 +101,34 @@ describe('ndjson integration', () => {
     expect(linesOf(dayFile('2026-09-28', 'monitoring', 'solar'))).toHaveLength(1)
   })
 
+  // A raw directory the service cannot write (docker creates a missing bind
+  // source owned by root) must stop the service at startup, where the deploy
+  // gate and the restart loop show it, not drop every reading unnoticed.
+  describe('at startup', () => {
+    it('creates the stream directory', () => {
+      createNdjsonIntegration({root, stream: 'secondary', service: 'secondary-power'})
+
+      expect(fs.statSync(path.join(root, 'secondary')).isDirectory()).toBe(true)
+    })
+
+    it('throws when the stream directory cannot be written', () => {
+      fs.writeFileSync(path.join(root, 'secondary'), '') // a file where the directory belongs
+
+      expect(() => createNdjsonIntegration({root, stream: 'secondary', service: 'secondary-power'})).toThrow()
+    })
+  })
+
   describe('when a write fails', () => {
-    it('logs it without throwing, so the other integrations still get the reading', () => {
-      // A file where the stream directory should be: every write fails.
+    // Makes every later write fail: a file where the stream directory was.
+    const breakStream = () => {
+      fs.rmSync(path.join(root, 'secondary'), {recursive: true, force: true})
       fs.writeFileSync(path.join(root, 'secondary'), '')
+    }
+    const repairStream = () => fs.rmSync(path.join(root, 'secondary'))
+
+    it('logs it without throwing, so the other integrations still get the reading', () => {
       const {publish} = createNdjsonIntegration({root, stream: 'secondary', service: 'secondary-power'})
+      breakStream()
 
       expect(() => publish(reading(), DEVICE)).not.toThrow()
 
@@ -111,12 +136,41 @@ describe('ndjson integration', () => {
       expect(errors.mock.calls[0].join(' ')).toContain('[ndjson]')
     })
 
-    it('writes the next reading once the fault is gone', () => {
-      fs.writeFileSync(path.join(root, 'secondary'), '')
+    // Readings arrive many times a second; one log line per reading would push
+    // everything else out of the rotated log.
+    it('logs the same error once, not once per reading', () => {
       const {publish} = createNdjsonIntegration({root, stream: 'secondary', service: 'secondary-power'})
+      breakStream()
+
+      for (let i = 0; i < 20; i++) publish(reading(), DEVICE)
+
+      expect(errors).toHaveBeenCalledTimes(1)
+    })
+
+    it('logs when writing works again, and logs the next failure again', () => {
+      const {publish} = createNdjsonIntegration({root, stream: 'secondary', service: 'secondary-power'})
+      breakStream()
+      publish(reading(), DEVICE)
       publish(reading(), DEVICE)
 
-      fs.rmSync(path.join(root, 'secondary'))
+      repairStream()
+      publish({...reading(), p: 1}, DEVICE)
+      publish({...reading(), p: 2}, DEVICE)
+      breakStream()
+      // The next day's first reading has to open a new file in the broken place.
+      publish({...reading(), _tz: Date.UTC(2026, 8, 29, 0, 0, 1)}, DEVICE)
+
+      expect(errors).toHaveBeenCalledTimes(2)
+      expect(logs).toHaveBeenCalledTimes(1)
+      expect(logs.mock.calls[0].join(' ')).toContain('[ndjson]')
+    })
+
+    it('writes the next reading once the fault is gone', () => {
+      const {publish} = createNdjsonIntegration({root, stream: 'secondary', service: 'secondary-power'})
+      breakStream()
+      publish(reading(), DEVICE)
+
+      repairStream()
       publish({...reading(), p: 1}, DEVICE)
 
       expect(linesOf(dayFile('2026-09-28')).map((line) => JSON.parse(line).p)).toEqual([1])

@@ -17,25 +17,38 @@ const run = (args) => execFileSync('docker', args, { cwd: root, encoding: 'utf8'
 
 const config = JSON.parse(run(['compose', '--env-file', 'example.env', 'config', '--format', 'json']))
 
+const volumesIn = (ref) => Object.keys(JSON.parse(run(['image', 'inspect', ref, '--format', '{{json .Config.Volumes}}'])) ?? {})
+
 // An image not published yet (a service added in this change) cannot be
-// pulled, so it is built from the service's build context instead.
+// pulled, so it is built from the service's build context instead. The build
+// gets a throwaway tag that is removed again, so it never replaces a real
+// local image of that name.
+function volumesOfBuild (image, build) {
+  const tag = `homy-compose-volumes-test/${image.replace(/^.*\//, '').replace(/[^a-z0-9._-]/g, '-')}:throwaway`
+  run(['build', '--quiet', '--tag', tag, ...(build.dockerfile ? ['--file', resolve(build.context, build.dockerfile)] : []), build.context])
+  try {
+    return volumesIn(tag)
+  } finally {
+    run(['image', 'rm', tag])
+  }
+}
+
 const imageVolumes = new Map()
 function volumesOf (image, build) {
   if (!imageVolumes.has(image)) {
-    const inspect = () => run(['image', 'inspect', image, '--format', '{{json .Config.Volumes}}'])
-    let out
+    let volumes
     try {
-      out = inspect()
+      volumes = volumesIn(image)
     } catch {
       try {
         run(['pull', '--quiet', image])
+        volumes = volumesIn(image)
       } catch (err) {
         if (!build?.context) throw err
-        run(['build', '--quiet', '--tag', image, ...(build.dockerfile ? ['--file', resolve(build.context, build.dockerfile)] : []), build.context])
+        volumes = volumesOfBuild(image, build)
       }
-      out = inspect()
     }
-    imageVolumes.set(image, Object.keys(JSON.parse(out) ?? {}))
+    imageVolumes.set(image, volumes)
   }
   return imageVolumes.get(image)
 }
