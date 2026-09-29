@@ -31,6 +31,9 @@ This directory contains technical documentation for the home automation system.
 ### InfluxDB Schema
 - **[Complete InfluxDB Schema](influxdb-schema.md)** - Comprehensive documentation of time-series database measurements, fields, and data sources
 
+### MongoDB Retention
+- **[MongoDB Retention](../docker/mqtt-mongo/CLAUDE.md#retention)** - every MongoDB collection keeps at least 60 days; older months are exported once, verified, and only then deleted by a host-side job (not a TTL index)
+
 ## Device Integration
 
 ### Wireless Device Integration
