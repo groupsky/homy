@@ -1,8 +1,8 @@
 const { payloadPreview } = require('./payload-preview')
 
 // Ingest-timestamp keys stamped into every archived payload.
-// TZ_FIELD (epoch-ms number) is the historical field kept for the existing
-// mqtt-mongo-history consumer. TS_FIELD is the same instant as a BSON `Date`,
+// TZ_FIELD (epoch-ms number) is the historical field, kept for existing
+// consumers of past archives. TS_FIELD is the same instant as a BSON `Date`,
 // the only field type a MongoDB TTL index can expire on. The TTL index must
 // point at this key's path in the stored document (payload.<TS_FIELD>); ttl.js
 // derives that path from TS_FIELD so the two can never drift apart.
