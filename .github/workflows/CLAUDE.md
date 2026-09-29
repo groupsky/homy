@@ -531,8 +531,9 @@ The following standalone workflows run unit tests independently from the unified
 | `test-automations.yml` | automations | `docker/automations/**` |
 | `test-automation-events-processor.yml` | automation-events-processor | `docker/automation-events-processor/**` |
 | `test-dmx-driver.yml` | dmx-driver | `docker/dmx-driver/**` |
-| `test-modbus-serial.yml` | modbus-serial | `docker/modbus-serial/**` |
+| `test-modbus-serial.yml` | modbus-serial | `docker/modbus-serial/**`, mqtt-ndjson's `day-file-writer` copies (a `cmp` step checks the two copies are identical) |
 | `test-mqtt-mongo.yml` | mqtt-mongo | `docker/mqtt-mongo/**` |
+| `test-mqtt-ndjson.yml` | mqtt-ndjson | `docker/mqtt-ndjson/**`, modbus-serial's `day-file-writer` copies (same `cmp` step) |
 | `test-sunseeker-monitoring.yml` | sunseeker-monitoring | `docker/sunseeker-monitoring/**` |
 | `test-telegram-bridge.yml` | telegram-bridge | `docker/telegram-bridge/**` |
 | `test-detect-changes.yml` | detect-changes (CI's own change detector) | `.github/scripts/detect-changes/**`, `docker-compose.yml` |

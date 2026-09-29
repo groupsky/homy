@@ -56,5 +56,10 @@ module.exports = {
         }
       }
     },
+    ndjson: {
+      root: process.env.RAW_DIR,
+      stream: process.env.COLLECTION,
+      service: process.env.SERVICE_NAME,
+    },
   },
 }

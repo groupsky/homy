@@ -31,8 +31,9 @@ This directory contains technical documentation for the home automation system.
 ### InfluxDB Schema
 - **[Complete InfluxDB Schema](influxdb-schema.md)** - Comprehensive documentation of time-series database measurements, fields, and data sources
 
-### MongoDB Retention
-- **[MongoDB Retention](../docker/mqtt-mongo/CLAUDE.md#retention)** - every MongoDB collection keeps at least 60 days; older months are exported once, verified, and only then deleted by a host-side job (not a TTL index)
+### Raw Readings and MongoDB Retirement
+- **[MongoDB Retention](../docker/mqtt-mongo/CLAUDE.md#retention)** - MongoDB is being retired (#1622): raw readings go to daily NDJSON files that a host-side job turns into Parquet; until the switch-off nothing deletes from MongoDB (no TTL index)
+- **[mqtt-ndjson](../docker/mqtt-ndjson/CLAUDE.md)** - writes MQTT topics (today `ioniq/#`) to daily NDJSON files; the file layout and write rules shared with `modbus-serial`'s `ndjson` integration
 
 ## Device Integration
 
