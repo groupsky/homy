@@ -66,6 +66,11 @@ module.exports = {
         }
       }
     },
+    ndjson: {
+      root: process.env.RAW_DIR,
+      stream: process.env.COLLECTION,
+      service: process.env.SERVICE_NAME,
+    },
     influxdb: {
       url: process.env.INFLUXDB_URL,
       username: getFileEnv('INFLUXDB_USERNAME'),

@@ -4,26 +4,36 @@
 // service mounts something at exactly /x. `up -d` keeps such a volume, but
 // `down` drops it, so a database would silently start empty. This checks the
 // resolved compose config against the VOLUMEs of every image it uses.
-// Needs docker (compose v2) and access to pull the images.
+// Needs docker (compose v2) and access to pull the images; one not published
+// yet is built from its build context.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const run = (args) => execFileSync('docker', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] })
 
 const config = JSON.parse(run(['compose', '--env-file', 'example.env', 'config', '--format', 'json']))
 
+// An image not published yet (a service added in this change) cannot be
+// pulled, so it is built from the service's build context instead.
 const imageVolumes = new Map()
-function volumesOf (image) {
+function volumesOf (image, build) {
   if (!imageVolumes.has(image)) {
+    const inspect = () => run(['image', 'inspect', image, '--format', '{{json .Config.Volumes}}'])
     let out
     try {
-      out = run(['image', 'inspect', image, '--format', '{{json .Config.Volumes}}'])
+      out = inspect()
     } catch {
-      run(['pull', '--quiet', image])
-      out = run(['image', 'inspect', image, '--format', '{{json .Config.Volumes}}'])
+      try {
+        run(['pull', '--quiet', image])
+      } catch (err) {
+        if (!build?.context) throw err
+        run(['build', '--quiet', '--tag', image, ...(build.dockerfile ? ['--file', resolve(build.context, build.dockerfile)] : []), build.context])
+      }
+      out = inspect()
     }
     imageVolumes.set(image, Object.keys(JSON.parse(out) ?? {}))
   }
@@ -35,7 +45,7 @@ test('every VOLUME an image declares is bind-mounted by the service', () => {
   for (const [name, service] of Object.entries(config.services)) {
     if (!service.image) continue
     const mounts = new Map((service.volumes ?? []).map((v) => [v.target, v]))
-    for (const path of volumesOf(service.image)) {
+    for (const path of volumesOf(service.image, service.build)) {
       const mount = mounts.get(path)
       if (!mount) problems.push(`${name}: image volume ${path} has no mount, so docker makes an unnamed volume`)
       else if (mount.type !== 'bind' && mount.type !== 'tmpfs') problems.push(`${name}: ${path} is a ${mount.type} mount, not a host directory`)
@@ -50,4 +60,23 @@ test('the services holding state mount their data from the host', () => {
   assert.ok(targets('mongo').includes('/data/configdb'))
   assert.ok(targets('broker').includes('/mosquitto/data'))
   assert.ok(targets('broker').includes('/mosquitto/log'))
+})
+
+// Every modbus-serial and mqtt-ndjson service appends raw readings to daily
+// files under RAW_DIR (#1622); without a host mount they would land inside the
+// container and be lost with it.
+test('every raw-reading writer mounts its RAW_DIR from the host', () => {
+  const writers = Object.entries(config.services)
+    .filter(([, service]) => /\/(modbus-serial|mqtt-ndjson):/.test(service.image ?? ''))
+  assert.ok(writers.length > 0)
+  const problems = []
+  for (const [name, service] of writers) {
+    const dir = service.environment?.RAW_DIR
+    const mount = (service.volumes ?? []).find((v) => v.target === dir)
+    if (!dir) problems.push(`${name}: no RAW_DIR`)
+    else if (!mount || mount.type !== 'bind') problems.push(`${name}: RAW_DIR ${dir} is not bind-mounted`)
+    if (!service.environment?.SERVICE_NAME) problems.push(`${name}: no SERVICE_NAME`)
+    else if (service.environment.SERVICE_NAME !== name) problems.push(`${name}: SERVICE_NAME is ${service.environment.SERVICE_NAME}`)
+  }
+  assert.deepEqual(problems, [])
 })

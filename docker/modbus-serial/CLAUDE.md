@@ -17,7 +17,8 @@ Multiple modbus-serial services run for different buses:
 
 ### Data Flow
 ```
-Modbus Device → Serial/TCP → Device Driver → InfluxDB Direct Write
+Modbus Device → Serial/TCP → Device Driver → integrations: InfluxDB direct write,
+                                             MQTT, MongoDB, daily NDJSON files
 ```
 
 ## InfluxDB Integration
@@ -91,6 +92,58 @@ node cli/test-device.js
 # Test configuration
 npm test
 ```
+
+## NDJSON Integration (raw readings)
+
+The `ndjson` integration (`integrations/ndjson.js`) writes every reading, as one
+JSON line, to a daily file:
+
+    <RAW_DIR>/<stream>/YYYY-MM-DD.<service>.ndjson
+
+It replaces the `mongodb` integration (MongoDB is being retired, #1622). Until
+the cut-over both run, and they must hold the same readings. A host-side job
+turns finished days into Parquet; the service never compresses or deletes a file.
+
+Each config file sets it from three environment variables, all set per service
+in `docker-compose.yml`:
+
+- `RAW_DIR` — where `${RAW_DATA_PATH}` is mounted (`/data/raw`).
+- `COLLECTION` — the stream, the same name as the Mongo collection.
+- `SERVICE_NAME` — the compose service name. `monitoring` and `solar` both write
+  the `monitoring` stream; the service name keeps them in separate files, so
+  every file has exactly one writer.
+
+A missing or unsafe value (a path, `..`) stops the service at startup.
+
+**The line.** The same fields as the Mongo document, **without `_id`**. index.js
+hands the same object to every integration, and the `mongodb` integration's
+`insertOne` adds `_id` to it, so `ndjson.js` drops `_id` explicitly, in whatever
+order the integrations run, without changing the shared object. The day is the
+**UTC** day of the reading's `_tz`. A reading taken just before midnight but
+written just after goes to the previous day's file, so the host-side job must
+leave a day alone for a short while after it ends. JSON has no `NaN` or
+`Infinity`: a driver value like that is written as `null`, where MongoDB kept the
+number.
+
+**How it writes** (`day-file-writer.js`):
+
+- One file descriptor per day, opened with flag `'a'`; it moves to the next
+  day's file at UTC midnight.
+- `fs.writeSync` per line. Not `fs.createWriteStream`: index.js calls
+  `process.exit()` after repeated errors, which drops the stream's queued
+  writes. Not `fs.appendFile`: parallel calls can finish out of order.
+- Opening a file whose last byte is not `\n` writes `\n` first. A process killed
+  in the middle of a line leaves it cut short; without this, the next line would
+  be glued onto it. The same repair runs after a failed write (a full disk).
+- A failed write is logged (`[ndjson] failed to write a reading ...`) and that
+  reading is skipped; the other integrations and the bus reader carry on.
+
+`day-file-writer.js` is also used by `docker/mqtt-ndjson`. The services are
+separate npm packages, so it cannot be shared by `require`: the file, its test
+`day-file-writer.test.js` and `test-fixtures/day-file-writer-child.js` are
+identical copies. Change them together. The test runs the writer in a real
+child process and kills it with `SIGKILL` in the middle of a line, then
+restarts it and checks that no line is glued to another.
 
 ## MQTT Integration
 

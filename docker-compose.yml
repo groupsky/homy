@@ -264,6 +264,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=main
+      - SERVICE_NAME=main-power
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/main/{name}/reading
@@ -277,6 +279,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${MAIN_POWER_CONFIG_FILE}:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   secondary-power:
@@ -301,6 +304,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=secondary
+      - SERVICE_NAME=secondary-power
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/secondary/{name}/reading
@@ -314,6 +319,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   tetriary-power:
@@ -339,6 +345,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=tetriary
+      - SERVICE_NAME=tetriary-power
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/tetriary/{name}/reading
@@ -352,6 +360,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   monitoring:
@@ -377,6 +386,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=monitoring
+      - SERVICE_NAME=monitoring
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/monitoring/{name}/reading
@@ -391,6 +402,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/monitoring.config.js:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   monitoring2:
@@ -416,6 +428,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=monitoring2
+      - SERVICE_NAME=monitoring2
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/monitoring2/{name}/reading
@@ -430,6 +444,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/monitoring2.config.js:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   dry-switches:
@@ -454,6 +469,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=dry-switches
+      - SERVICE_NAME=dry-switches
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/dry-switches/{name}/reading
@@ -468,6 +485,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   solar:
@@ -493,6 +511,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=monitoring
+      - SERVICE_NAME=solar
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/monitoring/{name}/reading
@@ -507,6 +527,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/solar.config.js:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   inverter:
@@ -533,6 +554,8 @@ services:
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=inverter
+      - SERVICE_NAME=inverter
+      - RAW_DIR=/data/raw
       - CONFIG=/etc/config.js
       - BROKER=mqtt://broker
       - TOPIC=/modbus/inverter/{name}/reading
@@ -545,6 +568,7 @@ services:
       - INFLUXDB_MEASUREMENT=inverter
     volumes:
       - ${CONFIG_PATH}/modbus-serial/inverter.config.js:/etc/config.js:ro
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   influxdb:
@@ -669,10 +693,34 @@ services:
       - BROKER=mqtt://broker
       - TOPIC=ioniq/#
       - MQTT_CLIENT_ID=mqtt-mongo-ioniq
-      # No TTL here: MongoDB keeps at least 60 days, older months are
-      # exported to Parquet by a host-side job that deletes a month from
-      # MongoDB only after verifying that month's export. A TTL index
-      # racing that job could delete data before it is archived (#1618).
+      # No TTL here (#1618): MongoDB is being retired (#1622), and nothing
+      # may delete from it before the host-side job has exported it. Until
+      # the cut-over this runs alongside mqtt-ndjson-ioniq below.
+    logging: *default-logging
+
+  # Writes ioniq/# to daily NDJSON files under RAW_DATA_PATH, the successor
+  # of mqtt-mongo-ioniq (#1622). It only ever appends; a host-side job turns
+  # finished days into Parquet and is the only thing that compresses or
+  # deletes them.
+  mqtt-ndjson-ioniq:
+    image: ghcr.io/groupsky/homy/mqtt-ndjson:${IMAGE_TAG:-latest}
+    build: docker/mqtt-ndjson
+    depends_on:
+      - broker
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - STREAM=ioniq
+      - SERVICE_NAME=mqtt-ndjson-ioniq
+      - RAW_DIR=/data/raw
+      - BROKER=mqtt://broker
+      - TOPIC=ioniq/#
+      - MQTT_CLIENT_ID=mqtt-ndjson-ioniq
+    volumes:
+      - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     logging: *default-logging
 
   mqtt-influx-primary:

@@ -353,7 +353,7 @@ because it is the sensor that fails — issue #1472)
 - nested objects → recursively flattened into dotted field keys (e.g. `relays.main`)
 - arrays → JSON-stringified into a single string field
 - Representative fields: `soc`, `hv_v`, `hv_a`, `12v`, `speed`, `relays.main`, `dtc`
-**Retention**: kept indefinitely (compact numeric data). The bulky raw archive lives separately in MongoDB (`ioniq` collection, at least 60 days, older months archived to Parquet and then deleted — see `docker/mqtt-mongo/CLAUDE.md#retention`).
+**Retention**: kept indefinitely (compact numeric data). The bulky raw archive lives separately: daily NDJSON files (`<RAW_DATA_PATH>/ioniq/`, written by `mqtt-ndjson-ioniq`) that a host-side job turns into Parquet, and, until MongoDB is retired (#1622), also the MongoDB `ioniq` collection — see `docker/mqtt-mongo/CLAUDE.md#retention`.
 **Use Cases**: Hyundai Ioniq OBD time-series (SoC, HV pack, speed, temps, TPMS) for Grafana and InfluxQL trip/charging analysis
 
 #### `ioniq_sessions` Measurement
@@ -390,9 +390,9 @@ envelope metadata, not measurement data).
 - **`park` fields**: `soc_start` / `soc_end` / `soc_delta_pct` (%), `soc_drain_pct_per_day` (%/day; null if
   `duration_sec` below the config drain-minimum), `aux12v_start` / `aux12v_end` (V, best-effort),
   `connector_confirmed` (bool).
-**Retention**: kept indefinitely (compact, one row per session). Session records also reach MongoDB via the
-existing `mqtt-mongo-ioniq` (`ioniq/#`) subscription — append-only, so downstream consumers there must
-de-dup on `(kind, start_ts, end_ts)`.
+**Retention**: kept indefinitely (compact, one row per session). Session records also reach the raw archive via the
+`ioniq/#` subscriptions of `mqtt-ndjson-ioniq` and, until MongoDB is retired, `mqtt-mongo-ioniq` — both
+append-only, so downstream consumers there must de-dup on `(kind, start_ts, end_ts)`.
 **Use Cases**: per-trip distance/energy/efficiency, charge-session energy/power/efficiency, parasitic-drain
 analysis, and the "Trips & charging" Grafana dashboard (`docs/ioniq-monitoring-alerting-spec.md` §7) — this
 measurement is its data source, unblocking the dashboard that was previously deferred for lack of session
@@ -623,15 +623,22 @@ Home Assistant entities map to InfluxDB data:
 - Standard queries use measurement names and tag filtering
 - Time-series visualization with sub-second resolution
 
-### MongoDB Backup
-Raw modbus data is also stored in MongoDB collections:
-- `secondary` - Raw boiler modbus data
-- `monitoring` - Raw solar controller data
-- `inverter` - Raw PV inverter data
+### Raw readings (daily NDJSON files; MongoDB being retired)
+Every `modbus-serial` service also keeps each raw reading, unconverted, one
+JSON line per reading, in daily files:
 
-Every MongoDB collection, these included, keeps at least 60 days; older
-months are exported once, verified, and only then deleted by a host-side
-job — see `docker/mqtt-mongo/CLAUDE.md#retention`.
+    <RAW_DATA_PATH>/<stream>/YYYY-MM-DD.<service>.ndjson
+
+`<stream>` is the service's `COLLECTION` (`main`, `secondary`, `tetriary`,
+`monitoring`, `monitoring2`, `dry-switches`, `inverter`), `<service>` its
+compose service name (`monitoring` and `solar` both write the `monitoring`
+stream, each to its own file), and the day is the UTC day of the reading's
+`_tz`. A line holds the same fields as the MongoDB document, without `_id`.
+A host-side job turns finished days into Parquet.
+
+The same readings still go to the MongoDB collections of the same names until
+the cut-over in #1622; MongoDB is being retired, not kept — see
+`docker/mqtt-mongo/CLAUDE.md#retention` and `docker/modbus-serial/CLAUDE.md`.
 
 ## Data Retention and Performance
 

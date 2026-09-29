@@ -100,7 +100,8 @@ Multiple interfaces for monitoring and control:
 - **Home Assistant**: Primary UI with device discovery and dashboards (UI only)
 - **Grafana**: Time-series visualization, energy monitoring, and alerting with Telegram notifications
 - **InfluxDB**: Time-series data storage for historical analysis
-- **MongoDB**: MQTT message logging and historical data storage
+- **MongoDB**: MQTT message logging and historical data storage (being retired, #1622)
+- **Raw reading files**: every raw reading as daily NDJSON under `RAW_DATA_PATH`; a host-side job turns finished days into Parquet
 
 ## Service Architecture
 
@@ -115,7 +116,7 @@ Multiple interfaces for monitoring and control:
 ### Data Services  
 - **influxdb**: Time-series database for sensor data
 - **grafana**: Visualization, dashboards, and alerting with Telegram integration
-- **mongo**: MQTT message logging and historical data storage
+- **mongo**: MQTT message logging and historical data storage (being retired, #1622)
 - **mongo-express**: Database administration interface
 
 ### Infrastructure Services
@@ -125,7 +126,9 @@ Multiple interfaces for monitoring and control:
 ### Data Pipeline Services
 - **mqtt-influx-***: Multiple services bridging MQTT to InfluxDB
   - **mqtt-influx-primary/secondary/tetriary**: Modbus sensor data
-- **mqtt-mongo-ioniq**: Lossless MQTT archive to MongoDB (Ioniq OBD stream)
+- **mqtt-mongo-ioniq**: Lossless MQTT archive to MongoDB (Ioniq OBD stream); removed at the #1622 cut-over
+- **mqtt-ndjson-ioniq**: Lossless MQTT archive of the same stream to daily NDJSON files, its successor
+- **modbus-serial `ndjson` integration**: every modbus service writes each raw reading to daily NDJSON files too (`<RAW_DATA_PATH>/<stream>/YYYY-MM-DD.<service>.ndjson`)
 - **historian-***: Manual data migration utilities
 
 ## Current State & Architectural Challenges
@@ -170,7 +173,7 @@ The system is actively running in production with:
 
 **Monitoring**
 - Grafana dashboards for system health and energy usage with Telegram alerting
-- MongoDB logs for MQTT message history and troubleshooting
+- Raw reading files (daily NDJSON, formerly MongoDB) for message history and troubleshooting
 - MQTT topic monitoring for real-time troubleshooting
 - InfluxDB queries for historical analysis and trending
 

@@ -19,8 +19,8 @@ Node-RED was fully removed from the stack on 2026-01-25 (#1185), but the
 device or its host stopped actually publishing on 2024-07-04 — 18 months
 earlier, and unexplained by anything in this repo's history. The
 `history` collection (3.4M documents, 2021-01-21 to 2024-07-04) is not
-deleted by this issue; it follows the same retention as every other
-MongoDB collection (see Retention, above).
+deleted by this issue; it is handled like every other MongoDB collection
+(see Retention, below).
 
 ## Record shape and timestamps
 
@@ -35,29 +35,39 @@ The logger's own event time remains available in `payload.ts`.
 
 ## Retention
 
-**Every MongoDB collection** — every archive here, and the raw modbus
-collections `modbus-serial` writes directly (see `docs/influxdb-schema.md`)
-— keeps **at least 60 days**. A host-side job, not yet running as of
-2026-09 (first run around 2026-11-30), exports each finished month once,
-one Parquet file per collection per month, verifies that export, and only
-then deletes that month from MongoDB — so a collection really holds
-somewhere between 60 and about 90 days, never less than 60. Nothing in this
-repo reads MongoDB automatically — a consumer that needs older data reads
-the Parquet archive (with DuckDB, for example), and `historian` only ever
-replays what is still in MongoDB. See #1618.
+**MongoDB is being retired (#1622).** Nothing in this repo reads it
+automatically; it was only ever a raw record of every reading. Raw readings
+now also go to **daily NDJSON files** under `RAW_DATA_PATH`:
+`docker/mqtt-ndjson` (`mqtt-ndjson-ioniq`) writes what this service writes
+for `ioniq/#`, and `modbus-serial`'s `ndjson` integration writes what it puts
+in its MongoDB collections. A host-side job turns finished days into Parquet
+and archives them; a consumer that needs the history reads that archive
+(with DuckDB, for example).
 
-Retention is **not** done with a TTL index: a TTL index deletes on its own
-schedule, so it could delete a month before the host-side job has archived
-and verified it. `ioniq` had a 90-day TTL index (`TTL_EXPIRE_SECONDS`, below)
-until #1618 dropped it and removed the setting, for exactly that reason —
-the TTL's first deletes would have landed on data the archive job had not
-reached yet.
+The switch happens in steps, all tracked in #1622:
+
+1. **Overlap** (from this change): MongoDB and the NDJSON files are written
+   side by side for at least 7 days, and their contents are compared.
+2. **Cut-over**: the `mongodb` integration is removed from every
+   `modbus-serial` config, and this service is removed.
+3. **Switch-off**: once the host side has exported the existing MongoDB
+   history, `mongo`, `mongo-express` and everything else that uses MongoDB is
+   removed. The MongoDB data directory is kept until the owner decides.
+
+Until the switch-off, nothing in this repo deletes from MongoDB, and
+`historian` only replays what MongoDB still holds.
+
+MongoDB is **not** cleaned with a TTL index: a TTL index deletes on its own
+schedule, so it could delete data before the host-side job has exported it.
+`ioniq` had a 90-day TTL index (`TTL_EXPIRE_SECONDS`, below) until #1618
+dropped it and removed the setting, for exactly that reason.
 
 ### The TTL_EXPIRE_SECONDS mechanism (opt-in, currently unused)
 
 The service still supports an opt-in TTL index via the `TTL_EXPIRE_SECONDS`
-environment variable, for a future archive that genuinely wants Mongo itself
-to expire old data (rather than the host-side archive-then-delete job). When
+environment variable, for an archive that genuinely wants Mongo itself to
+expire old data. No instance uses it, and none should while MongoDB is being
+retired (see Retention, above). When
 set to a positive integer, the service ensures a TTL index at startup
 (idempotent, re-run safe on every reconnect); when unset, as every instance
 is today, the archive is kept until something else deletes from it.
@@ -154,10 +164,10 @@ A consumer reading this archive must expect `_raw`/`_parseError` documents
 alongside normal ones and skip or handle them.
 
 **Retention caveat.** No instance sets a TTL index (see Retention above): a
-persistently malformed publisher accumulates up to 64 KiB per message
-indefinitely, until the host-side archive job exports and deletes that
-month. That is the deliberate cost of not dropping; watch a collection's
-size if a producer starts misbehaving.
+persistently malformed publisher accumulates up to 64 KiB per message, and
+nothing deletes it before MongoDB is switched off. That is the deliberate
+cost of not dropping; watch a collection's size if a producer starts
+misbehaving.
 
 Separately, and pre-existing: an incoming payload that already carries `_ts` keeps
 it (see `buildRecord`), so a producer sending a *string* `_ts` still yields a

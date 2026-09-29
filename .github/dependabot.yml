@@ -390,6 +390,28 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: "docker"
+    directory: "/docker/mqtt-ndjson"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/mqtt-ndjson"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      mqtt-services:
+        patterns:
+          - "*"
+
   # Hardware Integration - Device communication services
   - package-ecosystem: "docker"
     directory: "/docker/modbus-serial"
