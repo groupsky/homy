@@ -228,6 +228,13 @@ services:
       - mongo_root_password
       - mongo_express_username
       - mongo_express_password
+    healthcheck:
+      # THROWAWAY: deliberately always fails, to test #1607's forced-rollback
+      # path. Never merge this to master.
+      test: ["CMD", "false"]
+      interval: 2s
+      timeout: 2s
+      retries: 2
     environment:
       - TZ=${TZ}
       - VIRTUAL_HOST=${MONGO_EXPRESS_DOMAIN}
