@@ -1,4 +1,4 @@
-FROM ghcr.io/home-assistant/home-assistant:2026.8.3
+FROM ghcr.io/home-assistant/home-assistant:2026.9.4
 
 # Start-up (integrations, recorder schema migrations) takes minutes; failures
 # inside the start period do not count (#1607)
