@@ -6,10 +6,12 @@ on:
       - master
     paths:
       - 'docker/automations/**'
+      - 'config/automations/**'
       - '.github/workflows/test-automations.yml'
   pull_request:
     paths:
       - 'docker/automations/**'
+      - 'config/automations/**'
       - '.github/workflows/test-automations.yml'
   workflow_dispatch:
 

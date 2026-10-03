@@ -1112,7 +1112,7 @@ const config = {
       name: 'tvLivingVolumeUp',
       feature: 'tv_living_volume_up',
       config: {
-        name: 'TV Volume Up',
+        name: 'Living Volume Up',
         device: devices.livingroom,
         object_id: 'tv_living_volume_up',
         icon: 'mdi:volume-plus',
@@ -1123,11 +1123,30 @@ const config = {
       name: 'tvLivingVolumeDown',
       feature: 'tv_living_volume_down',
       config: {
-        name: 'TV Volume Down',
+        name: 'Living Volume Down',
         device: devices.livingroom,
         object_id: 'tv_living_volume_down',
         icon: 'mdi:volume-minus',
       }
+    }),
+
+    // Level of the media computer that drives the living-room speakers; its
+    // agent retains this state, homy only reads it
+    ...haSensor({
+      name: 'livingVolume',
+      feature: 'living_volume',
+      type: null,
+      config: {
+        name: 'Living Volume',
+        device: devices.livingroom,
+        object_id: 'living_volume',
+        unique_id: 'homy_living_volume',
+        state_topic: 'homy/media/living/volume/state',
+        value_template: '{{ value_json.volume }}',
+        json_attributes_topic: 'homy/media/living/volume/state',
+        unit_of_measurement: '%',
+        icon: 'mdi:volume-high',
+      },
     }),
 
     ...haButton({

@@ -11,13 +11,19 @@ const devices = {
   },
 }
 
-// TV IR codes for living room IR blaster
+// TV IR codes for living room IR blaster. Only power is used: the TV no longer
+// makes the sound, so its volume codes are kept only for the day the audio goes
+// back to HDMI.
 const tvLivingIrCodes = {
   volumeUp: 'BgMjhxFgAi6gAQOdBi4CwAHgARUBLgJAF0ADQAFAB+AHA0ABQBPgAwHgBz9AAUAj4AsDBymcAyP0CC4C',
   volumeDown: 'Bj8jexFqAiQgAUAFA5QGJALgAwFAE0ABQBdAA0APQAfgDwOAAUAlASQCgAVAAUAJQAMEJAKUBmogA8AHQAuAAwcCnD8jjAhqAg==',
   power: 'BUAjkREyAsABA5UGMgLgAwECagIyYAFAF0ADQAFAB+AHA+ADAUAb4AcBQBPAA0ABwAvABw8dnEAjuQgyAv//QCO5CDIC'
 }
 const tvLivingIrTopic = 'z2m/house1/ir-living/set/ir_code_to_send'
+// The media computer drives the living-room speakers; an agent on it subscribes
+// here and takes a bare `up` or `down` as one volume step. It retains
+// `{"volume": 0-100, "muted": bool}` on homy/media/living/volume/state.
+const livingVolumeCommandTopic = 'homy/media/living/volume/command'
 
 module.exports = {
   bots: {
@@ -454,21 +460,22 @@ module.exports = {
       outputContent: 'plain',
     },
 
-    // TV IR Control - Physical Button Triggers
+    // Living-room volume goes to the media computer, TV power to the TV over IR
+    // Physical button triggers
     tvLivingVolumeUpFromButton: {
       type: 'mqtt-transform',
       inputTopic: `${featuresPrefix}/button/living_main_up/status`,
       filterInput: (payload) => payload && payload.state === true,
-      transform: () => tvLivingIrCodes.volumeUp,
-      outputTopic: tvLivingIrTopic,
+      transform: () => 'up',
+      outputTopic: livingVolumeCommandTopic,
       outputContent: 'plain',
     },
     tvLivingVolumeDownFromButton: {
       type: 'mqtt-transform',
       inputTopic: `${featuresPrefix}/button/living_main_down/status`,
       filterInput: (payload) => payload && payload.state === true,
-      transform: () => tvLivingIrCodes.volumeDown,
-      outputTopic: tvLivingIrTopic,
+      transform: () => 'down',
+      outputTopic: livingVolumeCommandTopic,
       outputContent: 'plain',
     },
     tvLivingPowerFromButton: {
@@ -480,21 +487,21 @@ module.exports = {
       outputContent: 'plain',
     },
 
-    // TV IR Control - Home Assistant Button Triggers
+    // Home Assistant button triggers
     tvLivingVolumeUpFromHA: {
       type: 'mqtt-transform',
       inputTopic: `${featuresPrefix}/button/tv_living_volume_up/trigger`,
       filterInput: (payload) => !!payload,
-      transform: () => tvLivingIrCodes.volumeUp,
-      outputTopic: tvLivingIrTopic,
+      transform: () => 'up',
+      outputTopic: livingVolumeCommandTopic,
       outputContent: 'plain',
     },
     tvLivingVolumeDownFromHA: {
       type: 'mqtt-transform',
       inputTopic: `${featuresPrefix}/button/tv_living_volume_down/trigger`,
       filterInput: (payload) => !!payload,
-      transform: () => tvLivingIrCodes.volumeDown,
-      outputTopic: tvLivingIrTopic,
+      transform: () => 'down',
+      outputTopic: livingVolumeCommandTopic,
       outputContent: 'plain',
     },
     tvLivingPowerFromHA: {
