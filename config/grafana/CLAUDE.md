@@ -589,6 +589,26 @@ contactPoints:
 - Implement escalation for critical alerts
 - Use mute timings for maintenance windows
 
+**Alert state history** (`config.ini`, `[unified_alerting.state_history]`):
+Grafana stores every alert state change (Normal, Pending, Alerting, NoData,
+Error, with the reason, e.g. `Pending (Error)`) as an annotation in
+`grafana.db`, also when no message is sent. Alert annotations are kept forever.
+Use it to find alerts that changed state silently (#1670). In the UI: open the
+rule under Alerting → Alert rules → state history. On the host, in the
+project directory, read-only, the last 7 days (the file is
+`${GRAFANA_DATA_PATH}/grafana.db`; adjust the path if it is not `data/grafana`):
+
+```bash
+python3 - <<'EOF'
+import sqlite3, time
+c = sqlite3.connect("file:data/grafana/grafana.db?mode=ro", uri=True)
+since = int(time.time() * 1000) - 7 * 86400 * 1000
+for r in c.execute("SELECT datetime(epoch/1000, 'unixepoch'), prev_state, new_state, substr(text, 1, 60)"
+                   " FROM annotation WHERE alert_id > 0 AND epoch > ? ORDER BY epoch", (since,)):
+    print(*r, sep="  ")
+EOF
+```
+
 ## Database Configuration
 
 Grafana's own internal state (users, dashboard metadata, alert rule state, ngalert scheduler bookkeeping) lives in its own SQLite store (`grafana.db`, under `GRAFANA_DATA_PATH`) -- this is separate from InfluxDB, which only holds time-series sensor data.
