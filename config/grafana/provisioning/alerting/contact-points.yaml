@@ -12,3 +12,17 @@ contactPoints:
           httpMethod: POST
           maxAlerts: 0
           title: "Home Automation Alert"
+  # Same webhook, without RESOLVED messages. For "done" reminders, where the
+  # alert resolving later says nothing new (#1668). Routed by the label
+  # notify_resolved=false (notification-policies.yaml).
+  - orgId: 1
+    name: telegram-webhook-no-resolve
+    receivers:
+      - uid: telegram-webhook-no-resolve
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: http://telegram-bridge:3000/webhook
+          httpMethod: POST
+          maxAlerts: 0
+          title: "Home Automation Alert"
