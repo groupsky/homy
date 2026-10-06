@@ -94,9 +94,8 @@ temporary file in its place). The node image may be pulled (see below).
     `mongodb` integration drops readings until its connection to MongoDB is
     ready.
   - "only in NDJSON" just before a `modbus-serial` service stopped (for
-    example "Too many errors", which calls `process.exit()`): the Mongo insert
-    is asynchronous and still in flight, while the NDJSON line is already
-    written.
+    example a deploy or a crash): the Mongo insert is asynchronous and still
+    in flight, while the NDJSON line is already written.
   - "only in NDJSON" for a failed Mongo insert, which the integration only
     logs ("Error logging entry").
   - "only in Mongo" for a failed NDJSON write, which the integration logs
