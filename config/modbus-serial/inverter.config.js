@@ -33,6 +33,9 @@ module.exports = {
             port: 502,
         },
         msDelayBetweenDevices: 15000,
+        // A SUN2000 answer takes about 600 ms, sometimes more than 1 s; the
+        // default 1000 ms timed out about 2 of 3 polls in daytime (#1368).
+        msTimeout: 4000,
     },
     devices: [
         {

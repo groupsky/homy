@@ -144,9 +144,9 @@ overlap compares contents and not just counts:
 
 - One file descriptor per day, opened with flag `'a'`; it moves to the next
   day's file at UTC midnight.
-- `fs.writeSync` per line. Not `fs.createWriteStream`: index.js calls
-  `process.exit()` after repeated errors, which drops the stream's queued
-  writes. Not `fs.appendFile`: parallel calls can finish out of order.
+- `fs.writeSync` per line. Not `fs.createWriteStream`: a process that exits
+  (a crash, a stop) drops the stream's queued writes. Not `fs.appendFile`:
+  parallel calls can finish out of order.
 - Opening a file whose last byte is not `\n` writes `\n` first. A process killed
   in the middle of a line leaves it cut short; without this, the next line would
   be glued onto it. The same repair runs after a failed write (a full disk).
@@ -209,6 +209,25 @@ distinguishable in the log:
 A device driver's `write` must still validate the *shape* of what it receives:
 valid JSON is not necessarily the command the driver expects, and `null` is valid
 JSON.
+
+## Read Errors and Reconnect
+
+`index.js` does not exit on read errors. It closes the port and opens it again,
+inside the process (#1368):
+
+- at once on `PortNotOpenError` (the TCP peer dropped the session);
+- after 11 identical errors in a row from one device (`Too many errors,
+  reconnecting`).
+
+It waits 5 s before the first try, doubles the wait after each failed try, up
+to 60 s, and starts again at 5 s after the next good read. A bus that dies
+while the service runs therefore shows as `Reconnecting in ...` lines and
+missing readings, not as container restarts. Only the first connect, at
+start-up, still exits on failure, and Docker restarts the service.
+
+The SUN2000 inverter allows only one Modbus TCP session. Any other connection
+to its port, even a plain port check, drops the service's session. Check the
+inverter through the service logs and InfluxDB, never by connecting to it.
 
 ## Monitoring and Debugging
 

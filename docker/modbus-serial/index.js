@@ -14,7 +14,7 @@ const {
   devices: devicesConfig,
   integrations: integrationsConfig,
 } = require(process.env.CONFIG)
-const modbusClient = new ModbusRTU()
+let modbusClient
 const modbusMutex = withTimeout(new Mutex(), msCommunicationTimeout)
 
 const devices = devicesConfig.map((deviceConfig) => ({
@@ -37,18 +37,76 @@ const integrations = Object.entries(integrationsConfig).map(
 
 const deviceErrors = new Map()
 
+// Wait before each reconnect: 5 s, doubled after each failure, at most 60 s.
+// Reset by the next good read.
+const msReconnectDelayMin = 5000
+const msReconnectDelayMax = 60000
+let msReconnectDelay = 0
+
+// Each connect uses a new client, so a new connection starts as clean as the
+// first one: no stale transactions or listeners from the old port.
+const connect = async () => {
+  modbusClient = new ModbusRTU()
+  if (type === 'tcp') {
+    await modbusClient.connectTCP(port, portConfig)
+  } else {
+    await modbusClient.connectRTUBuffered(port, portConfig)
+  }
+  modbusClient.setTimeout(msTimeout)
+}
+
+// Closes the port and opens it again, inside the process. Exiting instead
+// let Docker restart the service, and each restart lost minutes of readings
+// (#1368). destroy() closes a TCP socket at once, so the old session is gone
+// before the new one opens: the SUN2000 allows only one. A serial port has
+// no destroy(), so it is closed.
+// It runs while its caller holds modbusMutex. pollDevice waits for a running
+// reconnect before it asks for the mutex, so the poll loop does not time out
+// on the mutex again and again while an MQTT write's poll reconnects.
+let reconnecting = null
+const reconnect = () => {
+  reconnecting = reconnecting || reconnectLoop().finally(() => { reconnecting = null })
+  return reconnecting
+}
+
+const reconnectLoop = async () => {
+  for (;;) {
+    const oldClient = modbusClient
+    await new Promise((resolve) => type === 'tcp' ? oldClient.destroy(resolve) : oldClient.close(resolve))
+    msReconnectDelay = Math.min(Math.max(msReconnectDelay * 2, msReconnectDelayMin), msReconnectDelayMax)
+    console.error(`Reconnecting in ${msReconnectDelay} ms`)
+    await sleep(msReconnectDelay)
+    try {
+      await connect()
+      console.error('Reconnected')
+      return
+    } catch (e) {
+      console.error('Failed to reconnect', e)
+    }
+  }
+}
+
 const pollDevice = async (device) => {
   let val = null
   let start
   let end
+  if (reconnecting) await reconnecting
   await modbusMutex.runExclusive(async () => {
     await modbusClient.setID(device.config.address)
     start = Date.now()
     try {
       val = await device.driver.read(modbusClient, device.config, device.state)
       deviceErrors.delete(device.name)
+      msReconnectDelay = 0
     } catch (e) {
       console.error(`Error reading from ${device.name}`, e)
+      // The port is closed (the peer dropped the TCP session): every read
+      // fails at once until it is opened again.
+      if (e.name === 'PortNotOpenError') {
+        deviceErrors.clear()
+        await reconnect()
+        return
+      }
       if (!deviceErrors.has(device.name)) {
         deviceErrors.set(device.name, {error: e, counter: 1})
         return
@@ -64,8 +122,10 @@ const pollDevice = async (device) => {
         return
       }
 
-      console.error('Too many errors', e)
-      process.exit()
+      console.error('Too many errors, reconnecting', e)
+      deviceErrors.clear()
+      await reconnect()
+      return
     }
     end = Date.now()
   })
@@ -102,13 +162,7 @@ const poll = async () => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-Promise.all([
-  type === 'tcp'
-      ? modbusClient.connectTCP(port, portConfig)
-      : modbusClient.connectRTUBuffered(port, portConfig)
-]).then(async () => {
-  modbusClient.setTimeout(msTimeout)
-
+connect().then(async () => {
   for (const integration of integrations) {
     if (integration.client.subscribe) {
       for (const device of devices) {
