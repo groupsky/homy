@@ -220,9 +220,10 @@ inside the process (#1368):
   reconnecting`).
 
 It waits 5 s before the first try, doubles the wait after each failed try, up
-to 60 s, and starts again at 5 s after the next good read. A bus that stays
-dead therefore shows as `Reconnecting in ...` lines and missing readings, not
-as container restarts.
+to 60 s, and starts again at 5 s after the next good read. A bus that dies
+while the service runs therefore shows as `Reconnecting in ...` lines and
+missing readings, not as container restarts. Only the first connect, at
+start-up, still exits on failure, and Docker restarts the service.
 
 The SUN2000 inverter allows only one Modbus TCP session. Any other connection
 to its port, even a plain port check, drops the service's session. Check the

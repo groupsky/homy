@@ -60,7 +60,16 @@ const connect = async () => {
 // (#1368). destroy() closes a TCP socket at once, so the old session is gone
 // before the new one opens: the SUN2000 allows only one. A serial port has
 // no destroy(), so it is closed.
-const reconnect = async () => {
+// It runs while its caller holds modbusMutex. pollDevice waits for a running
+// reconnect before it asks for the mutex, so the poll loop does not time out
+// on the mutex again and again while an MQTT write's poll reconnects.
+let reconnecting = null
+const reconnect = () => {
+  reconnecting = reconnecting || reconnectLoop().finally(() => { reconnecting = null })
+  return reconnecting
+}
+
+const reconnectLoop = async () => {
   for (;;) {
     const oldClient = modbusClient
     await new Promise((resolve) => type === 'tcp' ? oldClient.destroy(resolve) : oldClient.close(resolve))
@@ -81,6 +90,7 @@ const pollDevice = async (device) => {
   let val = null
   let start
   let end
+  if (reconnecting) await reconnecting
   await modbusMutex.runExclusive(async () => {
     await modbusClient.setID(device.config.address)
     start = Date.now()
