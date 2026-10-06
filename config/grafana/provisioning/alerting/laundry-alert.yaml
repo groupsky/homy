@@ -107,3 +107,5 @@ groups:
         labels:
           rule_uid: webhook-XA5nIopVk
           alert_type: webhook
+          # "Done" reminder: send no RESOLVED message (#1668)
+          notify_resolved: "false"
