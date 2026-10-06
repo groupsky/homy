@@ -50,8 +50,15 @@ groups:
               maxDataPoints: 43200
               refId: A
               type: classic_conditions
-        noDataState: NoData
-        execErrState: Alerting
+        # Both OK: a threshold rule does not page for "I cannot see the data"
+        # (config/grafana/CLAUDE.md). With execErrState Alerting and for 2m,
+        # the query errors in the first minutes after the 2026-10-04 reboot
+        # paged "Boiler Temperature Critical" while the tank top was 48.5 degC
+        # (#1669). On its own this rule now reads Normal when it cannot query.
+        # boiler-temperature-sensor-failure below reads the same t2 and pages
+        # when it has no data or its query fails for 30 min.
+        noDataState: OK
+        execErrState: OK
         for: 2m
         annotations:
           summary: "🔥 Boiler Temperature Critical"
