@@ -1,19 +1,25 @@
 const { InfluxDB, Point } = require('@influxdata/influxdb-client')
 
+// InfluxDB 1.x reserves the name "time": it strips such a field and fails the
+// write with "partial write", so a device's own clock (for example the
+// OR-WE-526 "time" register) is stored as "device_time" instead.
+const fieldName = (name) => name === 'time' ? 'device_time' : name
+
 const mapObject = (prefix, entry, point, skip=[]) => {
   for (const key in entry) {
     if (!Object.hasOwnProperty.call(entry, key)) continue
     if (skip.includes(key)) continue
     const value = entry[key]
+    const name = fieldName(prefix + key)
     switch (typeof value) {
       case 'boolean':
-        point.booleanField(prefix+key, value)
+        point.booleanField(name, value)
         break
       case 'number':
-        point.floatField(prefix+key, value)
+        point.floatField(name, value)
         break
       case 'string':
-        point.tag(prefix + key, value)
+        point.tag(name, value)
         break
       case 'object':
         if (!Array.isArray(value)) {

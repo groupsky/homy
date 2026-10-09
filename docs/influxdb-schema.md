@@ -178,6 +178,7 @@ the mesh reached InfluxDB at all.
   - `outputs.p1` (boolean): Solar circulation pump control
   - **Primary device**: Both temperature sensors and solar heating system control
 - **thermostats** (BAC002, addr 65-68): Individual room temperature control
+- **charger** (OR-WE-526, addr 1): `device_time` (ms) is the meter's own clock. The driver calls it `time`; the modbus-serial InfluxDB integration renames it because InfluxDB 1.x reserves `time`. Points written before this rename have no meter clock.
 **Use Cases**: Multi-zone temperature monitoring, solar heating coordination, thermal analysis
 
 #### `monitoring2` Measurement
