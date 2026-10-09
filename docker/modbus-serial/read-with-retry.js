@@ -3,9 +3,10 @@
 // from the device, a closed port) would only fail again.
 const isTransient = (e) => e?.name === 'TransactionTimedOutError' || e?.message === 'CRC error'
 
-// The pause lets a late reply to the first request arrive while the port
-// still waits for that unit and function, so the port drops it and does not
-// take it as the answer to the retry.
+// The pause is for a late reply to the first request. If it comes before the
+// retry is sent, modbus-serial matches it to the timed-out request and drops
+// it; after that it could be taken as the answer to the retry. A reply that
+// is later than the pause, or only part of one, can still make the retry fail.
 module.exports = async function readWithRetry (read, { msRetryDelay = 100, onRetry = () => {} } = {}) {
   try {
     return await read()

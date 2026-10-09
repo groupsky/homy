@@ -436,14 +436,16 @@ async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = 
     return
   }
 
-  state.lastReport = Date.now()
-  Object.assign(state, result)
-
   result.device = await readDevice(client, state)
   result.pg1 = await readPG1(client, state)
   result.pg2 = await readPG2(client, state)
   result.pg3 = await readPG3(client, state)
   result.mode = result.pg2.mode
+
+  // Set only after all reads succeed, so a failed read is not counted as a
+  // report and the next read (or the retry) reports the values again.
+  state.lastReport = Date.now()
+  Object.assign(state, result)
 
   return result
 }
