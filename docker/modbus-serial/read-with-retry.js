@@ -7,13 +7,16 @@ const isTransient = (e) => e?.name === 'TransactionTimedOutError' || e?.message 
 // retry is sent, modbus-serial matches it to the timed-out request and drops
 // it; after that it could be taken as the answer to the retry. A reply that
 // is later than the pause, or only part of one, can still make the retry fail.
+//
+// read(force) gets force = true on the retry: drivers that mark a report as
+// done before their reads would otherwise skip the retry and return nothing.
 module.exports = async function readWithRetry (read, { msRetryDelay = 100, onRetry = () => {} } = {}) {
   try {
-    return await read()
+    return await read(false)
   } catch (e) {
     if (!isTransient(e)) throw e
     onRetry(e)
     await new Promise((resolve) => setTimeout(resolve, msRetryDelay))
-    return read()
+    return read(true)
   }
 }

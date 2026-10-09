@@ -98,7 +98,7 @@ const pollDevice = async (device) => {
     try {
       // Only reads are retried; writes go through the MQTT handler below.
       val = await readWithRetry(
-        () => device.driver.read(modbusClient, device.config, device.state),
+        (force) => device.driver.read(modbusClient, device.config, device.state, force),
         {onRetry: (e) => console.error(`Retrying read from ${device.name} after: ${e.message}`)}
       )
       deviceErrors.delete(device.name)

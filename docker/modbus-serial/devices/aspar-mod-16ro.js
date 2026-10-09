@@ -50,11 +50,13 @@ const writeLong = (value) => [value & 0xFFFF, value >> 16]
  * @param {STATE} [state]
  * @return {Promise<Object>}
  */
-async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = {}, state = {}) {
+async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = {}, state = {}, force = false) {
   const recentReport = maxMsBetweenReports === 0 || ((Date.now() - (state.lastReport || 0)) < maxMsBetweenReports)
-  if (state.lastReport > 0 && recentReport) {
+  if (state.lastReport > 0 && recentReport && !force) {
     return
   }
+
+  state.lastReport = Date.now()
 
   let val = await client.readHoldingRegisters(0x0000, 2)
   const deviceVersionType = val.data[0]
@@ -77,10 +79,6 @@ async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = 
 
   val = await client.readInputRegisters(0x33, 1)
   const outputs = val.data[0]
-
-  // Set only after all reads succeed, so a failed read is not counted as a
-  // report and the next read (or the retry) reads the device again.
-  state.lastReport = Date.now()
 
   return {
     deviceVersionType,

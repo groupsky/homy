@@ -25,7 +25,7 @@ describe('readWithRetry', () => {
     const started = Date.now()
     await expect(readWithRetry(read, {msRetryDelay: 30, onRetry})).resolves.toEqual({v: 2})
 
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(read.mock.calls).toEqual([[false], [true]])
     expect(Date.now() - started).toBeGreaterThanOrEqual(25)
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
