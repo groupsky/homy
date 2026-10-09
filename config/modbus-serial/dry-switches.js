@@ -34,6 +34,9 @@ module.exports = {
     },
     msDelayBetweenDevices: 5,
     msTimeout: 50,
+    // A read retry holds the bus up to ~200 ms; the default (10 x msTimeout)
+    // could time out a relay write queued behind a few of those.
+    msCommunicationTimeout: 1000,
   },
   devices: [
     {
