@@ -2,6 +2,7 @@
 /* eslint-env node */
 const { Mutex, withTimeout } = require('async-mutex')
 const ModbusRTU = require('modbus-serial')
+const readWithRetry = require('./read-with-retry')
 const {
   modbus: {
     type = 'rtu', // 'rtu' or 'tcp'
@@ -95,7 +96,11 @@ const pollDevice = async (device) => {
     await modbusClient.setID(device.config.address)
     start = Date.now()
     try {
-      val = await device.driver.read(modbusClient, device.config, device.state)
+      // Only reads are retried; writes go through the MQTT handler below.
+      val = await readWithRetry(
+        () => device.driver.read(modbusClient, device.config, device.state),
+        {onRetry: (e) => console.error(`Retrying read from ${device.name} after: ${e.message}`)}
+      )
       deviceErrors.delete(device.name)
       msReconnectDelay = 0
     } catch (e) {
