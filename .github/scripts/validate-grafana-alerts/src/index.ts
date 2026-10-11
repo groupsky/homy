@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Rejects Grafana provisioning that is accepted at load time and wrong at run
- * time. Two checks, both of failures that leave the UI looking healthy.
+ * time. Four checks, all of failures that leave the UI looking healthy.
  *
  * 1. Unsupported evaluator types in provisioned alert rules.
  *
@@ -27,6 +27,11 @@
  *
  * 3. A Grafana bump that silently invalidates (2).
  *
+ * 4. Alert rules with `noDataState: NoData`.
+ *
+ * Grafana 9.5 sends NoData at once, without waiting for `for`, so a short
+ * writer gap pages a false "DATA SOURCE ISSUE" (#1682, #1695).
+ *
  * The unit list in `src/lib/units.ts` is data read out of one image's source
  * maps. `docker/grafana/Dockerfile` is where the version is pinned, so the two
  * are compared and a mismatch fails with instructions for re-deriving the list.
@@ -40,6 +45,7 @@ import { fileURLToPath } from 'url';
 import { run } from './lib/report.js';
 import { runDashboardUnits } from './lib/unit-report.js';
 import { runGrafanaVersionPin } from './lib/grafana-version.js';
+import { runNoDataState } from './lib/nodata.js';
 
 /**
  * Fixed on purpose. Taking the directory from argv or the environment would
@@ -56,7 +62,12 @@ const DASHBOARD_DIR = path.join(REPO_ROOT, 'config/grafana/dashboards');
 const GRAFANA_DOCKERFILE = path.join(REPO_ROOT, 'docker/grafana/Dockerfile');
 
 // Every check always runs: a failure in one must not hide the state of another.
-const results = [run(ALERTING_DIR), runDashboardUnits(DASHBOARD_DIR), runGrafanaVersionPin(GRAFANA_DOCKERFILE)];
+const results = [
+  run(ALERTING_DIR),
+  runNoDataState(ALERTING_DIR),
+  runDashboardUnits(DASHBOARD_DIR),
+  runGrafanaVersionPin(GRAFANA_DOCKERFILE),
+];
 for (const result of results) {
   for (const line of result.out) console.log(line);
   for (const line of result.err) console.error(line);

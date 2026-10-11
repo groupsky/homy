@@ -45,9 +45,15 @@ groups:
               intervalMs: 1000
               maxDataPoints: 43200
               type: classic_conditions
+        # No data is the blackout signal: every meter goes silent. But
+        # `current_power` has one writer, mqtt-influx, so a restart of that
+        # writer (a deploy) looks the same (#1695). `for: 5m` lets a writer gap
+        # of up to 5 min pass in silence. The cost: a real blackout pages about
+        # 4 min later, about 6.5-7.5 min after the meters stop (90 s window +
+        # 5 min `for` + up to 1 min until the next evaluation).
         noDataState: Alerting
         execErrState: OK
-        for: 1m
+        for: 5m
         annotations:
           summary: "🚨 TOTAL POWER OUTAGE"
           description: "All meters have gone silent — every phase is down (full blackout). Server running on UPS/battery."
