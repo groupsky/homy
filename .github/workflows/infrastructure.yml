@@ -76,7 +76,10 @@ jobs:
           docker compose --env-file example.env up -d ingress
 
           echo "Starting test backend services for ingress validation..."
-          docker compose --env-file example.env up -d grafana ha
+          # --no-deps: this test needs only grafana and ha on the ingress
+          # network. Grafana waits for a healthy influxdb (#1682), and influxdb
+          # cannot start here (the bind-mounted data dir is owned by root).
+          docker compose --env-file example.env up -d --no-deps grafana ha
 
           echo "Waiting for services to be healthy on ingress network..."
           for i in {1..10}; do

@@ -64,7 +64,12 @@ groups:
               intervalMs: 1000
               maxDataPoints: 43200
               type: classic_conditions
-        noDataState: NoData
+        # Alerting, not NoData: Grafana 9.5 sends a NoData state at once, as a
+        # "DATA SOURCE ISSUE" page, without waiting for `for`. The 2 min window
+        # is empty for a short time after an InfluxDB restart, while writers
+        # catch up (#1682). Alerting waits the 15 min of `for`, so a short gap
+        # is silent, and a gap of more than 15 min still pages as this rule.
+        noDataState: Alerting
         execErrState: OK
         for: 15m
         annotations:
