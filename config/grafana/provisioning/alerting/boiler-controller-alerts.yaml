@@ -151,12 +151,15 @@ groups:
       #   Known miss for the new shape: 2026-07-01T19:22:18Z, span 10.5 min, sits
       #   right on the threshold and does not fire - 1 expected in Jul, 0 delivered.
       #
-      #   * severity is `warning`, PROVISIONALLY. At 26.7 pages/30d annualised and
-      #     40-44 per month through Dec-Feb this is more than one page a day for a
-      #     third of the year, and 93.7% of it is the tank BOTTOM below 30 degC,
-      #     which on a stratified tank with a cold mains inlet is what happens after
-      #     any winter hot-water draw. Whether that is the automation working as
-      #     intended or a real problem is issue #1477; revisit this label there.
+      #   The replay above used the old `/.*emergency.*/` match (top AND bottom).
+      #
+      #   * Only `emergency_heating_top_cold` pages (issue #1477, owner decision
+      #     2026-10-11). The broad match fired 40-44 times a month through Dec-Feb,
+      #     and 93.7% of it was the tank BOTTOM below 30 degC, which on a stratified
+      #     tank with a cold mains inlet is normal after any winter hot-water draw -
+      #     the heater is already on and there is nothing to do. A cold TOP means no
+      #     usable hot water: 87 of 1385 emergency points in the 314 days above.
+      #     Severity stays `warning`.
       #     Do NOT retune `emergencyMin` to quiet this alert - that changes when the
       #     immersion heater runs, which is the automation's semantics, not ours.
       #
@@ -176,7 +179,8 @@ groups:
       #     honest about the cost: OK/OK makes this rule UNFALSIFIABLE - it reads
       #     Normal when there is no emergency AND when it is completely broken
       #     (datasource down, measurement or field renamed, typo'd refId, or the bot
-      #     changing the reason strings so /.*emergency.*/ stops matching). The CI
+      #     changing the reason strings so /emergency_heating_top_cold/ stops
+      #     matching). The CI
       #     evaluator check closes exactly one syntactic member of that class. Only
       #     an external check on Grafana's error log or
       #     grafana_alerting_rule_evaluation_failures_total proves it is alive.
@@ -192,7 +196,7 @@ groups:
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
-              query: 'SELECT count("heaterState") FROM automation_status WHERE "service"=''boilerController'' AND reason =~ /.*emergency.*/ AND time >= now() - 20m'
+              query: 'SELECT count("heaterState") FROM automation_status WHERE "service"=''boilerController'' AND reason =~ /emergency_heating_top_cold/ AND time >= now() - 20m'
               rawQuery: true
               resultFormat: time_series
           - refId: A
@@ -221,14 +225,13 @@ groups:
         annotations:
           summary: "❄️ Boiler Emergency Heating Active"
           description: >-
-            The boiler controller reported emergency heating (tank top or bottom below 30°C,
-            `emergencyMin` in config/automations/boiler-controller-config.js) continuously for
-            more than 10 minutes. This fires 30 minutes after the emergency began, and the
-            condition lags the tank by up to 20 minutes, so the boiler may already have
-            recovered by the time you read this. Almost all of these are the tank bottom
-            after a large hot-water draw - see issue #1477 before treating it as a fault.
+            The boiler controller reported emergency heating because the tank top is below 30°C
+            (`emergencyMin` in config/automations/boiler-controller-config.js) continuously for
+            more than 10 minutes - there may be no usable hot water. This fires 30 minutes after
+            the emergency began, and the condition lags the tank by up to 20 minutes, so the
+            boiler may already have recovered by the time you read this. A cold tank bottom
+            alone is normal after a hot-water draw and does not fire this (issue #1477).
         labels:
-          # Provisional - see issue #1477 and the note above.
           severity: warning
           system: boiler
           component: automation
