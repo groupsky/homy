@@ -75,10 +75,11 @@ count back to seven.)
    thresholds" below.
 
 ### Warning Alerts
-5. **Emergency Heating Active** (`boiler-controller-emergency-heating`) - tank top or bottom below
-   30°C continuously for 10+ minutes. Pages 30 minutes after onset and lags the tank by up to 20
-   minutes. `severity: warning` is **provisional**: this fires 40-44 times a month through
-   December-February, and 93.7% of it is the tank bottom after a hot-water draw. See issue #1477.
+5. **Emergency Heating Active** (`boiler-controller-emergency-heating`) - tank top below 30°C
+   (`emergency_heating_top_cold`) continuously for 10+ minutes, i.e. likely no usable hot water.
+   Pages 30 minutes after onset and lags the tank by up to 20 minutes. A cold tank bottom alone
+   (`emergency_heating_bottom_cold`) is normal after a hot-water draw and does not page; see
+   issue #1477.
 6. **Excessive Power** (`boiler-excessive-power-consumption`) - >3kW consumption for 15+ minutes
 7. **Solar Circulation Idle While Sunny** (`boiler-solar-circulation-stuck`) - under ~2 minutes of pump
    run time in 6 hours while the PV inverter averaged >1.5 kW and the boiler top stayed below 55°C.
