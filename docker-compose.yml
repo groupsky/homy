@@ -9,6 +9,12 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+# The host has no swap. Memory limits keep one runaway container from making
+# the kernel OOM killer pick a victim across the whole host. Limits are about
+# 2x the peak working set measured on the production host (see #1372).
+# Node services idle at 35-65 MiB; one peaked at about 160 MiB.
+x-node-mem-limit: &node-mem-limit 256m
+
 services:
 
   ingress:
@@ -132,6 +138,7 @@ services:
     labels:
       # Recorder schema migrates forward only (scripts/deploy.sh)
       homy.stateful: "true"
+    mem_limit: 1g
     logging: *default-logging
 
   z2m-home1:
@@ -185,6 +192,7 @@ services:
       # Data format migrates forward only: a failed deploy never rolls its
       # image back (scripts/deploy.sh)
       homy.stateful: "true"
+    mem_limit: 512m
     logging: *default-logging
 
   mongo:
@@ -202,6 +210,10 @@ services:
       - MONGO_INITDB_ROOT_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGO_INITDB_ROOT_PASSWORD_FILE=/run/secrets/mongo_root_password
       - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
+    # Without this WiredTiger takes half of the host RAM. The cache held about
+    # 300 MiB and mongod peaked at under 600 MiB RSS; 1 GiB leaves room for growth
+    # while mem_limit stays well under the free host memory.
+    command: ["--wiredTigerCacheSizeGB", "1"]
     volumes:
       # Both paths are VOLUMEs of the image; mounting /data (as before) left
       # them as unnamed volumes that `down` threw away.
@@ -210,6 +222,7 @@ services:
     labels:
       # Feature compatibility version migrates forward only (scripts/deploy.sh)
       homy.stateful: "true"
+    mem_limit: 2g
     logging: *default-logging
 
   mongo-express:
@@ -240,6 +253,7 @@ services:
       - ME_CONFIG_BASICAUTH_PASSWORD_FILE=/run/secrets/mongo_express_password
     volumes:
       - /etc/localtime:/etc/localtime:ro
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   main-power:
@@ -280,6 +294,7 @@ services:
       - /dev/serial:/dev/serial
       - ${MAIN_POWER_CONFIG_FILE}:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   secondary-power:
@@ -320,6 +335,7 @@ services:
       - /dev/serial:/dev/serial
       - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   tetriary-power:
@@ -361,6 +377,7 @@ services:
       - /dev/serial:/dev/serial
       - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   monitoring:
@@ -403,6 +420,7 @@ services:
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/monitoring.config.js:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   monitoring2:
@@ -445,6 +463,7 @@ services:
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/monitoring2.config.js:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   dry-switches:
@@ -486,6 +505,7 @@ services:
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/dry-switches.js:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   solar:
@@ -528,6 +548,7 @@ services:
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/modbus-serial/solar.config.js:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   inverter:
@@ -569,6 +590,7 @@ services:
     volumes:
       - ${CONFIG_PATH}/modbus-serial/inverter.config.js:/etc/config.js:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   influxdb:
@@ -609,6 +631,9 @@ services:
     labels:
       # Storage engine files are not rolled back with the image (scripts/deploy.sh)
       homy.stateful: "true"
+    # Extra room over the usual 2x: the in-memory series index is rebuilt on
+    # every start, and a crash loop here would stop all data writes.
+    mem_limit: 3g
     logging: *default-logging
 
   grafana:
@@ -655,6 +680,7 @@ services:
     labels:
       # Database migrations do not run backwards (scripts/deploy.sh)
       homy.stateful: "true"
+    mem_limit: 512m
     logging: *default-logging
 
   telegram-bridge:
@@ -675,6 +701,7 @@ services:
       - TZ=${TZ}
     volumes:
       - /etc/localtime:/etc/localtime:ro
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   mqtt-mongo-ioniq:
@@ -702,6 +729,7 @@ services:
       # No TTL here (#1618): MongoDB is being retired (#1622), and nothing
       # may delete from it before the host-side job has exported it. Until
       # the cut-over this runs alongside mqtt-ndjson-ioniq below.
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   # Writes ioniq/# to daily NDJSON files under RAW_DATA_PATH, the successor
@@ -727,6 +755,7 @@ services:
       - MQTT_CLIENT_ID=mqtt-ndjson-ioniq
     volumes:
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   mqtt-influx-primary:
@@ -753,6 +782,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"primary"}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   mqtt-influx-secondary:
@@ -779,6 +809,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"secondary"}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   mqtt-influx-tetriary:
@@ -805,6 +836,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"tetriary"}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   mqtt-influx-dry-switches:
@@ -831,6 +863,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"bus":"dry-switches"}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   mqtt-influx-ioniq:
@@ -856,6 +889,7 @@ services:
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   mqtt-influx-ioniq-sessions:
@@ -881,6 +915,7 @@ services:
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   # Records the Zigbee mesh. Nothing from zigbee2mqtt reached InfluxDB before
@@ -920,6 +955,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"mesh":"house1"}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   automation-events-processor:
@@ -946,6 +982,7 @@ services:
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       - TAGS={"source":"automation_events"}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   sunseeker-monitoring:
@@ -972,6 +1009,7 @@ services:
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   dmx-driver:
@@ -993,6 +1031,7 @@ services:
       - TOPIC=/modbus/dry-switches/mbsl32di1/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   automations:
@@ -1017,6 +1056,7 @@ services:
       - ${CONFIG_PATH}/automations/config.js:/etc/config.js:ro
       - ${DATA_PATH}/automations/state:/app/state
     user: ${PUID}:${PGID}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   boiler-controller:
@@ -1041,6 +1081,7 @@ services:
       - ${CONFIG_PATH}/automations/boiler-controller-config.js:/etc/boiler-controller-config.js:ro
       - ${DATA_PATH}/automations/state:/app/state
     user: ${PUID}:${PGID}
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   features:
@@ -1063,6 +1104,7 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
       - ${CONFIG_PATH}/automations/features.js:/etc/config.js:ro
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   ha_discovery:
@@ -1088,6 +1130,7 @@ services:
 
   # Manualy run with
   # dc run historian-primary node index.js
+    mem_limit: *node-mem-limit
     logging: *default-logging
   historian-primary:
     image: ghcr.io/groupsky/homy/historian:${IMAGE_TAG:-latest}
@@ -1112,6 +1155,7 @@ services:
       - TOPIC=/modbus/main/{device}/history
       - MQTT_CLIENT_ID=historian-primary
       - COLLECTION=main
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   # Manualy run with
@@ -1139,6 +1183,7 @@ services:
       - TOPIC=/modbus/secondary/{device}/history
       - MQTT_CLIENT_ID=historian-secondary
       - COLLECTION=secondary
+    mem_limit: *node-mem-limit
     logging: *default-logging
 
   # Manually run with
