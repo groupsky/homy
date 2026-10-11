@@ -246,6 +246,14 @@ because it is the sensor that fails — issue #1472)
 - `read_ms` (int): Modbus read duration
 **Use Cases**: Relay state history and RS485 bus-health diagnostics
 
+#### `influxdb_health` Measurement
+**Source**: `docker/influxdb/shard-check.sh`, a loop inside the influxdb container (#1685)
+**Tag Structure**: none
+**Fields**:
+- `failed_shards` (int): Shards that exist in the meta store and on disk, but are not open. Healthy is `0`.
+**Cadence**: once when influxdb answers `/health` after a start, then every 15 minutes
+**Use Cases**: The `influxdb-shard-open-failed` alert; see "Field Types and Broken Shards"
+
 ### Vehicle Telemetry
 
 #### `ioniq` Measurement
@@ -580,6 +588,13 @@ All data of that week becomes unreadable, although the TSM files are fine. The
 "Rebuilding" message does not fix it. To repair a shard: stop influxdb cleanly,
 move that shard's `fields.idx` and `fields.idxl` out of the shard directory, and start
 influxdb again. The field index is then rebuilt from the TSM files.
+
+The Grafana alert "InfluxDB Shard Failed To Open" (`influxdb-shard-open-failed` in
+`config/grafana/provisioning/alerting/influxdb-health-alerts.yaml`) sends a Telegram
+message when `influxdb_health.failed_shards` is above 0, and when the check stops
+reporting for 1 hour. The influxdb log names the broken shards in a `shard-check:`
+line. Repair them with the steps above. Test the check with
+`docker/influxdb/test-shard-check.sh`.
 
 A normal stop is clean: influxd receives SIGTERM, and the influxdb service sets
 `stop_grace_period: 40s` so it has time to close its shards.

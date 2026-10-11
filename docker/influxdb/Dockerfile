@@ -2,6 +2,7 @@ FROM ghcr.io/groupsky/homy/influxdb:1.12.4-alpine
 
 COPY load-env-files.sh /load-env-files.sh
 COPY secure-entrypoint.sh /secure-entrypoint.sh
+COPY shard-check.sh /shard-check.sh
 
 ENTRYPOINT ["/secure-entrypoint.sh"]
 CMD ["influxd"]
