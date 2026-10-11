@@ -1,12 +1,29 @@
 apiVersion: 1
 
-# Old rules made in the UI (folder "General Alerting"). Each one has the same
-# query, threshold and `for` as a provisioned "(Webhook)" rule, so every alert
-# was sent twice (#1682).
+# Old rules made in the UI (folder "General Alerting"). After these deletes
+# the folder has no UI-made rules left.
 deleteRules:
+  # Each one has the same query, threshold and `for` as a provisioned
+  # "(Webhook)" rule, so every alert was sent twice (#1682).
   - orgId: 1
     uid: 3A5nIop4k  # Термопомпа не работи -> webhook-3A5nIop4k
   - orgId: 1
     uid: lA5nSTtVk  # Main Power alert -> webhook-lA5nSTtVk
   - orgId: 1
     uid: z157Sot4z  # Water pump power alert -> webhook-z157Sot4z
+
+  # More UI-made rules from "General Alerting", owner decision in #1690.
+  # A provisioned rule already covers them:
+  - orgId: 1
+    uid: xjXziW_4k  # Термопомпа претоварена -> webhook-lA5nSTt4k (now per phase, 1000 W)
+  - orgId: 1
+    uid: 3057STtVkz  # AC alert (210/248 V, no for) -> webhook-3057STtVkz (207/253 V, 4m)
+  # Moved into the repo with the same meaning:
+  - orgId: 1
+    uid: RJcnSop4z  # External alert -> webhook-RJcnSop4z (heat-pump-alerts.yaml)
+  - orgId: 1
+    uid: eAc7ITtVk  # Output alert -> webhook-eAc7ITtVk (heat-pump-alerts.yaml)
+  - orgId: 1
+    uid: rA5nSotVkz  # Temperature alert -> webhook-rA5nSotVkz (controlbox-alerts.yaml)
+  - orgId: 1
+    uid: j05nSotVz  # Humidity alert -> webhook-j05nSotVz (controlbox-alerts.yaml)
