@@ -251,7 +251,7 @@ because it is the sensor that fails — issue #1472)
 **Tag Structure**: none
 **Fields**:
 - `failed_shards` (int): Shards that exist in the meta store and on disk, but are not open. Healthy is `0`.
-**Cadence**: once when influxdb answers `/health` after a start, then every 15 minutes
+**Cadence**: once when influxdb answers `/health` after a start, then every 15 minutes (`SHARD_CHECK_INTERVAL`, in seconds)
 **Use Cases**: The `influxdb-shard-open-failed` alert; see "Field Types and Broken Shards"
 
 ### Vehicle Telemetry
@@ -591,8 +591,8 @@ influxdb again. The field index is then rebuilt from the TSM files.
 
 The Grafana alert "InfluxDB Shard Failed To Open" (`influxdb-shard-open-failed` in
 `config/grafana/provisioning/alerting/influxdb-health-alerts.yaml`) sends a Telegram
-message when `influxdb_health.failed_shards` is above 0, and when the check stops
-reporting for 1 hour. The influxdb log names the broken shards in a `shard-check:`
+message when `influxdb_health.failed_shards` is above 0, when the check stops
+reporting for 1 hour, and when InfluxDB cannot be queried for 15 minutes. The influxdb log names the broken shards in a `shard-check:`
 line. Repair them with the steps above. Test the check with
 `docker/influxdb/test-shard-check.sh`.
 

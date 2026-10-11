@@ -16,7 +16,7 @@ IMAGE=homy-influxdb-shard-check-test
 NAME=homy-influxdb-shard-check-test-$$
 
 docker build -q -t "$IMAGE" . >/dev/null
-trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
+trap 'docker rm -f "$NAME" >/dev/null 2>&1; docker rmi "$IMAGE" >/dev/null 2>&1 || true' EXIT
 
 docker run -d --name "$NAME" \
   -e INFLUXDB_DB=homy \
@@ -68,7 +68,12 @@ docker kill "$NAME" >/dev/null
 docker start "$NAME" >/dev/null
 since=$(now)
 
-wait_healthy
+# Right after a start, docker may still show the old "healthy" status, so wait
+# for the log line of the new start instead
+for _ in $(seq 120); do
+  docker logs "$NAME" 2>&1 | grep -q 'Failed to open shard' && break
+  sleep 1
+done
 docker logs "$NAME" 2>&1 | grep -q 'Failed to open shard' \
   || { echo "FAIL: the shard was not broken" >&2; exit 1; }
 expect_failed_shards "$since" 1

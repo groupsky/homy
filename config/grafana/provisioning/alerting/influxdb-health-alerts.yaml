@@ -16,8 +16,9 @@ groups:
         # One rule covers both cases from #1685:
         # - failed_shards > 0: a shard failed to open.
         # - no value for 1h (noDataState: Alerting): the check stopped reporting.
-        # execErrState stays OK: a query error means influxdb itself is down or
-        # restarting, which is not this rule's case.
+        # A query error (influxdb down) also fires, but only after for: 15m, so
+        # the 2-5 min restart of a deploy does not page. last() over 1h keeps a
+        # value > 0 for the whole 15 min, so a broken shard still pages.
         data:
           - refId: failed
             queryType: ''
@@ -60,11 +61,11 @@ groups:
               refId: A
               type: classic_conditions
         noDataState: Alerting
-        execErrState: OK
-        for: 0s
+        execErrState: Alerting
+        for: 15m
         annotations:
           summary: "InfluxDB has shards that failed to open, or the shard check stopped"
-          description: "failed_shards is above 0, or influxdb_health got no value for 1 hour. If above 0, a whole week of data cannot be read. The influxdb log names the shards (lines with 'shard-check' and 'Failed to open shard'). Repair steps: 'Field Types and Broken Shards' in docs/influxdb-schema.md. If there is no value, check that the influxdb container runs /shard-check.sh."
+          description: "failed_shards is above 0, or influxdb_health got no value for 1 hour, or InfluxDB cannot be queried. If above 0, a whole week of data cannot be read. The influxdb log names the shards (lines with 'shard-check' and 'Failed to open shard'). Repair steps: 'Field Types and Broken Shards' in docs/influxdb-schema.md. If there is no value, check that the influxdb container runs /shard-check.sh."
           runbook_url: ""
         labels:
           severity: critical

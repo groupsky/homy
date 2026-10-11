@@ -26,31 +26,43 @@ log() {
   echo "shard-check: $*" >&2
 }
 
-check() {
-  shards=$(influx -format csv -execute 'SHOW SHARDS') || return 1
+# Reads shard paths ("database/retention_policy/id") from stdin and prints
+# the ones that are not open
+not_open() {
   stats=$(influx -format csv -execute "SHOW STATS FOR 'shard'") || return 1
-
-  # One "database/retention_policy/id" line per shard; header lines are skipped
-  shard_paths=$(echo "$shards" | awk -F, '$2 ~ /^[0-9]+$/ { print $3 "/" $4 "/" $2 }')
-  if [ -z "$shard_paths" ]; then
-    log "SHOW SHARDS returned no shards"
-    return 1
-  fi
   # The tags column holds "database=...,engine=tsm1,id=<id>,..."
   open_ids=" $(echo "$stats" | sed -n 's/.*,id=\([0-9]*\),.*/\1/p' | tr '\n' ' ') "
+  while read -r shard; do
+    case "$open_ids" in *" ${shard##*/} "*) ;; *) echo "$shard" ;; esac
+  done
+}
+
+check() {
+  shards=$(influx -format csv -execute 'SHOW SHARDS') || return 1
+
+  # One "database/retention_policy/id" line per shard that has a directory;
+  # header lines are skipped
+  on_disk=$(echo "$shards" | awk -F, '$2 ~ /^[0-9]+$/ { print $3 "/" $4 "/" $2 }' |
+    while read -r shard; do
+      [ -d "$DATA_DIR/$shard" ] && echo "$shard"
+    done)
+  if [ -z "$on_disk" ]; then
+    log "no shards found"
+    return 1
+  fi
+
+  failed=$(echo "$on_disk" | not_open) || return 1
+  # A shard created by a write between the queries above is open a moment later
+  if [ -n "$failed" ]; then
+    sleep 10
+    failed=$(echo "$failed" | not_open) || return 1
+  fi
 
   count=0
-  failed=""
-  while read -r shard; do
-    [ -d "$DATA_DIR/$shard" ] || continue
-    case "$open_ids" in *" ${shard##*/} "*) continue ;; esac
-    count=$((count + 1))
-    failed="$failed $shard"
-  done <<EOF
-$shard_paths
-EOF
-
-  [ "$count" -eq 0 ] || log "$count shard(s) failed to open:$failed"
+  if [ -n "$failed" ]; then
+    count=$(echo "$failed" | wc -l)
+    log "$count shard(s) failed to open: $(echo "$failed" | tr '\n' ' ')"
+  fi
   influx -database "$INFLUXDB_DB" -execute "INSERT influxdb_health failed_shards=${count}i"
 }
 
