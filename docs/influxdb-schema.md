@@ -563,7 +563,8 @@ Rules for every writer:
 - Never `DROP MEASUREMENT`, `DROP SERIES` or `DELETE` and then write the same field
   with another type in the same week.
 
-The last rule matters because of an InfluxDB 1.12 bug (#1370). The shard's field
+The last rule matters because of an InfluxDB 1.12 bug (#1370, upstream
+influxdata/influxdb#27699). The shard's field
 change log (`fields.idxl`) does not record drops and deletes. If influxd is then
 killed before a clean stop, the log replays both types on the next start, and the
 shard fails to open on every start after that:
