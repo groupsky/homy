@@ -190,3 +190,13 @@ connect().then(async () => {
 
   return poll()
 })
+
+// Node as PID 1 ignores SIGTERM unless it has a handler, so `docker stop`
+// waited out the grace period and then killed the service (#1680). The raw
+// file is written with writeSync, so nothing in it is lost, and the OS closes
+// the port and the files. Points still in the InfluxDB batch are dropped, as
+// they were by the kill.
+process.on('SIGTERM', () => {
+  console.error('Received SIGTERM, exiting')
+  process.exit(0)
+})

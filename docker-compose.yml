@@ -575,6 +575,8 @@ services:
     image: ghcr.io/groupsky/homy/influxdb:${IMAGE_TAG:-latest}
     build: docker/influxdb
     restart: unless-stopped
+    # influxd stops cleanly within 30 s; the default 10 s cut it short (#1680)
+    stop_grace_period: 40s
     networks:
       - automation
     security_opt:

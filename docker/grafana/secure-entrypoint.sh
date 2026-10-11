@@ -4,4 +4,4 @@ set -e
 
 . /load-env-files.sh
 
-/run.sh "$@"
+exec /run.sh "$@"
