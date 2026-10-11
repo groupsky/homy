@@ -51,12 +51,14 @@ groups:
               refId: A
               type: classic_conditions
         # Alerting, not NoData: Grafana 9.5 sends NoData at once, as a "DATA
-        # SOURCE ISSUE" page, without waiting for `for` (#1682, #1695). No
-        # connection data is the problem this rule looks for, so it pages,
-        # but only after the 30 min of `for`. A short writer gap stays silent.
+        # SOURCE ISSUE" page, without waiting for `for` (#1682, #1695). The
+        # count gives no rows (not 0) when there is no data, so no
+        # connection data is the signal this rule looks for. The 30 min window
+        # already does the waiting; `for` starts only after it is empty, so
+        # it is short.
         noDataState: Alerting
         execErrState: Alerting
-        for: 30m
+        for: 5m
         annotations:
           description: "Lost connection to Sunseeker lawn mower - no messages received for 30+ minutes"
           runbook_url: ""
