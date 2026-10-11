@@ -122,6 +122,7 @@ For comprehensive InfluxDB schema documentation including all measurements, fiel
 - **floatField**: Sensor readings, percentages, calculated values
 - **booleanField**: On/off states, status flags
 - **stringField**: Avoid for high-cardinality data (use tags instead)
+- Keep one fixed type per field; see "Field Types and Broken Shards" in `docs/influxdb-schema.md`
 
 ### Tag Design Principles
 - Use tags for data you'll filter or group by in Grafana

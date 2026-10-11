@@ -547,6 +547,40 @@ the 30 days to 2026-08-09; 6 points in the trailing 30 minutes).
   a boiler energy input. It is nonetheless the correct proxy for "the sun is out" when alerting on the
   solar **thermal** circuit, and both solar circuit alert rules use it that way.
 
+## Field Types and Broken Shards
+
+InfluxDB 1.x locks the type of a field (float, integer, string, boolean) per
+measurement and per shard (one shard is one week in `homy/autogen`). A write with
+another type is rejected for the rest of that week, and the whole point is dropped.
+
+Rules for every writer:
+- Write each field with one fixed type, chosen in code (`floatField`, `intField`, ...).
+  Never pick the type from the runtime value: `Number.isInteger(4.0)` is true, so
+  a float field can turn into an integer field for a whole week (#1430).
+- Write "no value" as a value of the same type (for example `0i`), or leave the field
+  out. Never write a placeholder of another type, such as the string `'null'`.
+- Never write test points into the `homy` database. Use a throwaway container.
+- Never `DROP MEASUREMENT`, `DROP SERIES` or `DELETE` and then write the same field
+  with another type in the same week.
+
+The last rule matters because of an InfluxDB 1.12 bug (#1370). The shard's field
+change log (`fields.idxl`) does not record drops and deletes. If influxd is then
+killed before a clean stop, the log replays both types on the next start, and the
+shard fails to open on every start after that:
+
+```
+msg="field creation" path=.../<shard id>/fields.idxl error="failed creating ... field type conflict"
+msg="error opening fields.idx: Rebuilding."
+msg="Failed to open shard" db_shard_id=<shard id> error="[shard <shard id>] field type conflict"
+```
+
+All data of that week becomes unreadable, although the TSM files are fine. The
+"Rebuilding" message does not fix it. To repair a shard: stop influxdb cleanly,
+move that shard's `fields.idx` and `fields.idxl` out of the shard directory, and start
+influxdb again. The field index is then rebuilt from the TSM files. influxd now gets
+SIGTERM, and the influxdb service has `stop_grace_period: 40s`, so a normal stop is
+clean (#1680).
+
 ## Query Examples (Verified)
 
 ### Energy Consumption Analysis
