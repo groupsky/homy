@@ -617,8 +617,11 @@ services:
       context: docker/grafana
       args:
         GF_INSTALL_IMAGE_RENDERER_PLUGIN: 'false'
+    # Start only when InfluxDB answers /health. Opening the store takes up to a
+    # few minutes, and rules evaluated before that fail or see no data (#1682).
     depends_on:
-      - influxdb
+      influxdb:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - automation

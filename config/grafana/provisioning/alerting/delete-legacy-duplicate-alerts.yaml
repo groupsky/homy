@@ -1,0 +1,12 @@
+apiVersion: 1
+
+# Old rules made in the UI (folder "General Alerting"). Each one has the same
+# query, threshold and `for` as a provisioned "(Webhook)" rule, so every alert
+# was sent twice (#1682).
+deleteRules:
+  - orgId: 1
+    uid: 3A5nIop4k  # Термопомпа не работи -> webhook-3A5nIop4k
+  - orgId: 1
+    uid: lA5nSTtVk  # Main Power alert -> webhook-lA5nSTtVk
+  - orgId: 1
+    uid: z157Sot4z  # Water pump power alert -> webhook-z157Sot4z
