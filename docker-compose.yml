@@ -631,7 +631,9 @@ services:
     labels:
       # Storage engine files are not rolled back with the image (scripts/deploy.sh)
       homy.stateful: "true"
-    mem_limit: 2g
+    # Extra room over the usual 2x: the in-memory series index is rebuilt on
+    # every start, and a crash loop here would stop all data writes.
+    mem_limit: 3g
     logging: *default-logging
 
   grafana:
