@@ -557,19 +557,20 @@ Rules for every writer:
 - Write each field with one fixed type, chosen in code (`floatField`, `intField`, ...).
   Never pick the type from the runtime value: `Number.isInteger(4.0)` is true, so
   a float field can turn into an integer field for a whole week (#1430).
-- Write "no value" as a value of the same type (for example `0i`), or leave the field
-  out. Never write a placeholder of another type, such as the string `'null'`.
+- For "no value", leave the field out, or write a value of the same type that the
+  readers treat as "none" (for example `0i` for `manualOverrideExpires`). Never write
+  a placeholder of another type, such as the string `'null'`.
 - Never write test points into the `homy` database. Use a throwaway container.
 - Never `DROP MEASUREMENT`, `DROP SERIES` or `DELETE` and then write the same field
   with another type in the same week.
 
-The last rule matters because of an InfluxDB 1.12 bug (#1370, upstream
-influxdata/influxdb#27699). The shard's field
-change log (`fields.idxl`) does not record drops and deletes. If influxd is then
-killed before a clean stop, the log replays both types on the next start, and the
-shard fails to open on every start after that:
+The last rule matters because of an InfluxDB 1.12 bug (upstream
+influxdata/influxdb#27699). The shard's field change log (`fields.idxl`) does not
+record drops and deletes. If influxd is then killed before a clean stop, the log
+replays both types on the next start, and the shard fails to open on every start
+after that:
 
-```
+```text
 msg="field creation" path=.../<shard id>/fields.idxl error="failed creating ... field type conflict"
 msg="error opening fields.idx: Rebuilding."
 msg="Failed to open shard" db_shard_id=<shard id> error="[shard <shard id>] field type conflict"
@@ -578,9 +579,10 @@ msg="Failed to open shard" db_shard_id=<shard id> error="[shard <shard id>] fiel
 All data of that week becomes unreadable, although the TSM files are fine. The
 "Rebuilding" message does not fix it. To repair a shard: stop influxdb cleanly,
 move that shard's `fields.idx` and `fields.idxl` out of the shard directory, and start
-influxdb again. The field index is then rebuilt from the TSM files. influxd now gets
-SIGTERM, and the influxdb service has `stop_grace_period: 40s`, so a normal stop is
-clean (#1680).
+influxdb again. The field index is then rebuilt from the TSM files.
+
+A normal stop is clean: influxd receives SIGTERM, and the influxdb service sets
+`stop_grace_period: 40s` so it has time to close its shards.
 
 ## Query Examples (Verified)
 
