@@ -124,7 +124,7 @@ Multiple interfaces for monitoring and control:
 - **vpn**: WireGuard VPN for remote access
 
 ### Data Pipeline Services
-- **mqtt-influx-***: Multiple services bridging MQTT to InfluxDB
+- **mqtt-influx**: One container running every MQTT to InfluxDB bridge (`INSTANCES`)
   - **mqtt-influx-primary/secondary/tetriary**: Modbus sensor data
 - **mqtt-mongo-ioniq**: Lossless MQTT archive to MongoDB (Ioniq OBD stream); removed at the #1622 cut-over
 - **mqtt-ndjson-ioniq**: Lossless MQTT archive of the same stream to daily NDJSON files, its successor
