@@ -50,7 +50,11 @@ groups:
               maxDataPoints: 43200
               refId: A
               type: classic_conditions
-        noDataState: NoData
+        # Alerting, not NoData: Grafana 9.5 sends NoData at once, as a "DATA
+        # SOURCE ISSUE" page, without waiting for `for` (#1682, #1695). No
+        # connection data is the problem this rule looks for, so it pages,
+        # but only after the 30 min of `for`. A short writer gap stays silent.
+        noDataState: Alerting
         execErrState: Alerting
         for: 30m
         annotations:

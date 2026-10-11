@@ -96,7 +96,10 @@ groups:
               intervalMs: 1000
               maxDataPoints: 43200
               type: classic_conditions
-        noDataState: NoData
+        # OK, not NoData: Grafana 9.5 sends NoData at once, as a "DATA SOURCE
+        # ISSUE" page, without waiting for `for` (#1682, #1695). No data means
+        # no finished cycle, so there is nothing to report here.
+        noDataState: OK
         execErrState: OK
         for: 0s
         annotations:

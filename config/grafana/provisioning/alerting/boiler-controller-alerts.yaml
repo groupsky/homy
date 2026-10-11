@@ -333,7 +333,11 @@ groups:
                     type: last
                   type: query
               expression: temp_readings
-        noDataState: NoData
+        # Alerting, not NoData: Grafana 9.5 sends NoData at once, as a "DATA
+        # SOURCE ISSUE" page, without waiting for `for` (#1682, #1695). No
+        # temperature data is the problem this rule looks for, so it pages,
+        # but only after the 30 min of `for`. A short writer gap stays silent.
+        noDataState: Alerting
         execErrState: Alerting
         for: 30m
         annotations:
@@ -378,7 +382,10 @@ groups:
                     type: avg
                   type: query
               expression: power
-        noDataState: NoData
+        # OK, not NoData: Grafana 9.5 sends NoData at once, as a "DATA SOURCE
+        # ISSUE" page, without waiting for `for` (#1682, #1695). No data means
+        # no high reading, so there is nothing to report here.
+        noDataState: OK
         execErrState: OK
         for: 15m
         annotations:
