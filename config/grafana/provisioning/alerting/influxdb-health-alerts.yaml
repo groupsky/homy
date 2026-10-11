@@ -1,0 +1,72 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: InfluxDB Health Alerts
+    folder: Infrastructure
+    interval: 5m
+    rules:
+      - uid: influxdb-shard-open-failed
+        title: InfluxDB Shard Failed To Open
+        condition: A
+        # docker/influxdb/shard-check.sh writes failed_shards after each
+        # influxdb start and every 15 minutes: the number of shards that exist
+        # but are not open. A shard that fails to open makes its whole week
+        # unreadable, and influxd keeps running without any other sign (#1370).
+        # One rule covers both cases from #1685:
+        # - failed_shards > 0: a shard failed to open.
+        # - no value for 1h (noDataState: Alerting): the check stopped reporting.
+        # A query error (influxdb down) also fires, but only after for: 15m, so
+        # the 2-5 min restart of a deploy does not page. last() over 1h keeps a
+        # value > 0 for the whole 15 min, so a broken shard still pages.
+        data:
+          - refId: failed
+            queryType: ''
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: 'SELECT last("failed_shards") FROM "influxdb_health" WHERE time >= now() - 1h'
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - failed
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: failed
+              hide: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: classic_conditions
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 15m
+        annotations:
+          summary: "InfluxDB has shards that failed to open, or the shard check stopped"
+          description: "failed_shards is above 0, or influxdb_health got no value for 1 hour, or InfluxDB cannot be queried. If above 0, a whole week of data cannot be read. The influxdb log names the shards (lines with 'shard-check' and 'Failed to open shard'). Repair steps: 'Field Types and Broken Shards' in docs/influxdb-schema.md. If there is no value, check that the influxdb container runs /shard-check.sh."
+          runbook_url: ""
+        labels:
+          severity: critical
+          service: influxdb
