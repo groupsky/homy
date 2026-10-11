@@ -68,7 +68,7 @@ groups:
         # "DATA SOURCE ISSUE" page, without waiting for `for`. The 2 min window
         # is empty for a short time after an InfluxDB restart, while writers
         # catch up (#1682). Alerting waits the 15 min of `for`, so a short gap
-        # is silent and a longer outage still pages.
+        # is silent, and a gap of more than 15 min still pages as this rule.
         noDataState: Alerting
         execErrState: OK
         for: 15m
