@@ -4,18 +4,20 @@ This file provides guidance specific to the mqtt-influx service for Claude Code.
 
 ## Service Overview
 
-The mqtt-influx service bridges MQTT messages to InfluxDB time-series storage. Multiple instances handle different data streams, with specialized converters transforming MQTT payloads into InfluxDB points.
+The mqtt-influx service bridges MQTT messages to InfluxDB time-series storage. Several bridges ("instances") handle different data streams, with specialized converters transforming MQTT payloads into InfluxDB points. In production all bridges run in **one** container, `mqtt-influx`, listed in its `INSTANCES` variable (#1688). Each bridge keeps its own MQTT client id, topics, converter and tags.
 
 ## Architecture
 
 ### Service Instances
+Each name below is the bridge's MQTT client id in `INSTANCES`:
+
 - **mqtt-influx-primary**: Primary electrical monitoring bus (`/modbus/main/+/+`)
 - **mqtt-influx-secondary**: Secondary circuits and boiler monitoring (`/modbus/secondary/+/+`)
 - **mqtt-influx-tetriary**: Additional power monitoring points (`/modbus/tetriary/+/+`)
 - **mqtt-influx-dry-switches**: Digital I/O bus (`/modbus/dry-switches/+/reading`) — decomposes packed input/output words into per-bit boolean fields for contact-sensor and RS485 bus-health diagnostics
 - **mqtt-influx-ioniq**: Hyundai Ioniq OBD telemetry (`ioniq/parsed/#`) → `ioniq` measurement
 - **mqtt-influx-ioniq-sessions**: Ioniq session records from the `ioniq-sessions` automations bot (`ioniq/derived/#`) → `ioniq_sessions` measurement (one record per closed trip/charge/park session)
-- **mqtt-influx-zigbee**: Zigbee mesh via zigbee2mqtt (`z2m/house1/+` and `z2m/house1/+/availability`) → `zigbee` measurement. Uses `CONVERTER=zigbee` rather than payload dispatch, because zigbee2mqtt does not stamp a `_type` into its payloads
+- **mqtt-influx-zigbee**: Zigbee mesh via zigbee2mqtt (`z2m/house1/+` and `z2m/house1/+/availability`) → `zigbee` measurement. Uses `"converter": "zigbee"` rather than payload dispatch, because zigbee2mqtt does not stamp a `_type` into its payloads
 - **Water System Integration**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, boiler, and heat pump energy monitoring
 
 ### Data Flow
@@ -95,17 +97,14 @@ const converters = {
 }
 ```
 
-### Step 3: Configure Service
-Add or modify docker-compose.yml service:
+### Step 3: Configure the Bridge
+Add an entry to `INSTANCES` of the `mqtt-influx` service in docker-compose.yml:
 
 ```yaml
-mqtt-influx-my-service:
-  build: docker/mqtt-influx
-  environment:
-    - TOPIC=my/mqtt/topic/pattern
-    - MQTT_CLIENT_ID=mqtt-influx-my-service
-    # other configuration...
+{"clientId": "mqtt-influx-my-service", "topic": "my/mqtt/topic/pattern", "tags": {"key": "value"}},
 ```
+
+Do not add a new container per bridge: each one loads its own copy of the Node runtime.
 
 ## Data Types and Measurements
 
@@ -132,8 +131,9 @@ For comprehensive InfluxDB schema documentation including all measurements, fiel
 ## Configuration
 
 ### Environment Variables
+- **INSTANCES**: JSON array of bridges, each `{clientId, topic, converter?, tags?}`. `topic` is a comma-separated string or an array. When set, `TOPIC`, `CONVERTER`, `MQTT_CLIENT_ID` and `TAGS` are ignored. Startup fails on a missing `clientId` or `topic`, a repeated `clientId`, or an unknown converter. If any bridge loses MQTT, the process exits so Docker restarts all of them
 - **BROKER**: MQTT broker URL (e.g., `mqtt://broker`)
-- **TOPIC**: MQTT topic pattern(s) to subscribe to (supports wildcards). **Comma-separated for more than one** — needed when a producer splits a device across topics, as zigbee2mqtt does with state and availability
+- **TOPIC** (single bridge, no `INSTANCES`): MQTT topic pattern(s) to subscribe to (supports wildcards). **Comma-separated for more than one** — needed when a producer splits a device across topics, as zigbee2mqtt does with state and availability
 - **CONVERTER**: optional. When set, every message on `TOPIC` goes to this one converter, which receives `(payload, topic)`. Required for producers that do not stamp `_type` into the payload — anything not written by this project. Unset keeps the original `data._type` dispatch, which is what the five Modbus/Ioniq instances use
 - **MQTT_CLIENT_ID**: Unique client identifier
 - **INFLUXDB_URL**: InfluxDB connection URL

@@ -4,34 +4,27 @@
 const mqtt = require('mqtt')
 const {InfluxDB} = require('@influxdata/influxdb-client')
 
+const {parseInstances} = require('./instances')
+
 const mqttUrl = process.env.BROKER
-// One or more topics, comma-separated. A bridge needs more than one when the
-// producer splits a device's data across topics — zigbee2mqtt publishes
-// availability separately from state, and availability is the half that shows
-// a device dropping off the mesh.
-// Named `topics`, not `topic`: the message handler's own `topic` parameter is
-// the per-message topic and must not be shadowed by the subscription list.
-const topics = (process.env.TOPIC || '').split(',').map((t) => t.trim()).filter(Boolean)
-// When set, every message on TOPIC is handed to this one converter, which
+// One or more bridges, each with its own topics, converter and tags. TOPIC may
+// hold more than one comma-separated pattern because a producer can split a
+// device's data across topics: zigbee2mqtt publishes availability separately
+// from state, and availability is the half that shows a device dropping off
+// the mesh.
+//
+// A bridge with a converter hands every message to that one converter, which
 // receives (payload, topic). Producers that do not stamp a `_type` into the
-// payload — anything not written by this project, zigbee2mqtt included —
-// cannot be dispatched by payload inspection, so the service is told which
-// converter to use instead. Unset restores the original behaviour exactly:
-// dispatch on data._type.
-const forcedConverter = process.env.CONVERTER
+// payload (anything not written by this project, zigbee2mqtt included) cannot
+// be dispatched by payload inspection, so the bridge is told which converter
+// to use instead. Without one, dispatch is on data._type.
+const instances = parseInstances(process.env)
 const influxUrl = process.env.INFLUXDB_URL
 const influxToken = process.env.INFLUXDB_TOKEN || `${process.env.INFLUXDB_USERNAME}:${process.env.INFLUXDB_PASSWORD}`
 const influxOrg = process.env.INFLUXDB_ORG || ''
 const influxBucket = process.env.INFLUXDB_BUCKET || `${process.env.INFLUXDB_DATABASE}/${process.env.INFLUXDB_RP || 'autogen'}`
-const tags = process.env.TAGS ? JSON.parse(process.env.TAGS) : []
 
-const client = mqtt.connect(mqttUrl, {
-    clientId: process.env.MQTT_CLIENT_ID
-})
-const writeApi = new InfluxDB({url: influxUrl, token: influxToken})
-    .getWriteApi(influxOrg, influxBucket, 'ms', {
-        defaultTags: tags
-    })
+const influx = new InfluxDB({url: influxUrl, token: influxToken})
 const converters = {
     'aspar-mod-16ro': require('./converters/aspar-mod-16ro'),
     dds024mr: require('./converters/dds024mr'),
@@ -62,57 +55,74 @@ function resolveConverter(name) {
 }
 
 // Fail at startup rather than silently dropping every message, which is what
-// an unknown CONVERTER would otherwise do.
-const forcedConverterFn = forcedConverter ? resolveConverter(forcedConverter) : null
-if (forcedConverter && !forcedConverterFn) {
-    throw new Error(`Unknown CONVERTER ${forcedConverter}`)
+// an unknown converter would otherwise do.
+for (const {clientId, converter} of instances) {
+    if (converter && !resolveConverter(converter)) {
+        throw new Error(`Unknown CONVERTER ${converter} for ${clientId}`)
+    }
 }
 
-client.on('connect', function () {
-    console.log('connected to', mqttUrl)
-    client.subscribe(topics, function (err) {
-        if (err) {
-            console.log('Failure subscribing to topic', err)
-            process.exit(1)
-        }
-        console.log('subscribed to', topics)
+/**
+ * Runs one bridge: subscribes to its topics and writes converted points with
+ * its tags. Any MQTT connection problem exits the whole process, so Docker
+ * restarts every bridge together and none is left silently disconnected.
+ */
+function startBridge({clientId, topics, converter, tags}) {
+    const log = `[${clientId}]`
+    const forcedConverterFn = converter ? resolveConverter(converter) : null
+    const writeApi = influx.getWriteApi(influxOrg, influxBucket, 'ms', {
+        defaultTags: tags
     })
-})
-client.on('reconnect', function () {
-    console.log('reconnected to', mqttUrl)
-})
-client.on('close', function () {
-    console.log('closed', mqttUrl)
-    process.exit(1)
-})
-client.on('disconnect', function () {
-    console.log('disconnect', mqttUrl)
-    process.exit(1)
-})
-client.on('error', function (err) {
-    console.log('error from mqtt', err)
-    process.exit(1)
-})
-client.on('offline', function () {
-    console.log('offline', mqttUrl)
-    process.exit(1)
-})
+    const client = mqtt.connect(mqttUrl, {clientId})
 
-client.on('message', function (topic, message) {
-    try {
-        const data = JSON.parse(message)
+    client.on('connect', function () {
+        console.log(log, 'connected to', mqttUrl)
+        client.subscribe(topics, function (err) {
+            if (err) {
+                console.log(log, 'Failure subscribing to topic', err)
+                process.exit(1)
+            }
+            console.log(log, 'subscribed to', topics)
+        })
+    })
+    client.on('reconnect', function () {
+        console.log(log, 'reconnected to', mqttUrl)
+    })
+    client.on('close', function () {
+        console.log(log, 'closed', mqttUrl)
+        process.exit(1)
+    })
+    client.on('disconnect', function () {
+        console.log(log, 'disconnect', mqttUrl)
+        process.exit(1)
+    })
+    client.on('error', function (err) {
+        console.log(log, 'error from mqtt', err)
+        process.exit(1)
+    })
+    client.on('offline', function () {
+        console.log(log, 'offline', mqttUrl)
+        process.exit(1)
+    })
 
-        const converter = forcedConverterFn || resolveConverter(data._type)
-        if (!converter) {
-            console.warn('Unhandled type', data._type, data)
-            return
+    client.on('message', function (topic, message) {
+        try {
+            const data = JSON.parse(message)
+
+            const converterFn = forcedConverterFn || resolveConverter(data._type)
+            if (!converterFn) {
+                console.warn(log, 'Unhandled type', data._type, data)
+                return
+            }
+
+            const points = converterFn(data, topic)
+
+            writeApi.writePoints(points)
+        } catch (err) {
+            // Log and skip a malformed message rather than crashing the bridge
+            console.error(log, 'Failed to process message on', topic, err)
         }
+    })
+}
 
-        const points = converter(data, topic)
-
-        writeApi.writePoints(points)
-    } catch (err) {
-        // Log and skip a malformed message rather than crashing the bridge
-        console.error('Failed to process message on', topic, err)
-    }
-})
+instances.forEach(startBridge)
