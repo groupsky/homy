@@ -84,18 +84,25 @@ groups:
           alert_type: webhook
       - uid: webhook-lA5nSTt4k
         title: Термопомпа претоварване (Webhook)
+        # The limit is per phase: mean power above 1000 W on any one phase for
+        # 15 minutes (3 x 1000 W = 3000 W in total). This is the meaning of the
+        # UI-made rule xjXziW_4k that it replaces (#1690). The old version here
+        # took the max over all phases against 3000 W, which never fires: the
+        # highest reading on any phase in 2026-01-10..24 was 1956 W.
         condition: B
         data:
           - refId: A
             queryType: ''
             relativeTimeRange:
-              from: 600
+              from: 900
               to: 0
             datasourceUid: P3C6603E967DC8568
             model:
               groupBy:
                 - params: ["$__interval"]
                   type: time
+                - params: ["phase"]
+                  type: tag
                 - params: ["null"]
                   type: fill
               intervalMs: 1000
@@ -108,7 +115,7 @@ groups:
                 - - params: ["p"]
                     type: field
                   - params: []
-                    type: max
+                    type: mean
               tags:
                 - key: "device.name"
                   operator: "="
@@ -125,7 +132,7 @@ groups:
                 uid: __expr__
               conditions:
                 - evaluator:
-                    params: [3000]
+                    params: [1000]
                     type: gt
                   operator:
                     type: and
@@ -138,13 +145,149 @@ groups:
               type: classic_conditions
         noDataState: NoData
         execErrState: OK
-        for: 10m
+        for: 15m
         annotations:
           __alertId__: "13"
           __dashboardUid__: "Nml0-Fonz"
           __panelId__: "2"
           summary: "🌡️ Претоварване на термопомпата"
-          description: "Термопомпата консумира над 3kW повече от 10 минути. Това може да означава претоварване или неизправност."
+          description: "Термопомпата консумира средно над 1000 W на поне една фаза повече от 15 минути. Лимитът е за всяка фаза поотделно (3 x 1000 W = 3000 W, ако и трите фази са на лимита). Това може да означава претоварване или неизправност."
         labels:
           rule_uid: webhook-lA5nSTt4k
+          alert_type: webhook
+
+      - uid: webhook-RJcnSop4z
+        title: Термопомпа опасност от замръзване (Webhook)
+        # Moved from the UI-made rule RJcnSop4z (#1690) with the same query,
+        # threshold and for. noDataState and execErrState stay OK as before:
+        # a short influxdb restart does not page (#1682), but missing data is
+        # not reported either.
+        condition: A
+        data:
+          - refId: external
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              groupBy:
+                - params: ["$__interval"]
+                  type: time
+                - params: ["none"]
+                  type: fill
+              intervalMs: 1000
+              maxDataPoints: 43200
+              measurement: monitoring2
+              orderByTime: ASC
+              policy: default
+              resultFormat: time_series
+              select:
+                - - params: ["s2Temp"]
+                    type: field
+                  - params: []
+                    type: min
+              tags:
+                - key: "device.name"
+                  operator: "="
+                  value: "heatpump-ctrl"
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    params: [5]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [external]
+                  reducer:
+                    type: avg
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: classic_conditions
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "🥶 Опасност от замръзване"
+          description: "Външната температура на термопомпата (s2Temp на heatpump-ctrl) е под 5 °C средно за 5 минути."
+        labels:
+          rule_uid: webhook-RJcnSop4z
+          alert_type: webhook
+
+      - uid: webhook-eAc7ITtVk
+        title: Термопомпа висока изходна температура (Webhook)
+        # Moved from the UI-made rule eAc7ITtVk (#1690) with the same query,
+        # threshold and for. noDataState and execErrState stay OK as before:
+        # a short influxdb restart does not page (#1682), but missing data is
+        # not reported either.
+        condition: A
+        data:
+          - refId: output
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              groupBy:
+                - params: ["$__interval"]
+                  type: time
+                - params: ["none"]
+                  type: fill
+              intervalMs: 1000
+              maxDataPoints: 43200
+              measurement: monitoring2
+              orderByTime: ASC
+              policy: default
+              resultFormat: time_series
+              select:
+                - - params: ["s3Temp"]
+                    type: field
+                  - params: []
+                    type: max
+              tags:
+                - key: "device.name"
+                  operator: "="
+                  value: "heatpump-ctrl"
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    params: [60]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [output]
+                  reducer:
+                    type: avg
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: classic_conditions
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "🔥 Изходната температура е прекалено висока"
+          description: "Изходната температура на термопомпата (s3Temp на heatpump-ctrl) е над 60 °C средно за 5 минути."
+        labels:
+          rule_uid: webhook-eAc7ITtVk
           alert_type: webhook

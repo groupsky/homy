@@ -1,0 +1,149 @@
+apiVersion: 1
+
+# Temperature and humidity inside the controlbox (XYMD1 sensor, measurement
+# xymd1). Moved from UI-made rules in "General Alerting" (#1690).
+groups:
+  - orgId: 1
+    name: Controlbox webhook
+    folder: Webhook Alerting
+    interval: 1m
+    rules:
+      - uid: webhook-rA5nSotVkz
+        title: Controlbox temperature out of range (Webhook)
+        # Moved from the UI-made rule rA5nSotVkz (#1690) with the same query,
+        # threshold and for. noDataState and execErrState stay OK as before:
+        # a short influxdb restart does not page (#1682), but missing data is
+        # not reported either.
+        condition: A
+        data:
+          - refId: temperature
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              groupBy:
+                - params: ["$__interval"]
+                  type: time
+                - params: ["null"]
+                  type: fill
+              intervalMs: 1000
+              maxDataPoints: 43200
+              measurement: xymd1
+              orderByTime: ASC
+              policy: default
+              resultFormat: time_series
+              select:
+                - - params: ["t"]
+                    type: field
+                  - params: []
+                    type: mean
+              tags:
+                - key: "device.name"
+                  operator: "="
+                  value: "controlbox"
+                - condition: AND
+                  key: "t"
+                  operator: "<"
+                  value: "80"
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    params: [5, 37]
+                    type: outside_range
+                  operator:
+                    type: and
+                  query:
+                    params: [temperature]
+                  reducer:
+                    type: avg
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: classic_conditions
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "🌡️ Controlbox temperature out of range"
+          description: "The controlbox temperature (xymd1 t) is outside 5-37 °C on average for 5 minutes. Readings of 80 °C and above are left out."
+        labels:
+          rule_uid: webhook-rA5nSotVkz
+          alert_type: webhook
+
+      - uid: webhook-j05nSotVz
+        title: Controlbox humidity out of range (Webhook)
+        # Moved from the UI-made rule j05nSotVz (#1690) with the same query,
+        # threshold and for. noDataState and execErrState stay OK as before:
+        # a short influxdb restart does not page (#1682), but missing data is
+        # not reported either.
+        condition: A
+        data:
+          - refId: humidity
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              groupBy:
+                - params: ["$__interval"]
+                  type: time
+                - params: ["null"]
+                  type: fill
+              intervalMs: 1000
+              maxDataPoints: 43200
+              measurement: xymd1
+              orderByTime: ASC
+              policy: default
+              resultFormat: time_series
+              select:
+                - - params: ["h"]
+                    type: field
+                  - params: []
+                    type: mean
+              tags:
+                - key: "device.name"
+                  operator: "="
+                  value: "controlbox"
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    params: [15, 85]
+                    type: outside_range
+                  operator:
+                    type: and
+                  query:
+                    params: [humidity]
+                  reducer:
+                    type: avg
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: classic_conditions
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "💧 Controlbox humidity out of range"
+          description: "The controlbox humidity (xymd1 h) is outside 15-85 % on average for 5 minutes."
+        labels:
+          rule_uid: webhook-j05nSotVz
+          alert_type: webhook
