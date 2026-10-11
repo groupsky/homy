@@ -66,6 +66,8 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
    - **Data**: Switch states, digital inputs/outputs
 
 ### MQTT Bridge Services (mqtt-influx)
+All bridges below run in the one `mqtt-influx` container. Each name is a bridge's MQTT client id in its `INSTANCES` list (see `docker/mqtt-influx/CLAUDE.md`).
+
 - **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB (bridges main bus MQTT to InfluxDB)
 - **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)

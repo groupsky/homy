@@ -759,9 +759,8 @@ services:
     logging: *default-logging
 
   # One Node process runs every MQTT -> InfluxDB bridge (one MQTT client and
-  # InfluxDB writer per entry in INSTANCES). They used to be 7 containers that
-  # differed only in topic, converter and tags; each one loaded its own copy of
-  # the Node runtime (#1688). If any bridge loses MQTT the process exits and
+  # InfluxDB writer per entry in INSTANCES), so the Node runtime is loaded once
+  # instead of once per bridge. If any bridge loses MQTT the process exits and
   # Docker restarts all of them.
   #
   # zigbee: records the Zigbee mesh. zigbee2mqtt splits a device across two
