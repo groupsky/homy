@@ -9,9 +9,10 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
-# Memory limits keep one runaway container from filling the host's memory and
-# swap and making the kernel OOM killer pick a victim anywhere. Limits are about
-# 2x the peak working set measured on the production host (see #1372).
+# Memory limits stop one runaway container from using up all of the host's
+# memory and swap. Without them, the kernel OOM killer could stop a container
+# anywhere on the host. Limits are about 2x the peak working set measured on
+# the production host (see #1372).
 # Node services idle at 35-65 MiB; one peaked at about 160 MiB.
 x-node-mem-limit: &node-mem-limit 256m
 
