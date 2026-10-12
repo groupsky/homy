@@ -1,9 +1,11 @@
-{{ $TargetContainer := whereLabelValueMatches $ "com.docker.compose.service" "ingress" | first }}
-{{ if not $TargetContainer }}
-{{ $TargetContainer = where $ "Name" (printf "/%s" $.Env.TARGET_CONTAINER) | first }}
-{{ end }}
+{{/* Find the nginx container by its exact name first. The label value is a
+     regex, so it is anchored: "ingress" alone also matches "ingressgen". */}}
+{{ $TargetContainer := where $ "Name" (printf "/%s" $.Env.TARGET_CONTAINER) | first }}
 {{ if not $TargetContainer }}
 {{ $TargetContainer = where $ "Name" $.Env.TARGET_CONTAINER | first }}
+{{ end }}
+{{ if not $TargetContainer }}
+{{ $TargetContainer = whereLabelValueMatches $ "com.docker.compose.service" "^ingress$" | first }}
 {{ end }}
 
 {{ $external_http_port := coalesce $.Env.HTTP_PORT "80" }}
