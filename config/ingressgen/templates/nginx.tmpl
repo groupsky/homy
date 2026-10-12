@@ -86,6 +86,9 @@ map $http_upgrade $proxy_connection {
 # Apply fix for very long server names
 server_names_hash_bucket_size 128;
 
+# The nginx default of 1m rejects uploads such as phone photos of documents
+client_max_body_size 50m;
+
 # Default dhparam
 {{ if (exists "/etc/nginx/dhparam/dhparam.pem") }}
 ssl_dhparam /etc/nginx/dhparam/dhparam.pem;
