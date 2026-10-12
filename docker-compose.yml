@@ -48,6 +48,7 @@ services:
       - no-new-privileges:true
     environment:
       - TARGET_CONTAINER=$INGRESS_NAME
+      - INGRESS_SHORT_HOST_SUFFIX=${INGRESS_SHORT_HOST_SUFFIX:-}
     volumes:
       - ${INGRESS_DATA_PATH}:/etc/nginx/conf.d
       - /var/run/docker.sock:/tmp/docker.sock:ro
