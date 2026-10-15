@@ -1,0 +1,63 @@
+# Counters for the Energy dashboard. See docs/energy-dashboard.md.
+#
+# A meter's own counter can step back and stay lower, for example after the
+# meter loses power and restores an older saved value. Home Assistant
+# statistics store such a step as negative energy. A utility meter ignores a
+# step back and adds only the increases, so the dashboard has no negative
+# values. `periodically_resetting: false` makes it also count the energy used
+# while Home Assistant was restarting.
+
+# Grid import, split by the EVN day/night tariff. The automation
+# "Grid tariff by zone" in automations.yaml selects the tariff.
+grid_import:
+  name: Grid import
+  source: sensor.main_energy_sdm630_total_import_kwh_2023_11_11
+  periodically_resetting: false
+  tariffs:
+    - day
+    - night
+
+water_pump_energy:
+  name: Water pump energy
+  source: sensor.water_pump_energy_used
+  periodically_resetting: false
+
+oven_energy:
+  name: Oven energy
+  source: sensor.oven_energy_used
+  periodically_resetting: false
+
+stove_energy:
+  name: Stove energy
+  source: sensor.stove_energy_used
+  periodically_resetting: false
+
+dishwasher_energy:
+  name: Dishwasher energy
+  source: sensor.dishwasher_energy_used
+  periodically_resetting: false
+
+laundry_energy:
+  name: Laundry energy
+  source: sensor.laundry_energy_used
+  periodically_resetting: false
+
+boiler_energy:
+  name: Boiler energy
+  source: sensor.boiler_energy_used
+  periodically_resetting: false
+
+heat_pump_energy:
+  name: Heat pump energy
+  source: sensor.heat_pump_dds024mr_tot_act
+  periodically_resetting: false
+
+microwave_energy:
+  name: Microwave energy
+  source: sensor.microwave_energy_used
+  periodically_resetting: false
+
+ev_charger_energy:
+  name: EV charger energy
+  source: sensor.ev_charger_total
+  periodically_resetting: false

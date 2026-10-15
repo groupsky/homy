@@ -21,6 +21,12 @@
   value_template: "{{ value_json.c_import_kwh | float(default=0) }}"
   <<: *common_used_energy
 
+# The grid import for the Energy dashboard, through utility_meters.yaml.
+- name: main_energy_sdm630_total_import_kwh_2023_11_11
+  state_topic: "/modbus/main/main/reading"
+  value_template: "{{ value_json.total_import_kwh | float(default=0) }}"
+  <<: *common_used_energy
+
 - name: main_energy_sdm630_a_import_kwh_2023_11_11
   state_topic: "/modbus/main/main/reading"
   value_template: "{{ value_json.a_import_kwh | float(default=0) }}"
@@ -128,7 +134,7 @@
 
 - name: Microwave energy used
   state_topic: "/modbus/secondary/microwave/reading"
-  value_template: "{{ value_json.tot | float(default=0) }}"
+  value_template: "{{ value_json.tot_act | float(default=0) }}"
   <<: *common_used_energy
 
 - name: inverter_sun2000_accumulated_yield
