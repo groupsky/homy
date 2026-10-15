@@ -21,6 +21,22 @@ module.exports = {
       solarAdvantageMin: 5,
       solarDisadvantageMax: -100,
       hysteresis: 3,
+      // EVN night tariff zone on the local wall clock. The zone hours change on
+      // 1 April and 1 November, not on the clock-change days. The element does
+      // not run from `holdBeforeMinutes` before the zone starts until
+      // `marginMinutes` after it (the meter clock may drift), unless the tank
+      // top is under `floor` °C; then it heats to `floor` + `hysteresis`.
+      // See docker/automations/docs/boiler-controller.md.
+      nightTariff: {
+        timeZone: 'Europe/Sofia',
+        zones: [
+          { months: [11, 12, 1, 2, 3], start: '22:00', end: '06:00' },
+          { months: [4, 5, 6, 7, 8, 9, 10], start: '23:00', end: '07:00' }
+        ],
+        holdBeforeMinutes: 60,
+        marginMinutes: 10,
+        floor: 40
+      },
       verbose: true
     }
   },

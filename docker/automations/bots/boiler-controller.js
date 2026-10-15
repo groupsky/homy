@@ -1,3 +1,33 @@
+const MINUTES_PER_DAY = 24 * 60
+
+const minutesOfDay = (hhmm) => {
+  const [hours, minutes] = hhmm.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+// Returns a function that tells whether a moment is in the hold before the
+// night tariff zone: from `holdBeforeMinutes` before the zone starts until
+// `marginMinutes` after it. The zone hours are on the local wall clock of
+// `timeZone`, so the month and time are read in that zone, never with a fixed
+// UTC offset that would be an hour off for half of the year.
+const nightTariffHold = ({ timeZone, zones, holdBeforeMinutes, marginMinutes }) => {
+  const clock = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    month: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    hourCycle: 'h23'
+  })
+  return (ms) => {
+    const parts = Object.fromEntries(clock.formatToParts(ms).map(({ type, value }) => [type, Number(value)]))
+    const zone = zones.find(({ months }) => months.includes(parts.month))
+    if (!zone) return false
+    const holdStart = minutesOfDay(zone.start) - holdBeforeMinutes
+    const sinceHoldStart = ((parts.hour * 60 + parts.minute - holdStart) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY
+    return sinceHoldStart < holdBeforeMinutes + marginMinutes
+  }
+}
+
 module.exports = (name, {
   temperatureTopTopic,
   temperatureBottomTopic,
@@ -16,6 +46,7 @@ module.exports = (name, {
   solarAdvantageMin = 5,
   solarDisadvantageMax = -3,
   hysteresis = 3,
+  nightTariff,
   verbose
 }) => ({
   persistedCache: {
@@ -68,6 +99,8 @@ module.exports = (name, {
       persistedCache.controlMode = currentState.controlMode
       persistedCache.manualOverrideExpires = currentState.manualOverrideExpires
     }
+
+    const inNightTariffHold = nightTariff ? nightTariffHold(nightTariff) : () => false
 
     // Use configured topics (with fallbacks for backward compatibility)
     const finalControlModeStatusTopic = controlModeStatusTopic || controlModeTopic.replace('/set', '/status')
@@ -135,6 +168,14 @@ module.exports = (name, {
 
       if (temperatureBottom !== null && temperatureBottom < emergencyMin) {
         return { decision: true, reason: 'emergency_heating_bottom_cold' }
+      }
+
+      // Night tariff: no heating in the last part of the day zone, so the
+      // element tops the tank up in the cheaper night zone instead. A top
+      // under the floor still heats, up to the floor plus the hysteresis.
+      const holdFrom = nightTariff && nightTariff.floor + (currentState.heaterState ? hysteresis : 0)
+      if (temperatureTop !== null && inNightTariffHold(now) && temperatureTop >= holdFrom) {
+        return { decision: false, reason: 'night_tariff_hold' }
       }
 
       // Comfort heating
@@ -391,6 +432,7 @@ module.exports = (name, {
         solarAdvantageMin,
         solarDisadvantageMax,
         hysteresis,
+        nightTariff,
         manualOverrideExpiry: manualOverrideExpiry / 60000 + ' minutes',
         heartbeatInterval: '15 minutes'
       })
