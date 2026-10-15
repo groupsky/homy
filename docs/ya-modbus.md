@@ -97,11 +97,11 @@ back needs them.
 
 1. In `docker-compose.yml`, put back the `<bus>-power` block of the old
    reader. It is the block before the move (`tetriary`: PR #1716, `main`:
-   issue #1759):
+   PR #1761):
 
    ```bash
-   git log --oneline -1 --grep='(#1716)'      # the move (PR #1716)
-   git show <that commit>^:docker-compose.yml  # copy tetriary-power from here
+   git log --oneline -1 --grep='(#1716)'      # the move (PR #1716; #1761 for main)
+   git show <that commit>^:docker-compose.yml  # copy <bus>-power from here
    ```
 
    Remove the `<bus>-adapter` service. For `main`, the old block also brings
