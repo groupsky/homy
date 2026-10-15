@@ -52,6 +52,7 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
   on `solarDisadvantageMax`, which the live config sets to `-100`, so it is unreachable. `SHOW TAG
   VALUES` returns the other seven reasons and not this one.
 - `temperature_sufficient` - No heating needed
+- `night_tariff_hold` - Held off in the hour before the night tariff zone (#1740)
 - `safety_shutoff_overheated` - Safety temperature exceeded
 - `hysteresis_zone_maintain_*` - Maintaining current state
 

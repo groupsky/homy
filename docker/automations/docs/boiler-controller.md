@@ -63,8 +63,9 @@ homy/features/relay/solar_heater_electric_heater/status # Solar controller elect
 
 ### Electric Heater Control (`boilerController`)
 
-The heater is **threshold-based, not scheduled**. The legacy `boilerOnSchedule` `solar-emitter` bot
-(ON at golden hour, OFF at nadir) was removed in `11ed714` and no longer exists.
+The heater is **threshold-based**, with one time rule: it does not heat in the hour before the night
+tariff zone (see [Night tariff hold](#night-tariff-hold)). The legacy `boilerOnSchedule`
+`solar-emitter` bot (ON at golden hour, OFF at nadir) was removed in `11ed714` and no longer exists.
 
 - **Type:** `boiler-controller` (`docker/automations/bots/boiler-controller.js`)
 - **Configuration:** `config/automations/boiler-controller-config.js`
@@ -84,6 +85,7 @@ The heater is **threshold-based, not scheduled**. The legacy `boilerOnSchedule` 
 | `emergencyMin` | 30 °C | Emergency heating below this |
 | `solarAdvantageMin` | 5 °C | Collector this far above tank top ⇒ defer to solar |
 | `solarDisadvantageMax` | -100 °C | Effectively disables the "solar insufficient, boost" branch |
+| `nightTariff.floor` | 40 °C | The night tariff hold does not apply below this |
 | `manualOverrideExpiry` | 24 h | Default expiry for `manual_on`/`manual_off`; an object payload's `duration` overrides it. **Vacation modes do not use it** — they expire after `days × 24 − 6` hours (66 / 114 / 162 / 234 / 330 h) |
 
 **Decision order** (first match wins, `makeDecision()` in the bot):
@@ -92,19 +94,51 @@ The heater is **threshold-based, not scheduled**. The legacy `boilerOnSchedule` 
 2. `top >= maxSafe` → OFF, `safety_shutoff_overheated`
 3. `top < emergencyMin` → ON, `emergency_heating_top_cold`
 4. `bottom < emergencyMin` → ON, `emergency_heating_bottom_cold`
-5. `top < comfortMin` → ON, `comfort_heating_insufficient`
-6. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
-7. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
-8. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
-9. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
+5. In the night tariff hold **and** `top >= nightTariff.floor` → OFF, `night_tariff_hold`
+6. `top < comfortMin` → ON, `comfort_heating_insufficient`
+7. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
+8. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
+9. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
+10. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
 
 **Control modes** (`homy/features/control_mode/boiler_controller/set`): `automatic`, `manual_on`,
 `manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`.
 
-The 50 °C cutout from step 8 is what makes `max(t2)` a usable solar-contribution signal: a day whose
+The 50 °C cutout from step 9 is what makes `max(t2)` a usable solar-contribution signal: a day whose
 top temperature never exceeds 50 °C got all of its heat from the immersion heater. That is the basis
 of the `boiler-solar-no-contribution` alert — see
 `config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
+
+### Night tariff hold
+
+The house pays a day and a night price for electricity. The night zone, on the local wall clock
+(`Europe/Sofia`), is:
+
+| Months | Night zone |
+|---|---|
+| 1 November to 31 March | 22:00–06:00 |
+| 1 April to 31 October | 23:00–07:00 |
+
+The zone hours change on 1 April and 1 November, not on the clock-change days. Issue #1740 has the
+sources and the cost model.
+
+- The element does not run from `holdBeforeMinutes` (60) before the zone starts until
+  `marginMinutes` (10) after it: 21:00–22:10 in winter, 22:00–23:10 in summer. A run that is on when
+  the hold begins is switched off. The 10 minutes after the zone start allow for drift of the meter
+  clock.
+- After the hold, the normal rules apply again on the next temperature reading. The element starts
+  if the top is under `comfortMin`.
+- **The floor**: when the top is under `nightTariff.floor` (40 °C), the hold does not apply, and the
+  element heats as usual.
+- The emergency rules (steps 2–4) come before the hold, so a cold tank always heats.
+- The hold uses the month and time in `nightTariff.timeZone`, never a fixed UTC offset.
+- Manual and vacation modes (step 1) are not affected.
+
+**To change the zone table**, edit `nightTariff` in `config/automations/boiler-controller-config.js`.
+Each entry of `zones` lists its months (1–12) and the zone `start` and `end` as `HH:MM`. Every month
+must be in exactly one entry; a month in no entry has no hold. Only `start` is used today; `end` is
+there to keep the table complete. To turn the hold off, remove `nightTariff`. Then run the tests in
+`docker/automations/bots/boiler-controller-night-tariff.test.js`, which read the committed config.
 
 ### Solar System (External Controller)
 - **External solar controller** manages solar heating logic independently
@@ -137,7 +171,8 @@ of the `boiler-solar-no-contribution` alert — see
 
 2. **Home Automation Electric Control (`boilerController` bot):**
    - Controls electric heater contactor via relay
-   - Threshold-based on the tank temperatures reported by the external controller; no time schedule
+   - Threshold-based on the tank temperatures reported by the external controller, plus the night
+     tariff hold
    - Reads the pump state (`outputs.p1`) so it can defer to solar, but ignores the external
      controller's electric heater recommendation (`outputs.p6`)
    - Provides manual override and vacation modes through Home Assistant
@@ -147,7 +182,7 @@ of the `boiler-solar-no-contribution` alert — see
 2. **Solar heating:** External controller handles circulation automatically
 3. **Electric heating:** `boilerController` decides on every temperature update, using the thresholds
    above — it defers to solar when the collector is at least 5 °C above the tank top *and* the pump
-   is running, and otherwise holds the top between 47 °C and 50 °C
+   is running, and otherwise holds the top between 47 °C and 50 °C, except in the night tariff hold
 4. **Energy tracking:** Power consumption monitored separately via energy meter
 5. **Manual override:** Available through Home Assistant for electric heater only
 
