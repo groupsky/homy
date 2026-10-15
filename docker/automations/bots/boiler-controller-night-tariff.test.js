@@ -20,10 +20,15 @@ const startAt = (localIso, config = CONFIG) => {
     mqtt,
     persistedCache: { controlMode: 'automatic', manualOverrideExpires: null }
   })
+  const deliver = (topic, payload) => {
+    const callback = subscriptions.get(topic)
+    if (typeof callback !== 'function') throw new Error(`no subscription for ${topic}`)
+    callback(payload)
+  }
   return {
     temperatures: ({ top, bottom = 35 }) => {
-      subscriptions.get(config.temperatureBottomTopic)({ state: bottom })
-      subscriptions.get(config.temperatureTopTopic)({ state: top })
+      deliver(config.temperatureBottomTopic, { state: bottom })
+      deliver(config.temperatureTopTopic, { state: top })
     },
     at: (localIso) => jest.setSystemTime(new Date(localIso)),
     relay: () => published.filter(m => m.topic === config.boilerRelayTopic).at(-1).payload
