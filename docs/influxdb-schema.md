@@ -93,8 +93,10 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 ### Primary Energy Monitoring
 
 #### `main` Measurement
-**Source**: modbus-serial-main → Main electrical panel (SDM630)
-**Note**: per-phase instantaneous voltage/current/power for the mains is in the `current_power` measurement (`bus: "primary"`, `device.name: "main"`), not here — see below. The main reader's full readings go to `raw` with `bus: "primary"`.
+**Source**: no current service writes it. The old `main` reader wrote `raw` with
+`bus: "primary"` instead (item 1 under "Direct InfluxDB Writers"), and that ended
+at the move to ya-modbus (#1759).
+**Note**: per-phase instantaneous voltage/current/power for the mains is in the `current_power` measurement (`bus: "primary"`, `device.name: "main"`), not here — see below.
 **Fields**: 3-phase power system metrics - voltage, current, power, frequency, power factor
 **Use Cases**: Whole-house energy consumption, electrical system monitoring
 
@@ -117,7 +119,8 @@ Real power is signed: on the SDM630 a phase goes negative while it exports (no e
 so far). **For energy, use counter differences**, not the integral of `p`: `raw.tot_act`
 for the pump and microwave, and `raw.total_import_kwh` for `main`. (`power_meter.total`
 for `main` is written twice per reading, first `total_kwh` and then `total_import_kwh`;
-the second write wins, so it equals the import counter.)
+the second write wins, so it equals the import counter.) Since `main` moved to
+ya-modbus (#1759), `raw` has no `main` points: use `power_meter.total` from then on.
 
 **Mains identification**: the whole-house grid meter is `bus = primary`,
 `device.name = main` (SDM630), publishing per-phase `v`/`c`/`p` tagged

@@ -37,7 +37,9 @@ The reading of the adapter is the old reading with two differences:
 - No `_ms` (the read time): the bridge does not publish it (ya-modbus#617).
   Nothing that reads these buses uses it.
 - `_tz` is the bridge's `timestamp`, the end of the read. The old `_tz` was
-  the middle of the read, so the new one is about 0.2 s later.
+  the middle of the read, so the new one is about half a read later: about
+  0.2 s on `tetriary`, about 0.4 s on `main`. The gaps between readings do
+  not change.
 
 The NDJSON file name has the adapter's service name:
 `<RAW_DATA_PATH>/<stream>/<day>.<bus>-adapter.ndjson`. The stream and the
