@@ -25,7 +25,8 @@ module.exports = {
       // 1 April and 1 November, not on the clock-change days. The element does
       // not run from `holdBeforeMinutes` before the zone starts until
       // `marginMinutes` after it (the meter clock may drift), unless the tank
-      // top is under `floor` °C. See docker/automations/docs/boiler-controller.md.
+      // top is under `floor` °C; then it heats to `floor` + `hysteresis`.
+      // See docker/automations/docs/boiler-controller.md.
       nightTariff: {
         timeZone: 'Europe/Sofia',
         zones: [

@@ -172,8 +172,9 @@ module.exports = (name, {
 
       // Night tariff: no heating in the last part of the day zone, so the
       // element tops the tank up in the cheaper night zone instead. A top
-      // under the floor still heats.
-      if (temperatureTop !== null && inNightTariffHold(now) && temperatureTop >= nightTariff.floor) {
+      // under the floor still heats, up to the floor plus the hysteresis.
+      const holdFrom = nightTariff && nightTariff.floor + (currentState.heaterState ? hysteresis : 0)
+      if (temperatureTop !== null && inNightTariffHold(now) && temperatureTop >= holdFrom) {
         return { decision: false, reason: 'night_tariff_hold' }
       }
 

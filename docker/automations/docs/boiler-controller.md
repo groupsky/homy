@@ -85,7 +85,7 @@ tariff zone (see [Night tariff hold](#night-tariff-hold)). The legacy `boilerOnS
 | `emergencyMin` | 30 °C | Emergency heating below this |
 | `solarAdvantageMin` | 5 °C | Collector this far above tank top ⇒ defer to solar |
 | `solarDisadvantageMax` | -100 °C | Effectively disables the "solar insufficient, boost" branch |
-| `nightTariff.floor` | 40 °C | The night tariff hold does not apply below this |
+| `nightTariff.floor` | 40 °C | The night tariff hold does not apply below this (until 43 °C once on) |
 | `manualOverrideExpiry` | 24 h | Default expiry for `manual_on`/`manual_off`; an object payload's `duration` overrides it. **Vacation modes do not use it** — they expire after `days × 24 − 6` hours (66 / 114 / 162 / 234 / 330 h) |
 
 **Decision order** (first match wins, `makeDecision()` in the bot):
@@ -94,7 +94,8 @@ tariff zone (see [Night tariff hold](#night-tariff-hold)). The legacy `boilerOnS
 2. `top >= maxSafe` → OFF, `safety_shutoff_overheated`
 3. `top < emergencyMin` → ON, `emergency_heating_top_cold`
 4. `bottom < emergencyMin` → ON, `emergency_heating_bottom_cold`
-5. In the night tariff hold **and** `top >= nightTariff.floor` → OFF, `night_tariff_hold`
+5. In the night tariff hold **and** `top >= nightTariff.floor` (plus `hysteresis` while the element is on) → OFF,
+   `night_tariff_hold`
 6. `top < comfortMin` → ON, `comfort_heating_insufficient`
 7. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
 8. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
@@ -127,10 +128,12 @@ sources and the cost model.
   the hold begins is switched off. The 10 minutes after the zone start allow for drift of the meter
   clock.
 - After the hold, the normal rules apply again on the next temperature reading. The element starts
-  if the top is under `comfortMin`.
+  if the top is under `comfortMin`. A run that the hold cut off does not resume while the top is
+  still between `comfortMin` and `comfortMin + hysteresis` (47–50 °C).
 - **The floor**: when the top is under `nightTariff.floor` (40 °C), the hold does not apply, and the
-  element heats as usual.
-- The emergency rules (steps 2–4) come before the hold, so a cold tank always heats.
+  element heats as usual. Once on, it runs until the top reaches the floor plus `hysteresis` (43 °C).
+  Without this band the 0.1 K jitter of the reading would switch the contactor every few seconds.
+- The safety and emergency rules (steps 2–4) come before the hold, so a cold tank always heats.
 - The hold uses the month and time in `nightTariff.timeZone`, never a fixed UTC offset.
 - Manual and vacation modes (step 1) are not affected.
 
@@ -139,6 +142,8 @@ Each entry of `zones` lists its months (1–12) and the zone `start` and `end` a
 must be in exactly one entry; a month in no entry has no hold. Only `start` is used today; `end` is
 there to keep the table complete. To turn the hold off, remove `nightTariff`. Then run the tests in
 `docker/automations/bots/boiler-controller-night-tariff.test.js`, which read the committed config.
+The Home Assistant automation `grid_tariff_by_zone` has the same table for the energy dashboard
+(`docs/energy-dashboard.md`); change both together.
 
 ### Solar System (External Controller)
 - **External solar controller** manages solar heating logic independently

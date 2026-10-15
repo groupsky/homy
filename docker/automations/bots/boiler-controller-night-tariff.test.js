@@ -10,10 +10,10 @@ const CONFIG = require(path.resolve(__dirname, '../../../config/automations/boil
 // The test runner itself runs in UTC (jest.global-setup.js).
 const startAt = (localIso, config = CONFIG) => {
   jest.useFakeTimers({ now: new Date(localIso) })
-  const subscriptions = {}
+  const subscriptions = new Map()
   const published = []
   const mqtt = {
-    subscribe: (topic, callback) => { subscriptions[topic] = callback },
+    subscribe: (topic, callback) => { subscriptions.set(topic, callback) },
     publish: (topic, payload) => { published.push({ topic, payload }) }
   }
   require('./boiler-controller')('boiler', config).start({
@@ -22,8 +22,8 @@ const startAt = (localIso, config = CONFIG) => {
   })
   return {
     temperatures: ({ top, bottom = 35 }) => {
-      subscriptions[config.temperatureBottomTopic]({ state: bottom })
-      subscriptions[config.temperatureTopTopic]({ state: top })
+      subscriptions.get(config.temperatureBottomTopic)({ state: bottom })
+      subscriptions.get(config.temperatureTopTopic)({ state: top })
     },
     at: (localIso) => jest.setSystemTime(new Date(localIso)),
     relay: () => published.filter(m => m.topic === config.boilerRelayTopic).at(-1).payload
@@ -87,6 +87,22 @@ describe('boiler-controller night tariff hold', () => {
     test('the floor releases the element when the top is under 40 °C', () => {
       expect(decisionAt('2026-11-02T21:30:00+02:00', { top: 39.9 })).toMatchObject(heating)
       expect(decisionAt('2026-11-02T21:30:00+02:00', { top: 40 })).toMatchObject(held)
+    })
+
+    // The top reading jitters by 0.1 K. Without hysteresis at the floor the
+    // contactor would switch every few seconds around 40 °C.
+    test('an element released by the floor runs on to the floor plus the hysteresis', () => {
+      const boiler = startAt('2026-11-02T21:30:00+02:00')
+      boiler.temperatures({ top: 39.9 })
+      expect(boiler.relay()).toMatchObject(heating)
+      boiler.temperatures({ top: 40 })
+      expect(boiler.relay()).toMatchObject(heating)
+      boiler.temperatures({ top: 42.9 })
+      expect(boiler.relay()).toMatchObject(heating)
+      boiler.temperatures({ top: 43 })
+      expect(boiler.relay()).toMatchObject(held)
+      boiler.temperatures({ top: 42.9 })
+      expect(boiler.relay()).toMatchObject(held)
     })
   })
 
