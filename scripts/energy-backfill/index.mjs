@@ -105,6 +105,11 @@ async function counterEnergy (name, sources, untilMs) {
     for (const { hour, from, to } of dropped) {
       console.log(`${name}: dropped a jump at ${new Date(hour).toISOString()}: ${from} -> ${to}`)
     }
+    // Two meters of one counter must not both count the same hour.
+    const shared = [...part.keys()].filter((hour) => energy.has(hour))
+    if (shared.length > 0) {
+      console.log(`${name}: warning: ${shared.length} hours have readings from two meters, from ${new Date(shared[0]).toISOString()}`)
+    }
     addEnergy(energy, part)
   }
   return energy
@@ -157,6 +162,31 @@ async function firstLiveRow (ha, id, untilMs) {
   return (result[id] ?? []).find((row) => row.sum !== null)
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// HA answers an import or an adjustment as soon as it has queued it. Wait
+// until the recorder has written everything, so that HA never holds more than
+// one counter's rows and a later read sees the result. The queue is checked
+// twice, because the last job may still run when the queue is already empty.
+async function waitForRecorder (ha) {
+  for (let empty = 0; empty < 2;) {
+    const { backlog } = await ha.call({ type: 'recorder/info' })
+    empty = backlog === 0 ? empty + 1 : 0
+    await sleep(2000)
+  }
+}
+
+// The live statistic must have the unit the rows are written in, or the
+// import would change its metadata.
+async function sameUnit (ha, id, unit, unitClass) {
+  const [current] = await ha.call({ type: 'recorder/get_statistics_metadata', statistic_ids: [id] })
+  if (current && (current.statistics_unit_of_measurement !== unit || (current.unit_class ?? null) !== unitClass)) {
+    console.error(`${id}: live statistics are in ${current.statistics_unit_of_measurement} (${current.unit_class}), not ${unit} (${unitClass}) - not imported`)
+    return false
+  }
+  return true
+}
+
 async function backfill (ha, target, untilMs, apply) {
   const { id, unit, unitClass, energy } = target
   const rows = statisticsRows(energy, END)
@@ -184,6 +214,7 @@ async function backfill (ha, target, untilMs, apply) {
     `meter since the deploy ${sinceEnd}; ${apply ? 'adjust' : 'would adjust'} live sums by ${adjustment}`
   )
   if (!apply) return true
+  if (!(await sameUnit(ha, id, unit, unitClass))) return false
   const metadata = {
     has_sum: true,
     mean_type: 0,
@@ -205,6 +236,7 @@ async function backfill (ha, target, untilMs, apply) {
       adjustment_unit_of_measurement: unit
     })
   }
+  await waitForRecorder(ha)
   return true
 }
 
@@ -218,6 +250,11 @@ async function main () {
   try {
     let ok = true
     for (const target of targets) ok = (await backfill(ha, target, untilMs, apply)) && ok
+    if (apply) {
+      // Check the result: every counter must now need no adjustment.
+      console.log('check after the import:')
+      for (const target of targets) await backfill(ha, target, untilMs, false)
+    }
     return ok ? 0 : 1
   } finally {
     ha?.close()

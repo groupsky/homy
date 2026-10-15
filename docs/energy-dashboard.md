@@ -144,11 +144,11 @@ hours before that come from the meter readings in InfluxDB, imported once by
 - The grid's hours go to the day or the night tariff by the zone table above.
 - Costs are imported only from 2026-07-01, at the current prices. Earlier
   prices were different and in BGN, so earlier hours have kWh but no cost.
-- The imported sums start from 0. Home Assistant's live sums started again
-  from 0 at the deploy, so the script also moves the live sums up
-  (`recorder/adjust_sum_statistics`), so that they go on from the imported
-  ones without a step. The size of the move is worked out from the meter
-  readings, so a second run moves them by 0.
+- The imported sums start from 0. Home Assistant's live sums also started
+  from 0, at the deploy. So the script moves the live sums up
+  (`recorder/adjust_sum_statistics`), and they go on from the imported ones
+  without a step. The size of the move comes from the meter readings, so a
+  second run moves them by 0.
 
 The old statistics of the raw sensors (for example `sensor.laundry_energy_used`
 and `sensor.main_energy_sdm630_a_import_kwh_2023_11_11`) are not changed. The
@@ -157,16 +157,28 @@ dashboard does not read them.
 ### Run the backfill
 
 It needs a long-lived access token of an **admin** user, in
-`ha_provision_token` in the secrets directory (`SECRETS_PATH` in `.env`), the
-same token as [ha-provision](../scripts/ha-provision/README.md). Every counter
-must already have live statistics, that is, its meter must have counted some
-energy since the deploy; the script refuses a counter that has none.
+`ha_provision_token` in the secrets directory (`SECRETS_PATH` in `.env`). It is
+the same token as [ha-provision](../scripts/ha-provision/README.md).
 
-1. Copy the Home Assistant database first, with SQLite's online backup (Home
-   Assistant keeps running):
+Every counter must already have live statistics: its meter must have counted
+some energy since the deploy. The script skips a counter that has none, and a
+later run imports it.
+
+1. Copy the Home Assistant database first, with SQLite's online backup. Home
+   Assistant keeps running. The copy's name has the time, and the command
+   never overwrites a copy:
 
    ```bash
-   docker exec homy-ha-1 python3 -c "import sqlite3; d = sqlite3.connect('/config/home-assistant_v2.db.before-backfill'); sqlite3.connect('/config/home-assistant_v2.db').backup(d); d.close()"
+   copy=home-assistant_v2.db.before-backfill-$(date -u +%Y%m%dT%H%MZ)
+   docker exec homy-ha-1 python3 -c "
+   import os, sqlite3, sys
+   dst = '/config/$copy'
+   if os.path.exists(dst): sys.exit(dst + ' exists')
+   src = sqlite3.connect('file:/config/home-assistant_v2.db?mode=ro', uri=True)
+   out = sqlite3.connect(dst)
+   src.backup(out)
+   out.close()
+   print(dst, os.path.getsize(dst), 'bytes')"
    ```
 
 2. Dry run. It prints, for each counter, the rows it would import and how much
@@ -184,26 +196,31 @@ energy since the deploy; the script refuses a counter that has none.
    ```
 
 3. The same command with `--apply` at the end imports the rows and moves the
-   live sums.
-4. A minute later, run the dry run again. Every counter must say `would adjust
-   live sums by 0`: the live sums then go on from the imported ones.
+   live sums. It waits until Home Assistant has written each counter. Then it
+   checks itself: under `check after the import:`, every counter must say
+   `would adjust live sums by 0`.
 
 Running it again imports the same rows over the old ones (Home Assistant
 replaces a row with the same hour), so nothing is counted twice.
 
-**To undo it**, put the copy back while Home Assistant is stopped. The
+**To undo it**, put the first copy back while Home Assistant is stopped. The
 statistics and states recorded since the copy are lost.
 
 ```bash
-docker compose stop ha
+copy=home-assistant_v2.db.before-backfill-<time>   # the first copy
 data=$(sed -n 's/^HOMEASSISTANT_DATA_PATH=//p' .env)
-sudo mv "$data/home-assistant_v2.db" "$data/home-assistant_v2.db.after-backfill"
-sudo rm -f "$data/home-assistant_v2.db-wal" "$data/home-assistant_v2.db-shm"
-sudo cp -p "$data/home-assistant_v2.db.before-backfill" "$data/home-assistant_v2.db"
+docker compose stop ha
+mv "$data/home-assistant_v2.db" "$data/home-assistant_v2.db.after-backfill"
+rm -f "$data/home-assistant_v2.db-wal" "$data/home-assistant_v2.db-shm"
+cp "$data/$copy" "$data/home-assistant_v2.db"
 docker compose start ha
 ```
 
-`stop` and `start` keep the same container; do not use `up` here.
+Use `stop` and `start`: they keep the same container. `up` would build a new
+container without the deploy's settings (`docker-compose.deploy.yml`).
+
+When the spot checks have passed, delete the copies. While they stay in the
+Home Assistant data folder, every `scripts/backup.sh` run includes them.
 
 ## How to check it
 
