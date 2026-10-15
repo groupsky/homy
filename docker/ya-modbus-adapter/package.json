@@ -1,0 +1,19 @@
+{
+  "name": "homy-ya-modbus-adapter-docker",
+  "version": "1.0.0",
+  "description": "Turns ya-modbus bridge messages into the readings of the old modbus-serial reader",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "start": "index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "mongodb": "^7.6.0",
+    "mqtt": "^5.15.2"
+  },
+  "devDependencies": {
+    "jest": "^30.5.1"
+  }
+}

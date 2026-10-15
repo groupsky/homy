@@ -28,11 +28,13 @@ const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/
 
 // The record each writer image produces:
 // - flat: modbus-serial's reading, `{ _tz, _ms, _addr, _type, device, ... }`,
-//   the same object its mongodb integration inserts.
+//   the same object its mongodb integration inserts. ya-modbus-adapter writes
+//   the same record without `_ms`, to Mongo and NDJSON alike (#1707).
 // - wrapped: `{ topic, payload }` with `payload._tz`, from mqtt-ndjson; the
 //   Mongo side is mqtt-mongo.
 const SHAPES = new Map([
   ['modbus-serial', 'flat'],
+  ['ya-modbus-adapter', 'flat'],
   ['mqtt-ndjson', 'wrapped']
 ])
 
@@ -90,7 +92,7 @@ function requireSegment (value, what, service) {
 /**
  * The NDJSON writers of `docker compose config --format json`, by stream:
  * every service with a RAW_DIR. Its stream is STREAM (mqtt-ndjson) or
- * COLLECTION (modbus-serial), its file name part SERVICE_NAME, and the host
+ * COLLECTION (modbus-serial, ya-modbus-adapter), its file name part SERVICE_NAME, and the host
  * directory the bind mount at RAW_DIR. Compose has already resolved .env, so
  * `RAW_DATA_PATH=${DATA_PATH}/raw` arrives as the real host path.
  *

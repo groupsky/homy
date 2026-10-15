@@ -121,6 +121,14 @@ test('writersFromCompose groups the NDJSON writers by stream', () => {
   assert.deepEqual(writers.get('ioniq'), { stream: 'ioniq', shape: 'wrapped', rawDir: '/srv/data/raw', services: ['mqtt-ndjson-ioniq'] })
 })
 
+// The ya-modbus adapter writes the old reader's record, without `_ms` (#1707),
+// and can share a stream with modbus-serial services.
+test('writersFromCompose takes the ya-modbus adapter as a flat writer', () => {
+  const adapter = { ...modbus('main-adapter', 'main'), image: 'ghcr.io/groupsky/homy/ya-modbus-adapter@sha256:0123' }
+  const writers = writersFromCompose({ services: { ...composeConfig.services, 'main-adapter': adapter } })
+  assert.deepEqual(writers.get('main'), { stream: 'main', shape: 'flat', rawDir: '/srv/data/raw', services: ['main-adapter', 'main-power'] })
+})
+
 test('writersFromCompose refuses a config it cannot read unambiguously', () => {
   const withService = (name, service) => ({ services: { ...composeConfig.services, [name]: service } })
   assert.throws(() => writersFromCompose(withService('odd', { ...modbus('odd', 'main'), image: 'ghcr.io/groupsky/homy/other:1' })), /record shape/)

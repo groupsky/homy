@@ -436,6 +436,54 @@ updates:
           - "*"
 
   - package-ecosystem: "docker"
+    directory: "/docker/ya-modbus-bridge"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    # The bridge does not run on Node 26.4 and newer (ya-modbus#507).
+    ignore:
+      - dependency-name: "*node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/ya-modbus-bridge"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/ya-modbus-adapter"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/ya-modbus-adapter"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      hardware-integration:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
     directory: "/docker/dmx-driver"
     schedule:
       interval: "monthly"

@@ -1,0 +1,62 @@
+name: Test ya-modbus-adapter
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docker/ya-modbus-adapter/**'
+      - 'docker/modbus-serial/day-file-writer.js'
+      - 'docker/modbus-serial/day-file-writer.test.js'
+      - 'docker/modbus-serial/test-fixtures/day-file-writer-child.js'
+      - '.github/workflows/test-ya-modbus-adapter.yml'
+  pull_request:
+    paths:
+      - 'docker/ya-modbus-adapter/**'
+      - 'docker/modbus-serial/day-file-writer.js'
+      - 'docker/modbus-serial/day-file-writer.test.js'
+      - 'docker/modbus-serial/test-fixtures/day-file-writer-child.js'
+      - '.github/workflows/test-ya-modbus-adapter.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test ya-modbus-adapter
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: 'docker/ya-modbus-adapter/.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'docker/ya-modbus-adapter/package-lock.json'
+
+      # day-file-writer.js is copied, not shared, between modbus-serial and
+      # ya-modbus-adapter (separate npm packages). The copies, their test and its
+      # harness must stay identical.
+      - name: Check the day-file-writer copies are identical
+        run: |
+          cmp docker/modbus-serial/day-file-writer.js docker/ya-modbus-adapter/day-file-writer.js
+          cmp docker/modbus-serial/day-file-writer.test.js docker/ya-modbus-adapter/day-file-writer.test.js
+          cmp docker/modbus-serial/test-fixtures/day-file-writer-child.js docker/ya-modbus-adapter/test-fixtures/day-file-writer-child.js
+
+      - name: Install dependencies
+        working-directory: docker/ya-modbus-adapter
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docker/ya-modbus-adapter
+        run: npm test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5
+        continue-on-error: true
+        with:
+          directory: docker/ya-modbus-adapter/coverage
+          flags: ya-modbus-adapter

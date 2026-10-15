@@ -45,7 +45,7 @@ The power-cycle-on-low-power bot monitors power consumption on a specific electr
   - Supports wildcard topics for multiple devices
 
 - **`powerMonitor.powerField`** (string): Field name containing power value in MQTT payload
-  - Example: `'b_ap'` for phase B apparent power
+  - Example: `'b_ap'`, phase B active power in W on the heat pump meter (DDS024MR). On the SDM630 `a_ap`/`b_ap`/`c_ap` are apparent power (VA).
   - Common fields: `'a_ap'`, `'b_ap'`, `'c_ap'`, `'power'`, `'watts'`
 
 - **`powerMonitor.threshold`** (number): Power threshold in watts
