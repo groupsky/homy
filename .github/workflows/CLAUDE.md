@@ -536,6 +536,7 @@ The following standalone workflows run unit tests independently from the unified
 | `test-mqtt-ndjson.yml` | mqtt-ndjson | `docker/mqtt-ndjson/**`, modbus-serial's `day-file-writer` copies (same `cmp` step) |
 | `test-sunseeker-monitoring.yml` | sunseeker-monitoring | `docker/sunseeker-monitoring/**` |
 | `test-telegram-bridge.yml` | telegram-bridge | `docker/telegram-bridge/**` |
+| `test-ya-modbus-adapter.yml` | ya-modbus-adapter | `docker/ya-modbus-adapter/**`, modbus-serial's `day-file-writer` copies (same `cmp` step) |
 | `test-detect-changes.yml` | detect-changes (CI's own change detector) | `.github/scripts/detect-changes/**`, `docker-compose.yml` |
 
 **Key Characteristics:**

@@ -406,7 +406,7 @@ module.exports = {
       type: 'power-cycle-on-low-power',
       powerMonitor: {
         statusTopic: '/modbus/tetriary/heat_pump/reading',
-        powerField: 'b_ap',      // Phase B apparent power
+        powerField: 'b_ap',      // Phase B active power, W
         threshold: 30,           // Watts - maximum power for "low power" condition
         durationMs: 180000       // 3 minutes
       },

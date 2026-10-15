@@ -53,7 +53,7 @@ Multiple containerized services read hardware and publish to MQTT:
 **Modbus Services** (wired hardware):
 - **main-power**: Primary electrical monitoring bus
 - **secondary-power**: Secondary circuits and boiler monitoring
-- **tetriary-power**: Additional power monitoring points
+- **tetriary-power**: Additional power monitoring points (heat pump meter). Read by the ya-modbus bridge; **tetriary-adapter** publishes the old reader's outputs ([docs/ya-modbus.md](docs/ya-modbus.md))
 - **monitoring/monitoring2**: HVAC and environmental sensors
 - **dry-switches**: Digital I/O for switches, sensors, and relays
 - **solar/inverter**: Solar energy system monitoring
@@ -128,7 +128,7 @@ Multiple interfaces for monitoring and control:
   - **mqtt-influx-primary/secondary/tetriary**: Modbus sensor data
 - **mqtt-mongo-ioniq**: Lossless MQTT archive to MongoDB (Ioniq OBD stream); removed at the #1622 cut-over
 - **mqtt-ndjson-ioniq**: Lossless MQTT archive of the same stream to daily NDJSON files, its successor
-- **modbus-serial `ndjson` integration**: every modbus service writes each raw reading to daily NDJSON files too (`<RAW_DATA_PATH>/<stream>/YYYY-MM-DD.<service>.ndjson`)
+- **modbus-serial `ndjson` integration**: every modbus service writes each raw reading to daily NDJSON files too (`<RAW_DATA_PATH>/<stream>/YYYY-MM-DD.<service>.ndjson`); on a bus moved to ya-modbus, its adapter writes them
 - **historian-***: Manual data migration utilities
 
 ## Current State & Architectural Challenges

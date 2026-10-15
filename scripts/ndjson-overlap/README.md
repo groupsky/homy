@@ -100,6 +100,11 @@ temporary file in its place). The node image may be pulled (see below).
     logs ("Error logging entry").
   - "only in Mongo" for a failed NDJSON write, which the integration logs
     (`[ndjson] failed to write`) and skips.
+  - A bus moved to ya-modbus is written by its adapter (`ya-modbus-adapter`
+    image, the same record without `_ms`; see `docs/ya-modbus.md`). Only the
+    writers in the compose file now are read, so on the day of a move the
+    other reader's file is not read, and its records of that day are "only in
+    Mongo".
 
   Check the service's log around the time of such records before calling them
   a bug.

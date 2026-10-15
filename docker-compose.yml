@@ -340,44 +340,54 @@ services:
     mem_limit: *node-mem-limit
     logging: *default-logging
 
+  # The tetriary bus runs on ya-modbus (#1707): tetriary-power is the
+  # ya-modbus bridge and holds the serial port; tetriary-adapter turns its
+  # messages back into the old reader's outputs. The port holder keeps the
+  # old name, so a rollback or the move back replaces it and two readers never
+  # share the port. How to move back: docs/ya-modbus.md.
   tetriary-power:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
-    build: docker/modbus-serial
+    image: ghcr.io/groupsky/homy/ya-modbus-bridge:${IMAGE_TAG:-latest}
+    build: docker/ya-modbus-bridge
     depends_on:
       - broker
-      - mongo
-      - influxdb
     restart: unless-stopped
     privileged: true
     networks:
       - automation
     security_opt:
       - no-new-privileges:true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
+      - ${CONFIG_PATH}/ya-modbus/tetriary.json:/etc/ya-modbus/config.json:ro
+    mem_limit: *node-mem-limit
+    logging: *default-logging
+
+  tetriary-adapter:
+    image: ghcr.io/groupsky/homy/ya-modbus-adapter:${IMAGE_TAG:-latest}
+    build: docker/ya-modbus-adapter
+    depends_on:
+      - broker
+      - mongo
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
     secrets:
-      - influxdb_write_user
-      - influxdb_write_user_password
       - mongo_root_username
       - mongo_root_password
     environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/tetriary/{name}/reading
       - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=tetriary
-      - SERVICE_NAME=tetriary-power
+      - SERVICE_NAME=tetriary-adapter
       - RAW_DIR=/data/raw
-      - CONFIG=/etc/config.js
-      - BROKER=mqtt://broker
-      - TOPIC=/modbus/tetriary/{name}/reading
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
-      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
-      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
-      - INFLUXDB_TAGS={"bus":"tetriary"}
-      - INFLUXDB_MEASUREMENT=sdm630raw
     volumes:
-      - /dev/bus/usb:/dev/bus/usb
-      - /dev/serial:/dev/serial
-      - ${TETRIARY_POWER_CONFIG_FILE}:/etc/config.js:ro
+      - ${CONFIG_PATH}/ya-modbus/tetriary.json:/etc/ya-modbus/config.json:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     mem_limit: *node-mem-limit
     logging: *default-logging

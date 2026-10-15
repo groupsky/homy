@@ -1,0 +1,12 @@
+{
+  "name": "homy-ya-modbus-bridge-docker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The ya-modbus MQTT bridge with the drivers homy uses",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "dependencies": {
+    "@ya-modbus/driver-dds024mr": "0.1.1",
+    "@ya-modbus/mqtt-bridge": "0.18.1"
+  }
+}

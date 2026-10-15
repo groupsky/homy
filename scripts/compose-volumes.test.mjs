@@ -75,12 +75,12 @@ test('the services holding state mount their data from the host', () => {
   assert.ok(targets('broker').includes('/mosquitto/log'))
 })
 
-// Every modbus-serial and mqtt-ndjson service appends raw readings to daily
-// files under RAW_DIR (#1622); without a host mount they would land inside the
-// container and be lost with it.
+// Every modbus-serial, ya-modbus-adapter and mqtt-ndjson service appends raw
+// readings to daily files under RAW_DIR (#1622); without a host mount they
+// would land inside the container and be lost with it.
 test('every raw-reading writer mounts its RAW_DIR from the host', () => {
   const writers = Object.entries(config.services)
-    .filter(([, service]) => /\/(modbus-serial|mqtt-ndjson):/.test(service.image ?? ''))
+    .filter(([, service]) => /\/(modbus-serial|ya-modbus-adapter|mqtt-ndjson):/.test(service.image ?? ''))
   assert.ok(writers.length > 0)
   const problems = []
   for (const [name, service] of writers) {

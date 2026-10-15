@@ -7,6 +7,8 @@ on:
       - 'docker-compose.yml'
       - 'docker/**/Dockerfile'
       - 'docker/volman/**'
+      - 'config/modbus-serial/**'
+      - 'config/ya-modbus/**'
       - '.github/workflows/deployment-scripts-tests.yml'
   push:
     branches:
@@ -16,6 +18,8 @@ on:
       - 'docker-compose.yml'
       - 'docker/**/Dockerfile'
       - 'docker/volman/**'
+      - 'config/modbus-serial/**'
+      - 'config/ya-modbus/**'
       - '.github/workflows/deployment-scripts-tests.yml'
   workflow_dispatch:
 
@@ -159,6 +163,18 @@ jobs:
 
       - name: Check image VOLUMEs against the compose mounts
         run: node --test scripts/compose-volumes.test.mjs
+
+  compose-serial-ports:
+    name: One reader per serial port
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Check the serial ports in the reader configs
+        run: node --test scripts/compose-serial-ports.test.mjs
 
   validate-scripts:
     name: Validate Script Syntax
