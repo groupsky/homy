@@ -22,9 +22,12 @@
   <<: *common_used_energy
 
 # The grid import for the Energy dashboard, through utility_meters.yaml.
+# No float(default=0): a missing or null value must not become 0, because the
+# utility meter would then add the whole counter again when the real value
+# comes back. An empty value is ignored, and null makes the state unknown.
 - name: main_energy_sdm630_total_import_kwh_2023_11_11
   state_topic: "/modbus/main/main/reading"
-  value_template: "{{ value_json.total_import_kwh | float(default=0) }}"
+  value_template: "{{ value_json.total_import_kwh }}"
   <<: *common_used_energy
 
 - name: main_energy_sdm630_a_import_kwh_2023_11_11

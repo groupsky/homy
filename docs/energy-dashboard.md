@@ -17,8 +17,8 @@ device.
 
 - The source is the main meter's total import counter, `total_import_kwh` on
   `/modbus/main/main/reading`. Home Assistant reads it as
-  `sensor.main_energy_sdm630_total_import_kwh_2023_11_11`. It is already the sum
-  of the three phases, so do not add the phase counters as well.
+  `sensor.main_energy_sdm630_total_import_kwh_2023_11_11`. It is the meter's own
+  total for all three phases, so do not add the phase counters as well.
 - The utility meter `grid_import` splits it into `sensor.grid_import_day` and
   `sensor.grid_import_night`. Each one is a grid source with its own price.
 - There is no export source. The house does not export: the main meter's export
@@ -29,8 +29,8 @@ device.
 
 ## Tariff zones
 
-EVN, household, two-scale meter. These are national rules in local time
-(`Europe/Sofia`):
+EVN, household, two-rate (day/night) meter. These are national rules in local
+time (`Europe/Sofia`):
 
 | Zone | Months | Hours |
 |---|---|---|
@@ -38,7 +38,7 @@ EVN, household, two-scale meter. These are national rules in local time
 | Night | 1 April to 31 October | 23:00–07:00 |
 | Day | the rest of the time | |
 
-Sources: [ERYUG FAQ](https://www.elyug.bg/SpecialPages/ND_FAQ.aspx),
+Sources: [FAQ of ERYUG, the local grid operator](https://www.elyug.bg/SpecialPages/ND_FAQ.aspx),
 [measurement rules, Art. 25(2)](https://elyug.bg/getattachment/d3ee48c7-9cb7-4623-b211-8e5b5f231ced/rule_Izm_161013.aspx).
 
 - The zones change on 1 April and 1 November, not on the clock-change days.
@@ -64,7 +64,8 @@ per kWh, with 20 % VAT. Home Assistant's currency is set to EUR in
 | day | 0.15458 | 0.12882 |
 | night | 0.09226 | 0.07688 |
 
-- Valid 2026-07-01 to 2027-06-30. Read on 2026-10-15 from KEVR decision Ц-13
+- Valid 2026-07-01 to 2027-06-30. Read on 2026-10-15 from decision Ц-13 of KEVR,
+  the national energy regulator
   ([decision](https://www.dker.bg/uploads/reshenia/2026/res-c-13-2026.pdf),
   pages 61–64) and the [EVN price table](https://www.evn.bg/Home/Electricity.aspx).
 - These are all-in prices: energy plus the network part (transmission,
@@ -78,7 +79,7 @@ KEVR sets new prices every year, usually from 1 July.
 
 1. Find the new KEVR price decision on [dker.bg](https://www.dker.bg) and the
    new [EVN price table](https://www.evn.bg/Home/Electricity.aspx). Take the
-   household two-scale day and night prices, all-in, with VAT.
+   household two-rate (day/night) prices, all-in, with VAT.
 2. Change the two `number_energy_price` values in
    `config/home-assistant/energy.json`. Update the table above, with the dates.
 3. Open a PR, merge it and deploy. Home Assistant restarts and uses the new
@@ -106,16 +107,22 @@ Not listed, on purpose:
   meter went from 575.66 to 570.59 kWh on 2026-09-19 and counted on from there.
   Home Assistant statistics store such a step as negative energy. A utility
   meter ignores a step back and adds only the increases.
-- `periodically_resetting: false` makes a utility meter compare each value with
+- `periodically_resetting: false` makes a device meter compare each value with
   the last good value. So it also counts the energy used while Home Assistant
   was restarting.
 - `configuration.yaml` no longer sets `last_reset` on every sensor
   (`customize_glob`). The energy cost sensors start again from 0 at each Home
   Assistant restart. The forced `last_reset` hid this restart from the
   statistics, so each restart was stored as a negative cost.
-- Known limit: if a meter once sends 0 by mistake and then its real value, the
-  counter adds the full value once. This was not seen in the 10 days of states
-  that Home Assistant keeps (checked on 2026-10-15).
+- Known limit: the grid meter (with tariffs) does not count the energy used
+  while Home Assistant was restarting. At start, Home Assistant forgets the last
+  value of a meter with tariffs. A restart of a few minutes loses well under
+  1 % of a day.
+- Known limit: if a device meter once sends 0 by mistake and then its real
+  value, its counter adds the full value once. This was not seen in the 10 days
+  of states that Home Assistant keeps (checked on 2026-10-15). The grid sensor
+  turns a missing or null value into "no value", not 0, so it is safe from
+  this.
 
 ## History
 

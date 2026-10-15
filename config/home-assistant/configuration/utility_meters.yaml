@@ -4,8 +4,10 @@
 # meter loses power and restores an older saved value. Home Assistant
 # statistics store such a step as negative energy. A utility meter ignores a
 # step back and adds only the increases, so the dashboard has no negative
-# values. `periodically_resetting: false` makes it also count the energy used
-# while Home Assistant was restarting.
+# values. With `periodically_resetting: false`, a device meter (no tariffs)
+# compares each value with the last good one, so it also counts the energy
+# used while Home Assistant was restarting. The grid meter with tariffs does
+# not: Home Assistant forgets its last value at start.
 
 # Grid import, split by the EVN day/night tariff. The automation
 # "Grid tariff by zone" in automations.yaml selects the tariff.
