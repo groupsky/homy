@@ -15,9 +15,14 @@ This document provides comprehensive documentation of all data stored in the Inf
 ### Direct InfluxDB Writers (modbus-serial services)
 All modbus-serial instances write directly to InfluxDB using environment-configured measurements:
 
-1. **modbus-serial-main** → `main` measurement
+1. **main-power** → `raw` measurement, tag `bus: "primary"` — **ended**
    - **Device**: SDM630 energy meter (address 1) - "main" power consumption
    - **Data**: 3-phase power, voltage, current, frequency measurements
+   - **Ended at the move to ya-modbus** (#1759): the old reader wrote these
+     points itself, and the ya-modbus adapter does not write InfluxDB.
+     Nothing read them (the live Grafana was checked on 2026-10-15). The raw
+     readings stay in the NDJSON day files. The per-phase `v`/`c`/`p` of the
+     mains stay in `current_power` (from `mqtt-influx-primary`).
 
 2. **modbus-serial-secondary** → `secondary` measurement
    - **Devices**: Multiple energy meters and appliances
@@ -164,6 +169,8 @@ the mesh reached InfluxDB at all.
 **Source**: the main and secondary Modbus readers write every numeric field of each reading
 **Tag Structure**: `bus: "primary" | "secondary"`, `device.name: [device_name]`
 **Note**: Data appears in `raw` measurement, not `secondary` as originally documented
+**Note**: `raw` with `bus: "primary"` (the `main` bus) ended when `main` moved to
+ya-modbus (#1759); see item 1 under "Direct InfluxDB Writers".
 **Key Devices and Fields**:
 - **main** (SDM630, `bus: primary`): real power `ap`/`bp`/`cp` and `total_p` (W);
   apparent power `a_ap`/`b_ap`/`c_ap` and `total_va` (VA); counters `total_import_kwh`,

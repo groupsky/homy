@@ -11,6 +11,7 @@ Buses on ya-modbus today:
 | bus | port holder (bridge) | adapter | bridge config | since |
 |---|---|---|---|---|
 | `tetriary` | `tetriary-power` | `tetriary-adapter` | `config/ya-modbus/tetriary.json` | #1707 |
+| `main` | `main-power` | `main-adapter` | `config/ya-modbus/main.json` | #1759 |
 
 ## How a moved bus works
 
@@ -74,9 +75,11 @@ All in one PR:
 1. `config/ya-modbus/<bus>.json`: the devices of the bus, with the port,
    serial settings and addresses from `config/modbus-serial/<bus>.config.js`.
    Use `"polling": {"interval": 1000, "mode": "continuous"}`.
-   If that old config has an `influxdb` integration (`main` has one), the
-   adapter must learn to write those points first: it does not write
-   InfluxDB today.
+   If that old config has an `influxdb` integration, the adapter does not
+   write those points. Check first that nothing reads them. For `main`
+   nothing did, so its `raw` points with `bus=primary` ended at the move
+   (#1759). On `secondary` the boiler dashboard and an alert read them, so
+   the adapter must learn to write InfluxDB before `secondary` moves.
 2. A mapping for each new driver in `docker/ya-modbus-adapter/mappings/<type>.js`
    (old field → ya-modbus data point id), and a test with a real old reading.
    `<type>` is the driver package name without `@ya-modbus/driver-`.
@@ -93,14 +96,17 @@ back needs them.
 ## Move a bus back to the old reader
 
 1. In `docker-compose.yml`, put back the `<bus>-power` block of the old
-   reader. For `tetriary`, it is the block before #1707:
+   reader. It is the block before the move (`tetriary`: PR #1716, `main`:
+   issue #1759):
 
    ```bash
    git log --oneline -1 --grep='(#1716)'      # the move (PR #1716)
    git show <that commit>^:docker-compose.yml  # copy tetriary-power from here
    ```
 
-   Remove the `<bus>-adapter` service.
+   Remove the `<bus>-adapter` service. For `main`, the old block also brings
+   back the InfluxDB variables and secrets, so `raw` with `bus=primary` is
+   written again.
 2. In `scripts/compose-serial-ports.test.mjs`, expect `modbus-serial` on the
    bus's port.
 3. Merge and deploy. The deploy replaces `<bus>-power`: the bridge stops and

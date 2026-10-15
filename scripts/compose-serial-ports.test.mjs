@@ -56,9 +56,11 @@ test('every serial port has one reader', () => {
   assert.deepEqual(shared, [])
 })
 
-// The port of the tetriary bus is the one in the old reader's config, which
-// stays in the repo for the move back (docs/ya-modbus.md).
-test('the tetriary port is read by the ya-modbus bridge, not by the old reader', () => {
-  const { modbus: { port } } = require(join(root, 'config/modbus-serial/tetriary.config.js'))
-  assert.deepEqual(readers.filter((r) => r.port === port), [{ service: 'tetriary-power', image: 'ya-modbus-bridge', port }])
-})
+// The port of a moved bus is the one in the old reader's config, which stays
+// in the repo for the move back (docs/ya-modbus.md).
+for (const bus of ['tetriary', 'main']) {
+  test(`the ${bus} port is read by the ya-modbus bridge, not by the old reader`, () => {
+    const { modbus: { port } } = require(join(root, `config/modbus-serial/${bus}.config.js`))
+    assert.deepEqual(readers.filter((r) => r.port === port), [{ service: `${bus}-power`, image: 'ya-modbus-bridge', port }])
+  })
+}
