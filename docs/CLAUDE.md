@@ -46,6 +46,9 @@ This directory contains technical documentation for the home automation system.
 ### Home Assistant Provisioning
 - **[ha-provision](../scripts/ha-provision/README.md)** - Applies the dashboard rows and assistant exposure that Home Assistant keeps only in `.storage`, from `config/home-assistant/provision.json`
 
+### Home Assistant Energy Dashboard
+- **[Energy dashboard](energy-dashboard.md)** - Grid import split into the day/night tariff, the device counters, where the prices live and how to change them each July
+
 ## Quick Reference
 
 ### Monitoring Topics

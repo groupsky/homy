@@ -1,1 +1,24 @@
-[]
+- id: grid_tariff_by_zone
+  alias: Grid tariff by zone
+  description: >-
+    Selects the EVN day or night tariff for the grid import counter. Night is
+    22:00-06:00 from 1 November to 31 March, and 23:00-07:00 from 1 April to
+    31 October, in local time. It runs every hour and at start, so a missed
+    switch is fixed within one hour. See docs/energy-dashboard.md.
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+    - trigger: time_pattern
+      minutes: 0
+  actions:
+    - action: select.select_option
+      target:
+        entity_id: select.grid_import
+      data:
+        option: >-
+          {% set t = now() %}
+          {% set summer = 4 <= t.month <= 10 %}
+          {% set night_start = 23 if summer else 22 %}
+          {% set night_end = 7 if summer else 6 %}
+          {{ 'night' if t.hour >= night_start or t.hour < night_end else 'day' }}

@@ -1,119 +1,63 @@
 {
   "version": 1,
-  "minor_version": 1,
+  "minor_version": 3,
   "key": "energy",
   "data": {
     "energy_sources": [
       {
         "type": "grid",
-        "flow_from": [
-          {
-            "stat_energy_from": "sensor.main_energy_used",
-            "stat_cost": null,
-            "entity_energy_price": null,
-            "number_energy_price": 0.25751
-          },
-          {
-            "stat_energy_from": "sensor.main_energy_sdm630_total_import_kwh",
-            "stat_cost": null,
-            "entity_energy_price": null,
-            "number_energy_price": 0.25751
-          },
-          {
-            "stat_energy_from": "sensor.main_energy_sdm630_a_import_kwh_2023_11_11",
-            "stat_cost": null,
-            "entity_energy_price": null,
-            "number_energy_price": 0.25751
-          },
-          {
-            "stat_energy_from": "sensor.main_energy_sdm630_b_import_kwh_2023_11_11",
-            "stat_cost": null,
-            "entity_energy_price": null,
-            "number_energy_price": 0.25751
-          },
-          {
-            "stat_energy_from": "sensor.main_energy_sdm630_c_import_kwh_2023_11_11",
-            "stat_cost": null,
-            "entity_energy_price": null,
-            "number_energy_price": 0.25751
-          }
-        ],
-        "flow_to": [
-          {
-            "stat_energy_to": "sensor.main_energy_sdm630_total_export_kwh",
-            "stat_compensation": null,
-            "entity_energy_price": null,
-            "number_energy_price": -0.25751
-          },
-          {
-            "stat_energy_to": "sensor.main_energy_sdm630_a_export_kwh_2023_11_11",
-            "stat_compensation": null,
-            "entity_energy_price": null,
-            "number_energy_price": -0.25751
-          },
-          {
-            "stat_energy_to": "sensor.main_energy_sdm630_b_export_kwh_2023_11_11",
-            "stat_compensation": null,
-            "entity_energy_price": null,
-            "number_energy_price": -0.25751
-          },
-          {
-            "stat_energy_to": "sensor.main_energy_sdm630_c_export_kwh_2023_11_11",
-            "stat_compensation": null,
-            "entity_energy_price": null,
-            "number_energy_price": -0.25751
-          }
-        ],
+        "stat_energy_from": "sensor.grid_import_day",
+        "stat_cost": null,
+        "entity_energy_price": null,
+        "number_energy_price": 0.15458,
+        "stat_energy_to": null,
+        "stat_compensation": null,
+        "entity_energy_price_export": null,
+        "number_energy_price_export": null,
         "cost_adjustment_day": 0.0
       },
       {
-        "type": "solar",
-        "stat_energy_from": "sensor.inverter_sun2000_accumulated_yield",
-        "config_entry_solar_forecast": [
-          "1d7032dd2c0298848a60e4e0f7270f0e"
-        ]
+        "type": "grid",
+        "stat_energy_from": "sensor.grid_import_night",
+        "stat_cost": null,
+        "entity_energy_price": null,
+        "number_energy_price": 0.09226,
+        "stat_energy_to": null,
+        "stat_compensation": null,
+        "entity_energy_price_export": null,
+        "number_energy_price_export": null,
+        "cost_adjustment_day": 0.0
       }
     ],
     "device_consumption": [
       {
-        "stat_consumption": "sensor.water_pump_energy_used"
+        "stat_consumption": "sensor.water_pump_energy"
       },
       {
-        "stat_consumption": "sensor.waste_pump_energy_used"
+        "stat_consumption": "sensor.oven_energy"
       },
       {
-        "stat_consumption": "sensor.oven_energy_used"
+        "stat_consumption": "sensor.stove_energy"
       },
       {
-        "stat_consumption": "sensor.stove_energy_used"
+        "stat_consumption": "sensor.dishwasher_energy"
       },
       {
-        "stat_consumption": "sensor.dishwasher_energy_used"
+        "stat_consumption": "sensor.laundry_energy"
       },
       {
-        "stat_consumption": "sensor.kitchen_energy_used"
+        "stat_consumption": "sensor.boiler_energy"
       },
       {
-        "stat_consumption": "sensor.laundry_energy_used"
+        "stat_consumption": "sensor.heat_pump_energy"
       },
       {
-        "stat_consumption": "sensor.boiler_energy_used"
+        "stat_consumption": "sensor.microwave_energy"
       },
       {
-        "stat_consumption": "sensor.heat_pump_energy_used"
-      },
-      {
-        "stat_consumption": "sensor.heat_pump_dds024mr_tot_act"
-      },
-      {
-        "stat_consumption": "sensor.microwave_energy_used"
-      },
-      {
-        "stat_consumption": "sensor.stabilizator_energy_used"
-      },
-      {
-        "stat_consumption":  "sensor.ev_charger_total"
+        "stat_consumption": "sensor.ev_charger_energy"
       }
-    ]
+    ],
+    "device_consumption_water": []
   }
 }
