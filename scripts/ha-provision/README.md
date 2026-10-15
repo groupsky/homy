@@ -35,9 +35,10 @@ directory (`SECRETS_PATH`); see [`secrets/ha_provision_token`](../../secrets/ha_
 Run from the checkout, dry run first:
 
 ```bash
+secrets=$(realpath "$(sed -n 's/^SECRETS_PATH=//p' .env)")
 docker run --rm --network homy_automation \
   -v "$PWD":/w:ro \
-  -v "$(realpath "${SECRETS_PATH:-./secrets}")/ha_provision_token":/run/secrets/ha_provision_token:ro \
+  -v "$secrets/ha_provision_token":/run/secrets/ha_provision_token:ro \
   ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 \
   node /w/scripts/ha-provision/index.mjs --dry-run
 ```

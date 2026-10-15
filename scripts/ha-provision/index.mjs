@@ -5,6 +5,7 @@
 // --dry-run reports what would change and writes nothing. See README.md.
 import { readFileSync } from 'node:fs'
 import { applyRows, planExposure } from './lib.mjs'
+import { connect, readToken } from './ha-websocket.mjs'
 
 // Fixed on purpose, not configurable: the script only ever talks to the HA
 // container over the automation network, reads the repo's desired state and
@@ -12,50 +13,6 @@ import { applyRows, planExposure } from './lib.mjs'
 const HA_URL = 'ws://ha:8123/api/websocket'
 const TOKEN_FILE = '/run/secrets/ha_provision_token'
 const DESIRED = new URL('../../config/home-assistant/provision.json', import.meta.url)
-
-function readToken () {
-  try {
-    return readFileSync(TOKEN_FILE, 'utf8').trim()
-  } catch {
-    throw new Error(`mount a long-lived access token of an admin user at ${TOKEN_FILE}`)
-  }
-}
-
-function connect (url, token) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url)
-    const pending = new Map()
-    let nextId = 1
-    const client = {
-      call: (message) => new Promise((res, rej) => {
-        const id = nextId++
-        pending.set(id, { res, rej, type: message.type })
-        ws.send(JSON.stringify({ id, ...message }))
-      }),
-      close: () => ws.close()
-    }
-    ws.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data)
-      if (message.type === 'auth_required') {
-        ws.send(JSON.stringify({ type: 'auth', access_token: token }))
-      } else if (message.type === 'auth_ok') {
-        resolve(client)
-      } else if (message.type === 'auth_invalid') {
-        reject(new Error(`authentication rejected: ${message.message}`))
-      } else if (message.type === 'result' && pending.has(message.id)) {
-        const { res, rej, type } = pending.get(message.id)
-        pending.delete(message.id)
-        if (message.success) res(message.result)
-        else rej(new Error(`${type} failed: ${message.error?.code} ${message.error?.message}`))
-      }
-    })
-    ws.addEventListener('error', () => reject(new Error(`cannot connect to ${url}`)))
-    ws.addEventListener('close', () => {
-      for (const { rej, type } of pending.values()) rej(new Error(`${type}: connection closed`))
-      pending.clear()
-    })
-  })
-}
 
 async function provisionExposure (ha, desired, dryRun) {
   const { exposed_entities: current } = await ha.call({ type: 'homeassistant/expose_entity/list' })
@@ -102,7 +59,7 @@ async function main () {
   const dryRun = process.argv.slice(2).includes('--dry-run')
   const desired = JSON.parse(readFileSync(DESIRED, 'utf8'))
 
-  const ha = await connect(HA_URL, readToken())
+  const ha = await connect(HA_URL, readToken(TOKEN_FILE))
   try {
     await provisionExposure(ha, desired.exposure ?? {}, dryRun)
     let ok = true

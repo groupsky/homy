@@ -124,15 +124,86 @@ Not listed, on purpose:
   turns a missing or null value into "no value", not 0, so it is safe from
   this.
 
-## History
+## History and the backfill
 
-The counters above started on 2026-10-15. The dashboard shows data only from
-that day. The older data is not deleted: it stays in the Home Assistant
-statistics under the old sensor ids (for example `sensor.laundry_energy_used`
-and `sensor.main_energy_sdm630_a_import_kwh_2023_11_11`), and in InfluxDB.
-Those old statistics keep their wrong values (negative costs at restarts,
-negative export compensation, meter step-backs), because the dashboard no
-longer reads them.
+The counters above started on 2026-10-15 at 14:00 UTC (the deploy hour). The
+hours before that come from the meter readings in InfluxDB, imported once by
+[`scripts/energy-backfill`](../scripts/energy-backfill/index.mjs) (#1758):
+
+- Each hour gets the increase of the meter's counter, from the last reading of
+  the hour before to the last reading of the hour. A step back counts as no
+  energy, like the utility meters. An increase above 50 kWh per hour is a
+  meter swap or a bad reading, and counts as no energy; the script prints
+  each one.
+- When readings are missing for some hours, the increase is spread evenly over
+  those hours. The longest gaps: 2025-09-05 to 09-10 (123 h, all meters) and
+  2021-04-20 to 09-27 (laundry only).
+- The main meter was swapped on 2023-10-15/16. Each meter is read on its own,
+  so the swap is not counted as use. The 36 hours between the two meters'
+  readings have no grid data.
+- The grid's hours go to the day or the night tariff by the zone table above.
+- Costs are imported only from 2026-07-01, at the current prices. Earlier
+  prices were different and in BGN, so earlier hours have kWh but no cost.
+- The imported sums start from 0. Home Assistant's live sums started again
+  from 0 at the deploy, so the script also moves the live sums up
+  (`recorder/adjust_sum_statistics`), so that they go on from the imported
+  ones without a step. The size of the move is worked out from the meter
+  readings, so a second run moves them by 0.
+
+The old statistics of the raw sensors (for example `sensor.laundry_energy_used`
+and `sensor.main_energy_sdm630_a_import_kwh_2023_11_11`) are not changed. The
+dashboard does not read them.
+
+### Run the backfill
+
+It needs a long-lived access token of an **admin** user, in
+`ha_provision_token` in the secrets directory (`SECRETS_PATH` in `.env`), the
+same token as [ha-provision](../scripts/ha-provision/README.md). Every counter
+must already have live statistics, that is, its meter must have counted some
+energy since the deploy; the script refuses a counter that has none.
+
+1. Copy the Home Assistant database first, with SQLite's online backup (Home
+   Assistant keeps running):
+
+   ```bash
+   docker exec homy-ha-1 python3 -c "import sqlite3; d = sqlite3.connect('/config/home-assistant_v2.db.before-backfill'); sqlite3.connect('/config/home-assistant_v2.db').backup(d); d.close()"
+   ```
+
+2. Dry run. It prints, for each counter, the rows it would import and how much
+   it would move the live sums:
+
+   ```bash
+   secrets=$(realpath "$(sed -n 's/^SECRETS_PATH=//p' .env)")
+   docker run --rm --network homy_automation \
+     -v "$PWD":/w:ro \
+     -v "$secrets/ha_provision_token":/run/secrets/ha_provision_token:ro \
+     -v "$secrets/influxdb_read_user":/run/secrets/influxdb_read_user:ro \
+     -v "$secrets/influxdb_read_user_password":/run/secrets/influxdb_read_user_password:ro \
+     ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 \
+     node /w/scripts/energy-backfill/index.mjs
+   ```
+
+3. The same command with `--apply` at the end imports the rows and moves the
+   live sums.
+4. A minute later, run the dry run again. Every counter must say `would adjust
+   live sums by 0`: the live sums then go on from the imported ones.
+
+Running it again imports the same rows over the old ones (Home Assistant
+replaces a row with the same hour), so nothing is counted twice.
+
+**To undo it**, put the copy back while Home Assistant is stopped. The
+statistics and states recorded since the copy are lost.
+
+```bash
+docker compose stop ha
+data=$(sed -n 's/^HOMEASSISTANT_DATA_PATH=//p' .env)
+sudo mv "$data/home-assistant_v2.db" "$data/home-assistant_v2.db.after-backfill"
+sudo rm -f "$data/home-assistant_v2.db-wal" "$data/home-assistant_v2.db-shm"
+sudo cp -p "$data/home-assistant_v2.db.before-backfill" "$data/home-assistant_v2.db"
+docker compose start ha
+```
+
+`stop` and `start` keep the same container; do not use `up` here.
 
 ## How to check it
 
