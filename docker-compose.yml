@@ -378,7 +378,6 @@ services:
       - mongo_root_username
       - mongo_root_password
     environment:
-      - BRIDGE_CONFIG=/etc/ya-modbus/config.json
       - BROKER=mqtt://broker
       - TOPIC=/modbus/tetriary/{name}/reading
       - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin

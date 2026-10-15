@@ -28,7 +28,8 @@ serial port ── bridge (<bus>-power) ── ya-modbus/<device>/data ── ad
 - **Adapter** (`docker/ya-modbus-adapter`): turns each data message back into
   the old reader's reading, so no consumer changes (Home Assistant, the
   automations, `mqtt-influx`, the raw archive). It reads the same bridge
-  config file for the devices, their addresses and drivers.
+  config file (mounted at `/etc/ya-modbus/config.json`) for the devices,
+  their addresses and drivers. It does not write InfluxDB itself.
 
 The reading of the adapter is the old reading with two differences:
 
@@ -56,6 +57,13 @@ the move back the adapter keeps running. That is harmless: without the bridge
 it gets no messages and writes nothing. Remove it by hand when convenient
 (see below).
 
+One case needs a hand: when the **adapter itself** fails the deploy's health
+gate, the rollback cannot recreate it (the old compose file does not have
+it). The deploy then reports "Rollback failed" and blocks further deploys.
+The port is still safe: `<bus>-power` is already back on the old reader. To
+recover, remove the adapter (`docker rm -f homy-<bus>-adapter-1`), check the
+stack, and remove the deploy block file named in the message.
+
 `scripts/compose-serial-ports.test.mjs` checks that every serial port has
 one reader, and which reader each moved bus has.
 
@@ -66,6 +74,9 @@ All in one PR:
 1. `config/ya-modbus/<bus>.json`: the devices of the bus, with the port,
    serial settings and addresses from `config/modbus-serial/<bus>.config.js`.
    Use `"polling": {"interval": 1000, "mode": "continuous"}`.
+   If that old config has an `influxdb` integration (`main` has one), the
+   adapter must learn to write those points first: it does not write
+   InfluxDB today.
 2. A mapping for each new driver in `docker/ya-modbus-adapter/mappings/<type>.js`
    (old field → ya-modbus data point id), and a test with a real old reading.
    `<type>` is the driver package name without `@ya-modbus/driver-`.
@@ -85,8 +96,8 @@ back needs them.
    reader. For `tetriary`, it is the block before #1707:
 
    ```bash
-   git log --oneline -1 --grep='#1707' -- docker-compose.yml   # the move
-   git show <that commit>^:docker-compose.yml                   # copy tetriary-power from here
+   git log --oneline -1 --grep='(#1716)'      # the move (PR #1716)
+   git show <that commit>^:docker-compose.yml  # copy tetriary-power from here
    ```
 
    Remove the `<bus>-adapter` service.
@@ -114,12 +125,16 @@ docker compose exec broker mosquitto_sub -t /modbus/tetriary/heat_pump/reading -
 # The adapter and the bridge log no errors
 docker compose logs --since 10m tetriary-power tetriary-adapter
 # NDJSON: new lines in the adapter's file
-tail -n 2 "$RAW_DATA_PATH/tetriary/$(date -u +%F).tetriary-adapter.ndjson"
+docker compose exec tetriary-adapter sh -c 'tail -n 2 /data/raw/tetriary/$(date -u +%F).tetriary-adapter.ndjson'
 ```
 
 Also check the new points in InfluxDB (`mqtt-influx` writes them from MQTT),
 the Home Assistant sensors of the bus, and new documents in the Mongo
 collection.
+
+These checks matter: the deploy's health gate does not see a dead port. When
+the bridge cannot open its port, it keeps running and retries, so the gate
+passes. (The old reader crashed instead, which failed the gate.)
 
 **`ndjson-overlap` on the day of a move.** The check reads only the files of
 the writers in `docker-compose.yml`. On the day of a move (or a move back) it

@@ -13,16 +13,19 @@ function fileEnv(name) {
   return process.env[name]
 }
 
+// The bridge's own config file, mounted at the same path as in the bridge:
+// the devices, their addresses and drivers, and the topic prefix.
+const BRIDGE_CONFIG = '/etc/ya-modbus/config.json'
+
 const mqttUrl = process.env.BROKER
 const publishTopic = process.env.TOPIC
-if (!mqttUrl || !publishTopic || !process.env.BRIDGE_CONFIG) {
-  console.error('BROKER, TOPIC and BRIDGE_CONFIG must be set')
+if (!mqttUrl || !publishTopic) {
+  console.error('BROKER and TOPIC must be set')
   process.exit(1)
 }
 
-// The bridge's own config file: the devices, their addresses and drivers,
-// and the topic prefix. Throws at startup on a driver without a mapping.
-const devices = devicesFromBridgeConfig(JSON.parse(fs.readFileSync(process.env.BRIDGE_CONFIG, 'utf8')))
+// Throws at startup on a driver without a mapping.
+const devices = devicesFromBridgeConfig(JSON.parse(fs.readFileSync(BRIDGE_CONFIG, 'utf8')))
 
 // Throws, and so stops the service at startup, when RAW_DIR, COLLECTION or
 // SERVICE_NAME is missing or the stream directory cannot be written.
@@ -52,7 +55,7 @@ if (process.env.MONGODB_URL) {
   insert = (doc) => collection && collection.insertOne(doc)
 }
 
-const client = mqtt.connect(mqttUrl, {clientId: process.env.MQTT_CLIENT_ID})
+const client = mqtt.connect(mqttUrl)
 
 const handle = createAdapter({
   devices,
