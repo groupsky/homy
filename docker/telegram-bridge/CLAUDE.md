@@ -69,6 +69,11 @@ From **23:00 to 07:00** on the `Europe/Sofia` wall clock, the bridge sends every
 Telegram's `disable_notification`, so it arrives without sound. Nothing is dropped or delayed.
 Safety messages still ring (issue #1744). The window follows the local clock across the clock changes.
 
+**Limit:** `disable_notification` only removes the sound of one message. Telegram has no alert that
+rings through a muted chat or the phone's Do Not Disturb. For a safety message to ring, the chat must
+not be muted on the phone, and Do Not Disturb must allow Telegram. A real wake-up channel is a
+separate question.
+
 A message is a **safety message** when:
 - any alert in a Grafana webhook has the label `safety: "true"` (firing or resolved), or
 - a JSON object body has `"safety": true` (for direct senders).
