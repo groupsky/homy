@@ -24,7 +24,11 @@ const startAt = (localIso) => {
     mqtt,
     persistedCache: { controlMode: 'automatic', manualOverrideExpires: null }
   })
-  const deliver = (topic, payload) => subscriptions.get(topic)(payload)
+  const deliver = (topic, payload) => {
+    const callback = subscriptions.get(topic)
+    if (typeof callback !== 'function') throw new Error(`no subscription for ${topic}`)
+    callback(payload)
+  }
   return {
     temperatures: ({ top, bottom }) => {
       deliver(CONFIG.temperatureBottomTopic, { state: bottom })
