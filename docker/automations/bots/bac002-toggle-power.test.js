@@ -45,6 +45,14 @@ describe('bac002-toggle-power bot', () => {
     jest.clearAllMocks()
   })
 
+  // Every contact reports "closed" once, as the readers do within minutes of a
+  // start. The bot acts only on contact data it has seen fresh (#1743).
+  const reportContactsClosed = async () => {
+    for (const { topic } of config.switches) {
+      await mockMqtt._triggerMessage(topic, { state: false })
+    }
+  }
+
   describe('initialization', () => {
     it('should have persistedCache configuration', () => {
       expect(bot.persistedCache).toBeDefined()
@@ -129,6 +137,7 @@ describe('bac002-toggle-power bot', () => {
   describe('power control logic', () => {
     beforeEach(async () => {
       await bot.start({ mqtt: mockMqtt, persistedCache })
+      await reportContactsClosed()
     })
 
     it('should turn off power when it is on and at least one switch is open', async () => {
@@ -184,6 +193,7 @@ describe('bac002-toggle-power bot', () => {
   describe('complete power cycle scenarios', () => {
     beforeEach(async () => {
       await bot.start({ mqtt: mockMqtt, persistedCache })
+      await reportContactsClosed()
     })
 
     it('should handle complete open-close cycle', async () => {
@@ -239,6 +249,7 @@ describe('bac002-toggle-power bot', () => {
   describe('edge cases and error handling', () => {
     beforeEach(async () => {
       await bot.start({ mqtt: mockMqtt, persistedCache })
+      await reportContactsClosed()
     })
 
     it('should handle null payload (documents current behavior)', async () => {
@@ -341,6 +352,7 @@ describe('bac002-toggle-power bot', () => {
   describe('persistent state behavior', () => {
     beforeEach(async () => {
       await bot.start({ mqtt: mockMqtt, persistedCache })
+      await reportContactsClosed()
     })
 
     it('should maintain state across simulated restarts', async () => {
@@ -367,8 +379,9 @@ describe('bac002-toggle-power bot', () => {
 
       await bot.start({ mqtt: mockMqtt, persistedCache })
 
-      // Close the switch
+      // Close the switch; the door reports again too
       await mockMqtt._triggerMessage('homy/features/open/window1/status', { state: false })
+      await mockMqtt._triggerMessage('homy/features/open/door1/status', { state: false })
       // Power should turn on when reading shows off
       await mockMqtt._triggerMessage('modbus/1/3/reading', { power: 'off' })
 
@@ -380,6 +393,7 @@ describe('bac002-toggle-power bot', () => {
   describe('MQTT integration', () => {
     beforeEach(async () => {
       await bot.start({ mqtt: mockMqtt, persistedCache })
+      await reportContactsClosed()
     })
 
     it('should handle MQTT publish failures gracefully', async () => {
@@ -403,6 +417,93 @@ describe('bac002-toggle-power bot', () => {
         'modbus/1/3/write',
         { power: 'off' }
       )
+    })
+  })
+
+  // A reader that stops leaves the last contact state in place. On old data
+  // the bot must not keep a room off that a person wants on (#1743).
+  describe('old contact data', () => {
+    const MIN = 60 * 1000
+    const WINDOW = 'homy/features/open/window1/status'
+    const DOOR = 'homy/features/open/door1/status'
+    const READING = 'modbus/1/3/reading'
+    let httpPost
+    let staleBot
+
+    const alerts = () => httpPost.mock.calls.map(([, body]) => body.message)
+    const writes = () => mockMqtt.publish.mock.calls.map(([, payload]) => payload.power)
+
+    beforeEach(async () => {
+      jest.useFakeTimers()
+      httpPost = jest.fn().mockResolvedValue({ok: true})
+      staleBot = createBac002TogglePower('toggleRoomPower', {...config, httpPost})
+      await staleBot.start({mqtt: mockMqtt, persistedCache})
+    })
+
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    it('does not switch on states kept from before the start', async () => {
+      persistedCache.switchStates = [true, false]
+
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+
+      expect(writes()).toEqual([])
+    })
+
+    it('switches off on fresh data with a window open', async () => {
+      await mockMqtt._triggerMessage(WINDOW, {state: true})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+
+      expect(writes()).toEqual(['off'])
+    })
+
+    it('stops forcing the thermostat off when the contact data is older than 10 min', async () => {
+      await mockMqtt._triggerMessage(WINDOW, {state: true})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+
+      jest.advanceTimersByTime(11 * MIN)
+      // A person turns the thermostat on again.
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+
+      expect(writes()).toEqual(['off'])
+    })
+
+    it('sends one alert when the data goes stale and one when it returns', async () => {
+      await mockMqtt._triggerMessage(WINDOW, {state: false})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+
+      jest.advanceTimersByTime(10 * MIN)
+      expect(alerts()).toEqual([])
+
+      jest.advanceTimersByTime(60 * MIN)
+      expect(alerts()).toHaveLength(1)
+      expect(alerts()[0]).toContain('no contact data for 10 min')
+      expect(httpPost.mock.calls[0][1].source).toBe('toggleRoomPower')
+
+      await mockMqtt._triggerMessage(WINDOW, {state: false})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+      jest.advanceTimersByTime(5 * MIN)
+
+      expect(alerts()).toHaveLength(2)
+      expect(alerts()[1]).toContain('contact data is back')
+    })
+
+    it('acts normally again when the data returns', async () => {
+      await mockMqtt._triggerMessage(WINDOW, {state: true})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+      jest.advanceTimersByTime(30 * MIN)
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+      expect(writes()).toEqual([])
+
+      await mockMqtt._triggerMessage(WINDOW, {state: true})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+
+      expect(writes()).toEqual(['off'])
     })
   })
 })

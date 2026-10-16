@@ -591,8 +591,8 @@ the 30 days to 2026-08-09; 6 points in the trailing 30 minutes).
 - **Controller Decisions** (Source of Truth):
   - `reason` (**tag**, not a field): Decision reasoning. Observed values: `comfort_heating_insufficient`,
     `emergency_heating_bottom_cold`, `emergency_heating_top_cold`, `hysteresis_zone_maintain_false`,
-    `hysteresis_zone_maintain_true`, `solar_priority_available`, `temperature_sufficient`, and
-    `night_tariff_hold` from #1740 on
+    `hysteresis_zone_maintain_true`, `solar_priority_available`, `temperature_sufficient`,
+    `night_tariff_hold` from #1740 on, and `input_stale` (boiler temperatures too old) from #1743 on
   - `controlMode` (**tag**, not a field): Current operation mode ("automatic", "manual_on", "manual_off", "vacation_3d", etc.)
   - `manualOverrideExpires` (integer field): When manual mode expires (0 for automatic mode)
 

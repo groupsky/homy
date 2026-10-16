@@ -16,7 +16,9 @@ const startAt = (localIso, config = CONFIG) => {
     subscribe: (topic, callback) => { subscriptions.set(topic, callback) },
     publish: (topic, payload) => { published.push({ topic, payload }) }
   }
-  require('./boiler-controller')('boiler', config).start({
+  // The clock jumps in these tests make the input look old; no real alert posts.
+  const httpPost = async () => ({ ok: true })
+  require('./boiler-controller')('boiler', { ...config, httpPost }).start({
     mqtt,
     persistedCache: { controlMode: 'automatic', manualOverrideExpires: null }
   })

@@ -53,6 +53,7 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
   VALUES` returns the other reasons and not this one.
 - `temperature_sufficient` - No heating needed
 - `night_tariff_hold` - Held off in the hour before the night tariff zone (#1740)
+- `input_stale` - Boiler temperatures older than 10 min, element off (#1743)
 - `safety_shutoff_overheated` - Safety temperature exceeded
 - `hysteresis_zone_maintain_*` - Maintaining current state
 

@@ -1,3 +1,6 @@
+const { watchInputAge, DEFAULT_MAX_INPUT_AGE_MS } = require('../lib/input-age')
+const telegramAlert = require('../lib/telegram-alert')
+
 const MINUTES_PER_DAY = 24 * 60
 
 const minutesOfDay = (hhmm) => {
@@ -47,6 +50,9 @@ module.exports = (name, {
   solarDisadvantageMax = -3,
   hysteresis = 3,
   nightTariff,
+  maxInputAgeMs = DEFAULT_MAX_INPUT_AGE_MS,
+  telegramWebhookUrl,
+  httpPost,
   verbose
 }) => ({
   persistedCache: {
@@ -60,7 +66,7 @@ module.exports = (name, {
     }
   },
 
-  start: ({ mqtt, persistedCache }) => {
+  start: ({ mqtt, persistedCache, isEnabled }) => {
     let currentState = {
       temperatureTop: null,
       temperatureBottom: null,
@@ -152,6 +158,12 @@ module.exports = (name, {
             reason: `${reasonPrefix} (expires: ${new Date(currentState.manualOverrideExpires)})`
           }
         }
+      }
+
+      // A reader that stops leaves the last temperatures here, and heating on
+      // them could run the element with no real reading (#1743).
+      if (temperatures.isStale()) {
+        return { decision: false, reason: 'input_stale' }
       }
 
       const { temperatureTop, temperatureBottom, solarTemperature, solarCirculation } = currentState
@@ -254,6 +266,19 @@ module.exports = (name, {
       }
     }
 
+    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost, isEnabled })
+    const minutes = Math.round(maxInputAgeMs / 60000)
+    const temperatures = watchInputAge({
+      inputs: ['top', 'bottom'],
+      maxAgeMs: maxInputAgeMs,
+      onChange: (stale) => {
+        updateHeaterState()
+        alert(name, stale
+          ? `⚠️ ${name}: no boiler temperature for ${minutes} min. In automatic mode the element is off until it returns.`
+          : `✅ ${name}: boiler temperature is back. Normal control again.`)
+      }
+    })
+
     // Initialize from cache
     loadState()
 
@@ -263,6 +288,7 @@ module.exports = (name, {
         const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureTop = temp
+          temperatures.seen('top', payload?._tz)
           updateHeaterState()
         }
       } catch (err) {
@@ -277,6 +303,7 @@ module.exports = (name, {
         const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureBottom = temp
+          temperatures.seen('bottom', payload?._tz)
           updateHeaterState()
         }
       } catch (err) {
@@ -402,6 +429,9 @@ module.exports = (name, {
 
     // Periodic heartbeat to ensure service health monitoring
     const heartbeatInterval = setInterval(() => {
+      // No input arrives during an outage, so decide here too: a manual mode
+      // must still expire on time.
+      updateHeaterState()
       mqtt.publish(finalAutomationStatusTopic, {
         heaterState: currentState.heaterState,
         reason: currentState.lastDecisionReason || 'heartbeat',

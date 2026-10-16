@@ -86,26 +86,29 @@ tariff zone (see [Night tariff hold](#night-tariff-hold)). The legacy `boilerOnS
 | `solarAdvantageMin` | 5 °C | Collector this far above tank top ⇒ defer to solar |
 | `solarDisadvantageMax` | -100 °C | Effectively disables the "solar insufficient, boost" branch |
 | `nightTariff.floor` | 40 °C | The night tariff hold does not apply below this (until 43 °C once on) |
+| `maxInputAgeMs` | 10 min (default) | Boiler top/bottom temperature older than this ⇒ OFF, `input_stale` |
 | `manualOverrideExpiry` | 24 h | Default expiry for `manual_on`/`manual_off`; an object payload's `duration` overrides it. **Vacation modes do not use it** — they expire after `days × 24 − 6` hours (66 / 114 / 162 / 234 / 330 h) |
 
 **Decision order** (first match wins, `makeDecision()` in the bot):
 
 1. Manual override active (`manual_on` / `manual_off` / `vacation_*`) → forced state
-2. `top >= maxSafe` → OFF, `safety_shutoff_overheated`
-3. `top < emergencyMin` → ON, `emergency_heating_top_cold`
-4. `bottom < emergencyMin` → ON, `emergency_heating_bottom_cold`
-5. In the night tariff hold **and** `top >= nightTariff.floor` (plus `hysteresis` while the element is on) → OFF,
+2. Boiler top or bottom temperature older than `maxInputAgeMs` → OFF, `input_stale` (see
+   [Old input](#old-input))
+3. `top >= maxSafe` → OFF, `safety_shutoff_overheated`
+4. `top < emergencyMin` → ON, `emergency_heating_top_cold`
+5. `bottom < emergencyMin` → ON, `emergency_heating_bottom_cold`
+6. In the night tariff hold **and** `top >= nightTariff.floor` (plus `hysteresis` while the element is on) → OFF,
    `night_tariff_hold`
-6. `top < comfortMin` → ON, `comfort_heating_insufficient`
-7. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
-8. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
-9. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
-10. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
+7. `top < comfortMin` → ON, `comfort_heating_insufficient`
+8. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
+9. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
+10. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
+11. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
 
 **Control modes** (`homy/features/control_mode/boiler_controller/set`): `automatic`, `manual_on`,
 `manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`.
 
-The 50 °C cutout from step 9 is what makes `max(t2)` a usable solar-contribution signal: a day whose
+The 50 °C cutout from step 10 is what makes `max(t2)` a usable solar-contribution signal: a day whose
 top temperature never exceeds 50 °C got all of its heat from the immersion heater. That is the basis
 of the `boiler-solar-no-contribution` alert — see
 `config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
@@ -133,7 +136,7 @@ sources and the cost model.
 - **The floor**: when the top is under `nightTariff.floor` (40 °C), the hold does not apply, and the
   element heats as usual. Once on, it runs until the top reaches the floor plus `hysteresis` (43 °C).
   Without this band the 0.1 K jitter of the reading would switch the contactor every few seconds.
-- The safety and emergency rules (steps 2–4) come before the hold, so a cold tank always heats.
+- The safety and emergency rules (steps 3–5) come before the hold, so a cold tank always heats.
 - The hold uses the month and time in `nightTariff.timeZone`, never a fixed UTC offset.
 - Manual and vacation modes (step 1) are not affected.
 
@@ -190,6 +193,22 @@ The Home Assistant automation `grid_tariff_by_zone` has the same table for the e
    is running, and otherwise holds the top between 47 °C and 50 °C, except in the night tariff hold
 4. **Energy tracking:** Power consumption monitored separately via energy meter
 5. **Manual override:** Available through Home Assistant for electric heater only
+
+### Old input
+
+When the top or the bottom temperature is older than `maxInputAgeMs` (10 min by default), the element
+is OFF with reason `input_stale` (#1743), and the bot posts one Telegram message through
+`telegram-bridge`. When both temperatures arrive again it posts one "back" message and decides as
+usual. The age is checked on every reading and every 30 s, and taken from the message's own `_tz`, so
+old retained values after a start count as old; a temperature not seen yet counts from the start.
+The 15-minute heartbeat also decides again, so a manual mode expires on time during an outage. Manual
+and vacation modes still win, so a person can force heating during a long outage. The safe state
+needs no internet; only the message does, and it follows the bridge's quiet hours. A disabled bot
+sends nothing. The Grafana rule `boiler-temperature-sensor-failure` reports the same outage on its own,
+about 35 minutes in.
+
+If cold water during a long outage turns out to be a problem, the agreed alternative is to allow the
+element only in the night tariff zone while the input is old, instead of OFF.
 
 ### Known blind spot
 
