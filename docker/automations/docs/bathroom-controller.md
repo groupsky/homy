@@ -45,7 +45,7 @@ The bathroom controller manages lights based on occupancy detection and user int
 - **`opened`**: Auto-off delay when door opens  
 - **`toggled`**: Auto-off delay after manual activation
 - **`unlocked`**: Grace period after unlocking before auto-off
-- **`toggledOff`** (optional): A door-open this soon after a wall-switch off does not turn the lights on. Set it longer than the door contact's debounce, because the debounced "opened" can arrive after the press
+- **`toggledOff`** (optional): A door opening or closing this soon after a wall-switch off does not turn the lights on. Set it longer than the door contact's debounce, because the debounced door change can arrive after the press
 
 ### Priority Logic
 1. **Lock State**: Highest priority - cancels all timeouts
