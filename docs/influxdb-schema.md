@@ -512,6 +512,8 @@ trade-off of both firing for one real outage.
 
 #### `weather` Measurement
 **Source**: `weather` service → Open-Meteo (model data for the grid cell of the house, not a sensor).
+**Retention policy**: `weather` (infinite, 520-week shards), not `autogen`, so a history load does not
+rewrite the old weekly shards. Queries must name it: `FROM "weather"."weather"`.
 Written at second precision, all times UTC.
 
 **Tags**:
@@ -543,9 +545,9 @@ A missing value is left out of the point, never written as 0.
 **Queries**:
 ```sql
 -- Hourly outdoor temperature from the history model
-SELECT mean("temperature") FROM "weather" WHERE "kind" = 'history' AND "model" = 'era5_seamless' AND time > now() - 30d GROUP BY time(1h)
+SELECT mean("temperature") FROM "weather"."weather" WHERE "kind" = 'history' AND "model" = 'era5_seamless' AND time > now() - 30d GROUP BY time(1h)
 -- What was forecast 24 hours ahead, next to what happened
-SELECT "temperature" FROM "weather" WHERE "kind" = 'forecast' AND "lead_hours" = '24' AND time > now() - 7d
+SELECT "temperature" FROM "weather"."weather" WHERE "kind" = 'forecast' AND "lead_hours" = '24' AND time > now() - 7d
 ```
 
 ### Automation System Monitoring

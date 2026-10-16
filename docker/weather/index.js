@@ -26,8 +26,14 @@ const poller = createPoller({
 
 let timer = null
 
+// pollOnce logs its own errors; the catch keeps an unexpected one from
+// stopping the process, and the next run is always scheduled.
 async function run() {
-    await poller.pollOnce(Math.floor(Date.now() / 1000))
+    try {
+        await poller.pollOnce(Math.floor(Date.now() / 1000))
+    } catch (error) {
+        console.error(`Poll failed: ${error.message}`)
+    }
     timer = setTimeout(run, msUntilNextRun(Date.now()))
 }
 

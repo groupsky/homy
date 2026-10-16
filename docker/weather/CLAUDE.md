@@ -24,12 +24,28 @@ One poll every 15 minutes (2 minutes after each quarter hour):
 A failed call or write is logged and tried again on the next poll. The service never
 exits because Open-Meteo or InfluxDB is down.
 
+## Setup (once)
+
+The data go into their own retention policy `weather`, not `autogen`. `autogen` has
+1-week shards. Writing history into an old, cold shard makes InfluxDB rewrite that whole
+shard, and a backfill from 2020 would touch about 300 of them. With 520-week shards, all
+weather data fit in two small shards. Create the policy once, before the first deploy, as
+the InfluxDB admin:
+
+```sql
+CREATE RETENTION POLICY "weather" ON "homy" DURATION INF REPLICATION 1 SHARD DURATION 520w
+```
+
+The write and read users have rights on the whole database, so they need no change.
+Queries name the policy: `FROM "weather"."weather"`.
+
 ## Configuration
 
 | Variable | Meaning |
 |---|---|
 | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` | House location. Set them only in the real `.env`; they are private and are never committed or logged. The service rounds them to 2 decimals (about 1 km) before use. |
 | `INFLUXDB_URL`, `INFLUXDB_DATABASE`, `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | InfluxDB 1.x write user, as for the other writers. |
+| `INFLUXDB_RP` | Retention policy, `weather` in compose. Without it the service writes to `autogen`, which is fine only for a test database. |
 
 No API key is needed. The free service is for non-commercial use: 10,000 calls a day,
 5,000 an hour, 600 a minute. A call for more than 2 weeks of data counts as several calls.

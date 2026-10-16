@@ -11,12 +11,11 @@ const {createWriter} = require('./src/influx')
 const {fetchJson} = require('./src/fetch-json')
 const {backfill} = require('./src/backfill')
 
+const USAGE = 'Usage: node backfill.js <start YYYY-MM-DD> [end YYYY-MM-DD] [model]'
+
+// A missing or bad date is rejected by the date parsing in backfill().
 async function main() {
     const [startDate, endDate = new Date().toISOString().slice(0, 10), model = 'era5_seamless'] = process.argv.slice(2)
-    if (!startDate) {
-        console.error('Usage: node backfill.js <start YYYY-MM-DD> [end YYYY-MM-DD] [model]')
-        process.exit(2)
-    }
     const config = loadConfig(process.env, (path) => fs.readFileSync(path, 'utf8'))
     const writer = createWriter(config.influx)
     try {
@@ -38,5 +37,6 @@ async function main() {
 
 main().catch((error) => {
     console.error(`Backfill failed: ${error.message}`)
+    console.error(USAGE)
     process.exit(1)
 })

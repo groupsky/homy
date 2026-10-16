@@ -893,6 +893,9 @@ services:
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      # Own retention policy with 520-week shards, created once (see docker/weather/CLAUDE.md).
+      # History writes into the weekly autogen shards would make InfluxDB rewrite each old shard.
+      - INFLUXDB_RP=weather
     mem_limit: *node-mem-limit
     logging: *default-logging
 

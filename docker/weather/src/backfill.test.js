@@ -31,6 +31,15 @@ test('fetches one year at a time from one model and writes every hour that has d
     expect(log.info).toHaveBeenCalledTimes(2)
 })
 
+test('rejects a missing start date before any call', async () => {
+    const fetchJson = jest.fn()
+    await expect(backfill({
+        location, fetchJson, writePoints: async () => {}, log: {info() {}},
+        model: 'era5_seamless', startDate: undefined, endDate: '2021-02-01', nowSec: t,
+    })).rejects.toThrow('Not a date')
+    expect(fetchJson).not.toHaveBeenCalled()
+})
+
 test('stops on the first failed call so the run can be repeated', async () => {
     const fetchJson = async () => { throw new Error('Open-Meteo answered 429') }
     await expect(backfill({

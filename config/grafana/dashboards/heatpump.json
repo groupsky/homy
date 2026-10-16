@@ -2335,6 +2335,30 @@
                 "value": 0
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outdoor, Open-Meteo now"
+            },
+            "properties": [
+              {
+                "id": "custom.spanNulls",
+                "value": 1800000
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Outdoor, (ERA5|ECMWF IFS)$"
+            },
+            "properties": [
+              {
+                "id": "custom.spanNulls",
+                "value": 7200000
+              }
+            ]
           }
         ]
       },
@@ -2374,7 +2398,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"temperature\") FROM \"weather\" WHERE \"kind\" = 'current' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "query": "SELECT mean(\"temperature\") FROM \"weather\".\"weather\" WHERE \"kind\" = 'current' AND $timeFilter GROUP BY time($__interval) fill(null)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -2385,7 +2409,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"temperature\") FROM \"weather\" WHERE \"kind\" = 'history' AND \"model\" = 'era5_seamless' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "query": "SELECT mean(\"temperature\") FROM \"weather\".\"weather\" WHERE \"kind\" = 'history' AND \"model\" = 'era5_seamless' AND $timeFilter GROUP BY time($__interval) fill(null)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -2396,7 +2420,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT mean(\"temperature\") FROM \"weather\" WHERE \"kind\" = 'history' AND \"model\" = 'ecmwf_ifs' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "query": "SELECT mean(\"temperature\") FROM \"weather\".\"weather\" WHERE \"kind\" = 'history' AND \"model\" = 'ecmwf_ifs' AND $timeFilter GROUP BY time($__interval) fill(null)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
