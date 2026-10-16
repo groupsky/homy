@@ -81,8 +81,9 @@ A message is a **safety message** when:
 **At night, a safety alert rings once** (issue #1745). The bridge remembers each safety alert it has
 sent, by its Grafana `fingerprint` and `startsAt` (the firing episode), day or night. A repeat of
 the same episode at night is silent. A new firing (new `startsAt`) and a resolved message ring. A
-direct `"safety": true` message always rings. The memory is lost when the bridge restarts, so the
-first repeat after a restart rings once.
+direct `"safety": true` message always rings. Only a message Telegram accepted is remembered, so
+Grafana's resend after a failed send still rings. The memory is lost when the bridge restarts, so
+the first repeat after a restart rings once.
 
 The safety label is set on these rules in `config/grafana/provisioning/alerting/`:
 

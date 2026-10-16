@@ -45,28 +45,28 @@ const safetyAlerts = (webhookData) =>
 // episode: a repeat carries both unchanged, a new firing has a new startsAt.
 const alertId = (alert) => alert.fingerprint ?? JSON.stringify(alert.labels)
 
-// Remembers the firing episode of every safety alert already sent, day or
-// night, so that its repeats at night are silent. The memory is lost on a
-// restart; the first repeat after it rings once.
+// Remembers the firing episode of every safety alert Telegram accepted, day
+// or night, so that its repeats at night are silent. Only a successful send is
+// remembered: Grafana resends a failed message with the same startsAt, and
+// that resend must still ring. An alert without startsAt always rings. The
+// memory is lost on a restart; the first repeat after it rings once.
 export function createQuietHours() {
   const sentEpisodes = new Map()
 
-  const rings = (webhookData) => {
-    if (webhookData?.safety === true) return true
-    const alerts = safetyAlerts(webhookData)
-    const isRepeat = (alert) => sentEpisodes.has(alertId(alert)) && sentEpisodes.get(alertId(alert)) === alert.startsAt
-    const ring = alerts.some((alert) => alert.status === 'resolved' || !isRepeat(alert))
-    for (const alert of alerts) {
-      if (alert.status === 'resolved') sentEpisodes.delete(alertId(alert))
-      else sentEpisodes.set(alertId(alert), alert.startsAt)
-    }
-    return ring
-  }
+  const isRepeat = (alert) =>
+    alert.status !== 'resolved' && alert.startsAt !== undefined &&
+    sentEpisodes.get(alertId(alert)) === alert.startsAt
+
+  const rings = (webhookData) =>
+    webhookData?.safety === true || safetyAlerts(webhookData).some((alert) => !isRepeat(alert))
 
   return {
-    sendSilently: (webhookData, date) => {
-      const ring = rings(webhookData)
-      return isQuietTime(date) && !ring
+    sendSilently: (webhookData, date) => isQuietTime(date) && !rings(webhookData),
+    markSent: (webhookData) => {
+      for (const alert of safetyAlerts(webhookData)) {
+        if (alert.status === 'resolved') sentEpisodes.delete(alertId(alert))
+        else sentEpisodes.set(alertId(alert), alert.startsAt)
+      }
     },
   }
 }

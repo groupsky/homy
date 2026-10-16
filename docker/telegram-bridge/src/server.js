@@ -96,6 +96,7 @@ async function handleWebhook(req, res, botToken, chatId, querySource, now, quiet
     logSent({ text: messageText, source: normalizeSource(bodySource) !== DEFAULT_SOURCE ? bodySource : querySource, silent, result: telegramResult, botToken })
 
     if (telegramResult.success) {
+      quietHours.markSent(webhookData)
       console.log('✅ Message sent to Telegram successfully')
       debugTelegram('Telegram API response: %O', telegramResult.data)
       res.writeHead(200, { 'Content-Type': 'application/json' })

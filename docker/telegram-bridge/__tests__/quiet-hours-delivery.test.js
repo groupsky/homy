@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals'
-import { getInterceptedRequests, clearInterceptedRequests } from './setup.js'
+import { server, getInterceptedRequests, clearInterceptedRequests } from './setup.js'
+import { http as mswHttp, HttpResponse } from 'msw'
 
 const NIGHT = new Date('2026-11-03T02:00:00+02:00')
 const DAY = new Date('2026-11-03T12:00:00+02:00')
@@ -80,6 +81,22 @@ describe('quiet hours delivery', () => {
     clearInterceptedRequests()
     expect((await post(repeated)).disable_notification).toBe(true)
     expect(sentLine().silent).toBe(true)
+  })
+
+  test('a safety alert whose first send failed rings on the resend', async () => {
+    now = NIGHT
+    const failing = alert({ safety: 'true' })
+    failing.alerts[0].fingerprint = 'failed-send-test'
+    failing.alerts[0].startsAt = '2026-11-03T00:30:00Z'
+    server.use(mswHttp.post('https://api.telegram.org/bot*/sendMessage', () =>
+      HttpResponse.json({ ok: false, description: 'Too Many Requests' }, { status: 429 }), { once: true }))
+    const response = await fetch(`${baseUrl}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(failing),
+    })
+    expect(response.status).toBe(500)
+    expect((await post(failing)).disable_notification).toBe(false)
   })
 
   test('a direct message with "safety": true at night rings', async () => {
