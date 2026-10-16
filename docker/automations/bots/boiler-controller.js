@@ -1,3 +1,6 @@
+const { watchInputAge, DEFAULT_MAX_INPUT_AGE_MS } = require('../lib/input-age')
+const telegramAlert = require('../lib/telegram-alert')
+
 const MINUTES_PER_DAY = 24 * 60
 
 const minutesOfDay = (hhmm) => {
@@ -47,6 +50,9 @@ module.exports = (name, {
   solarDisadvantageMax = -3,
   hysteresis = 3,
   nightTariff,
+  maxInputAgeMs = DEFAULT_MAX_INPUT_AGE_MS,
+  telegramWebhookUrl,
+  httpPost,
   verbose
 }) => ({
   persistedCache: {
@@ -154,6 +160,12 @@ module.exports = (name, {
         }
       }
 
+      // A reader that stops leaves the last temperatures here, and heating on
+      // them could run the element with no real reading (#1743).
+      if (temperatures.isStale()) {
+        return { decision: false, reason: 'input_stale' }
+      }
+
       const { temperatureTop, temperatureBottom, solarTemperature, solarCirculation } = currentState
 
       // Safety checks first
@@ -254,6 +266,19 @@ module.exports = (name, {
       }
     }
 
+    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost })
+    const minutes = Math.round(maxInputAgeMs / 60000)
+    const temperatures = watchInputAge({
+      inputs: ['top', 'bottom'],
+      maxAgeMs: maxInputAgeMs,
+      onChange: (stale) => {
+        updateHeaterState()
+        alert(name, stale
+          ? `⚠️ ${name}: no boiler temperature for ${minutes} min. The element is off until it returns; manual mode still works.`
+          : `✅ ${name}: boiler temperature is back. Normal control again.`)
+      }
+    })
+
     // Initialize from cache
     loadState()
 
@@ -263,6 +288,7 @@ module.exports = (name, {
         const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureTop = temp
+          temperatures.seen('top')
           updateHeaterState()
         }
       } catch (err) {
@@ -277,6 +303,7 @@ module.exports = (name, {
         const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureBottom = temp
+          temperatures.seen('bottom')
           updateHeaterState()
         }
       } catch (err) {
