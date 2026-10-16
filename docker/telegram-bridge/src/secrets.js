@@ -17,6 +17,7 @@ export function loadSecret(name) {
   
   return null
 }
+
 // For logs: an id shown only by its last 3 characters (issue #1765). Shorter
 // ids are hidden completely.
 export function maskId(id) {
