@@ -4,7 +4,10 @@ groups:
   - orgId: 1
     name: Ioniq Cell Health Alerts
     folder: Ioniq EV
-    # Evaluated every 15m: cell and module spreads change over days; the 30m look-back covers the interval (#1746).
+    # Evaluated every 15m (#1746): cell voltage spread changes over days. Module
+    # temperature spread can rise within one drive, but a hot module is also
+    # caught by Pack Temperature Critical in the 5m battery group. The 30m
+    # look-back covers the interval.
     interval: 15m
     rules:
       - uid: ioniq-cell-spread-warning

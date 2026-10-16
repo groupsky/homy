@@ -42,4 +42,4 @@ groups:
         labels: { severity: warning, device: ioniq, subsystem: 12v }
         annotations:
           summary: "🚗 12V LDC not charging"
-          description: "The DC-DC converter (LDC) held the 12V rail below 13.2V for over a minute while driving at low HV load. Suspect an LDC fault — the 12V battery is not being replenished. Investigate before it strands the car."
+          description: "The DC-DC converter (LDC) held the 12V rail below 13.2V for about 5 minutes while driving at low HV load. Suspect an LDC fault — the 12V battery is not being replenished. Investigate before it strands the car."

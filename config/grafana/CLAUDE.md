@@ -734,7 +734,7 @@ Grafana's own internal state (users, dashboard metadata, alert rule state, ngale
   12:11  for: 10m has elapsed with the condition continuously true -> Alerting, pages
   18:00  the 12:00 point finally ages out of the 6h window -> NoData -> noDataState: OK -> clears
   ```
-  Had a corrective frame arrived at 12:02, `last()` would have returned it and the rule would have resolved from Pending without paging. That is the only case `for:` covers. (Since #1746 this group is evaluated every 15 min with `for: 15m`; the mechanism is the same.)
+  Had a corrective frame arrived at 12:02, `last()` would have returned it and the rule would have resolved from Pending without paging. That is the only case `for:` covers. (Since #1746 these rules are evaluated every 5 min, still with `for: 10m`; the mechanism is the same.)
 - **Practical test**: `for:` is a real transient filter only when the source reliably publishes **several** samples inside the for-window. If `for` is smaller than ~2x the publish interval, or the source can stop publishing entirely, treat `for:` as best-effort and say so in a comment on the rule.
 - **Solutions**, in order of preference:
   1. **Shorten the query window** so `last()` cannot hold a stale point. Only safe when the source publishes reliably -- and check `noDataState` first: `NoData` will page on every quiet period, `OK` will *silently clear* a real alert instead of holding last known state.
