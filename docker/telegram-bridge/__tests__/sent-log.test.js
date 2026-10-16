@@ -18,6 +18,7 @@ describe('buildSentLine', () => {
       sender: 'telegram-bridge',
       source: 'ioniq-dtc',
       origin_host: 'routy',
+      silent: false,
       ok: true,
       message_id: 4711,
       error: null,

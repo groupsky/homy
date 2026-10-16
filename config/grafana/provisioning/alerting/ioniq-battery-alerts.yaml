@@ -38,7 +38,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: battery }
+        labels: { severity: warning, device: ioniq, subsystem: battery, safety: "true" }
         annotations:
           summary: "🚗 HV isolation resistance below 500 kΩ"
           description: "Possible HV leak to chassis. Investigate before driving if it keeps falling."
@@ -75,7 +75,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 10m
-        labels: { severity: critical, device: ioniq, subsystem: battery }
+        labels: { severity: critical, device: ioniq, subsystem: battery, safety: "true" }
         annotations:
           summary: "🚗 HV isolation resistance below 100 kΩ"
           description: "HV isolation at/under the rated minimum. Do not fast-charge; book HV inspection."
@@ -287,7 +287,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 5m
-        labels: { severity: critical, device: ioniq, subsystem: battery }
+        labels: { severity: critical, device: ioniq, subsystem: battery, safety: "true" }
         annotations:
           summary: "🚗 Pack temperature above 55 °C"
           description: "Pack over-temp. Stop charging/driving; investigate cooling."

@@ -86,5 +86,6 @@ groups:
           summary: "⚡ Phase power lost"
           description: "Phase {{ $labels.phase }} of the mains has dropped to 0 V while the meter is still reporting. One or more phases are out; the meter's own supply phase is still live."
         labels:
+          safety: "true"
           rule_uid: webhook-phaseloss01
           alert_type: webhook

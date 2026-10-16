@@ -34,7 +34,7 @@ function describeError(result, botToken) {
   return botToken ? error.split(botToken).join('[redacted]') : error
 }
 
-export function buildSentLine({ text, source, result, botToken }) {
+export function buildSentLine({ text, source, silent = false, result, botToken }) {
   const ok = Boolean(result && result.success)
   const messageId = ok && result.data && result.data.result ? result.data.result.message_id ?? null : null
   return JSON.stringify({
@@ -42,6 +42,7 @@ export function buildSentLine({ text, source, result, botToken }) {
     sender: SENDER,
     source: normalizeSource(source),
     origin_host: 'routy',
+    silent: Boolean(silent),
     ok,
     message_id: messageId,
     error: describeError(result, botToken),

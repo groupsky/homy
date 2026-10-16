@@ -140,7 +140,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FL (front-left) tyre cold-start pressure below 2.20 bar"
           description: "Front-left tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -177,7 +177,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FL (front-left) tyre cold-start pressure below 1.90 bar"
           description: "Front-left tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -214,7 +214,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: info, device: ioniq, subsystem: tpms }
+        labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FL (front-left) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized front-left tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
@@ -257,7 +257,7 @@ groups:
         # historical cases), but not one that is the last value published before
         # the car sleeps.
         for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FL (front-left) tyre running hot vs the other wheels"
           description: "front-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
@@ -294,7 +294,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FR (front-right) tyre cold-start pressure below 2.20 bar"
           description: "Front-right tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -331,7 +331,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FR (front-right) tyre cold-start pressure below 1.90 bar"
           description: "Front-right tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -368,7 +368,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: info, device: ioniq, subsystem: tpms }
+        labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FR (front-right) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized front-right tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
@@ -411,7 +411,7 @@ groups:
         # historical cases), but not one that is the last value published before
         # the car sleeps.
         for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FR (front-right) tyre running hot vs the other wheels"
           description: "front-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
@@ -448,7 +448,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RL (rear-left) tyre cold-start pressure below 2.20 bar"
           description: "Rear-left tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -485,7 +485,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RL (rear-left) tyre cold-start pressure below 1.90 bar"
           description: "Rear-left tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -522,7 +522,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: info, device: ioniq, subsystem: tpms }
+        labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RL (rear-left) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized rear-left tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
@@ -565,7 +565,7 @@ groups:
         # historical cases), but not one that is the last value published before
         # the car sleeps.
         for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RL (rear-left) tyre running hot vs the other wheels"
           description: "rear-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
@@ -602,7 +602,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RR (rear-right) tyre cold-start pressure below 2.20 bar"
           description: "Rear-right tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -639,7 +639,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: critical, device: ioniq, subsystem: tpms }
+        labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RR (rear-right) tyre cold-start pressure below 1.90 bar"
           description: "Rear-right tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
@@ -676,7 +676,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: info, device: ioniq, subsystem: tpms }
+        labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RR (rear-right) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized rear-right tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
@@ -719,7 +719,7 @@ groups:
         # historical cases), but not one that is the last value published before
         # the car sleeps.
         for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RR (rear-right) tyre running hot vs the other wheels"
           description: "rear-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
@@ -824,7 +824,7 @@ groups:
         noDataState: OK
         execErrState: OK
         for: 0s
-        labels: { severity: warning, device: ioniq, subsystem: tpms }
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 Tyre cold-pressure spread above 0.21 bar across wheels"
           description: "The cold-normalized pressures of the four tyres differ by more than 0.21 bar. Even out inflation and check the lowest wheel for a leak."
