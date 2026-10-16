@@ -44,7 +44,6 @@ Physical devices communicate via multiple protocols:
 - **I/O Modules**: MBSL32DI1/DI2 for digital inputs (switches, sensors) (Modbus)
 - **Relay Modules**: 32-channel relay banks for device control (Modbus)
 - **HVAC Controllers**: BAC002 thermostats with BACnet communication (Modbus)
-- **Arduino Mega**: Local I/O for buttons, lights, and auxiliary devices (Modbus)
 - **Zigbee Devices**: Wireless sensors, switches, and smart devices via Zigbee2MQTT bridge
 
 ### Layer 2: Protocol Bridge Services

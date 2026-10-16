@@ -64,7 +64,6 @@ sudo /tmp/test_rs485.sh 2 232
 Serial hardware integrates with:
 
 - **[modbus-serial](../../docker/modbus-serial/CLAUDE.md)** - Modbus RTU device communication
-- **[Arduino Mega](../../docker/mega/CLAUDE.md)** - Custom I/O control (if applicable)
 
 ## Troubleshooting
 

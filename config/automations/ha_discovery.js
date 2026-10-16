@@ -267,16 +267,6 @@ const haSensor = (
 const config = {
   bots: {
     ...haLight({
-      name: 'antreCeilingLight',
-      feature: 'antre_ceiling_light',
-      config: {
-        name: 'Антре',
-        device: devices.antre,
-        object_id: 'antre_ceiling_light',
-        unique_id: 'homy_antre_ceiling_light',
-      }
-    }),
-    ...haLight({
       name: 'bath2CeilingLight',
       feature: 'bath2_ceiling_light',
       config: {
@@ -334,26 +324,6 @@ const config = {
         device: devices.cabinet,
         object_id: 'office_ceiling_light',
         unique_id: 'homy_office_ceiling_light',
-      }
-    }),
-    ...haLight({
-      name: 'bedroomBedLeftLight',
-      feature: 'bedroom_bed_left_light',
-      config: {
-        name: 'Спалня лява',
-        device: devices.bedroom,
-        object_id: 'bedroom_bed_left_light',
-        unique_id: 'homy_bedroom_bed_left_light',
-      }
-    }),
-    ...haLight({
-      name: 'verandaWestLight',
-      feature: 'veranda_west_light',
-      config: {
-        name: 'Веранда запад',
-        device: devices.external,
-        object_id: 'veranda_west_light',
-        unique_id: 'homy_veranda_west_light',
       }
     }),
     ...haLight({
