@@ -108,8 +108,11 @@ on 2026-10-16. Summed over a day it overstated the main meter's counter by 13–
 idle the pump read 58 VA for 11 W and the microwave 35 VA for 0 W. For those meters
 and earlier dates, read the real power from `raw` (main: `ap`/`bp`/`cp`; pump and
 microwave: `p`). The other meters (DDS519MR, DDS024MR) always wrote real power.
-**For energy, use counter differences** (`power_meter.total`, or `raw.total_import_kwh`
-/ `raw.tot_act`), not the integral of `p`.
+Real power is signed: on the SDM630 a phase goes negative while it exports (no export
+so far). **For energy, use counter differences**, not the integral of `p`: `raw.tot_act`
+for the pump and microwave, and `raw.total_import_kwh` for `main`. (`power_meter.total`
+for `main` is written twice per reading, first `total_kwh` and then `total_import_kwh`;
+the second write wins, so it equals the import counter.)
 
 **Mains identification**: the whole-house grid meter is `bus = primary`,
 `device.name = main` (SDM630), publishing per-phase `v`/`c`/`p` tagged
