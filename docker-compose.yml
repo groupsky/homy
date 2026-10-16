@@ -870,6 +870,35 @@ services:
     mem_limit: *node-mem-limit
     logging: *default-logging
 
+  # Outdoor weather from Open-Meteo (current, forecast, history) for analysis.
+  # No automation may depend on it for a decision in the moment: see docker/weather/CLAUDE.md.
+  weather:
+    image: ghcr.io/groupsky/homy/weather:${IMAGE_TAG:-latest}
+    build: docker/weather
+    depends_on:
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - automation
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      - WEATHER_LATITUDE=${WEATHER_LATITUDE}
+      - WEATHER_LONGITUDE=${WEATHER_LONGITUDE}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      # Own retention policy with 520-week shards, created once (see docker/weather/CLAUDE.md).
+      # History writes into the weekly autogen shards would make InfluxDB rewrite each old shard.
+      - INFLUXDB_RP=weather
+    mem_limit: *node-mem-limit
+    logging: *default-logging
+
   dmx-driver:
     image: ghcr.io/groupsky/homy/dmx-driver:${IMAGE_TAG:-latest}
     build: docker/dmx-driver

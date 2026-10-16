@@ -1,0 +1,27 @@
+{
+  "name": "weather",
+  "version": "1.0.0",
+  "description": "Polls outdoor weather (current, forecast, history) from Open-Meteo into InfluxDB",
+  "author": "Geno Roupsky",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "backfill": "node backfill.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.35.0"
+  },
+  "devDependencies": {
+    "jest": "^30.5.1"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "*.js",
+      "src/**/*.js",
+      "!node_modules/**"
+    ]
+  }
+}

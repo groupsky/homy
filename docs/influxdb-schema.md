@@ -80,6 +80,8 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 - **sunseeker-monitoring**: Sunseeker robotic lawn mower telemetry, with its own integrated
   mqtt-influx bridge (subscribes to the vendor cloud broker `mqtts.sk-robot.com`, not the local
   broker) → `sunseeker_*` measurements
+- **weather**: outdoor weather polled from the Open-Meteo web API every 15 minutes, plus a
+  one-time history load → `weather` measurement. See `docker/weather/CLAUDE.md`.
 
 ## Measurements and Schema
 
@@ -506,6 +508,48 @@ genuinely unreachable mower before the battery-telemetry staleness alert does (~
 `config/grafana/CLAUDE.md` ("Staleness / Absence Alerts") for the alert design and the accepted
 trade-off of both firing for one real outage.
 
+### Outdoor Weather
+
+#### `weather` Measurement
+**Source**: `weather` service → Open-Meteo (model data for the grid cell of the house, not a sensor).
+**Retention policy**: `weather` (infinite, 520-week shards), not `autogen`, so a history load does not
+rewrite the old weekly shards. Queries must name it: `FROM "weather"."weather"`.
+Written at second precision, all times UTC.
+
+**Tags**:
+- `source`: always `open-meteo`
+- `kind`:
+  - `current`: the current values, in 15-minute steps, one point per poll. A missed poll is a gap; it is never filled in later.
+  - `forecast`: the next 48 hours, written once per hour.
+  - `history`: past hourly values of one named model, refreshed for the last 14 days once a day.
+- `model`:
+  - `best_match` (current and forecast: Open-Meteo picks the model);
+  - `era5_seamless` (history: ERA5-Land temperature, humidity and dew point at about 11 km, with ERA5 cloud cover, rain, wind and sun at about 25 km; about 5 days behind);
+  - `ecmwf_ifs` (history: about 9 km, no delay; it covers the last days that ERA5 does not have yet).
+- `lead_hours`: forecast only, `0` to `47`, hours from the issue hour to the target hour.
+
+**Fields** (floats, unless noted):
+| Field | Unit | Note |
+|---|---|---|
+| `temperature` | °C | at 2 m |
+| `relative_humidity` | % | at 2 m |
+| `dew_point` | °C | at 2 m |
+| `cloud_cover` | % | total |
+| `precipitation` | mm | sum over the interval before the timestamp (1 h, or 15 min for `current`) |
+| `wind_speed` | m/s | at 10 m |
+| `shortwave_radiation` | W/m² | mean over the interval before the timestamp |
+| `issued` | unix seconds (integer) | forecast only: the hour the forecast was fetched in |
+
+A missing value is left out of the point, never written as 0.
+
+**Queries**:
+```sql
+-- Hourly outdoor temperature from the history model
+SELECT mean("temperature") FROM "weather"."weather" WHERE "kind" = 'history' AND "model" = 'era5_seamless' AND time > now() - 30d GROUP BY time(1h)
+-- What was forecast 24 hours ahead, next to what happened
+SELECT "temperature" FROM "weather"."weather" WHERE "kind" = 'forecast' AND "lead_hours" = '24' AND time > now() - 7d
+```
+
 ### Automation System Monitoring
 
 #### `automation_status` Measurement
@@ -735,6 +779,8 @@ Modbus Devices → modbus-serial-* → Direct InfluxDB Write
 Modbus Devices → modbus-serial-* → MQTT Publish → mqtt-influx-* → InfluxDB Write
 
 Sunseeker mower → vendor cloud broker (mqtts.sk-robot.com) → sunseeker-monitoring → InfluxDB Write
+
+Open-Meteo web API → weather → InfluxDB Write
 ```
 
 **Note**: `sunseeker-monitoring` is the one writer that bypasses the local broker entirely — it

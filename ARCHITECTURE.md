@@ -130,6 +130,7 @@ Multiple interfaces for monitoring and control:
 - **mqtt-ndjson-ioniq**: Lossless MQTT archive of the same stream to daily NDJSON files, its successor
 - **modbus-serial `ndjson` integration**: every modbus service writes each raw reading to daily NDJSON files too (`<RAW_DATA_PATH>/<stream>/YYYY-MM-DD.<service>.ndjson`); on a bus moved to ya-modbus, its adapter writes them
 - **historian-***: Manual data migration utilities
+- **weather**: Outdoor weather (current, forecast, history) from the Open-Meteo web API to InfluxDB, for analysis only (`docker/weather/CLAUDE.md`)
 
 ## Current State & Architectural Challenges
 

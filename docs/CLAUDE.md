@@ -35,6 +35,9 @@ This directory contains technical documentation for the home automation system.
 - **[MongoDB Retention](../docker/mqtt-mongo/CLAUDE.md#retention)** - MongoDB is being retired (#1622): raw readings go to daily NDJSON files that a host-side job turns into Parquet; until the switch-off nothing deletes from MongoDB (no TTL index)
 - **[mqtt-ndjson](../docker/mqtt-ndjson/CLAUDE.md)** - writes MQTT topics (today `ioniq/#`) to daily NDJSON files; the file layout and write rules shared with `modbus-serial`'s `ndjson` integration
 
+### Outdoor Weather
+- **[weather](../docker/weather/CLAUDE.md)** - outdoor weather from Open-Meteo (current, forecast, history), and the rules for automations that read it
+
 ### Modbus Buses on ya-modbus
 - **[ya-modbus](ya-modbus.md)** - buses read by the ya-modbus bridge (today `tetriary`), the adapter that keeps the old reader's outputs, and how to move a bus there and back
 
