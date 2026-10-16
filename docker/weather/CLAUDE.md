@@ -129,6 +129,14 @@ The rules are `RULES` and `STORED` in `src/mower.js`. When the mower is put away
 winter while it still reports from a dock, add `{from: '<ISO UTC time>', to: null}` to `STORED`,
 and set `to` when it comes back.
 
+**Bias (decided in #1736: keep the raw series, no correction).** Against ECMWF IFS the docked
+battery reads +3.0 °C on average, with an hourly spread of 2.5 °C. It is about +4.2 °C at night
+and +1.3 to +1.6 °C at midday, because the battery lags the air. It is about +5 °C in winter and
+about 0 in August. A linear correction fitted on one season is off by about −1 °C on later
+data, so none is stored. The mower series needs the internet (the vendor cloud), so it is
+**not an offline fallback**. It is the lowest-priority of the three outdoor sources and the first to drop when an outdoor sensor or
+the Open-Meteo data make it redundant.
+
 **Building the past.** Once an hour the poller redoes the last 3 hours of both estimates, so
 readings that reached InfluxDB late still count. On start it redoes the last 48 hours. Older
 hours are built once:
@@ -148,9 +156,9 @@ docker exec homy-weather-1 node backfill-estimate.js mower 2025-08-26
   - `current` older than 1 hour. The poller writes every 15 minutes.
   - a forecast whose `issued` is older than 3 hours.
 - When the data are missing or old, a bot falls back in this order:
-  1. the local estimates, valid hours only: the solar collector at night
-     (`source=collector`) and the docked mower battery (`source=mower`, which reads a few
-     degrees warm and needs the internet);
+  1. the solar collector estimate at night (`source=collector`, valid hours only). The
+     docked mower battery (`source=mower`) reads up to 5 °C warm and needs the internet, so it
+     is not an offline fallback;
   2. the last value, held for up to 12 hours;
   3. a calendar average;
   4. its normal behaviour without weather data.
