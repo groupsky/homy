@@ -936,6 +936,9 @@ services:
       - CONFIG=/etc/config.js
       - MQTT_CLIENT_ID=automations
       - TZ=${TZ}
+      # House location for the sunset/sunrise lights (solar-emitter bots)
+      - WEATHER_LATITUDE=${WEATHER_LATITUDE}
+      - WEATHER_LONGITUDE=${WEATHER_LONGITUDE}
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro

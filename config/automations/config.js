@@ -1,6 +1,15 @@
 const featuresPrefix = process.env.FEATURES_TOPIC_PREFIX || 'homy/features'
 const haPrefix = process.env.HA_TOPIC_PREFIX || 'homeassistant'
 
+// House location for the sunset/sunrise lights. It comes from the real .env
+// (the same values as the weather service) and is never committed. A missing
+// value gives NaN, and the solar-emitter bots then log an error and stay off.
+const coordinate = (value) => (value && value.trim() !== '' ? Number(value) : NaN)
+const houseLocation = {
+  lat: coordinate(process.env.WEATHER_LATITUDE),
+  lon: coordinate(process.env.WEATHER_LONGITUDE)
+}
+
 const devices = {
   boiler: {
     identifiers: 'boiler_eldom_200l',
@@ -278,8 +287,8 @@ module.exports = {
       commandTopic: '/modbus/dry-switches/relays00-15/write',
       stateParser: ({ outputs }) => outputs & 1 << 15,
       commandTemplate: (state) => ({ 'out15': state }),
-      lat: 42.1354,
-      lon: 24.7453,
+      lat: houseLocation.lat,
+      lon: houseLocation.lon,
       solarTimeStates: {
         sunset: true,
         sunrise: false
@@ -292,8 +301,8 @@ module.exports = {
       commandTopic: 'z2m/house1/P5-night-ext-lights/set',
       stateParser: (payload) => payload.state === 'ON',
       commandTemplate: (state) => ({ state: state ? 'ON' : 'OFF' }),
-      lat: 42.1354,
-      lon: 24.7453,
+      lat: houseLocation.lat,
+      lon: houseLocation.lon,
       solarTimeStates: {
         sunset: true,
         sunrise: false

@@ -30,8 +30,8 @@ describe('solar-emitter bot', () => {
       commandTopic: 'z2m/house1/P5-night-ext-lights/set',
       stateParser: (payload) => payload.state === 'ON',
       commandTemplate: (state) => ({ state: state ? 'ON' : 'OFF' }),
-      lat: 42.1354,
-      lon: 24.7453,
+      lat: 45.0,
+      lon: 10.0,
       solarTimeStates: {
         sunset: true,
         sunrise: false
@@ -99,8 +99,8 @@ describe('solar-emitter bot', () => {
       commandTopic: '/modbus/dry-switches/relays00-15/write',
       stateParser: ({ outputs }) => Boolean(outputs & (1 << 15)),
       commandTemplate: (state) => ({ out15: state }),
-      lat: 42.1354,
-      lon: 24.7453,
+      lat: 45.0,
+      lon: 10.0,
       solarTimeStates: {
         sunset: true,
         sunrise: false
@@ -128,6 +128,30 @@ describe('solar-emitter bot', () => {
     test('should format command for Modbus relay', () => {
       const command = config.commandTemplate(true)
       expect(command).toEqual({ out15: true })
+    })
+  })
+
+  describe('missing location', () => {
+    test.each([
+      ['undefined', undefined, undefined],
+      ['NaN', NaN, 10],
+    ])('logs an error and does not start when lat/lon is %s', (_, lat, lon) => {
+      const error = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const subscribe = jest.fn()
+      bot = solarEmitter('nightExternalLights', {
+        statusTopic: 'status',
+        commandTopic: 'command',
+        stateParser: () => true,
+        commandTemplate: (state) => state,
+        lat,
+        lon,
+        solarTimeStates: { sunset: true, sunrise: false }
+      })
+      bot.start({ mqtt: { publish: jest.fn(), subscribe } })
+      expect(subscribe).not.toHaveBeenCalled()
+      expect(jest.getTimerCount()).toBe(0)
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('WEATHER_LATITUDE'))
+      error.mockRestore()
     })
   })
 
