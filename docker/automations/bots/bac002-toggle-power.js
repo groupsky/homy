@@ -23,7 +23,8 @@ module.exports = (name, {
     const alert = telegramAlert({ url: telegramWebhookUrl, httpPost })
     const minutes = Math.round(maxInputAgeMs / 60000)
     // All thermostat bots read the same contact reader, so one outage is one
-    // message that lists the rooms, not one message per room.
+    // message that lists the rooms, not one message per room. The batch sends
+    // with the first bot's bridge settings; all bots use the defaults.
     const staleRooms = sharedBatch('bac002-toggle-power:stale', {
       send: (names) => alert('bac002-toggle-power', `⚠️ No contact data for ${minutes} min: ${names.join(', ')}. These thermostats are not switched until it returns.`)
     })
