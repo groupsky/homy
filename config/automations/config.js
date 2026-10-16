@@ -312,6 +312,8 @@ module.exports = {
     haBoilerEnergyMeter: {
       type: 'mqtt-publish',
       topic: 'homeassistant/sensor/boiler-energy-meter/config',
+      // Retained, so HA finds the entity again after a restart (#1712)
+      retain: true,
       payload: {
         name: 'boiler energy meter',
         unique_id: 'boiler_energy_meter',
@@ -327,6 +329,7 @@ module.exports = {
     haBoilerHeating: {
       type: 'mqtt-publish',
       topic: 'homeassistant/binary_sensor/boiler-heating/config',
+      retain: true,
       payload: {
         name: 'boiler heating',
         unique_id: 'boiler_status_heating',
