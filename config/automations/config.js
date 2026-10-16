@@ -225,6 +225,7 @@ module.exports = {
         opened: 12 * 60000,   // 12 minutes - door usually left open
         toggled: 25 * 60000,  // 25 minutes - guest + kid friendly manual override
         unlocked: 3 * 60000,  // 3 minutes - accommodate kids cleanup time
+        toggledOff: 5000,     // 5 seconds - the door contact is debounced 2 s, so its "opened" can come after the wall switch press
       },
       commandConfig: {
         verification: 300,    // 300ms verification timeout

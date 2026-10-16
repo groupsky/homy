@@ -10,6 +10,7 @@
  *     opened: number,
  *     toggled: number,
  *     unlocked: number,
+ *     toggledOff?: number,   // a door-open this soon after a wall-switch off does not turn the lights on
  * }} [timeouts]
  * @param {{
  *     verification: number,    // timeout for command verification (default: 0 = disabled)
@@ -37,6 +38,7 @@ module.exports = (name, {
         let openedTimer = null
         let toggledTimer = null
         let unlockedTimer = null
+        let toggledOffAt = -Infinity
 
         // Command verification configuration (safe defaults = disabled)
         const config = {
@@ -254,6 +256,7 @@ module.exports = (name, {
                                 console.log(`[${name}] turning off lights`)
                             }
                             smartPublish(light.commandTopic, {state: false, r: 'tgl-lon'})
+                            toggledOffAt = Date.now()
                         }
                     } else {
                         if (verbose) {
@@ -354,6 +357,13 @@ module.exports = (name, {
                         }
                         clearTimeout(unlockedTimer)
                         unlockedTimer = null
+                    } else if (timeouts?.toggledOff && Date.now() - toggledOffAt < timeouts.toggledOff) {
+                        // Someone turned the lights off with the wall switch and is
+                        // leaving. A debounced door contact reports the opening late,
+                        // after the press, so this event must not turn them on again.
+                        if (verbose) {
+                            console.log(`[${name}] keeping lights off, the wall switch turned them off ${Date.now() - toggledOffAt}ms ago`)
+                        }
                     } else {
                         if (verbose) {
                             console.log(`[${name}] turning on lights`)
