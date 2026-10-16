@@ -7,7 +7,7 @@
 //
 // The old names are confusing: `ap`/`bp`/`cp` are the active power (W) and
 // `a_ap`/`b_ap`/`c_ap` the apparent power (VA). mqtt-influx writes
-// `current_power.p` from `a_ap`, so it stays the apparent power here.
+// `current_power.p` from `ap`/`bp`/`cp` (#1749), so each must keep its unit.
 module.exports = {
   av: 'voltage_l1',
   bv: 'voltage_l2',

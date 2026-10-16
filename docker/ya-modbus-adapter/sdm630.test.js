@@ -151,9 +151,9 @@ describe('the sdm630 mapping', () => {
     expect([...ids].sort()).toStrictEqual(Object.keys(MESSAGE.data).sort())
   })
 
-  // mqtt-influx (converters/sdm630.js) writes `current_power.p` from `a_ap`,
-  // and the main-power and phase-power-loss alerts read it. On the SDM630 the
-  // old `a_ap` is the apparent power (VA), not the active power (W).
+  // mqtt-influx (converters/sdm630.js) writes `current_power.p` from
+  // `ap`/`bp`/`cp`, the active power (W, #1749). On the SDM630 the old
+  // `a_ap`/`b_ap`/`c_ap` are the apparent power (VA), not the active power.
   it('takes a_ap, b_ap and c_ap from the apparent power, and ap, bp, cp from the active power', () => {
     const reading = toReading(MESSAGE, DEVICE)
 
