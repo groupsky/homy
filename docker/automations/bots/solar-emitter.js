@@ -24,6 +24,12 @@ module.exports = (name, {
   verbose
 }) => ({
   start: ({ mqtt }) => {
+    // The house location comes from the real .env. Without it SunCalc gives no
+    // times, and the bot would silently never switch, so it says so and stays off.
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      console.error(`[${name}] no house location: set WEATHER_LATITUDE and WEATHER_LONGITUDE in .env; not started`)
+      return
+    }
     let status = null
     let wantedStatus = null
 

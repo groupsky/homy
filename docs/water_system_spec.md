@@ -22,7 +22,6 @@ water_system:
       diameter: "80mm"
       location: 
         manhole: "Sonda shahta"
-        coords: [24.64155, 42.11554, -13]
         depth_in_manhole: "13m from surface"
       pump:
         model: "Grundfos SQE3-80"
