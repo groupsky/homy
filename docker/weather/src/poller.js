@@ -1,7 +1,9 @@
 // One poll every 15 minutes:
 // - current values on every poll;
 // - the 48-hour forecast once per hour (the first poll that succeeds in it);
-// - the last 14 days of history once per UTC day, from each history model.
+// - the last 14 days of history once per UTC day, from each history model;
+// - the collector night estimate for each newly completed hour (#1735). On start
+//   it redoes the last 48 hours, which overwrites the same points.
 // A failed step is logged and tried again on the next poll. A missed poll is
 // not filled in later, so a gap in the current values stays visible.
 
@@ -20,9 +22,12 @@ function utcDate(sec) {
     return new Date(sec * 1000).toISOString().slice(0, 10)
 }
 
-function createPoller({location, fetchJson, writePoints, log = console}) {
+const ESTIMATE_HOURS_ON_START = 48
+
+function createPoller({location, fetchJson, writePoints, log = console, estimateHours = null}) {
     let lastForecastHour = null
     let lastHistoryDay = null
+    let estimatedUntil = null
 
     async function pollForecast(nowSec) {
         const json = await fetchJson(buildForecastUrl(location))
@@ -49,6 +54,17 @@ function createPoller({location, fetchJson, writePoints, log = console}) {
         lastHistoryDay = end
     }
 
+    async function estimate(nowSec) {
+        const hour = Math.floor(nowSec / 3600) * 3600
+        const from = estimatedUntil == null ? hour - ESTIMATE_HOURS_ON_START * 3600 : estimatedUntil
+        if (from >= hour) return
+        const points = await estimateHours(from, hour)
+        await writePoints(points)
+        estimatedUntil = hour
+        const valid = points.filter(p => p.booleans && p.booleans.valid).length
+        log.info(`Wrote ${points.length} collector estimate hours (${valid} valid)`)
+    }
+
     async function pollOnce(nowSec) {
         try {
             await pollForecast(nowSec)
@@ -60,6 +76,13 @@ function createPoller({location, fetchJson, writePoints, log = console}) {
                 await refreshHistory(nowSec)
             } catch (error) {
                 log.error(`History refresh failed: ${error.message}`)
+            }
+        }
+        if (estimateHours) {
+            try {
+                await estimate(nowSec)
+            } catch (error) {
+                log.error(`Collector estimate failed: ${error.message}`)
             }
         }
     }

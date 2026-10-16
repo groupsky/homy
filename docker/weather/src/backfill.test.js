@@ -47,3 +47,46 @@ test('stops on the first failed call so the run can be repeated', async () => {
         model: 'era5_seamless', startDate: '2020-12-01', endDate: '2021-02-01', nowSec: t,
     })).rejects.toThrow('429')
 })
+
+describe('backfillEstimate', () => {
+    const {backfillEstimate} = require('./backfill')
+    const day = 86400
+
+    test('walks the range in 30-day steps and stops at the current hour', async () => {
+        const start = Date.UTC(2022, 6, 20) / 1000
+        const nowSec = start + 40 * day + 1800
+        const calls = []
+        const estimateHours = async (from, to) => {
+            calls.push([from, to])
+            return [{time: from}]
+        }
+        const written = []
+        const total = await backfillEstimate({
+            estimateHours, writePoints: async (p) => { written.push(...p) }, log: {info() {}},
+            startDate: '2022-07-20', endDate: '2022-12-31', nowSec,
+        })
+        expect(calls).toEqual([
+            [start, start + 30 * day],
+            [start + 30 * day, start + 40 * day],
+        ])
+        expect(total).toBe(2)
+        expect(written).toHaveLength(2)
+    })
+
+    test('includes the whole end day', async () => {
+        const calls = []
+        await backfillEstimate({
+            estimateHours: async (from, to) => { calls.push([from, to]); return [] },
+            writePoints: async () => {}, log: {info() {}},
+            startDate: '2024-01-01', endDate: '2024-01-02', nowSec: Date.UTC(2026, 0, 1) / 1000,
+        })
+        expect(calls).toEqual([[Date.UTC(2024, 0, 1) / 1000, Date.UTC(2024, 0, 3) / 1000]])
+    })
+
+    test('rejects a bad date', async () => {
+        await expect(backfillEstimate({
+            estimateHours: jest.fn(), writePoints: jest.fn(), log: {info() {}},
+            startDate: '2024-02-30', endDate: '2024-03-01', nowSec: 0,
+        })).rejects.toThrow('Not a date')
+    })
+})

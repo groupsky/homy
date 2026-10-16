@@ -21,6 +21,9 @@ One poll every 15 minutes (2 minutes after each quarter hour):
   - `ecmwf_ifs`: about 9 km, no delay. It covers the days ERA5 does not have yet. Hours
     after the time of the call are left out, because they are still forecast.
 
+- the **collector night estimate** (`source=collector`, `kind=estimate`) for each newly
+  completed hour, from local data only. See below.
+
 A failed call or write is logged and tried again on the next poll. The service never
 exits because Open-Meteo or InfluxDB is down.
 
@@ -45,6 +48,7 @@ Queries name the policy: `FROM "weather"."weather"`.
 |---|---|
 | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` | House location. Set them only in the real `.env`; they are private and are never committed or logged. The service rounds them to 2 decimals (about 1 km) before use. |
 | `INFLUXDB_URL`, `INFLUXDB_DATABASE`, `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | InfluxDB 1.x write user, as for the other writers. |
+| `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | InfluxDB read user, for the solar controller data of the collector estimate. |
 | `INFLUXDB_RP` | Retention policy, `weather` in compose. Without it the service writes to `autogen`, which is fine only for a test database. |
 
 No API key is needed. The free service is for non-commercial use: 10,000 calls a day,
@@ -65,6 +69,39 @@ docker exec homy-weather-1 node backfill.js 2020-12-01
 It asks for one calendar year per call (about 26 weighted calls each). Writing the same
 hour again overwrites it, so a failed run can simply be repeated.
 
+## Collector night estimate (#1735)
+
+The probe `t3` of the solar controller (InfluxDB `xymd1`, `device.name = solar_heater`) is
+in the collector, outdoors. At night, with the solar pump (`outputs.p1`) off, it follows
+the outdoor air. It needs no internet. Each UTC hour gets one point in `weather` with tags
+`source=collector`, `kind=estimate`:
+
+- `temperature`: the mean of `t3` over the hour (mean of the four quarter-hour means). It
+  is written whenever all four quarters have data, also for invalid hours.
+- `valid` (boolean) and `reason` (string). The first rule that fails sets the reason:
+
+| `reason` | Meaning |
+|---|---|
+| `no_data` | a quarter of the hour has no reading |
+| `unexplained_warm` | 2022-07-24 to 2022-09-16: 22 nights read 6–15 °C too warm, cause unknown |
+| `probe_fault` | 2026-06-07 to 2026-08-09: the probe had fallen off |
+| `day` | the sun is up during some part of the hour |
+| `after_sunset` | less than 3 hours after sunset; the collector still holds heat |
+| `pump_on` | the solar pump ran during the hour |
+| `pump_unknown` | no reading in the hour before, so the pump state is unknown |
+| `pump_recent` | the solar pump ran in the hour before |
+| `ok` | valid |
+
+The rules are `RULES` and `KNOWN_BAD` in `src/collector.js`. Under a clear, calm sky the
+collector reads below the air, because it radiates heat to the sky. That is not corrected;
+compare with `cloud_cover` from Open-Meteo. The poller redoes the last 48 hours when it
+starts. Older hours are built once:
+
+```bash
+docker exec homy-weather-1 node backfill-collector.js 2022-07-20
+# node backfill-collector.js <start> [end, default today]; 30 days per step
+```
+
 ## Rules for automations that read it
 
 - Use it for analysis and to tune behaviour, for example pre-heating with a forecast.
@@ -74,8 +111,8 @@ hour again overwrites it, so a failed run can simply be repeated.
   - `current` older than 1 hour. The poller writes every 15 minutes.
   - a forecast whose `issued` is older than 3 hours.
 - When the data are missing or old, a bot falls back in this order:
-  1. the local estimate: the solar collector at night (#1735) and the mower battery while
-     docked (#1736), once they exist;
+  1. the local estimate: the solar collector at night (`source=collector`, valid hours
+     only) and the mower battery while docked (#1736), once it exists;
   2. the last value, held for up to 12 hours;
   3. a calendar average;
   4. its normal behaviour without weather data.

@@ -1,12 +1,14 @@
 const {InfluxDB, Point} = require('@influxdata/influxdb-client')
 
-function toInfluxPoint({measurement, tags, fields, integers, time}) {
+function toInfluxPoint({measurement, tags, fields, integers, booleans, strings, time}) {
     const p = new Point(measurement)
     for (const [key, value] of Object.entries(tags)) p.tag(key, value)
     // Every weather value is a float, also when it happens to be whole (7 °C),
     // so the field type never changes between writes.
     for (const [key, value] of Object.entries(fields)) p.floatField(key, value)
     for (const [key, value] of Object.entries(integers || {})) p.intField(key, value)
+    for (const [key, value] of Object.entries(booleans || {})) p.booleanField(key, value)
+    for (const [key, value] of Object.entries(strings || {})) p.stringField(key, value)
     return p.timestamp(String(time))
 }
 

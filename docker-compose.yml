@@ -870,7 +870,8 @@ services:
     mem_limit: *node-mem-limit
     logging: *default-logging
 
-  # Outdoor weather from Open-Meteo (current, forecast, history) for analysis.
+  # Outdoor weather from Open-Meteo (current, forecast, history) and the
+  # collector night estimate, for analysis.
   # No automation may depend on it for a decision in the moment: see docker/weather/CLAUDE.md.
   weather:
     image: ghcr.io/groupsky/homy/weather:${IMAGE_TAG:-latest}
@@ -886,12 +887,17 @@ services:
     secrets:
       - influxdb_write_user
       - influxdb_write_user_password
+      - influxdb_read_user
+      - influxdb_read_user_password
     environment:
       - WEATHER_LATITUDE=${WEATHER_LATITUDE}
       - WEATHER_LONGITUDE=${WEATHER_LONGITUDE}
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      # The collector night estimate (#1735) reads the solar controller data.
+      - INFLUXDB_READ_USERNAME_FILE=/run/secrets/influxdb_read_user
+      - INFLUXDB_READ_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
       # Own retention policy with 520-week shards, created once (see docker/weather/CLAUDE.md).
       # History writes into the weekly autogen shards would make InfluxDB rewrite each old shard.

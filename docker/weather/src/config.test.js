@@ -3,6 +3,8 @@ const {loadConfig} = require('./config')
 const files = {
     '/run/secrets/user': 'writer\n',
     '/run/secrets/password': 'secret\n',
+    '/run/secrets/read_user': 'reader\n',
+    '/run/secrets/read_password': 'readsecret\n',
 }
 const readFile = (path) => {
     if (!(path in files)) throw new Error(`ENOENT: ${path}`)
@@ -15,6 +17,8 @@ const env = {
     INFLUXDB_DATABASE: 'homy',
     INFLUXDB_USERNAME_FILE: '/run/secrets/user',
     INFLUXDB_PASSWORD_FILE: '/run/secrets/password',
+    INFLUXDB_READ_USERNAME_FILE: '/run/secrets/read_user',
+    INFLUXDB_READ_PASSWORD_FILE: '/run/secrets/read_password',
 }
 
 describe('loadConfig', () => {
@@ -22,6 +26,7 @@ describe('loadConfig', () => {
         expect(loadConfig(env, readFile)).toEqual({
             location: {latitude: '12.35', longitude: '23.46'},
             influx: {url: 'http://influxdb:8086', token: 'writer:secret', org: '', bucket: 'homy/autogen'},
+            reader: {url: 'http://influxdb:8086', database: 'homy', username: 'reader', password: 'readsecret'},
         })
     })
 
@@ -32,7 +37,7 @@ describe('loadConfig', () => {
         expect(loadConfig(direct, readFile).influx).toMatchObject({token: 'u:p', bucket: 'homy/weekly'})
     })
 
-    test.each(['WEATHER_LATITUDE', 'WEATHER_LONGITUDE', 'INFLUXDB_URL', 'INFLUXDB_DATABASE', 'INFLUXDB_USERNAME_FILE'])(
+    test.each(['WEATHER_LATITUDE', 'WEATHER_LONGITUDE', 'INFLUXDB_URL', 'INFLUXDB_DATABASE', 'INFLUXDB_USERNAME_FILE', 'INFLUXDB_READ_USERNAME_FILE'])(
         'fails when %s is missing',
         (name) => {
             const partial = {...env}
