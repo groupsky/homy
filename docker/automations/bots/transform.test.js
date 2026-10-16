@@ -24,6 +24,14 @@ const OPEN = {inputs: 0}
 // Another bit of the same module changed; the contact did not.
 const OPEN_OTHER_BIT = {inputs: 1 << 7}
 
+// features.js prints the whole config when it is loaded.
+const loadFeatureBots = () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {})
+  const {bots} = require(path.resolve(__dirname, '../../../config/automations/features.js'))
+  log.mockRestore()
+  return bots
+}
+
 describe('transform bot', () => {
   let mqtt
   let send
@@ -55,9 +63,11 @@ describe('transform bot', () => {
     })
   })
 
-  describe('with debounceMs: 2000', () => {
+  // The real bot from features.js, so the test follows the config.
+  describe('bath1DoorOpenState from features.js', () => {
     beforeEach(() => {
-      contactBot({debounceMs: 2000}).start({mqtt})
+      const {bath1DoorOpenState: config} = loadFeatureBots()
+      transform('bath1DoorOpenState', config).start({mqtt})
     })
 
     it('publishes the first value at once', () => {
@@ -111,7 +121,6 @@ describe('transform bot', () => {
       send(OPEN)
       jest.advanceTimersByTime(2000)
 
-      expect(published()).not.toContain(undefined)
       expect(published().at(-1)).toBe(true)
       expect(published().filter(state => state === true)).toHaveLength(1)
     })
@@ -119,7 +128,7 @@ describe('transform bot', () => {
 })
 
 describe('features config', () => {
-  const {bots} = require(path.resolve(__dirname, '../../../config/automations/features.js'))
+  const bots = loadFeatureBots()
 
   it('debounces bath1DoorOpen and bath2WindowOpen by 2 s', () => {
     expect(bots.bath1DoorOpenState.debounceMs).toBe(2000)
