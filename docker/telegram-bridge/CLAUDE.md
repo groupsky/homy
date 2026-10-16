@@ -51,6 +51,18 @@ A JSON object body may add `"safety": true` to ring during the quiet hours (see 
 }
 ```
 
+### GET /health
+Health check endpoint returns service status.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "telegram-bridge", 
+  "timestamp": "2023-..."
+}
+```
+
 ## Quiet hours
 
 From **23:00 to 07:00** on the `Europe/Sofia` wall clock, the bridge sends every message with
@@ -79,21 +91,13 @@ the `ioniq-dtc` bot. There is no UPS alert yet; a future UPS low-battery alert m
 reloads its provisioning on restart). Then update the table above. The window and the time zone are
 constants in `src/quiet-hours.js`.
 
+A DatasourceNoData or DatasourceError alert keeps the labels of its rule, so it rings for a labelled
+rule. A Grafana "test contact point" message has no safety label, so it is silent at night unless
+`safety=true` is added in the test dialog.
+
 Grafana has no part in the timing. Grafana 9.5 cannot send a webhook silently, and a mute timing
 would hold notifications back: a "done" alert that fires and clears inside the night would never be
 sent.
-
-### GET /health
-Health check endpoint returns service status.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "service": "telegram-bridge", 
-  "timestamp": "2023-..."
-}
-```
 
 ## Message Processing
 

@@ -75,6 +75,7 @@ describe('quiet hours delivery', () => {
     now = NIGHT
     const body = await post({ message: 'Safety test', safety: true })
     expect(body.disable_notification).toBe(false)
+    expect(sentLine().silent).toBe(false)
   })
 
   test('a non-safety alert in the day rings', async () => {
