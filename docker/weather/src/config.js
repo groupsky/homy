@@ -36,7 +36,7 @@ function loadConfig(env, readFile) {
             org: '',
             bucket: `${database}/${env.INFLUXDB_RP || 'autogen'}`,
         },
-        reader: {url, database, username: readUsername, password: readPassword},
+        reader: {url, database, token: `${readUsername}:${readPassword}`},
     }
 }
 

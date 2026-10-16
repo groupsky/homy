@@ -26,7 +26,7 @@ describe('loadConfig', () => {
         expect(loadConfig(env, readFile)).toEqual({
             location: {latitude: '12.35', longitude: '23.46'},
             influx: {url: 'http://influxdb:8086', token: 'writer:secret', org: '', bucket: 'homy/autogen'},
-            reader: {url: 'http://influxdb:8086', database: 'homy', username: 'reader', password: 'readsecret'},
+            reader: {url: 'http://influxdb:8086', database: 'homy', token: 'reader:readsecret'},
         })
     })
 
