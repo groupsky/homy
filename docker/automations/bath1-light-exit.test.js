@@ -6,9 +6,9 @@ const path = require('path')
  * debounced door contact from config/automations/features.js feed
  * lightBath1Controller from config/automations/config.js through a fake broker.
  *
- * The door contact is debounced for 2 s (#1742), so a person who unlocks, opens
- * the door and presses the wall switch can press it before the "door opened"
- * event arrives. The light must still end off (#1792).
+ * The door contact is debounced for 2 s (#1742), so a person who opens or
+ * closes the door and presses the wall switch can press it before the door
+ * event arrives. The light must still end off (#1792, #1794).
  */
 
 const configDir = path.resolve(__dirname, '../../config/automations')
@@ -81,6 +81,23 @@ describe('bath1 light with the debounced door contact', () => {
     reading(CLOSED) // unlocked, door still closed
     jest.advanceTimersByTime(700)
     reading(0) // door opened; its event reaches the controller 2 s later
+    jest.advanceTimersByTime(1400)
+    const commandsBefore = broker.lightCommands.length
+    press()
+
+    jest.advanceTimersByTime(10000)
+    expect(broker.lightOn).toBe(false)
+    expect(broker.lightCommands.slice(commandsBefore)).toEqual([{ state: false, r: 'tgl-lon' }])
+  })
+
+  test('leaving: close the door, press the wall switch 1.4 s later; the light ends off', () => {
+    reading(CLOSED)
+    jest.advanceTimersByTime(4 * 60000) // the closed timeout turns the light off and clears the first unlocked timer
+    reading(0) // the door opens and stays open
+    jest.advanceTimersByTime(30000)
+    expect(broker.lightOn).toBe(true)
+
+    reading(CLOSED) // door closed; its event reaches the controller 2 s later
     jest.advanceTimersByTime(1400)
     const commandsBefore = broker.lightCommands.length
     press()

@@ -10,7 +10,7 @@
  *     opened: number,
  *     toggled: number,
  *     unlocked: number,
- *     toggledOff?: number,   // a door-open this soon after a wall-switch off does not turn the lights on
+ *     toggledOff?: number,   // a door change this soon after a wall-switch off does not turn the lights on
  * }} [timeouts]
  * @param {{
  *     verification: number,    // timeout for command verification (default: 0 = disabled)
@@ -171,6 +171,12 @@ module.exports = (name, {
 
             executeCommand()
         }
+
+        // Someone turned the lights off with the wall switch and is leaving. A
+        // debounced door contact reports the door opening or closing late, after
+        // the press, so that door event must not turn the lights on again.
+        const toggledOffRecently = () =>
+            timeouts?.toggledOff && Date.now() - toggledOffAt < timeouts.toggledOff
 
         const cancelTimers = () => {
             if (closedTimer) {
@@ -357,10 +363,7 @@ module.exports = (name, {
                         }
                         clearTimeout(unlockedTimer)
                         unlockedTimer = null
-                    } else if (timeouts?.toggledOff && Date.now() - toggledOffAt < timeouts.toggledOff) {
-                        // Someone turned the lights off with the wall switch and is
-                        // leaving. A debounced door contact reports the opening late,
-                        // after the press, so this event must not turn them on again.
+                    } else if (toggledOffRecently()) {
                         if (verbose) {
                             console.log(`[${name}] keeping lights off, the wall switch turned them off ${Date.now() - toggledOffAt}ms ago`)
                         }
@@ -384,6 +387,11 @@ module.exports = (name, {
                                 openedTimer = null
                             }, timeouts.opened)
                         }
+                    }
+                } else if (toggledOffRecently()) {
+                    // Door closed right after a wall-switch off
+                    if (verbose) {
+                        console.log(`[${name}] keeping lights off, the wall switch turned them off ${Date.now() - toggledOffAt}ms ago`)
                     }
                 } else {
                     // Door closed
