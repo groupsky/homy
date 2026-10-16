@@ -20,8 +20,9 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
    - **Data**: 3-phase power, voltage, current, frequency measurements
    - **Ended at the move to ya-modbus** (#1759): the old reader wrote these
      points itself, and the ya-modbus adapter does not write InfluxDB.
-     Nothing read them (the live Grafana was checked on 2026-10-15). The raw
-     readings stay in the NDJSON day files. The per-phase `v`/`c`/`p` of the
+     Nothing read them (the live Grafana was checked on 2026-10-15). The
+     points written before the move stay in InfluxDB, and new raw readings
+     go to the NDJSON day files. The per-phase `v`/`c`/`p` of the
      mains stay in `current_power` (from `mqtt-influx-primary`).
 
 2. **modbus-serial-secondary** → `secondary` measurement
@@ -120,7 +121,7 @@ so far). **For energy, use counter differences**, not the integral of `p`: `raw.
 for the pump and microwave, and `raw.total_import_kwh` for `main`. (`power_meter.total`
 for `main` is written twice per reading, first `total_kwh` and then `total_import_kwh`;
 the second write wins, so it equals the import counter.) Since `main` moved to
-ya-modbus (#1759), `raw` has no `main` points: use `power_meter.total` from then on.
+ya-modbus (#1759), `raw` gets no new `main` points: use `power_meter.total` from then on.
 
 **Mains identification**: the whole-house grid meter is `bus = primary`,
 `device.name = main` (SDM630), publishing per-phase `v`/`c`/`p` tagged
@@ -168,8 +169,8 @@ it recordable.
 power and metering history — impossible before 2026-09-02, when nothing from
 the mesh reached InfluxDB at all.
 
-#### `raw` Measurement (from modbus-serial-main and modbus-serial-secondary)
-**Source**: the main and secondary Modbus readers write every numeric field of each reading
+#### `raw` Measurement (from modbus-serial-secondary; modbus-serial-main until #1759)
+**Source**: the secondary Modbus reader (and the main one until the move to ya-modbus, #1759) writes every numeric field of each reading
 **Tag Structure**: `bus: "primary" | "secondary"`, `device.name: [device_name]`
 **Note**: Data appears in `raw` measurement, not `secondary` as originally documented
 **Note**: `raw` with `bus: "primary"` (the `main` bus) ended when `main` moved to
