@@ -49,7 +49,7 @@ utility_meter: !include configuration/utility_meters.yaml
 
 switch:
   - platform: broadlink
-    mac: B4:43:0D:B6:02:E2
+    mac: !secret broadlink_mac
     switches:
       - name: living_tv
         command_on: JgCMAJOSEzYTNxI3EhISEhMSFBAUERM2EjcUNRISExMSERMSFBATEhM4ERMSERMTERMSEhISEzYTEhM2EzYSNxQ2EjYTNxIABf2UkhE3FDUTNxIRFRATEhMRExETNxQ1EzcRExITERMSEhISExMSNhYOExMVDhMSExISEhM3ExETNhU0EzcRNxM2EzcTAA0FAAAAAAAAAAAAAAAA
