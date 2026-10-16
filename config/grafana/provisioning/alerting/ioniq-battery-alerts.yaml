@@ -4,7 +4,8 @@ groups:
   - orgId: 1
     name: Ioniq Battery Alerts
     folder: Ioniq EV
-    interval: 1m
+    # Evaluated every 5m: HV isolation and pack temperature are safety alerts, so this group stays fast (#1746).
+    interval: 5m
     rules:
       - uid: ioniq-isolation-low
         title: "🚗 Ioniq HV Isolation Low"
@@ -111,7 +112,7 @@ groups:
               expression: cmin
         noDataState: OK
         execErrState: OK
-        for: 1m
+        for: 5m
         labels: { severity: warning, device: ioniq, subsystem: battery }
         annotations:
           summary: "🚗 Minimum cell voltage below 3.0 V"
@@ -148,7 +149,7 @@ groups:
               expression: cmin
         noDataState: OK
         execErrState: OK
-        for: 1m
+        for: 5m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
           summary: "🚗 Minimum cell voltage below 2.5 V"
@@ -185,7 +186,7 @@ groups:
               expression: cmax
         noDataState: OK
         execErrState: OK
-        for: 1m
+        for: 5m
         labels: { severity: critical, device: ioniq, subsystem: battery }
         annotations:
           summary: "🚗 Maximum cell voltage above 4.15 V"

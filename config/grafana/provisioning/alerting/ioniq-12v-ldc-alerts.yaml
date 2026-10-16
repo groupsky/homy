@@ -4,7 +4,8 @@ groups:
   - orgId: 1
     name: Ioniq 12V LDC Alerts
     folder: Ioniq EV
-    interval: 1m
+    # Evaluated every 5m: 12V not charging drains the battery over hours; 5 min is soon enough (#1746).
+    interval: 5m
     rules:
       - uid: ioniq-ldc-not-charging
         title: "🚗 Ioniq LDC Not Charging"
@@ -37,7 +38,7 @@ groups:
               expression: ldc
         noDataState: OK
         execErrState: OK
-        for: 60s
+        for: 5m
         labels: { severity: warning, device: ioniq, subsystem: 12v }
         annotations:
           summary: "🚗 12V LDC not charging"

@@ -106,7 +106,8 @@ groups:
   - orgId: 1
     name: Ioniq TPMS Alerts
     folder: Ioniq EV
-    interval: 1m
+    # Evaluated every 15m: one cold-start reading a morning, 6h and 7d look-backs (#1746).
+    interval: 15m
     rules:
       - uid: ioniq-tpms-fl-psi-low
         title: "🚗 Ioniq Tyre Low — FL"
@@ -256,7 +257,7 @@ groups:
         # an artefact that a corrective frame overwrites within 10 min (all three
         # historical cases), but not one that is the last value published before
         # the car sleeps.
-        for: 10m
+        for: 15m
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FL (front-left) tyre running hot vs the other wheels"
@@ -410,7 +411,7 @@ groups:
         # an artefact that a corrective frame overwrites within 10 min (all three
         # historical cases), but not one that is the last value published before
         # the car sleeps.
-        for: 10m
+        for: 15m
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 FR (front-right) tyre running hot vs the other wheels"
@@ -564,7 +565,7 @@ groups:
         # an artefact that a corrective frame overwrites within 10 min (all three
         # historical cases), but not one that is the last value published before
         # the car sleeps.
-        for: 10m
+        for: 15m
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RL (rear-left) tyre running hot vs the other wheels"
@@ -718,7 +719,7 @@ groups:
         # an artefact that a corrective frame overwrites within 10 min (all three
         # historical cases), but not one that is the last value published before
         # the car sleeps.
-        for: 10m
+        for: 15m
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
         annotations:
           summary: "🚗 RR (rear-right) tyre running hot vs the other wheels"
