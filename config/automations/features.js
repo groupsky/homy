@@ -55,7 +55,9 @@ const cmd = (
       'from_state',
       ...transform.filter(Boolean)
     ],
-    output: { name: 'outputs/mqtt', params: { topic: outputTopic, retain: true } }
+    // Not retained: the broker would hand the last command to every new
+    // subscriber, and a reader start would apply it again (#1708).
+    output: { name: 'outputs/mqtt', params: { topic: outputTopic } }
   },
 })
 
