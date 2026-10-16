@@ -16,10 +16,10 @@ async function backfill({location, fetchJson, writePoints, log, model, startDate
 
 const STEP_DAYS = 30
 
-// Builds the collector estimate for a date range (both days included), 30 days
+// Builds a local estimate for a date range (both days included), 30 days
 // per step, up to the current hour. `pauseMs` between steps keeps the load on
 // InfluxDB low.
-async function backfillEstimate({estimateHours, writePoints, log, startDate, endDate, nowSec, pauseMs = 0}) {
+async function backfillEstimate({estimateHours, writePoints, log, startDate, endDate, nowSec, pauseMs = 0, label = 'estimate'}) {
     const start = parseDate(startDate).getTime() / 1000
     const end = Math.min(parseDate(endDate).getTime() / 1000 + 86400, Math.floor(nowSec / 3600) * 3600)
     let total = 0
@@ -30,9 +30,17 @@ async function backfillEstimate({estimateHours, writePoints, log, startDate, end
         await writePoints(points)
         total += points.length
         const valid = points.filter(p => p.booleans && p.booleans.valid).length
-        log.info(`collector ${new Date(from * 1000).toISOString().slice(0, 10)} to ${new Date(to * 1000).toISOString().slice(0, 10)}: wrote ${points.length} hours (${valid} valid)`)
+        log.info(`${label} ${new Date(from * 1000).toISOString().slice(0, 10)} to ${new Date(to * 1000).toISOString().slice(0, 10)}: wrote ${points.length} hours (${valid} valid)`)
     }
     return total
 }
 
-module.exports = {backfill, backfillEstimate}
+// Picks the estimator factory for a source name given on the command line.
+function pickEstimator(factories, source) {
+    if (typeof source !== 'string' || !Object.hasOwn(factories, source)) {
+        throw new Error(`Unknown source: ${source}; expected one of ${Object.keys(factories).join(', ')}`)
+    }
+    return factories[source]
+}
+
+module.exports = {backfill, backfillEstimate, pickEstimator}

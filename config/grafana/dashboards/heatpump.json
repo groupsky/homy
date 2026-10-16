@@ -2294,7 +2294,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Outdoor temperature next to the rooms and the heat pump. The outdoor values are model data for a grid cell, not a sensor at the house. The collector line is the solar collector probe at night, valid hours only (#1735). Weather data by Open-Meteo.com (CC BY 4.0).",
+      "description": "Outdoor temperature next to the rooms and the heat pump. The outdoor values are model data for a grid cell, not a sensor at the house. The collector line is the solar collector probe at night, valid hours only (#1735). The mower line is the docked, idle mower battery, valid hours only and not corrected: it reads a few degrees above the air (#1736). Weather data by Open-Meteo.com (CC BY 4.0).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2364,6 +2364,18 @@
             "matcher": {
               "id": "byName",
               "options": "Outdoor, collector at night"
+            },
+            "properties": [
+              {
+                "id": "custom.spanNulls",
+                "value": 7200000
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outdoor, mower battery (raw)"
             },
             "properties": [
               {
@@ -2448,6 +2460,17 @@
           "refId": "F",
           "resultFormat": "time_series",
           "alias": "Outdoor, collector at night"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT mean(\"temperature\") FROM \"weather\".\"weather\" WHERE \"source\" = 'mower' AND \"valid\" = true AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "G",
+          "resultFormat": "time_series",
+          "alias": "Outdoor, mower battery (raw)"
         },
         {
           "datasource": {

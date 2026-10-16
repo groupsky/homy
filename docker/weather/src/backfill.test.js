@@ -90,3 +90,16 @@ describe('backfillEstimate', () => {
         })).rejects.toThrow('Not a date')
     })
 })
+
+describe('pickEstimator', () => {
+    const {pickEstimator} = require('./backfill')
+    const factories = {collector: () => 'c', mower: () => 'm'}
+
+    test('returns the factory for a known source', () => {
+        expect(pickEstimator(factories, 'mower')()).toBe('m')
+    })
+
+    test.each([undefined, 'nope', 'toString', '__proto__'])('rejects %p', (source) => {
+        expect(() => pickEstimator(factories, source)).toThrow('Unknown source')
+    })
+})

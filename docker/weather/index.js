@@ -9,6 +9,7 @@ const {fetchJson} = require('./src/fetch-json')
 const {createPoller, msUntilNextRun} = require('./src/poller')
 const {createReader} = require('./src/influx-query')
 const {createEstimator} = require('./src/collector')
+const {createMowerEstimator} = require('./src/mower')
 
 let config
 try {
@@ -19,7 +20,17 @@ try {
 }
 
 const writer = createWriter(config.influx)
-const {estimateHours} = createEstimator({query: createReader(config.reader).query, location: config.location})
+const {query} = createReader(config.reader)
+const collector = createEstimator({query, location: config.location})
+const mower = createMowerEstimator({query})
+// Local outdoor estimates: the solar collector at night (#1735) and the docked mower battery (#1736).
+// An error names its source; the poller then retries both.
+const named = (name, estimator) => (from, to) => estimator.estimateHours(from, to).catch((error) => {
+    throw new Error(`${name}: ${error.message}`)
+})
+const collectorHours = named('collector', collector)
+const mowerHours = named('mower', mower)
+const estimateHours = async (from, to) => [...await collectorHours(from, to), ...await mowerHours(from, to)]
 const poller = createPoller({
     location: config.location,
     fetchJson,

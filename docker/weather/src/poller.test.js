@@ -151,7 +151,7 @@ describe('collector estimate', () => {
     test('a failed estimate is logged and the same hours are tried on the next poll', async () => {
         const s = setupEstimate({fail: true})
         await s.poller.pollOnce(t0 + 2 * 60)
-        expect(s.log.error).toHaveBeenCalledWith(expect.stringContaining('influx read failed'))
+        expect(s.log.error).toHaveBeenCalledWith(expect.stringContaining('Estimate failed: influx read failed'))
         await s.poller.pollOnce(t0 + 17 * 60)
         expect(s.estimateHours).toHaveBeenCalledTimes(2)
         expect(s.estimateHours).toHaveBeenLastCalledWith(t0 - 48 * hour, t0)
