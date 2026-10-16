@@ -3,12 +3,14 @@ import debug from 'debug'
 import { extractMessageFromWebhook } from './message-utils.js'
 import { sendToTelegram } from './telegram.js'
 import { logSent, normalizeSource, DEFAULT_SOURCE } from './sent-log.js'
+import { sendSilently } from './quiet-hours.js'
 
 // Create debug instances for server operations
 const debugServer = debug('telegram-bridge:server')
 const debugTelegram = debug('telegram-bridge:telegram')
 
-export function createTelegramBridgeServer(botToken, chatId) {
+// `now` is the clock for the quiet hours; tests pass a fixed one.
+export function createTelegramBridgeServer(botToken, chatId, { now = () => new Date() } = {}) {
   return http.createServer(async (req, res) => {
     // Set CORS headers for any potential browser requests
     res.setHeader('Access-Control-Allow-Origin', '*')
@@ -41,7 +43,7 @@ export function createTelegramBridgeServer(botToken, chatId) {
     }
     if (req.method === 'POST' && url.pathname === '/webhook') {
       debugServer('Webhook POST request received')
-      await handleWebhook(req, res, botToken, chatId, url.searchParams.get('source'))
+      await handleWebhook(req, res, botToken, chatId, url.searchParams.get('source'), now)
       return
     }
 
@@ -51,7 +53,7 @@ export function createTelegramBridgeServer(botToken, chatId) {
   })
 }
 
-async function handleWebhook(req, res, botToken, chatId, querySource) {
+async function handleWebhook(req, res, botToken, chatId, querySource, now) {
   try {
     // Read the webhook payload
     let body = ''
@@ -84,12 +86,13 @@ async function handleWebhook(req, res, botToken, chatId, querySource) {
 
     // Send to Telegram
     debugTelegram('Sending message to Telegram: %s', messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''))
-    const telegramResult = await sendToTelegram(messageText, botToken, chatId)
+    const silent = sendSilently(webhookData, now())
+    const telegramResult = await sendToTelegram(messageText, botToken, chatId, { silent })
 
     // Callers name themselves with a `source` field in a JSON object body, or a
     // ?source= query parameter; the bridge's default is Grafana.
     const bodySource = webhookData && typeof webhookData === 'object' ? webhookData.source : undefined
-    logSent({ text: messageText, source: normalizeSource(bodySource) !== DEFAULT_SOURCE ? bodySource : querySource, result: telegramResult, botToken })
+    logSent({ text: messageText, source: normalizeSource(bodySource) !== DEFAULT_SOURCE ? bodySource : querySource, silent, result: telegramResult, botToken })
 
     if (telegramResult.success) {
       console.log('✅ Message sent to Telegram successfully')

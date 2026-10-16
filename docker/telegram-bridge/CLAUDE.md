@@ -40,6 +40,8 @@ Receives webhook payloads and forwards them to Telegram.
 - Text field object: `{"text": "text"}`
 - Raw string
 
+A JSON object body may add `"safety": true` to ring during the quiet hours (see [Quiet hours](#quiet-hours)).
+
 **Response:**
 ```json
 {
@@ -48,6 +50,38 @@ Receives webhook payloads and forwards them to Telegram.
   "telegramResponse": { ... }
 }
 ```
+
+## Quiet hours
+
+From **23:00 to 07:00** on the `Europe/Sofia` wall clock, the bridge sends every message with
+Telegram's `disable_notification`, so it arrives without sound. Nothing is dropped or delayed.
+Safety messages still ring (issue #1744). The window follows the local clock across the clock changes.
+
+A message is a **safety message** when:
+- any alert in a Grafana webhook has the label `safety: "true"` (firing or resolved), or
+- a JSON object body has `"safety": true` (for direct senders).
+
+The safety label is set on these rules in `config/grafana/provisioning/alerting/`:
+
+| Kind | Rules |
+|---|---|
+| Power outage | Total Power Outage, Phase Power Loss |
+| Boiler | Boiler Overheating Critical (85 °C; the tank has no mixing valve, so it is a scald risk) |
+| Heat pump | Термопомпа опасност от замръзване (freeze danger) |
+| Car tyres | Ioniq Tyre Low, Critical, Over-inflated and Hot (each wheel), Tyre Pressure Spread High |
+| Car HV battery | Ioniq HV Isolation Low and Critical, Pack Temperature Critical |
+
+Everything else is silent at night, for example the dishwasher and washing machine reminders, the
+mower, the other boiler alerts, Main Power (over 10 kW use), AC voltage, the other Ioniq alerts and
+the `ioniq-dtc` bot. There is no UPS alert yet; a future UPS low-battery alert must carry the label.
+
+**To change the list**, add or remove `safety: "true"` in the rule's `labels` and deploy (Grafana
+reloads its provisioning on restart). Then update the table above. The window and the time zone are
+constants in `src/quiet-hours.js`.
+
+Grafana has no part in the timing. Grafana 9.5 cannot send a webhook silently, and a mute timing
+would hold notifications back: a "done" alert that fires and clears inside the night would never be
+sent.
 
 ### GET /health
 Health check endpoint returns service status.
@@ -115,6 +149,7 @@ docker/telegram-bridge/
 │   ├── telegram.js            # Telegram API client
 │   ├── secrets.js             # Configuration loading
 │   ├── message-utils.js       # Message processing
+│   ├── quiet-hours.js         # Silent delivery at night, safety messages
 │   └── message-utils.test.js  # Unit tests for message utils
 ├── jest.config.js             # Jest configuration
 ├── package.json               # Dependencies and scripts
@@ -230,10 +265,11 @@ The service provides structured console logging with emojis for visual parsing:
 Every Bot API call writes one JSON line to stdout (`docker logs telegram-bridge`), for successes and failures, with the full text. The Bot API cannot list what a bot sent, so this is the only history:
 
 ```json
-{"event":"telegram.sent","sender":"telegram-bridge","source":"grafana","origin_host":"routy","ok":true,"message_id":4711,"error":null,"text":"<full text as sent>"}
+{"event":"telegram.sent","sender":"telegram-bridge","source":"grafana","origin_host":"routy","silent":false,"ok":true,"message_id":4711,"error":null,"text":"<full text as sent>"}
 ```
 
 - `source` is what asked for the message: a `source` string in the JSON body, or a `?source=` query parameter; default `grafana`. The `ioniq-dtc` bot sends `source: "ioniq-dtc"`.
+- `silent` is true when the message was sent without sound ([Quiet hours](#quiet-hours)).
 - `error` is the Bot API `description`, or the transport error. No chat id, and the bot token is stripped from errors.
 - Code: `src/sent-log.js`. Search: `docker logs telegram-bridge | grep '"event":"telegram.sent"'`.
 

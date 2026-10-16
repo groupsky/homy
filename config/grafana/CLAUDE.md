@@ -146,6 +146,9 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
 **Alert Rule Organization:**
 - Group related alerts in single YAML files (e.g., `sunseeker-alerts.yaml`)
 - Use descriptive alert names and labels
+- A rule that must ring at night carries the label `safety: "true"`; all other messages arrive
+  without sound from 23:00 to 07:00. The list and the reasons are in `docker/telegram-bridge/CLAUDE.md`
+  ("Quiet hours")
 - Include recovery conditions for all alerts
 
 **Supported `classic_conditions` evaluators:**

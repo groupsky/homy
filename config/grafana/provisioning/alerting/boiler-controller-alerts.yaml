@@ -64,6 +64,7 @@ groups:
           summary: "🔥 Boiler Temperature Critical"
           description: "Boiler top temperature is above 85°C for more than 2 minutes. This may indicate safety system failure or excessive heating demand."
         labels:
+          safety: "true"
           severity: critical
           system: boiler
           component: temperature

@@ -1,4 +1,5 @@
-export async function sendToTelegram(message, botToken, chatId) {
+// `silent` sends the message without sound (Telegram's disable_notification).
+export async function sendToTelegram(message, botToken, chatId, { silent = false } = {}) {
   try {
     const telegramApiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`
 
@@ -10,7 +11,8 @@ export async function sendToTelegram(message, botToken, chatId) {
       body: JSON.stringify({
         chat_id: chatId,
         text: message,
-        parse_mode: 'HTML'
+        parse_mode: 'HTML',
+        disable_notification: silent
       })
     })
 

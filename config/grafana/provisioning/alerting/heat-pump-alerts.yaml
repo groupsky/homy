@@ -224,6 +224,7 @@ groups:
           summary: "🥶 Опасност от замръзване"
           description: "Външната температура на термопомпата (s2Temp на heatpump-ctrl) е под 5 °C средно за 5 минути."
         labels:
+          safety: "true"
           rule_uid: webhook-RJcnSop4z
           alert_type: webhook
 
