@@ -92,7 +92,7 @@ describe('bath1 light with the debounced door contact', () => {
 
   test('leaving: close the door, press the wall switch 1.4 s later; the light ends off', () => {
     reading(CLOSED)
-    jest.advanceTimersByTime(4 * 60000) // past the unlocked timeout of the first lock state
+    jest.advanceTimersByTime(4 * 60000) // the closed timeout turns the light off and clears the first unlocked timer
     reading(0) // the door opens and stays open
     jest.advanceTimersByTime(30000)
     expect(broker.lightOn).toBe(true)
