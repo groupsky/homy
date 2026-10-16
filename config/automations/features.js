@@ -7,6 +7,7 @@ const prefix = process.env.TOPIC_PREFIX || 'homy/features'
  * @param {string} inputTopic
  * @param {Array<string|object>} transform
  * @param {string} outputTopic
+ * @param {number} [debounceMs] a new value is published only after it stayed the same this long; 0 is off
  * @return {Object}
  */
 const state = (
@@ -15,10 +16,12 @@ const state = (
     input: { topic: inputTopic },
     transform,
     output: { topic: outputTopic },
+    debounceMs = 0,
   }
 ) => ({
   [`${name}State`]: {
     type: 'transform',
+    ...(debounceMs > 0 && { debounceMs }),
     input: { name: 'inputs/mqtt', params: { topic: inputTopic } },
     transform: [
       ...transform,
@@ -64,6 +67,7 @@ const cmd = (
  * @param {number} bit
  * @param {boolean} invert
  * @param {string} topic
+ * @param {number} [debounceMs] ignore changes shorter than this; 0 is off
  * @return {Object}
  */
 const drySwitch = (
@@ -73,10 +77,12 @@ const drySwitch = (
     device,
     bit,
     invert = false,
-    topic
+    topic,
+    debounceMs = 0,
   }
 ) => state({
   name,
+  debounceMs,
   input: { topic: `/modbus/${bus}/${device}/reading` },
   transform: [
     { name: 'get_object_key', params: { key: 'inputs' } },
@@ -304,6 +310,8 @@ const config = {
       bit: 6,
       invert: true,
       topic: 'open/bath1_door_open',
+      // The contact chatters; each bounce switched the bath1 light (#1742)
+      debounceMs: 2000,
     }),
     ...drySwitch({
       name: 'cabinetDoorLock',
@@ -436,7 +444,9 @@ const config = {
       device: 'mbsl32di1',
       bit: 25,
       invert: true,
-      topic: 'open/bath2_window_open'
+      topic: 'open/bath2_window_open',
+      // Short "open" episodes, likely wind or a loose magnet (#1742)
+      debounceMs: 2000,
     }),
     ...drySwitch({
       name: 'bedroomExternalDoorOpen',
