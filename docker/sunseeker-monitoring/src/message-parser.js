@@ -270,8 +270,8 @@ export class SunseekerMessageParser {
       data.max_cell_voltage = millivolts / 1000; // Convert to volts
     }
 
-    // Extract temperature
-    const tempMatch = logText.match(/temp=(\d+)/);
+    // Extract temperature. Below 0 °C the firmware prints a minus sign (temp=-3).
+    const tempMatch = logText.match(/temp=(-?\d+)/);
     if (tempMatch) {
       data.temperature = parseInt(tempMatch[1], 10);
     }

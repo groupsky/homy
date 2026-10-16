@@ -2,7 +2,7 @@
 // - current values on every poll;
 // - the 48-hour forecast once per hour (the first poll that succeeds in it);
 // - the last 14 days of history once per UTC day, from each history model;
-// - the collector night estimate once per hour (#1735). It redoes the last 3
+// - the local estimates (collector #1735, mower #1736) once per hour. It redoes the last 3
 //   hours, so readings that reached InfluxDB late are counted, and the last 48
 //   hours on start. The same points are overwritten.
 // A failed step is logged and tried again on the next poll. A missed poll is
@@ -66,7 +66,7 @@ function createPoller({location, fetchJson, writePoints, log = console, estimate
         await writePoints(points)
         estimatedUntil = hour
         const valid = points.filter(p => p.booleans && p.booleans.valid).length
-        log.info(`Wrote ${points.length} collector estimate hours (${valid} valid)`)
+        log.info(`Wrote ${points.length} estimate points (${valid} valid)`)
     }
 
     async function pollOnce(nowSec) {
@@ -86,7 +86,7 @@ function createPoller({location, fetchJson, writePoints, log = console, estimate
             try {
                 await estimate(nowSec)
             } catch (error) {
-                log.error(`Collector estimate failed: ${error.message}`)
+                log.error(`Estimate failed: ${error.message}`)
             }
         }
     }

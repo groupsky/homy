@@ -470,6 +470,21 @@ describe('SunseekerMessageParser', () => {
       expect(batteryPoint.fields.voltage).toBe(20.096);
     });
 
+    it('should keep a temperature below zero as a negative number (#1736)', () => {
+      const topic = TEST_TOPICS.DEVICE_UPDATE;
+      const payload = '{"cmd":509,"lv":3,"log":"I/waiting [Sun Jan 11 04:12:43 2026] (856)bat vol=20096mV, percent=97,min=3974mV,max=3980mV,temp=-3\\n"}';
+
+      const result = parser.parseMessage(topic, payload);
+
+      const batteryPoint = result.find(p => p.measurement === 'sunseeker_battery_detail');
+      expect(batteryPoint.fields.temperature).toBe(-3);
+      expect(batteryPoint.tags.temp_alert).toBe('low');
+    });
+
+    it('should not read a dash after temp= without digits as a temperature', () => {
+      expect(parser._extractLogData('I/waiting bat vol=20096mV, temp=-').temperature).toBeUndefined();
+    });
+
     it('should tag low temperature alerts and include volt conversion', () => {
       const topic = TEST_TOPICS.DEVICE_UPDATE;
       const payload = '{"cmd":509,"lv":3,"log":"I/waiting [Sun Aug 24 19:12:43 2025] (856)bat vol=20096mV, percent=97,temp=5\\n"}';

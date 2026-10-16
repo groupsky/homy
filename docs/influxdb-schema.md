@@ -512,18 +512,19 @@ trade-off of both firing for one real outage.
 
 #### `weather` Measurement
 **Source**: `weather` service → Open-Meteo (model data for the grid cell of the house, not a sensor),
-and the collector night estimate built from the `xymd1` solar controller data (`source=collector`, #1735).
+the collector night estimate built from the `xymd1` solar controller data (`source=collector`, #1735),
+and the docked mower battery estimate built from the `sunseeker_*` data (`source=mower`, #1736).
 **Retention policy**: `weather` (infinite, 520-week shards), not `autogen`, so a history load does not
 rewrite the old weekly shards. Queries must name it: `FROM "weather"."weather"`.
 Written at second precision, all times UTC.
 
 **Tags**:
-- `source`: `open-meteo`, or `collector` for the night estimate from the solar collector probe
+- `source`: `open-meteo`, `collector` for the night estimate from the solar collector probe, or `mower` for the docked mower battery
 - `kind`:
   - `current`: the current values, in 15-minute steps, one point per poll. A missed poll is a gap; it is never filled in later.
   - `forecast`: the next 48 hours, written once per hour.
   - `history`: past hourly values of one named model, refreshed for the last 14 days once a day.
-  - `estimate` (`source=collector` only): one point per UTC hour, valid only at night with the solar pump off. Rules and reasons: `docker/weather/CLAUDE.md`.
+  - `estimate` (`source=collector` or `mower`): one point per UTC hour with `valid` and `reason`. The collector is valid only at night with the solar pump off; the mower only when docked and idle for 3 hours. Rules and reasons: `docker/weather/CLAUDE.md`.
 - `model`:
   - `best_match` (current and forecast: Open-Meteo picks the model);
   - `era5_seamless` (history: ERA5-Land temperature, humidity and dew point at about 11 km, with ERA5 cloud cover, rain, wind and sun at about 25 km; about 5 days behind);
@@ -541,8 +542,8 @@ Written at second precision, all times UTC.
 | `wind_speed` | m/s | at 10 m |
 | `shortwave_radiation` | W/m² | mean over the interval before the timestamp |
 | `issued` | unix seconds (integer) | forecast only: the hour the forecast was fetched in |
-| `valid` | boolean | collector estimate only: true when the hour passes every rule |
-| `reason` | string | collector estimate only: `ok`, or the first rule that failed (`day`, `after_sunset`, `pump_on`, ...) |
+| `valid` | boolean | estimates only: true when the hour passes every rule |
+| `reason` | string | estimates only: `ok`, or the first rule that failed (`day`, `after_sunset`, `pump_on`, `not_docked`, ...) |
 
 A missing value is left out of the point, never written as 0.
 

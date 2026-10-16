@@ -21,8 +21,8 @@ One poll every 15 minutes (2 minutes after each quarter hour):
   - `ecmwf_ifs`: about 9 km, no delay. It covers the days ERA5 does not have yet. Hours
     after the time of the call are left out, because they are still forecast.
 
-- the **collector night estimate** (`source=collector`, `kind=estimate`) for each newly
-  completed hour, from local data only. See below.
+- the **local estimates** once per hour: the solar collector at night (`source=collector`)
+  and the docked mower battery (`source=mower`), both `kind=estimate`. See below.
 
 A failed call or write is logged and tried again on the next poll. The service never
 exits because Open-Meteo or InfluxDB is down.
@@ -48,7 +48,7 @@ Queries name the policy: `FROM "weather"."weather"`.
 |---|---|
 | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` | House location. Set them only in the real `.env`; they are private and are never committed or logged. The service rounds them to 2 decimals (about 1 km) before use. |
 | `INFLUXDB_URL`, `INFLUXDB_DATABASE`, `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | InfluxDB 1.x write user, as for the other writers. |
-| `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | InfluxDB read user, for the solar controller data of the collector estimate. |
+| `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | InfluxDB read user, for the solar controller and mower data of the local estimates. |
 | `INFLUXDB_RP` | Retention policy, `weather` in compose. Without it the service writes to `autogen`, which is fine only for a test database. |
 
 No API key is needed. The free service is for non-commercial use: 10,000 calls a day,
@@ -94,15 +94,48 @@ the outdoor air. It needs no internet. Each UTC hour gets one point in `weather`
 | `pump_recent` | the solar pump ran in the 60 minutes before the window |
 | `ok` | valid |
 
-The rules are `RULES` and `KNOWN_BAD` in `src/collector.js`. Under a clear, calm sky the
-collector reads below the air, because it radiates heat to the sky. That is not corrected;
-compare with `cloud_cover` from Open-Meteo. Once an hour the poller redoes the last 3
-hours, so readings that reached InfluxDB late still count. On start it redoes the last 48
-hours. Older hours are built once:
+The rules are `RULES` and `KNOWN_BAD` in `src/collector.js`.
+
+**Bias (decided in #1735: keep as is, no correction).** Against ECMWF IFS the collector reads
+about −1.2 °C on clear nights (cloud cover under 20 %) and about 0 °C on cloudy nights (over
+80 %), because under a clear sky it radiates heat to the sky. Over all nights it is −0.5 °C with
+a night-to-night spread of 1.6 °C. For the air temperature, join on `cloud_cover` at the same
+hour: offset ≈ −1.06 + 0.0122 × cloud %. It is one of three outdoor sources and can be dropped
+later if an outdoor sensor or the Open-Meteo data make it redundant.
+
+## Mower battery estimate (#1736)
+
+`sunseeker-monitoring` stores the mower battery temperature (whole °C, about every 5 minutes)
+in `sunseeker_battery_detail.temperature`, the mode in `sunseeker_mode.mode` and the dock state
+in `sunseeker_station.at_station`. Docked and idle, the battery follows the air near the dock,
+a few degrees warmer and about 2 hours late. Each UTC hour gets one point in `weather` with
+tags `source=mower`, `kind=estimate`, the same fields and the same ±30-minute window as the
+collector. The value is the raw battery temperature, not corrected. The data come through the
+vendor cloud, so they stop when the internet is down.
+
+| `reason` | Meaning |
+|---|---|
+| `no_data` | a quarter of the window has no battery reading |
+| `stored` | inside a period in `STORED` (the mower is stored indoors) |
+| `state_unknown` | no mode or dock message in the 10 hours before; they repeat about every 3 hours while idle |
+| `not_docked` | off the dock at some time in the window |
+| `charging` | mode 3 (charging) in the window |
+| `mowing` | any other mode than 0 (standby) in the window: mowing, going home, border |
+| `recent_activity` | not in standby for the whole 3 hours before the window |
+| `ok` | valid |
+
+The rules are `RULES` and `STORED` in `src/mower.js`. When the mower is put away for the
+winter while it still reports from a dock, add `{from: '<ISO UTC time>', to: null}` to `STORED`,
+and set `to` when it comes back.
+
+**Building the past.** Once an hour the poller redoes the last 3 hours of both estimates, so
+readings that reached InfluxDB late still count. On start it redoes the last 48 hours. Older
+hours are built once:
 
 ```bash
-docker exec homy-weather-1 node backfill-collector.js 2022-07-20
-# node backfill-collector.js <start> [end, default today]; 30 days per step, 5 s apart
+docker exec homy-weather-1 node backfill-estimate.js collector 2022-07-20
+docker exec homy-weather-1 node backfill-estimate.js mower 2025-08-26
+# node backfill-estimate.js <collector|mower> <start> [end, default today]; 30 days per step, 5 s apart
 ```
 
 ## Rules for automations that read it
@@ -114,8 +147,9 @@ docker exec homy-weather-1 node backfill-collector.js 2022-07-20
   - `current` older than 1 hour. The poller writes every 15 minutes.
   - a forecast whose `issued` is older than 3 hours.
 - When the data are missing or old, a bot falls back in this order:
-  1. the local estimate: the solar collector at night (`source=collector`, valid hours
-     only) and the mower battery while docked (#1736), once it exists;
+  1. the local estimates, valid hours only: the solar collector at night
+     (`source=collector`) and the docked mower battery (`source=mower`, which reads a few
+     degrees warm and needs the internet);
   2. the last value, held for up to 12 hours;
   3. a calendar average;
   4. its normal behaviour without weather data.
