@@ -51,10 +51,6 @@ module.exports = (name, {
       } else if (persistedCache.wasOn && payload.power === 'off' && allClosed) {
         mqtt.publish(writeTopic, { power: 'on' })
         persistedCache.wasOn = false
-      } else if (payload.power === 'on' && allClosed) {
-        // Someone turned it on while the contacts were closed: there is no
-        // switch-off of the bot's own left to undo.
-        persistedCache.wasOn = false
       }
     })
   }
