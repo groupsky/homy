@@ -66,7 +66,7 @@ module.exports = (name, {
     }
   },
 
-  start: ({ mqtt, persistedCache }) => {
+  start: ({ mqtt, persistedCache, isEnabled }) => {
     let currentState = {
       temperatureTop: null,
       temperatureBottom: null,
@@ -266,7 +266,7 @@ module.exports = (name, {
       }
     }
 
-    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost })
+    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost, isEnabled })
     const minutes = Math.round(maxInputAgeMs / 60000)
     const temperatures = watchInputAge({
       inputs: ['top', 'bottom'],
@@ -274,7 +274,7 @@ module.exports = (name, {
       onChange: (stale) => {
         updateHeaterState()
         alert(name, stale
-          ? `⚠️ ${name}: no boiler temperature for ${minutes} min. The element is off until it returns; manual mode still works.`
+          ? `⚠️ ${name}: no boiler temperature for ${minutes} min. In automatic mode the element is off until it returns.`
           : `✅ ${name}: boiler temperature is back. Normal control again.`)
       }
     })
@@ -288,7 +288,7 @@ module.exports = (name, {
         const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureTop = temp
-          temperatures.seen('top')
+          temperatures.seen('top', payload?._tz)
           updateHeaterState()
         }
       } catch (err) {
@@ -303,7 +303,7 @@ module.exports = (name, {
         const temp = typeof payload === 'object' ? payload.state : payload
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureBottom = temp
-          temperatures.seen('bottom')
+          temperatures.seen('bottom', payload?._tz)
           updateHeaterState()
         }
       } catch (err) {
@@ -429,6 +429,9 @@ module.exports = (name, {
 
     // Periodic heartbeat to ensure service health monitoring
     const heartbeatInterval = setInterval(() => {
+      // No input arrives during an outage, so decide here too: a manual mode
+      // must still expire on time.
+      updateHeaterState()
       mqtt.publish(finalAutomationStatusTopic, {
         heaterState: currentState.heaterState,
         reason: currentState.lastDecisionReason || 'heartbeat',

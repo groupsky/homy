@@ -10,6 +10,14 @@ describe('telegramAlert', () => {
     expect(httpPost).toHaveBeenCalledWith('http://telegram-bridge:3000/webhook', {source: 'boilerController', message: 'hello'})
   })
 
+  it('sends nothing while the bot is disabled', async () => {
+    const httpPost = jest.fn().mockResolvedValue({ok: true})
+
+    await telegramAlert({httpPost, isEnabled: () => false})('boilerController', 'hello')
+
+    expect(httpPost).not.toHaveBeenCalled()
+  })
+
   it('logs a failed post and does not throw', async () => {
     const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
     const httpPost = jest.fn().mockRejectedValue(new Error('getaddrinfo EAI_AGAIN'))

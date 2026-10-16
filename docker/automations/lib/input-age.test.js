@@ -59,6 +59,15 @@ describe('watchInputAge', () => {
     expect(watch.isFresh()).toBe(true)
   })
 
+  it('counts an input from the time it was made, when given', () => {
+    watch.seen('a', Date.now() - 30 * MIN)
+    watch.seen('b')
+
+    expect(watch.isStale()).toBe(true)
+    expect(watch.isFresh()).toBe(false)
+    expect(changes).toEqual([true])
+  })
+
   it('takes the limit from maxAgeMs', () => {
     const short = []
     const w = watchInputAge({inputs: ['a'], maxAgeMs: 2 * MIN, onChange: (stale) => short.push(stale)})

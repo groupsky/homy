@@ -30,6 +30,10 @@ const startAt = (localIso) => {
       deliver(CONFIG.temperatureBottomTopic, { state: bottom })
       deliver(CONFIG.temperatureTopTopic, { state: top })
     },
+    temperaturesMadeAt: (madeAt, { top, bottom }) => {
+      deliver(CONFIG.temperatureBottomTopic, { state: bottom, _tz: madeAt })
+      deliver(CONFIG.temperatureTopTopic, { state: top, _tz: madeAt })
+    },
     controlMode: (mode) => deliver(CONFIG.controlModeTopic, mode),
     relay: () => published.filter(m => m.topic === CONFIG.boilerRelayTopic).at(-1).payload,
     relayReasons: () => published.filter(m => m.topic === CONFIG.boilerRelayTopic).map(m => m.payload.reason),
@@ -89,6 +93,26 @@ describe('boiler-controller with old boiler temperatures (#1743)', () => {
     expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
     expect(boiler.alerts()).toHaveLength(2)
     expect(boiler.alerts()[1]).toContain('boiler temperature is back')
+  })
+
+  // Feature status topics are retained, so a start can get values from long ago.
+  test('treats old retained temperatures after a start as old', () => {
+    const boiler = startAt(MIDDAY)
+    boiler.temperaturesMadeAt(Date.now() - 2 * 60 * MIN, COOL)
+
+    expect(boiler.relay()).toMatchObject({ state: false, reason: 'input_stale' })
+    expect(boiler.alerts()).toHaveLength(1)
+  })
+
+  test('lets a manual mode expire on time during an outage', () => {
+    const boiler = startAt(MIDDAY)
+    boiler.temperatures(COOL)
+    boiler.controlMode({ mode: 'manual_on', duration: 20 * MIN })
+    expect(boiler.relay()).toMatchObject({ state: true })
+
+    jest.advanceTimersByTime(31 * MIN)
+
+    expect(boiler.relay()).toMatchObject({ state: false, reason: 'input_stale' })
   })
 
   test('manual mode still overrides old data', () => {

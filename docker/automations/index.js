@@ -152,6 +152,7 @@ playground.bots.forEach(async bot => {
   publishBotStatus()
 
   const startParams = {
+    isEnabled: () => bot.enabled,
     mqtt: {
       subscribe: async (topic, cb) => new Promise((resolve, reject) => {
         console.log(`[${bot.config.type}] subscribing to ${topic}`)

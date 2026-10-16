@@ -492,6 +492,22 @@ describe('bac002-toggle-power bot', () => {
       expect(alerts()[1]).toContain('contact data is back')
     })
 
+    it('forgets its own switch-off when a person turned the thermostat on and the contacts closed', async () => {
+      await mockMqtt._triggerMessage(WINDOW, {state: true})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+      jest.advanceTimersByTime(30 * MIN)
+
+      // A person turned it on during the gap; the window is closed when data returns.
+      await mockMqtt._triggerMessage(WINDOW, {state: false})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+      await mockMqtt._triggerMessage(READING, {power: 'on'})
+      // Later the person turns it off by hand.
+      await mockMqtt._triggerMessage(READING, {power: 'off'})
+
+      expect(writes()).toEqual(['off'])
+    })
+
     it('acts normally again when the data returns', async () => {
       await mockMqtt._triggerMessage(WINDOW, {state: true})
       await mockMqtt._triggerMessage(DOOR, {state: false})

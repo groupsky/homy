@@ -2,7 +2,8 @@
  * Watches how old a bot's inputs are, so a bot does not keep acting on the
  * last value of a reader that stopped (#1743).
  *
- * - `seen(key)`: the input `key` arrived now.
+ * - `seen(key, madeAt)`: the input `key` arrived. `madeAt` is when it was made,
+ *   if known (a retained message can be hours old); otherwise now.
  * - `isFresh()`: every input arrived within `maxAgeMs` since the start. State
  *   kept over a restart may be hours old, so an input not seen yet is not fresh.
  * - `isStale()`: some input is older than `maxAgeMs`. An input not seen yet
@@ -28,11 +29,11 @@ const watchInputAge = ({inputs, maxAgeMs = DEFAULT_MAX_INPUT_AGE_MS, onChange = 
       onChange(stale)
     }
   }
-  setInterval(check, CHECK_INTERVAL_MS)
+  setInterval(check, CHECK_INTERVAL_MS).unref?.()
 
   return {
-    seen: (key) => {
-      lastSeen.set(key, Date.now())
+    seen: (key, madeAt) => {
+      lastSeen.set(key, typeof madeAt === 'number' ? madeAt : Date.now())
       check()
     },
     isFresh,

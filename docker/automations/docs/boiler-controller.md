@@ -196,13 +196,16 @@ The Home Assistant automation `grid_tariff_by_zone` has the same table for the e
 
 ### Old input
 
-When the reader of the boiler temperatures stops, the bot used to keep its last values and its last
-decision (#1743). Now, when the top or the bottom temperature is older than `maxInputAgeMs` (10 min by
-default), the element is OFF with reason `input_stale`, and the bot posts one Telegram message through
+When the top or the bottom temperature is older than `maxInputAgeMs` (10 min by default), the element
+is OFF with reason `input_stale` (#1743), and the bot posts one Telegram message through
 `telegram-bridge`. When both temperatures arrive again it posts one "back" message and decides as
-usual. The age is checked on every reading and every 30 s; right after a start it counts from the
-start. Manual and vacation modes still win, so a person can force heating during a long outage. The
-safe state needs no internet; only the message does, and it follows the bridge's quiet hours.
+usual. The age is checked on every reading and every 30 s, and taken from the message's own `_tz`, so
+old retained values after a start count as old; a temperature not seen yet counts from the start.
+The 15-minute heartbeat also decides again, so a manual mode expires on time during an outage. Manual
+and vacation modes still win, so a person can force heating during a long outage. The safe state
+needs no internet; only the message does, and it follows the bridge's quiet hours. A disabled bot
+sends nothing. The Grafana rule `boiler-temperature-sensor-failure` reports the same outage on its own,
+about 35 minutes in.
 
 If cold water during a long outage turns out to be a problem, the agreed alternative is to allow the
 element only in the night tariff zone while the input is old, instead of OFF.

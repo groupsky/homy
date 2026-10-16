@@ -16,10 +16,10 @@ module.exports = (name, {
     }
   },
 
-  start: async ({ mqtt, persistedCache }) => {
+  start: async ({ mqtt, persistedCache, isEnabled }) => {
     const readingTopic = `${topicPrefix}/reading`
     const writeTopic = `${topicPrefix}/write`
-    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost })
+    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost, isEnabled })
     const minutes = Math.round(maxInputAgeMs / 60000)
 
     // A contact reader that stops leaves its last state here. Acting on it
@@ -36,7 +36,7 @@ module.exports = (name, {
     switches.forEach(({topic, isOpen}, index) => {
       mqtt.subscribe(topic, (payload) => {
         persistedCache.switchStates[index] = isOpen(payload)
-        contacts.seen(index)
+        contacts.seen(index, payload._tz)
       })
     })
 
@@ -50,6 +50,10 @@ module.exports = (name, {
         persistedCache.wasOn = true
       } else if (persistedCache.wasOn && payload.power === 'off' && allClosed) {
         mqtt.publish(writeTopic, { power: 'on' })
+        persistedCache.wasOn = false
+      } else if (payload.power === 'on' && allClosed) {
+        // Someone turned it on while the contacts were closed: there is no
+        // switch-off of the bot's own left to undo.
         persistedCache.wasOn = false
       }
     })
