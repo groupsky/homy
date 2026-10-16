@@ -24,10 +24,13 @@ const {query} = createReader(config.reader)
 const collector = createEstimator({query, location: config.location})
 const mower = createMowerEstimator({query})
 // Local outdoor estimates: the solar collector at night (#1735) and the docked mower battery (#1736).
-const estimateHours = async (from, to) => [
-    ...await collector.estimateHours(from, to),
-    ...await mower.estimateHours(from, to),
-]
+// An error names its source; the poller then retries both.
+const named = (name, estimator) => (from, to) => estimator.estimateHours(from, to).catch((error) => {
+    throw new Error(`${name}: ${error.message}`)
+})
+const collectorHours = named('collector', collector)
+const mowerHours = named('mower', mower)
+const estimateHours = async (from, to) => [...await collectorHours(from, to), ...await mowerHours(from, to)]
 const poller = createPoller({
     location: config.location,
     fetchJson,

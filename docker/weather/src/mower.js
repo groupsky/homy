@@ -19,7 +19,7 @@ const RULES = {
     hoursAfterActivity: 3,
 }
 
-// Mode and station messages repeat about every 3 hours while idle, so the last
+// Mode and station messages repeat every 3 to 7 hours while idle, so the last
 // one before a time is searched this far back. Older than that, the state is unknown.
 const LOOKBACK_HOURS = 10
 
@@ -32,11 +32,14 @@ const CHARGING = 3
 // so this is for a mower that is stored while still reporting from a dock.
 const STORED = []
 
+// The battery readings start at the quiet span of the first point: a gap there
+// can hide charging or mowing while the vendor cloud was down.
 function buildMowerQueries(startSec, endSec) {
     const end = endSec - HALF_HOUR
-    const eventsFrom = startSec - HALF_HOUR - RULES.hoursAfterActivity * HOUR - LOOKBACK_HOURS * HOUR
+    const quietFrom = startSec - HALF_HOUR - RULES.hoursAfterActivity * HOUR
+    const eventsFrom = quietFrom - LOOKBACK_HOURS * HOUR
     return {
-        temperature: `SELECT mean("temperature") FROM "sunseeker_battery_detail" WHERE time >= ${startSec - HALF_HOUR}s AND time < ${end}s GROUP BY time(15m)`,
+        temperature: `SELECT mean("temperature") FROM "sunseeker_battery_detail" WHERE time >= ${quietFrom}s AND time < ${end}s GROUP BY time(15m)`,
         modes: `SELECT "mode" FROM "sunseeker_mode" WHERE time >= ${eventsFrom}s AND time < ${end}s`,
         stations: `SELECT "at_station" FROM "sunseeker_station" WHERE time >= ${eventsFrom}s AND time < ${end}s`,
     }
@@ -76,19 +79,23 @@ function mowerPoints({temperature, modes, stations, startSec, endSec, stored = S
         const quietFrom = windowStart - RULES.hoursAfterActivity * HOUR
         const own = QUARTERS.map(offset => mean.get(windowStart + offset))
         const full = own.every(value => typeof value === 'number')
+        const quietQuarters = []
+        for (let t = quietFrom; t < windowStart; t += 900) quietQuarters.push(mean.get(t))
 
         const quietModes = statesIn(modeEvents, quietFrom, windowStart)
+        const quietStations = statesIn(stationEvents, quietFrom, windowStart)
         const windowModes = statesIn(modeEvents, windowStart, windowEnd)
         const windowStations = statesIn(stationEvents, windowStart, windowEnd)
 
         let reason
         if (!full) reason = 'no_data'
         else if (isStored(h, stored)) reason = 'stored'
-        else if (quietModes == null || windowModes == null || windowStations == null) reason = 'state_unknown'
+        else if ([quietModes, quietStations, windowModes, windowStations].includes(null)) reason = 'state_unknown'
         else if (windowStations.some(atStation => atStation !== true)) reason = 'not_docked'
         else if (windowModes.includes(CHARGING)) reason = 'charging'
         else if (windowModes.some(mode => mode !== STANDBY)) reason = 'mowing'
-        else if (quietModes.some(mode => mode !== STANDBY)) reason = 'recent_activity'
+        else if (!quietQuarters.every(value => typeof value === 'number')) reason = 'gap_before'
+        else if (quietModes.some(mode => mode !== STANDBY) || quietStations.some(atStation => atStation !== true)) reason = 'recent_activity'
         else reason = 'ok'
 
         const fields = {}

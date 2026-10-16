@@ -5,8 +5,9 @@ const at = (iso) => Date.parse(iso) / 1000
 const h = at('2026-10-16T02:00:00Z')
 const windowStart = h - 1800
 
-// Battery quarter means covering the window of the point at h.
-const quarters = (temp = 15) => [0, 1, 2, 3].map(i => [windowStart + i * 900, temp])
+// Battery quarter means covering the 3-hour quiet span and the window of the point at h.
+const quietFrom = windowStart - 3 * hour
+const quarters = (temp = 15) => Array.from({length: 16}, (_, i) => [quietFrom + i * 900, temp])
 // Idle and docked since long before the quiet span (state messages repeat every 3 hours).
 const idleModes = () => [[h - 9 * hour, 0], [h - 6 * hour, 0], [h - 3 * hour, 0], [h, 0]]
 const docked = () => [[h - 9 * hour, true], [h - 6 * hour, true], [h - 3 * hour, true], [h, true]]
@@ -19,7 +20,7 @@ describe('buildMowerQueries', () => {
     test('reads battery quarters for the windows, and raw mode and station events with a look-back', () => {
         const q = buildMowerQueries(h, h + 2 * hour)
         expect(q.temperature).toBe(
-            `SELECT mean("temperature") FROM "sunseeker_battery_detail" WHERE time >= ${h - 1800}s AND time < ${h + 2 * hour - 1800}s GROUP BY time(15m)`)
+            `SELECT mean("temperature") FROM "sunseeker_battery_detail" WHERE time >= ${h - 1800 - 3 * hour}s AND time < ${h + 2 * hour - 1800}s GROUP BY time(15m)`)
         const from = h - 1800 - 3 * hour - LOOKBACK_HOURS * hour
         expect(q.modes).toBe(`SELECT "mode" FROM "sunseeker_mode" WHERE time >= ${from}s AND time < ${h + 2 * hour - 1800}s`)
         expect(q.stations).toBe(`SELECT "at_station" FROM "sunseeker_station" WHERE time >= ${from}s AND time < ${h + 2 * hour - 1800}s`)
@@ -39,13 +40,13 @@ describe('mowerPoints', () => {
         })
     })
 
-    test('the temperature is the mean of the four quarters', () => {
-        const temperature = [[windowStart, 14], [windowStart + 900, 15], [windowStart + 1800, 15], [windowStart + 2700, 16]]
+    test('the temperature is the mean of the four quarters of the window', () => {
+        const temperature = [...quarters(9).slice(0, 12), [windowStart, 14], [windowStart + 900, 15], [windowStart + 1800, 15], [windowStart + 2700, 16]]
         expect(run({temperature}).fields.temperature).toBe(15)
     })
 
-    test('a missing quarter gives no_data and no temperature', () => {
-        const p = run({temperature: quarters().slice(0, 3)})
+    test('a missing quarter in the window gives no_data and no temperature', () => {
+        const p = run({temperature: quarters().slice(0, 15)})
         expect(p.strings.reason).toBe('no_data')
         expect(p.fields).toEqual({})
     })
@@ -83,6 +84,25 @@ describe('mowerPoints', () => {
         expect(run({modes: recent}).strings.reason).toBe('recent_activity')
         const before = [[h - 9 * hour, 1], [h - 4 * hour, 0], [h - hour, 0]]
         expect(run({modes: before}).strings.reason).toBe('ok')
+    })
+
+    test('off the dock in the 3 hours before the window gives recent_activity', () => {
+        const stations = [[h - 9 * hour, true], [h - 3 * hour, false], [h - 2 * hour, true], [h, true]]
+        expect(run({stations}).strings.reason).toBe('recent_activity')
+        expect(run({stations: [[h - 2 * hour, true], [h, true]]}).strings.reason).toBe('state_unknown')
+    })
+
+    test('a battery-data gap in the 3 hours before the window gives gap_before', () => {
+        const temperature = quarters().filter(([t]) => t !== quietFrom + 2 * 900)
+        expect(run({temperature}).strings.reason).toBe('gap_before')
+    })
+
+    test('several dock messages in the same second keep their order', () => {
+        const t = h - 1200
+        expect(run({stations: [...docked().slice(0, 3), [t, true], [t, false], [t, true]]}).strings.reason).toBe('not_docked')
+        const before = h - 4 * hour
+        const stations = [[h - 9 * hour, true], [before, true], [before, false], [before, true], [h, true]]
+        expect(run({stations}).strings.reason).toBe('ok')
     })
 
     test('the quiet span starts 3 hours before the window', () => {

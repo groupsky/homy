@@ -117,11 +117,12 @@ vendor cloud, so they stop when the internet is down.
 |---|---|
 | `no_data` | a quarter of the window has no battery reading |
 | `stored` | inside a period in `STORED` (the mower is stored indoors) |
-| `state_unknown` | no mode or dock message in the 10 hours before; they repeat about every 3 hours while idle |
+| `state_unknown` | no mode or dock message in the 10 hours before; they repeat every 3 to 7 hours while idle |
 | `not_docked` | off the dock at some time in the window |
 | `charging` | mode 3 (charging) in the window |
-| `mowing` | any other mode than 0 (standby) in the window: mowing, going home, border |
-| `recent_activity` | not in standby for the whole 3 hours before the window |
+| `mowing` | any other mode than 0 (standby) in the window: mowing, going home, border, and the unnamed modes 4 and 5 |
+| `gap_before` | a quarter of the 3 hours before the window has no battery reading; charging or mowing during a cloud outage would not be seen |
+| `recent_activity` | not in standby on the dock for the whole 3 hours before the window |
 | `ok` | valid |
 
 The rules are `RULES` and `STORED` in `src/mower.js`. When the mower is put away for the
