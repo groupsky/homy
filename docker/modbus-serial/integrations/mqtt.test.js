@@ -60,6 +60,32 @@ describe('mqtt subscribe', () => {
     expect(seen).toEqual([{out8: true}])
   })
 
+  // A retained command is the last one sent, maybe hours ago. The broker hands
+  // it over on every (re)subscribe; applying it would switch a relay that
+  // nobody asked to switch now (#1708).
+  it('ignores a retained message', async () => {
+    const seen = []
+    const logs = jest.spyOn(console, 'log').mockImplementation(() => {})
+    const client = await subscribed(async (message) => { seen.push(message) })
+
+    client.emit('message', WRITE_TOPIC, Buffer.from('{"out10":false}'), {retain: true})
+    await flush()
+
+    expect(seen).toEqual([])
+    expect(logs.mock.calls.map(args => args.join(' '))).toContainEqual(
+      expect.stringContaining(`ignored a retained message on ${WRITE_TOPIC}`))
+  })
+
+  it('delivers a live message that is not retained', async () => {
+    const seen = []
+    const client = await subscribed(async (message) => { seen.push(message) })
+
+    client.emit('message', WRITE_TOPIC, Buffer.from('{"out10":true}'), {retain: false})
+    await flush()
+
+    expect(seen).toEqual([{out10: true}])
+  })
+
   it('ignores a message on another topic', async () => {
     const seen = []
     const client = await subscribed(async (message) => { seen.push(message) })

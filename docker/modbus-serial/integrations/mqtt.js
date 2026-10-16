@@ -48,8 +48,16 @@ module.exports = ({ url, publishTopic, subscribeTopic }) => {
         resolve()
       })
     )
-    client.on('message', (messageTopic, payload) => {
+    client.on('message', (messageTopic, payload, packet) => {
       if (deviceTopic !== messageTopic) {
+        return
+      }
+
+      // The broker hands a retained command to every new subscription, so a
+      // reader start or a reconnect would apply the last command again, maybe
+      // hours after it was sent (#1708). A live command arrives with retain unset.
+      if (packet?.retain) {
+        console.log(`[mqtt] ignored a retained message on ${messageTopic}`)
         return
       }
 
