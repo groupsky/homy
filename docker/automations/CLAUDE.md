@@ -168,7 +168,7 @@ Key patterns:
 - **Purpose**: BACnet thermostat synchronization and control
 - **Features**: Clock sync, power management based on door/window states
 - **State**: Uses persistent cache for switch state tracking
-- **Old input**: `bac002-toggle-power` switches only while every contact reported within `maxInputAgeMs` (10 min default) since the start, so a stopped reader cannot keep a room off. It posts one Telegram message through `telegram-bridge` when the contact data goes old and one when it is back (`lib/input-age.js`, `lib/telegram-alert.js`, #1743)
+- **Old input**: `bac002-toggle-power` switches only while every contact reported within `maxInputAgeMs` (10 min default) since the start, so a stopped reader cannot keep a room off. When the contact data goes old, and again when it is back, the bots post one shared Telegram message through `telegram-bridge` that lists the rooms (reports within 60 s are joined; `lib/input-age.js`, `lib/group-alerts.js`, `lib/telegram-alert.js`, #1743)
 
 #### `stateful-counter` - Example with persistent cache and migration
 - **Purpose**: Demonstrates persistent cache patterns with versioning

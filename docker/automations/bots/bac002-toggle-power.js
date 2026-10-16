@@ -1,5 +1,6 @@
 const { watchInputAge, DEFAULT_MAX_INPUT_AGE_MS } = require('../lib/input-age')
 const telegramAlert = require('../lib/telegram-alert')
+const { sharedBatch } = require('../lib/group-alerts')
 
 module.exports = (name, {
   bacTopic: topicPrefix,
@@ -19,8 +20,17 @@ module.exports = (name, {
   start: async ({ mqtt, persistedCache, isEnabled }) => {
     const readingTopic = `${topicPrefix}/reading`
     const writeTopic = `${topicPrefix}/write`
-    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost, isEnabled })
+    const alert = telegramAlert({ url: telegramWebhookUrl, httpPost })
     const minutes = Math.round(maxInputAgeMs / 60000)
+    // All thermostat bots read the same contact reader, so one outage is one
+    // message that lists the rooms, not one message per room. The batch sends
+    // with the first bot's bridge settings; all bots use the defaults.
+    const staleRooms = sharedBatch('bac002-toggle-power:stale', {
+      send: (names) => alert('bac002-toggle-power', `⚠️ No contact data for ${minutes} min: ${names.join(', ')}. These thermostats are not switched until it returns.`)
+    })
+    const backRooms = sharedBatch('bac002-toggle-power:back', {
+      send: (names) => alert('bac002-toggle-power', `✅ Contact data is back: ${names.join(', ')}. These thermostats are switched again.`)
+    })
 
     // A contact reader that stops leaves its last state here. Acting on it
     // could keep a room off that nobody can turn on (#1743), so the bot only
@@ -28,9 +38,11 @@ module.exports = (name, {
     const contacts = watchInputAge({
       inputs: switches.map((_, index) => index),
       maxAgeMs: maxInputAgeMs,
-      onChange: (stale) => alert(name, stale
-        ? `⚠️ ${name}: no contact data for ${minutes} min. The thermostat is not switched until it returns.`
-        : `✅ ${name}: contact data is back. The thermostat is switched again.`)
+      onChange: (stale) => {
+        // A disabled bot gets no input, so it would report it as missing.
+        if (isEnabled && !isEnabled()) return
+        (stale ? staleRooms : backRooms)(name)
+      }
     })
 
     switches.forEach(({topic, isOpen}, index) => {
