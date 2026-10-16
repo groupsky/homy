@@ -58,6 +58,7 @@ Device-specific drivers in `devices/` directory:
 - **MODBUS_DEVICE**: Device path or TCP connection
 - **CONFIG_FILE**: Device configuration file path
 - **INFLUXDB_***: InfluxDB connection settings
+- **MODBUS_CONSOLE**: what the `console` integration prints per reading: `off` (default, nothing), `line` (one JSON line) or `full` (the whole object, one field per line). Errors are logged in every mode. To debug one reader, add `MODBUS_CONSOLE=full` to that service's `environment` and recreate only it.
 - **Bus-specific settings**: Varies by instance
 
 ### Device Configuration
