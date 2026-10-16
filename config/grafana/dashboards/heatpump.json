@@ -2294,7 +2294,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Outdoor temperature next to the rooms and the heat pump. The outdoor values are model data for a grid cell, not a sensor at the house. Weather data by Open-Meteo.com (CC BY 4.0).",
+      "description": "Outdoor temperature next to the rooms and the heat pump. The outdoor values are model data for a grid cell, not a sensor at the house. The collector line is the solar collector probe at night, valid hours only (#1735). Weather data by Open-Meteo.com (CC BY 4.0).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2352,6 +2352,18 @@
             "matcher": {
               "id": "byRegexp",
               "options": "^Outdoor, (ERA5|ECMWF IFS)$"
+            },
+            "properties": [
+              {
+                "id": "custom.spanNulls",
+                "value": 7200000
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outdoor, collector at night"
             },
             "properties": [
               {
@@ -2425,6 +2437,17 @@
           "refId": "C",
           "resultFormat": "time_series",
           "alias": "Outdoor, ECMWF IFS"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT mean(\"temperature\") FROM \"weather\".\"weather\" WHERE \"source\" = 'collector' AND \"valid\" = true AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "F",
+          "resultFormat": "time_series",
+          "alias": "Outdoor, collector at night"
         },
         {
           "datasource": {

@@ -172,5 +172,6 @@ module.exports = {
     forecastPoints,
     historyPoints,
     checkResponse,
+    parseDate,
     yearChunks,
 }

@@ -113,3 +113,53 @@ describe('msUntilNextRun', () => {
         expect(msUntilNextRun(base + 16 * 60 * 1000 + 59 * 1000)).toBe(1000)
     })
 })
+
+describe('collector estimate', () => {
+    function setupEstimate({fail = false} = {}) {
+        const log = {info: jest.fn(), error: jest.fn()}
+        const fetchJson = async (url) => url.startsWith('https://archive-api.') ? historyJson : forecastJson(t0)
+        const written = []
+        const writePoints = async (points) => { written.push(...points) }
+        const estimateHours = jest.fn(async (start, end) => {
+            if (fail) throw new Error('influx read failed')
+            const points = []
+            for (let h = start; h < end; h += hour) points.push({tags: {source: 'collector', kind: 'estimate'}, time: h})
+            return points
+        })
+        const poller = createPoller({location, fetchJson, writePoints, log, estimateHours})
+        return {poller, written, log, estimateHours}
+    }
+
+    const estimates = (points) => points.filter(p => p.tags.kind === 'estimate')
+
+    test('the first poll estimates the last 48 complete hours', async () => {
+        const {poller, written, estimateHours} = setupEstimate()
+        await poller.pollOnce(t0 + 2 * 60)
+        expect(estimateHours).toHaveBeenCalledWith(t0 - 48 * hour, t0)
+        expect(estimates(written)).toHaveLength(48)
+    })
+
+    test('later polls in the same hour do nothing, the next hour redoes the last 3 hours', async () => {
+        const {poller, estimateHours} = setupEstimate()
+        await poller.pollOnce(t0 + 2 * 60)
+        await poller.pollOnce(t0 + 17 * 60)
+        expect(estimateHours).toHaveBeenCalledTimes(1)
+        await poller.pollOnce(t0 + hour + 2 * 60)
+        expect(estimateHours).toHaveBeenLastCalledWith(t0 - 2 * hour, t0 + hour)
+    })
+
+    test('a failed estimate is logged and the same hours are tried on the next poll', async () => {
+        const s = setupEstimate({fail: true})
+        await s.poller.pollOnce(t0 + 2 * 60)
+        expect(s.log.error).toHaveBeenCalledWith(expect.stringContaining('influx read failed'))
+        await s.poller.pollOnce(t0 + 17 * 60)
+        expect(s.estimateHours).toHaveBeenCalledTimes(2)
+        expect(s.estimateHours).toHaveBeenLastCalledWith(t0 - 48 * hour, t0)
+    })
+
+    test('a poller without an estimator skips the step', async () => {
+        const {poller, written} = setup()
+        await poller.pollOnce(t0 + 2 * 60)
+        expect(estimates(written)).toHaveLength(0)
+    })
+})

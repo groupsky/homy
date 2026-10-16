@@ -7,6 +7,8 @@ const {loadConfig} = require('./src/config')
 const {createWriter} = require('./src/influx')
 const {fetchJson} = require('./src/fetch-json')
 const {createPoller, msUntilNextRun} = require('./src/poller')
+const {createReader} = require('./src/influx-query')
+const {createEstimator} = require('./src/collector')
 
 let config
 try {
@@ -17,11 +19,13 @@ try {
 }
 
 const writer = createWriter(config.influx)
+const {estimateHours} = createEstimator({query: createReader(config.reader).query, location: config.location})
 const poller = createPoller({
     location: config.location,
     fetchJson,
     writePoints: writer.writePoints,
     log: console,
+    estimateHours,
 })
 
 let timer = null

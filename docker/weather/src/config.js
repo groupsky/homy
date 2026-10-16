@@ -21,6 +21,12 @@ function loadConfig(env, readFile) {
     if (!username || !password) {
         throw new Error('InfluxDB credentials are required (INFLUXDB_USERNAME_FILE and INFLUXDB_PASSWORD_FILE)')
     }
+    // The read user is for the collector estimate, which reads the solar controller data.
+    const readUsername = readSecret(env, readFile, 'INFLUXDB_READ_USERNAME')
+    const readPassword = readSecret(env, readFile, 'INFLUXDB_READ_PASSWORD')
+    if (!readUsername || !readPassword) {
+        throw new Error('InfluxDB read credentials are required (INFLUXDB_READ_USERNAME_FILE and INFLUXDB_READ_PASSWORD_FILE)')
+    }
     return {
         location,
         influx: {
@@ -30,6 +36,7 @@ function loadConfig(env, readFile) {
             org: '',
             bucket: `${database}/${env.INFLUXDB_RP || 'autogen'}`,
         },
+        reader: {url, database, token: `${readUsername}:${readPassword}`},
     }
 }
 

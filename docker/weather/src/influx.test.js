@@ -15,6 +15,20 @@ describe('toInfluxPoint', () => {
     })
 })
 
+test('writes booleans and strings too', () => {
+    const point = toInfluxPoint({
+        measurement: 'weather',
+        tags: {source: 'collector', kind: 'estimate'},
+        fields: {temperature: 1.5},
+        integers: {},
+        booleans: {valid: false},
+        strings: {reason: 'pump_on'},
+        time: 1705345200,
+    })
+    expect(point.toLineProtocol()).toBe(
+        'weather,kind=estimate,source=collector reason="pump_on",temperature=1.5,valid=F 1705345200')
+})
+
 describe('createWriter', () => {
     const http = require('http')
     const {createWriter} = require('./influx')
