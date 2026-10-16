@@ -78,6 +78,12 @@ A message is a **safety message** when:
 - any alert in a Grafana webhook has the label `safety: "true"` (firing or resolved), or
 - a JSON object body has `"safety": true` (for direct senders).
 
+**At night, a safety alert rings once** (issue #1745). The bridge remembers each safety alert it has
+sent, by its Grafana `fingerprint` and `startsAt` (the firing episode), day or night. A repeat of
+the same episode at night is silent. A new firing (new `startsAt`) and a resolved message ring. A
+direct `"safety": true` message always rings. The memory is lost when the bridge restarts, so the
+first repeat after a restart rings once.
+
 The safety label is set on these rules in `config/grafana/provisioning/alerting/`:
 
 | Kind | Rules |

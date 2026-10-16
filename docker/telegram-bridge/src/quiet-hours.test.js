@@ -1,5 +1,5 @@
 import { describe, test, expect } from '@jest/globals'
-import { isQuietTime, isSafetyMessage, sendSilently } from './quiet-hours.js'
+import { isQuietTime, isSafetyMessage, createQuietHours } from './quiet-hours.js'
 
 // Times are local wall-clock times with their offset written out: +02:00 is
 // winter time (EET) and +03:00 is summer time (EEST) in Europe/Sofia.
@@ -84,17 +84,71 @@ describe('isSafetyMessage', () => {
   })
 })
 
-describe('sendSilently', () => {
+describe('createQuietHours().sendSilently', () => {
   const night = at('2026-11-03T02:00:00+02:00')
+  const later = at('2026-11-03T03:00:00+02:00')
   const day = at('2026-11-03T12:00:00+02:00')
 
+  // A Grafana alert as the webhook sends it: the fingerprint names the alert,
+  // startsAt names its firing episode.
+  const safetyAlert = ({ status = 'firing', fingerprint = 'aaa111', startsAt = '2026-11-03T01:55:00Z' } = {}) => ({
+    status,
+    alerts: [{ status, fingerprint, startsAt, labels: { alertname: 'Tyre', safety: 'true' } }],
+  })
+
   test('a non-safety message is silent at night only', () => {
+    const { sendSilently } = createQuietHours()
     expect(sendSilently(grafana({}), night)).toBe(true)
     expect(sendSilently(grafana({}), day)).toBe(false)
   })
 
-  test('a safety message is never silent', () => {
-    expect(sendSilently(grafana({ safety: 'true' }), night)).toBe(false)
+  test('the first message of a safety alert rings at night', () => {
+    const { sendSilently } = createQuietHours()
+    expect(sendSilently(safetyAlert(), night)).toBe(false)
+  })
+
+  test('a repeat of the same safety alert is silent at night', () => {
+    const { sendSilently } = createQuietHours()
+    sendSilently(safetyAlert(), night)
+    expect(sendSilently(safetyAlert(), later)).toBe(true)
+  })
+
+  test('a safety alert first sent in the day repeats silently at night', () => {
+    const { sendSilently } = createQuietHours()
+    expect(sendSilently(safetyAlert({ startsAt: '2026-11-02T10:00:00Z' }), day)).toBe(false)
+    expect(sendSilently(safetyAlert({ startsAt: '2026-11-02T10:00:00Z' }), night)).toBe(true)
+  })
+
+  test('a repeat still rings in the day', () => {
+    const { sendSilently } = createQuietHours()
+    sendSilently(safetyAlert(), night)
+    expect(sendSilently(safetyAlert(), day)).toBe(false)
+  })
+
+  test('a new firing episode of the same alert rings again', () => {
+    const { sendSilently } = createQuietHours()
+    sendSilently(safetyAlert(), night)
+    expect(sendSilently(safetyAlert({ startsAt: '2026-11-03T02:40:00Z' }), later)).toBe(false)
+  })
+
+  test('a resolved safety alert rings, and its next firing rings too', () => {
+    const { sendSilently } = createQuietHours()
+    sendSilently(safetyAlert(), night)
+    expect(sendSilently(safetyAlert({ status: 'resolved' }), later)).toBe(false)
+    expect(sendSilently(safetyAlert(), later)).toBe(false)
+  })
+
+  test('a message with a new safety alert next to a repeated one rings', () => {
+    const { sendSilently } = createQuietHours()
+    sendSilently(safetyAlert(), night)
+    const both = safetyAlert()
+    both.alerts.push({ status: 'firing', fingerprint: 'bbb222', startsAt: '2026-11-03T02:50:00Z', labels: { alertname: 'Tyre', safety: 'true' } })
+    expect(sendSilently(both, later)).toBe(false)
+  })
+
+  test('a direct message with "safety": true always rings', () => {
+    const { sendSilently } = createQuietHours()
     expect(sendSilently({ message: 'x', safety: true }, night)).toBe(false)
+    expect(sendSilently({ message: 'x', safety: true }, later)).toBe(false)
   })
 })

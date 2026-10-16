@@ -589,6 +589,9 @@ contactPoints:
 
 **Notification Policies:**
 - Configure alert routing based on severity and service
+- One message per cause (#1745): the two mower rules (connection lost, telemetry stale) share one
+  group with a 6 h group interval and a 24 h repeat, and all tyre rules share one group with a 24 h
+  repeat. Grafana 9.5 has no inhibit rules, so grouping is the tool
 - Implement escalation for critical alerts
 - Use mute timings for maintenance windows
 

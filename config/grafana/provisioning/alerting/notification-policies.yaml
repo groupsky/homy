@@ -13,6 +13,35 @@ policies:
       - receiver: telegram-webhook-no-resolve
         matchers:
           - notify_resolved = false
+      # One message per cause (#1745). The two mower rules watch one outage
+      # from two sides, so they share one group. Grafana 9.5 has no inhibit
+      # rules. A 6 h group interval batches the second rule joining and short
+      # flaps; "mower back" can come up to 6 h late, which is fine for the mower.
+      - receiver: telegram-webhook
+        matchers:
+          - device = sunseeker
+          - type =~ "connectivity|telemetry"
+        group_by:
+          - grafana_folder
+          - device
+        group_wait: 30s
+        group_interval: 6h
+        repeat_interval: 24h
+      # A tyre condition lasts days (the cold-start rules look back 7 days), so
+      # one reminder a day is enough, and the wheels share one message: both
+      # rear tyres low was one cause sent as two messages (#1745). Before the
+      # severity routes below, which would repeat a critical tyre every hour.
+      - receiver: telegram-webhook
+        matchers:
+          - device = ioniq
+          - subsystem = tpms
+        group_by:
+          - grafana_folder
+          - device
+          - subsystem
+        group_wait: 1m
+        group_interval: 5m
+        repeat_interval: 24h
       - receiver: telegram-webhook
         matchers:
           - device = ioniq

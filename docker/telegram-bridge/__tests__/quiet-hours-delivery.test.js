@@ -71,6 +71,17 @@ describe('quiet hours delivery', () => {
     expect(sentLine().silent).toBe(false)
   })
 
+  test('a repeat of a safety alert at night is silent', async () => {
+    now = NIGHT
+    const repeated = alert({ safety: 'true' })
+    repeated.alerts[0].fingerprint = 'repeat-test'
+    repeated.alerts[0].startsAt = '2026-11-03T00:00:00Z'
+    expect((await post(repeated)).disable_notification).toBe(false)
+    clearInterceptedRequests()
+    expect((await post(repeated)).disable_notification).toBe(true)
+    expect(sentLine().silent).toBe(true)
+  })
+
   test('a direct message with "safety": true at night rings', async () => {
     now = NIGHT
     const body = await post({ message: 'Safety test', safety: true })
