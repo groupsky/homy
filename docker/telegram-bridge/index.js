@@ -5,7 +5,7 @@
  * This allows us to use webhook notifiers in Grafana while still sending to Telegram.
  */
 
-import { loadSecret } from './src/secrets.js'
+import { loadSecret, maskId } from './src/secrets.js'
 import { createTelegramBridgeServer } from './src/server.js'
 
 const PORT = process.env.PORT || 3000
@@ -25,8 +25,9 @@ if (!TELEGRAM_CHAT_ID) {
 
 console.log('🏠 Starting Telegram Bridge Service...')
 console.log(`📡 Listening on port ${PORT}`)
-console.log(`🔑 Bot token: ${TELEGRAM_BOT_TOKEN.substring(0, 10)}...`)
-console.log(`💬 Chat ID: ${TELEGRAM_CHAT_ID}`)
+// Never log the token or the full chat id: the log is kept centrally (#1765).
+console.log('🔑 Bot token loaded: yes')
+console.log(`💬 Chat ID: ${maskId(TELEGRAM_CHAT_ID)}`)
 
 const server = createTelegramBridgeServer(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
 

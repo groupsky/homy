@@ -262,7 +262,7 @@ The `/health` endpoint can be used for:
 ### Logging
 
 The service provides structured console logging with emojis for visual parsing:
-- 🏠 Service startup
+- 🏠 Service startup. It logs only that the bot token is loaded, and the chat id masked to its last 3 characters (#1765)
 - 📥 Webhook received
 - 📝 Message extracted
 - 📤 Telegram API calls
