@@ -4,7 +4,8 @@ groups:
   - orgId: 1
     name: Ioniq DTC Alerts
     folder: Ioniq EV
-    interval: 1m
+    # Evaluated every 15m: the ioniq-dtc bot flags a new code at once; this rule is the backstop (#1746).
+    interval: 15m
     rules:
       - uid: ioniq-dtc-present
         title: "🚗 Ioniq Diagnostic Trouble Code"

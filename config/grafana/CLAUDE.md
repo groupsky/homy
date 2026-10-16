@@ -146,6 +146,10 @@ SELECT last("battery_percentage") FROM "sunseeker_power"
 **Alert Rule Organization:**
 - Group related alerts in single YAML files (e.g., `sunseeker-alerts.yaml`)
 - Use descriptive alert names and labels
+- Evaluation interval (per group): the longest that fits how fast the fault matters (#1746). Every
+  look-back must cover the interval, or samples between evaluations are never seen. Make `for:` a
+  whole number of intervals: Grafana 9.5 fires when the pending time is at least `for`, so
+  `for` equal to the interval fires on the second evaluation
 - A rule that must ring at night carries the label `safety: "true"`; all other messages arrive
   without sound from 23:00 to 07:00. The list and the reasons are in `docker/telegram-bridge/CLAUDE.md`
   ("Quiet hours")
@@ -730,7 +734,7 @@ Grafana's own internal state (users, dashboard metadata, alert rule state, ngale
   12:11  for: 10m has elapsed with the condition continuously true -> Alerting, pages
   18:00  the 12:00 point finally ages out of the 6h window -> NoData -> noDataState: OK -> clears
   ```
-  Had a corrective frame arrived at 12:02, `last()` would have returned it and the rule would have resolved from Pending without paging. That is the only case `for:` covers.
+  Had a corrective frame arrived at 12:02, `last()` would have returned it and the rule would have resolved from Pending without paging. That is the only case `for:` covers. (Since #1746 these rules are evaluated every 5 min, still with `for: 10m`; the mechanism is the same.)
 - **Practical test**: `for:` is a real transient filter only when the source reliably publishes **several** samples inside the for-window. If `for` is smaller than ~2x the publish interval, or the source can stop publishing entirely, treat `for:` as best-effort and say so in a comment on the rule.
 - **Solutions**, in order of preference:
   1. **Shorten the query window** so `last()` cannot hold a stale point. Only safe when the source publishes reliably -- and check `noDataState` first: `NoData` will page on every quiet period, `OK` will *silently clear* a real alert instead of holding last known state.

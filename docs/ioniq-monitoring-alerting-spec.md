@@ -33,7 +33,7 @@ automations bots (compute) ──MQTT──> ioniq/parsed/derived/* ──> Infl
 **Division of labour**
 - **Grafana rules** own everything expressible as a threshold/staleness query over a single InfluxDB field: `isolation_kohm`, `soh`, `temp_max`, `cell_min_v`/`cell_max_v`, `aux_12v` (state-filtered), `avail_dis`, per-wheel pressure, and all data-liveness checks. Grafana also owns **all notification delivery, dedup, grouping, and silencing**.
 - **Automations bots** own conditions Grafana/InfluxQL express poorly: **array logic** (DTC `codes[]`), **cross-field/cross-topic math** not in InfluxDB (96-cell rest spread, 12-sensor thermal spread, cold-normalized tire pressure, cross-wheel outliers), and **stateful/edge** logic (charge-stalled, SoC-at-park, LDC-not-charging). Each bot **reduces its condition to a clean numeric signal** published to `ioniq/parsed/derived/<name>` so it lands in InfluxDB and Grafana alerts on it with a trivial threshold. This keeps one notification path and one place to silence.
-  - Exception: a bot MAY also flag immediately, but default is "bot computes → Grafana alerts" (worst-case added latency = Grafana eval interval, set to 1 m for the derived group).
+  - Exception: a bot MAY also flag immediately, but default is "bot computes → Grafana alerts" (worst-case added latency = Grafana eval interval: 5 or 15 min per group since #1746; see the rule files).
 
 ---
 
@@ -99,6 +99,8 @@ policies:
 Columns: **Signal/source** · **Condition** · **Threshold** (baseline/spec) · **Sev** · **`for:`** · **Platform**. All Grafana queries use `classic_conditions` + explicit `WHERE time >= now() - <window>` (per repo Grafana rules; no `$timeFilter`). `group`/dotted fields are double-quoted; string literals single-quoted.
 
 ### 4.1 HV traction battery / BMS
+
+The `for` values below are the design. The live values and the evaluation interval of each group are in `config/grafana/provisioning/alerting/ioniq-*.yaml` (5 or 15 min since #1746).
 
 | Signal | Condition | Threshold | Sev | for | Platform |
 |---|---|---|---|---|---|

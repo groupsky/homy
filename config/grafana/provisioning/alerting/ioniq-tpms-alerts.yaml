@@ -72,8 +72,8 @@ apiVersion: 1
 # **What happens past 7 d of not driving**: the window empties, the rule goes
 # NoData -> OK, and a firing alert auto-resolves with nothing fixed. That is
 # accepted rather than overlooked — a tyre on a car that is not being driven is
-# not a hazard, and the next drive republishes a cold start and re-fires within
-# the minute. `ioniq-tpms-coldstart-stale` below is the rule that owns "I cannot
+# not a hazard, and the next drive republishes a cold start and re-fires at the
+# next evaluation (within 15 min). `ioniq-tpms-coldstart-stale` below is the rule that owns "I cannot
 # see this data", per the one-staleness-rule-per-source pattern in
 # config/grafana/CLAUDE.md. Note the Tires dashboard's stat tiles look back 30 d,
 # so between day 8 and day 30 the tile still shows the last cold reading while
@@ -106,7 +106,8 @@ groups:
   - orgId: 1
     name: Ioniq TPMS Alerts
     folder: Ioniq EV
-    interval: 1m
+    # Evaluated every 15m: one cold-start reading a morning, 6h and 7d look-backs (#1746).
+    interval: 15m
     rules:
       - uid: ioniq-tpms-fl-psi-low
         title: "🚗 Ioniq Tyre Low — FL"
@@ -219,49 +220,6 @@ groups:
           summary: "🚗 FL (front-left) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized front-left tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
 
-      - uid: ioniq-tpms-fl-temp-excess
-        title: "🚗 Ioniq Tyre Hot — FL"
-        condition: A
-        data:
-          - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
-            datasourceUid: P3C6603E967DC8568
-            model:
-              query: |
-                SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_fl_temp_excess' AND time >= now() - 6h
-              rawQuery: true
-              resultFormat: time_series
-          - refId: A
-            datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [8] }
-                  operator: { type: and }
-                  query: { params: [q] }
-                  reducer: { type: last }
-                  type: query
-              expression: q
-        noDataState: OK
-        execErrState: OK
-        # A dragging brake or a failing bearing produces a sustained excess; a
-        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
-        # Best-effort only -- see the note at the top of this file. It suppresses
-        # an artefact that a corrective frame overwrites within 10 min (all three
-        # historical cases), but not one that is the last value published before
-        # the car sleeps.
-        for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
-        annotations:
-          summary: "🚗 FL (front-left) tyre running hot vs the other wheels"
-          description: "front-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
-
       - uid: ioniq-tpms-fr-psi-low
         title: "🚗 Ioniq Tyre Low — FR"
         condition: A
@@ -372,49 +330,6 @@ groups:
         annotations:
           summary: "🚗 FR (front-right) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized front-right tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
-
-      - uid: ioniq-tpms-fr-temp-excess
-        title: "🚗 Ioniq Tyre Hot — FR"
-        condition: A
-        data:
-          - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
-            datasourceUid: P3C6603E967DC8568
-            model:
-              query: |
-                SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_fr_temp_excess' AND time >= now() - 6h
-              rawQuery: true
-              resultFormat: time_series
-          - refId: A
-            datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [8] }
-                  operator: { type: and }
-                  query: { params: [q] }
-                  reducer: { type: last }
-                  type: query
-              expression: q
-        noDataState: OK
-        execErrState: OK
-        # A dragging brake or a failing bearing produces a sustained excess; a
-        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
-        # Best-effort only -- see the note at the top of this file. It suppresses
-        # an artefact that a corrective frame overwrites within 10 min (all three
-        # historical cases), but not one that is the last value published before
-        # the car sleeps.
-        for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
-        annotations:
-          summary: "🚗 FR (front-right) tyre running hot vs the other wheels"
-          description: "front-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
 
       - uid: ioniq-tpms-rl-psi-low
         title: "🚗 Ioniq Tyre Low — RL"
@@ -527,49 +442,6 @@ groups:
           summary: "🚗 RL (rear-left) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized rear-left tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
 
-      - uid: ioniq-tpms-rl-temp-excess
-        title: "🚗 Ioniq Tyre Hot — RL"
-        condition: A
-        data:
-          - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
-            datasourceUid: P3C6603E967DC8568
-            model:
-              query: |
-                SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_rl_temp_excess' AND time >= now() - 6h
-              rawQuery: true
-              resultFormat: time_series
-          - refId: A
-            datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [8] }
-                  operator: { type: and }
-                  query: { params: [q] }
-                  reducer: { type: last }
-                  type: query
-              expression: q
-        noDataState: OK
-        execErrState: OK
-        # A dragging brake or a failing bearing produces a sustained excess; a
-        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
-        # Best-effort only -- see the note at the top of this file. It suppresses
-        # an artefact that a corrective frame overwrites within 10 min (all three
-        # historical cases), but not one that is the last value published before
-        # the car sleeps.
-        for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
-        annotations:
-          summary: "🚗 RL (rear-left) tyre running hot vs the other wheels"
-          description: "rear-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
-
       - uid: ioniq-tpms-rr-psi-low
         title: "🚗 Ioniq Tyre Low — RR"
         condition: A
@@ -681,49 +553,6 @@ groups:
           summary: "🚗 RR (rear-right) tyre cold-pressure above 2.90 bar"
           description: "Cold-normalized rear-right tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
 
-      - uid: ioniq-tpms-rr-temp-excess
-        title: "🚗 Ioniq Tyre Hot — RR"
-        condition: A
-        data:
-          - refId: q
-            relativeTimeRange: { from: 21600, to: 0 }
-            datasourceUid: P3C6603E967DC8568
-            model:
-              query: |
-                SELECT last("value") FROM "ioniq"
-                WHERE "group"='derived/tire_rr_temp_excess' AND time >= now() - 6h
-              rawQuery: true
-              resultFormat: time_series
-          - refId: A
-            datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [8] }
-                  operator: { type: and }
-                  query: { params: [q] }
-                  reducer: { type: last }
-                  type: query
-              expression: q
-        noDataState: OK
-        execErrState: OK
-        # A dragging brake or a failing bearing produces a sustained excess; a
-        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
-        # Best-effort only -- see the note at the top of this file. It suppresses
-        # an artefact that a corrective frame overwrites within 10 min (all three
-        # historical cases), but not one that is the last value published before
-        # the car sleeps.
-        for: 10m
-        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
-        annotations:
-          summary: "🚗 RR (rear-right) tyre running hot vs the other wheels"
-          description: "rear-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
-
       # The eight under-inflation rules above are noDataState: OK + execErrState:
       # OK on a series that publishes roughly four points a day, so on their own
       # they are unfalsifiable: a broken producer, a renamed group tag, a wiped
@@ -828,3 +657,180 @@ groups:
         annotations:
           summary: "🚗 Tyre cold-pressure spread above 0.21 bar across wheels"
           description: "The cold-normalized pressures of the four tyres differ by more than 0.21 bar. Even out inflation and check the lowest wheel for a leak."
+  - orgId: 1
+    name: Ioniq TPMS Temperature Alerts
+    folder: Ioniq EV
+    # Evaluated every 5m: a dragging brake or a failing bearing must alert
+    # during the drive, so the four temp-excess rules keep their own faster
+    # group and their for: 10m (#1746). The other tyre rules read once-a-day
+    # cold-start values and stay in the 15m group above.
+    interval: 5m
+    rules:
+      - uid: ioniq-tpms-fl-temp-excess
+        title: "🚗 Ioniq Tyre Hot — FL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fl_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: OK
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
+        for: 10m
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
+        annotations:
+          summary: "🚗 FL (front-left) tyre running hot vs the other wheels"
+          description: "front-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
+      - uid: ioniq-tpms-fr-temp-excess
+        title: "🚗 Ioniq Tyre Hot — FR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_fr_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: OK
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
+        for: 10m
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
+        annotations:
+          summary: "🚗 FR (front-right) tyre running hot vs the other wheels"
+          description: "front-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
+      - uid: ioniq-tpms-rl-temp-excess
+        title: "🚗 Ioniq Tyre Hot — RL"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rl_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: OK
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
+        for: 10m
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
+        annotations:
+          summary: "🚗 RL (rear-left) tyre running hot vs the other wheels"
+          description: "rear-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
+      - uid: ioniq-tpms-rr-temp-excess
+        title: "🚗 Ioniq Tyre Hot — RR"
+        condition: A
+        data:
+          - refId: q
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("value") FROM "ioniq"
+                WHERE "group"='derived/tire_rr_temp_excess' AND time >= now() - 6h
+              rawQuery: true
+              resultFormat: time_series
+          - refId: A
+            datasourceUid: __expr__
+            model:
+              type: classic_conditions
+              datasource: { type: __expr__, uid: __expr__ }
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              hide: false
+              conditions:
+                - evaluator: { type: gt, params: [8] }
+                  operator: { type: and }
+                  query: { params: [q] }
+                  reducer: { type: last }
+                  type: query
+              expression: q
+        noDataState: OK
+        execErrState: OK
+        # A dragging brake or a failing bearing produces a sustained excess; a
+        # transient step is a TPMS refresh artefact, not a fault (issue #1415).
+        # Best-effort only -- see the note at the top of this file. It suppresses
+        # an artefact that a corrective frame overwrites within 10 min (all three
+        # historical cases), but not one that is the last value published before
+        # the car sleeps.
+        for: 10m
+        labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true" }
+        annotations:
+          summary: "🚗 RR (rear-right) tyre running hot vs the other wheels"
+          description: "rear-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
