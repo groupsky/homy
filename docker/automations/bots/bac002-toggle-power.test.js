@@ -433,10 +433,15 @@ describe('bac002-toggle-power bot', () => {
     const alerts = () => httpPost.mock.calls.map(([, body]) => body.message)
     const writes = () => mockMqtt.publish.mock.calls.map(([, payload]) => payload.power)
 
+    let create
+
     beforeEach(async () => {
       jest.useFakeTimers()
+      // A fresh module, so the alert batch shared by the bots starts empty.
+      jest.resetModules()
+      create = require('./bac002-toggle-power')
       httpPost = jest.fn().mockResolvedValue({ok: true})
-      staleBot = createBac002TogglePower('toggleRoomPower', {...config, httpPost})
+      staleBot = create('toggleRoomPower', {...config, httpPost})
       await staleBot.start({mqtt: mockMqtt, persistedCache})
     })
 
@@ -481,15 +486,37 @@ describe('bac002-toggle-power bot', () => {
 
       jest.advanceTimersByTime(60 * MIN)
       expect(alerts()).toHaveLength(1)
-      expect(alerts()[0]).toContain('no contact data for 10 min')
-      expect(httpPost.mock.calls[0][1].source).toBe('toggleRoomPower')
+      expect(alerts()[0]).toContain('No contact data for 10 min: toggleRoomPower.')
+      expect(httpPost.mock.calls[0][1].source).toBe('bac002-toggle-power')
 
       await mockMqtt._triggerMessage(WINDOW, {state: false})
       await mockMqtt._triggerMessage(DOOR, {state: false})
       jest.advanceTimersByTime(5 * MIN)
 
       expect(alerts()).toHaveLength(2)
-      expect(alerts()[1]).toContain('contact data is back')
+      expect(alerts()[1]).toContain('Contact data is back: toggleRoomPower.')
+    })
+
+    // All thermostat bots read the same contact reader: one cause, one message.
+    it('sends one message that lists every room on the same outage', async () => {
+      const other = create('toggleOtherRoomPower', {...config, httpPost})
+      await other.start({mqtt: mockMqtt, persistedCache: {switchStates: [false, false], wasOn: false}})
+      await mockMqtt._triggerMessage(WINDOW, {state: false})
+      await mockMqtt._triggerMessage(DOOR, {state: false})
+
+      jest.advanceTimersByTime(60 * MIN)
+
+      expect(alerts()).toHaveLength(1)
+      expect(alerts()[0]).toContain('toggleRoomPower, toggleOtherRoomPower')
+    })
+
+    it('sends nothing for a disabled bot', async () => {
+      const disabled = create('toggleDisabledPower', {...config, httpPost})
+      await disabled.start({mqtt: mockMqtt, persistedCache: {switchStates: [false, false], wasOn: false}, isEnabled: () => false})
+
+      jest.advanceTimersByTime(60 * MIN)
+
+      expect(alerts().join(' ')).not.toContain('toggleDisabledPower')
     })
 
     it('acts normally again when the data returns', async () => {
