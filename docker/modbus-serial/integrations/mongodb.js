@@ -1,18 +1,13 @@
 const { MongoClient } = require('mongodb')
+const { connectWithRetry } = require('../mongo-connect')
 
 module.exports = ({ url, options, collection }) => {
   let col
 
-  MongoClient
-    .connect(url, {
-      ...options,
-    })
+  // Readings that arrive before the connection is up are not inserted.
+  connectWithRetry({ connect: () => MongoClient.connect(url, { ...options }) })
     .then((mongoClient) => {
-      const db = mongoClient.db()
-      col = db.collection(collection)
-    })
-    .catch((err) => {
-      console.error('Error initializing mongo connection', err)
+      col = mongoClient.db().collection(collection)
     })
 
   const logger = (entry) => {

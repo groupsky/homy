@@ -43,14 +43,14 @@ let collection = null
 let insert = null
 if (process.env.MONGODB_URL) {
   const {MongoClient} = require('mongodb')
-  MongoClient.connect(process.env.MONGODB_URL, {
-    auth: {username: fileEnv('MONGODB_USERNAME'), password: fileEnv('MONGODB_PASSWORD')},
+  const {connectWithRetry} = require('./mongo-connect')
+  connectWithRetry({
+    connect: () => MongoClient.connect(process.env.MONGODB_URL, {
+      auth: {username: fileEnv('MONGODB_USERNAME'), password: fileEnv('MONGODB_PASSWORD')},
+    }),
   })
     .then((client) => {
       collection = client.db().collection(process.env.COLLECTION)
-    })
-    .catch((err) => {
-      console.error('Error initializing mongo connection', err)
     })
   insert = (doc) => collection && collection.insertOne(doc)
 }
