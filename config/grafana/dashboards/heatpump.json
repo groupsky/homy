@@ -2288,6 +2288,145 @@
       ],
       "title": "External",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Outdoor temperature next to the rooms and the heat pump. The outdoor values are model data for a grid cell, not a sensor at the house. Weather data by Open-Meteo.com (CC BY 4.0).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto"
+          },
+          "unit": "celsius",
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Heat pump power"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: W"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "id": 11,
+      "links": [
+        {
+          "title": "Weather data by Open-Meteo.com",
+          "url": "https://open-meteo.com/",
+          "targetBlank": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "min",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT mean(\"temperature\") FROM \"weather\" WHERE \"kind\" = 'current' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "alias": "Outdoor, Open-Meteo now"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT mean(\"temperature\") FROM \"weather\" WHERE \"kind\" = 'history' AND \"model\" = 'era5_seamless' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "alias": "Outdoor, ERA5"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT mean(\"temperature\") FROM \"weather\" WHERE \"kind\" = 'history' AND \"model\" = 'ecmwf_ifs' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "alias": "Outdoor, ECMWF IFS"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT mean(\"currentTemp\") FROM \"xymd1\" WHERE \"device.name\" =~ /^thermostat-/ AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "alias": "Rooms, mean of thermostats"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT sum(\"p\") FROM (SELECT mean(\"p\") AS \"p\" FROM \"current_power\" WHERE \"device.name\" = 'heat_pump' AND $timeFilter GROUP BY time($__interval), \"phase\" fill(none)) WHERE $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "alias": "Heat pump power"
+        }
+      ],
+      "title": "Outdoor, rooms and heat pump",
+      "type": "timeseries"
     }
   ],
   "refresh": "5s",

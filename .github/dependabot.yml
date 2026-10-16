@@ -572,6 +572,28 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: "docker"
+    directory: "/docker/weather"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      monitoring:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/docker/weather"
+    schedule:
+      interval: "monthly"
+    reviewers:
+      - "groupsky"
+    groups:
+      monitoring:
+        patterns:
+          - "*"
+
   # Home Automation - User interface and automation platform
   - package-ecosystem: "docker"
     directory: "/docker/homeassistant"

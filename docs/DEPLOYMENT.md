@@ -479,6 +479,7 @@ The following services are built as prebuilt images in CI:
 | sunseeker-monitoring | Lawn mower monitoring |
 | telegram-bridge | Telegram notifications |
 | volman | Volume backup management |
+| weather | Outdoor weather from Open-Meteo to InfluxDB |
 | ya-modbus-adapter | ya-modbus bridge messages to the old reader's outputs |
 | ya-modbus-bridge | ya-modbus MQTT bridge (Modbus buses moved off modbus-serial) |
 | zigbee2mqtt | Zigbee device integration |
