@@ -9,7 +9,7 @@ const at = (iso) => Date.parse(iso) / 1000
 // On 2024-01-15 at 45 N 10 E the sun sets at about 16:15 UTC and rises at about 06:55 UTC.
 const times = SunCalc.getTimes(new Date('2024-01-15T12:00:00Z'), 45, 10)
 
-describe('sunReason', () => {
+describe('sunReason (for the hour from the given start)', () => {
     test('the test day has the expected sunset and sunrise', () => {
         expect(times.sunset.toISOString()).toMatch(/^2024-01-15T16:/)
         expect(times.sunrise.toISOString()).toMatch(/^2024-01-15T06:5/)
@@ -30,33 +30,36 @@ describe('sunReason', () => {
 })
 
 describe('buildQueries', () => {
-    test('reads t3 by quarter hour and pump-on samples by hour, from one hour before the start', () => {
+    test('reads t3 and pump-on samples by quarter hour, from 90 minutes before the first point to 30 minutes before the end', () => {
         const q = buildQueries(at('2024-01-15T20:00:00Z'), at('2024-01-15T22:00:00Z'))
+        const range = `time >= ${at('2024-01-15T18:30:00Z')}s AND time < ${at('2024-01-15T21:30:00Z')}s`
         expect(q.temperature).toBe(
-            'SELECT mean("t3"), count("t3") FROM "xymd1" WHERE "device.name" = \'solar_heater\' ' +
-            'AND time >= 1705345200s AND time < 1705356000s GROUP BY time(15m)')
+            `SELECT mean("t3") FROM "xymd1" WHERE "device.name" = 'solar_heater' AND ${range} GROUP BY time(15m)`)
         expect(q.pump).toBe(
-            'SELECT count("t3") FROM "xymd1" WHERE "device.name" = \'solar_heater\' AND "outputs.p1" = true ' +
-            'AND time >= 1705345200s AND time < 1705356000s GROUP BY time(1h) fill(0)')
+            `SELECT count("outputs.p1") FROM "xymd1" WHERE "device.name" = 'solar_heater' AND "outputs.p1" = true AND ${range} GROUP BY time(15m)`)
     })
 })
 
-// Builds the quarter-hour rows for hours starting at `from`, all with data.
-function quarters(fromSec, hours, temp = 1.5, count = 700) {
+// Quarter-hour rows [time, mean] from `from`, `count` quarters long.
+function quarters(from, count, temp = 1.5) {
     const rows = []
-    for (let t = fromSec; t < fromSec + hours * hour; t += 900) rows.push([t, temp, count])
+    for (let i = 0; i < count; i++) rows.push([from + i * 900, temp])
     return rows
 }
 
 describe('estimatePoints', () => {
     const start = at('2024-01-15T21:00:00Z')
+    // The window of the point at `start` is 20:30 to 21:30; the pump check covers 19:30 to 20:30.
+    const windowStart = start - 1800
+    const checkStart = windowStart - hour
+    const allData = () => quarters(checkStart, 8)
 
     function run({temperature, pump = [], end = start + hour, knownBad = []}) {
         return estimatePoints({temperature, pump, startSec: start, endSec: end, location, knownBad})
     }
 
     test('a dark hour with the pump off before and during it is valid', () => {
-        expect(run({temperature: quarters(start - hour, 2)})).toEqual([{
+        expect(run({temperature: allData()})).toEqual([{
             measurement: 'weather',
             tags: {source: 'collector', kind: 'estimate'},
             fields: {temperature: 1.5},
@@ -67,42 +70,46 @@ describe('estimatePoints', () => {
         }])
     })
 
-    test('the temperature is the mean of the quarter means', () => {
-        const temperature = [...quarters(start - hour, 1), [start, 1, 700], [start + 900, 2, 700], [start + 1800, 3, 700], [start + 2700, 4, 700]]
+    test('the temperature is the mean of the four quarters around the hour', () => {
+        const temperature = [...quarters(checkStart, 4), [windowStart, 1], [windowStart + 900, 2], [start, 3], [start + 900, 4]]
         expect(run({temperature})[0].fields.temperature).toBe(2.5)
     })
 
     test.each([
-        ['pump_on', {pump: [[start - hour, 0], [start, 13]]}],
-        ['pump_recent', {pump: [[start - hour, 5], [start, 0]]}],
-    ])('a pump run gives %s', (reason, extra) => {
-        const [p] = run({temperature: quarters(start - hour, 2), ...extra})
+        ['pump_on', [[start, 13]]],
+        ['pump_on', [[windowStart, 2]]],
+        ['pump_recent', [[checkStart, 5]]],
+        ['pump_recent', [[windowStart - 900, 1]]],
+    ])('a pump run gives %s', (reason, pump) => {
+        const [p] = run({temperature: allData(), pump})
         expect(p.booleans.valid).toBe(false)
         expect(p.strings.reason).toBe(reason)
         expect(p.fields.temperature).toBe(1.5)
     })
 
-    test('a quarter without samples gives no_data and the temperature is left out', () => {
-        const temperature = quarters(start - hour, 2).map(([t, v, c]) => t === start + 1800 ? [t, null, null] : [t, v, c])
+    test('a quarter without data in the window gives no_data and leaves the temperature out', () => {
+        const temperature = allData().map(([t, v]) => (t === start + 900 ? [t, null] : [t, v]))
         const [p] = run({temperature})
         expect(p.strings.reason).toBe('no_data')
         expect(p.booleans.valid).toBe(false)
         expect(p.fields).toEqual({})
     })
 
-    test('no samples in the hour before means the pump state is unknown', () => {
-        expect(run({temperature: quarters(start, 1)})[0].strings.reason).toBe('pump_unknown')
+    test('a quarter without data in the hour before means the pump state is unknown', () => {
+        expect(run({temperature: quarters(windowStart, 4)})[0].strings.reason).toBe('pump_unknown')
+        const gap = allData().filter(([t]) => t !== checkStart + 900)
+        expect(run({temperature: gap})[0].strings.reason).toBe('pump_unknown')
     })
 
     test('a known bad period gives its reason', () => {
-        const knownBad = [{from: '2024-01-15', to: '2024-01-15', reason: 'probe_fault'}]
-        expect(run({temperature: quarters(start - hour, 2), knownBad})[0].strings.reason).toBe('probe_fault')
+        const knownBad = [{from: '2024-01-15T12:00:00Z', to: '2024-01-16T12:00:00Z', reason: 'probe_fault'}]
+        expect(run({temperature: allData(), knownBad})[0].strings.reason).toBe('probe_fault')
     })
 
     test('daytime hours are marked day, and every hour gets a point', () => {
         const from = at('2024-01-15T10:00:00Z')
         const points = estimatePoints({
-            temperature: quarters(from - hour, 13), pump: [], startSec: from, endSec: from + 12 * hour, location, knownBad: [],
+            temperature: quarters(from - 5400, 13 * 4), pump: [], startSec: from, endSec: from + 12 * hour, location, knownBad: [],
         })
         expect(points.map(p => p.strings.reason)).toEqual([
             'day', 'day', 'day', 'day', 'day', 'day', 'day', // 10:00 to 16:00
@@ -110,27 +117,29 @@ describe('estimatePoints', () => {
             'ok', 'ok', // 20:00, 21:00
         ])
     })
+
+    test('the hour before sunrise is valid when its window ends before sunrise', () => {
+        const h = at('2024-01-16T06:00:00Z') // window 05:30 to 06:30, sunrise about 06:55
+        const [p] = estimatePoints({temperature: quarters(h - 5400, 8), pump: [], startSec: h, endSec: h + hour, location, knownBad: []})
+        expect(p.strings.reason).toBe('ok')
+    })
 })
 
 describe('KNOWN_BAD', () => {
-    test('marks the probe fault and the warm summer of 2022', () => {
+    test('marks the warm nights of 2022 and the probe fault, whole nights each', () => {
         expect(KNOWN_BAD).toEqual([
-            {from: '2022-07-24', to: '2022-09-16', reason: 'unexplained_warm'},
-            {from: '2026-06-07', to: '2026-08-09', reason: 'probe_fault'},
+            {from: '2022-07-24T12:00:00Z', to: '2022-09-17T12:00:00Z', reason: 'unexplained_warm'},
+            {from: '2026-06-07T12:00:00Z', to: '2026-08-10T12:00:00Z', reason: 'probe_fault'},
         ])
     })
 
-    test('the last day of a period is still inside it', () => {
-        const t = at('2026-08-09T23:00:00Z')
-        const [p] = estimatePoints({
-            temperature: quarters(t - hour, 2), pump: [], startSec: t, endSec: t + hour, location,
-        })
-        expect(p.strings.reason).toBe('probe_fault')
-        const next = at('2026-08-10T23:00:00Z')
-        const [q] = estimatePoints({
-            temperature: quarters(next - hour, 2), pump: [], startSec: next, endSec: next + hour, location,
-        })
-        expect(q.strings.reason).toBe('ok')
+    test('the morning after the last day is still inside, the next night is not', () => {
+        const point = (iso) => {
+            const h = at(iso)
+            return estimatePoints({temperature: quarters(h - 5400, 8), pump: [], startSec: h, endSec: h + hour, location})[0]
+        }
+        expect(point('2026-08-10T02:00:00Z').strings.reason).toBe('probe_fault')
+        expect(point('2026-08-10T23:00:00Z').strings.reason).toBe('ok')
     })
 })
 
@@ -140,8 +149,8 @@ describe('createEstimator', () => {
         const asked = []
         const query = async (q) => {
             asked.push(q)
-            if (q.includes('outputs.p1')) return [{columns: ['time', 'count'], values: [[start - hour, 0], [start, 0]]}]
-            return [{columns: ['time', 'mean', 'count'], values: quarters(start - hour, 2, 3.25)}]
+            if (q.includes('outputs.p1')) return [{columns: ['time', 'count'], values: quarters(start - 5400, 8, 0)}]
+            return [{columns: ['time', 'mean'], values: quarters(start - 5400, 8, 3.25)}]
         }
         const {estimateHours} = createEstimator({query, location, knownBad: []})
         const points = await estimateHours(start, start + hour)

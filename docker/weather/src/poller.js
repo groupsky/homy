@@ -2,8 +2,9 @@
 // - current values on every poll;
 // - the 48-hour forecast once per hour (the first poll that succeeds in it);
 // - the last 14 days of history once per UTC day, from each history model;
-// - the collector night estimate for each newly completed hour (#1735). On start
-//   it redoes the last 48 hours, which overwrites the same points.
+// - the collector night estimate once per hour (#1735). It redoes the last 3
+//   hours, so readings that reached InfluxDB late are counted, and the last 48
+//   hours on start. The same points are overwritten.
 // A failed step is logged and tried again on the next poll. A missed poll is
 // not filled in later, so a gap in the current values stays visible.
 
@@ -23,6 +24,7 @@ function utcDate(sec) {
 }
 
 const ESTIMATE_HOURS_ON_START = 48
+const ESTIMATE_HOURS_REDONE = 3
 
 function createPoller({location, fetchJson, writePoints, log = console, estimateHours = null}) {
     let lastForecastHour = null
@@ -56,8 +58,10 @@ function createPoller({location, fetchJson, writePoints, log = console, estimate
 
     async function estimate(nowSec) {
         const hour = Math.floor(nowSec / 3600) * 3600
-        const from = estimatedUntil == null ? hour - ESTIMATE_HOURS_ON_START * 3600 : estimatedUntil
-        if (from >= hour) return
+        if (estimatedUntil === hour) return
+        const from = estimatedUntil == null
+            ? hour - ESTIMATE_HOURS_ON_START * 3600
+            : Math.min(estimatedUntil, hour - ESTIMATE_HOURS_REDONE * 3600)
         const points = await estimateHours(from, hour)
         await writePoints(points)
         estimatedUntil = hour

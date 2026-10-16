@@ -5,6 +5,8 @@
 // By day the sun heats it, while the pump runs the tank heats it, and right
 // after sunset the collector still holds heat. So each UTC hour gets one point,
 // marked valid or invalid with the reason, and the mean of t3 when there are data.
+// The point at hour h is the mean from h-30m to h+30m, so it lines up with the
+// Open-Meteo values, which are readings at h. All rules use that same window.
 //
 // Under a clear, calm sky the collector reads below the air (it radiates to the
 // sky). That is not corrected here; compare with the cloud cover from Open-Meteo.
@@ -19,16 +21,17 @@ const QUARTERS = [0, 900, 1800, 2700]
 // collector reads about 0.9 °C warm, 3 hours after about 0.5 °C, 7 hours after about 0.
 const RULES = {
     hoursAfterSunset: 3,
-    // The pump must be off during the hour and the whole hour before it.
-    pumpOffHoursBefore: 1,
+    // The pump must be off during the window and this long before it.
+    pumpOffMinutesBefore: 60,
 }
 
-// Periods with bad readings, UTC dates, both days included.
+// Periods with bad readings. Each runs from noon UTC of its first day to noon
+// UTC after its last day, so it covers whole nights.
 const KNOWN_BAD = [
     // 22 nights read 6 to 15 °C too warm; the cause is unknown.
-    {from: '2022-07-24', to: '2022-09-16', reason: 'unexplained_warm'},
+    {from: '2022-07-24T12:00:00Z', to: '2022-09-17T12:00:00Z', reason: 'unexplained_warm'},
     // The probe had fallen off the collector.
-    {from: '2026-06-07', to: '2026-08-09', reason: 'probe_fault'},
+    {from: '2026-06-07T12:00:00Z', to: '2026-08-10T12:00:00Z', reason: 'probe_fault'},
 ]
 
 const MEASUREMENT = 'xymd1'
@@ -38,12 +41,12 @@ function validTime(date) {
     return date != null && !Number.isNaN(date.getTime())
 }
 
-// Returns null when the whole hour is dark and at least `hoursAfterSunset`
-// after sunset, else 'day' or 'after_sunset'.
-function sunReason(hourStartSec, location) {
+// Returns null when the whole hour from `startSec` is dark and at least
+// `hoursAfterSunset` after sunset, else 'day' or 'after_sunset'.
+function sunReason(startSec, location) {
     const lat = Number(location.latitude)
     const lon = Number(location.longitude)
-    const start = hourStartSec * 1000
+    const start = startSec * 1000
     const end = start + HOUR * 1000
     const sunsets = []
     const sunrises = []
@@ -61,51 +64,56 @@ function sunReason(hourStartSec, location) {
     return null
 }
 
-function knownBadReason(hourStartSec, knownBad) {
+function knownBadReason(sec, knownBad) {
     for (const {from, to, reason} of knownBad) {
-        const fromSec = Date.parse(`${from}T00:00:00Z`) / 1000
-        const toSec = Date.parse(`${to}T00:00:00Z`) / 1000 + 86400
-        if (hourStartSec >= fromSec && hourStartSec < toSec) return reason
+        if (sec >= Date.parse(from) / 1000 && sec < Date.parse(to) / 1000) return reason
     }
     return null
 }
 
-// Both queries start one hour early, for the pump check of the first hour.
+const HALF_HOUR = HOUR / 2
+const QUARTERS_BEFORE = RULES.pumpOffMinutesBefore / 15
+
+// Points from startSec to endSec need data from the start of the first
+// window's pump check to the end of the last window (h + 30m).
 function buildQueries(startSec, endSec) {
-    const range = `time >= ${startSec - RULES.pumpOffHoursBefore * HOUR}s AND time < ${endSec}s`
+    const from = startSec - HALF_HOUR - RULES.pumpOffMinutesBefore * 60
+    const range = `time >= ${from}s AND time < ${endSec - HALF_HOUR}s`
     const where = `"device.name" = '${DEVICE}'`
     return {
-        temperature: `SELECT mean("t3"), count("t3") FROM "${MEASUREMENT}" WHERE ${where} AND ${range} GROUP BY time(15m)`,
-        pump: `SELECT count("t3") FROM "${MEASUREMENT}" WHERE ${where} AND "outputs.p1" = true AND ${range} GROUP BY time(1h) fill(0)`,
+        temperature: `SELECT mean("t3") FROM "${MEASUREMENT}" WHERE ${where} AND ${range} GROUP BY time(15m)`,
+        pump: `SELECT count("outputs.p1") FROM "${MEASUREMENT}" WHERE ${where} AND "outputs.p1" = true AND ${range} GROUP BY time(15m)`,
     }
 }
 
-// temperature: [[quarterStartSec, meanT3, count], ...]; pump: [[hourStartSec, pumpOnSamples], ...]
+// temperature: [[quarterStartSec, meanT3 or null], ...]
+// pump: [[quarterStartSec, pumpOnSamples], ...]
 function estimatePoints({temperature, pump, startSec, endSec, location, knownBad = KNOWN_BAD}) {
-    const quarter = new Map(temperature.map(([t, mean, count]) => [t, {mean, count: count || 0}]))
+    const mean = new Map(temperature.map(([t, value]) => [t, value]))
     const pumpOn = new Map(pump.map(([t, count]) => [t, count || 0]))
-    const hasData = (q) => q != null && q.count > 0 && typeof q.mean === 'number'
+    const hasData = (t) => typeof mean.get(t) === 'number'
+    const pumpRan = (t) => pumpOn.get(t) > 0
 
     const points = []
     for (let h = startSec; h < endSec; h += HOUR) {
-        const own = QUARTERS.map(offset => quarter.get(h + offset))
+        const windowStart = h - HALF_HOUR
+        const own = QUARTERS.map(offset => windowStart + offset)
+        const before = []
+        for (let i = QUARTERS_BEFORE; i >= 1; i--) before.push(windowStart - i * 900)
         const full = own.every(hasData)
-        const pumpBefore = []
-        for (let i = 1; i <= RULES.pumpOffHoursBefore; i++) pumpBefore.push(h - i * HOUR)
-        const before = pumpBefore.every(b => QUARTERS.some(offset => hasData(quarter.get(b + offset))))
 
         const reason = !full ? 'no_data'
             : knownBadReason(h, knownBad)
-            || sunReason(h, location)
-            || (pumpOn.get(h) > 0 ? 'pump_on' : null)
-            || (!before ? 'pump_unknown' : null)
-            || (pumpBefore.some(b => pumpOn.get(b) > 0) ? 'pump_recent' : null)
+            || sunReason(windowStart, location)
+            || (own.some(pumpRan) ? 'pump_on' : null)
+            || (!before.every(hasData) ? 'pump_unknown' : null)
+            || (before.some(pumpRan) ? 'pump_recent' : null)
             || 'ok'
 
         const fields = {}
         if (full) {
-            const mean = own.reduce((sum, q) => sum + q.mean, 0) / own.length
-            fields.temperature = Math.round(mean * 1000) / 1000
+            const sum = own.reduce((total, t) => total + mean.get(t), 0)
+            fields.temperature = Math.round(sum / own.length * 1000) / 1000
         }
         points.push({
             measurement: 'weather',

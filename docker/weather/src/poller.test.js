@@ -139,13 +139,13 @@ describe('collector estimate', () => {
         expect(estimates(written)).toHaveLength(48)
     })
 
-    test('later polls in the same hour do nothing, the next hour adds one hour', async () => {
+    test('later polls in the same hour do nothing, the next hour redoes the last 3 hours', async () => {
         const {poller, estimateHours} = setupEstimate()
         await poller.pollOnce(t0 + 2 * 60)
         await poller.pollOnce(t0 + 17 * 60)
         expect(estimateHours).toHaveBeenCalledTimes(1)
         await poller.pollOnce(t0 + hour + 2 * 60)
-        expect(estimateHours).toHaveBeenLastCalledWith(t0, t0 + hour)
+        expect(estimateHours).toHaveBeenLastCalledWith(t0 - 2 * hour, t0 + hour)
     })
 
     test('a failed estimate is logged and the same hours are tried on the next poll', async () => {

@@ -76,30 +76,33 @@ in the collector, outdoors. At night, with the solar pump (`outputs.p1`) off, it
 the outdoor air. It needs no internet. Each UTC hour gets one point in `weather` with tags
 `source=collector`, `kind=estimate`:
 
-- `temperature`: the mean of `t3` over the hour (mean of the four quarter-hour means). It
-  is written whenever all four quarters have data, also for invalid hours.
+- `temperature`: the mean of `t3` from 30 minutes before to 30 minutes after the hour
+  (the mean of four quarter-hour means), so it lines up with the Open-Meteo values, which
+  are readings at the hour. It is written whenever all four quarters have data, also for
+  invalid hours. All rules below use the same window.
 - `valid` (boolean) and `reason` (string). The first rule that fails sets the reason:
 
 | `reason` | Meaning |
 |---|---|
-| `no_data` | a quarter of the hour has no reading |
-| `unexplained_warm` | 2022-07-24 to 2022-09-16: 22 nights read 6–15 °C too warm, cause unknown |
-| `probe_fault` | 2026-06-07 to 2026-08-09: the probe had fallen off |
-| `day` | the sun is up during some part of the hour |
-| `after_sunset` | less than 3 hours after sunset; the collector still holds heat |
-| `pump_on` | the solar pump ran during the hour |
-| `pump_unknown` | no reading in the hour before, so the pump state is unknown |
-| `pump_recent` | the solar pump ran in the hour before |
+| `no_data` | a quarter of the window has no reading |
+| `unexplained_warm` | the nights of 2022-07-24 to 2022-09-16: 22 nights read 6–15 °C too warm, cause unknown |
+| `probe_fault` | the nights of 2026-06-07 to 2026-08-09: the probe had fallen off |
+| `day` | the sun is up during some part of the window |
+| `after_sunset` | the window starts less than 3 hours after sunset; the collector still holds heat |
+| `pump_on` | the solar pump ran during the window |
+| `pump_unknown` | a quarter of the 60 minutes before the window has no reading, so the pump state is unknown |
+| `pump_recent` | the solar pump ran in the 60 minutes before the window |
 | `ok` | valid |
 
 The rules are `RULES` and `KNOWN_BAD` in `src/collector.js`. Under a clear, calm sky the
 collector reads below the air, because it radiates heat to the sky. That is not corrected;
-compare with `cloud_cover` from Open-Meteo. The poller redoes the last 48 hours when it
-starts. Older hours are built once:
+compare with `cloud_cover` from Open-Meteo. Once an hour the poller redoes the last 3
+hours, so readings that reached InfluxDB late still count. On start it redoes the last 48
+hours. Older hours are built once:
 
 ```bash
 docker exec homy-weather-1 node backfill-collector.js 2022-07-20
-# node backfill-collector.js <start> [end, default today]; 30 days per step
+# node backfill-collector.js <start> [end, default today]; 30 days per step, 5 s apart
 ```
 
 ## Rules for automations that read it

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // One-time build of the collector night estimate (#1735) from past data.
 // Usage: node backfill-collector.js <start YYYY-MM-DD> [end YYYY-MM-DD]
-// The end defaults to today (UTC). Run it inside the running container:
+// The end defaults to today (UTC). It pauses 5 s between 30-day steps to keep
+// the load on InfluxDB low. Run it inside the running container:
 //   docker exec homy-weather-1 node backfill-collector.js 2022-07-20
 
 const fs = require('fs')
@@ -27,6 +28,7 @@ async function main() {
             startDate,
             endDate,
             nowSec: Math.floor(Date.now() / 1000),
+            pauseMs: 5000,
         })
         console.log(`Done: ${total} collector estimate hours`)
     } finally {
