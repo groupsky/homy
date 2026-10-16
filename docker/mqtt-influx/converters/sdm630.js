@@ -1,5 +1,7 @@
 const {Point} = require('@influxdata/influxdb-client')
 
+// current_power.p is the real (active) power of each phase in W: ap/bp/cp.
+// On the SDM630, a_ap/b_ap/c_ap are apparent power in VA (#1749).
 module.exports = function sdm630(input) {
     return [
         new Point('current_power')
@@ -10,7 +12,7 @@ module.exports = function sdm630(input) {
             .timestamp(input._tz)
             .floatField('v', input.av)
             .floatField('c', input.ac)
-            .floatField('p', input.a_ap),
+            .floatField('p', input.ap),
 
         new Point('current_power')
             .tag('device.name', input.device)
@@ -20,7 +22,7 @@ module.exports = function sdm630(input) {
             .timestamp(input._tz)
             .floatField('v', input.bv)
             .floatField('c', input.bc)
-            .floatField('p', input.b_ap),
+            .floatField('p', input.bp),
 
         new Point('current_power')
             .tag('device.name', input.device)
@@ -30,7 +32,7 @@ module.exports = function sdm630(input) {
             .timestamp(input._tz)
             .floatField('v', input.cv)
             .floatField('c', input.cc)
-            .floatField('p', input.c_ap),
+            .floatField('p', input.cp),
 
         new Point('power_meter')
             .tag('device.name', input.device)

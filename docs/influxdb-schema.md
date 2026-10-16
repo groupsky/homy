@@ -89,7 +89,7 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 
 #### `main` Measurement
 **Source**: modbus-serial-main → Main electrical panel (SDM630)
-**Note**: per-phase instantaneous voltage/current/power for the mains is in the `current_power` measurement (`bus: "primary"`, `device.name: "main"`), not here — see below.
+**Note**: per-phase instantaneous voltage/current/power for the mains is in the `current_power` measurement (`bus: "primary"`, `device.name: "main"`), not here — see below. The main reader's full readings go to `raw` with `bus: "primary"`.
 **Fields**: 3-phase power system metrics - voltage, current, power, frequency, power factor
 **Use Cases**: Whole-house energy consumption, electrical system monitoring
 
@@ -99,7 +99,20 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 **Tag Structure**: `bus` (`primary` | `secondary` | `tetriary`),
 `device.name` (e.g. `main`, `boiler`, `heat_pump`, …), `device.type`,
 `device.addr`, and `phase` (`A` | `B` | `C`, on 3-phase meters).
-**Fields** (float): `v` (phase voltage), `c` (phase current), `p` (phase power).
+**Fields** (float): `v` (phase voltage, V), `c` (phase current, A), `p` (real/active
+power of the phase, **W**).
+
+**`p` before 2026-10-16 (#1749)**: for `main` (SDM630), `water_pump` (EX9EM) and
+`microwave` (OR-WE-514), `p` held **apparent power (VA)** until the deploy of #1749
+on 2026-10-16. Summed over a day it overstated the main meter's counter by 13–20 %; at
+idle the pump read 58 VA for 11 W and the microwave 35 VA for 0 W. For those meters
+and earlier dates, read the real power from `raw` (main: `ap`/`bp`/`cp`; pump and
+microwave: `p`). The other meters (DDS519MR, DDS024MR) always wrote real power.
+Real power is signed: on the SDM630 a phase goes negative while it exports (no export
+so far). **For energy, use counter differences**, not the integral of `p`: `raw.tot_act`
+for the pump and microwave, and `raw.total_import_kwh` for `main`. (`power_meter.total`
+for `main` is written twice per reading, first `total_kwh` and then `total_import_kwh`;
+the second write wins, so it equals the import counter.)
 
 **Mains identification**: the whole-house grid meter is `bus = primary`,
 `device.name = main` (SDM630), publishing per-phase `v`/`c`/`p` tagged
@@ -147,14 +160,19 @@ it recordable.
 power and metering history — impossible before 2026-09-02, when nothing from
 the mesh reached InfluxDB at all.
 
-#### `raw` Measurement (from modbus-serial-secondary)
-**Source**: modbus-serial-secondary → Individual appliance monitoring
-**Tag Structure**: `bus: "secondary"`, `device.name: [device_name]`
+#### `raw` Measurement (from modbus-serial-main and modbus-serial-secondary)
+**Source**: the main and secondary Modbus readers write every numeric field of each reading
+**Tag Structure**: `bus: "primary" | "secondary"`, `device.name: [device_name]`
 **Note**: Data appears in `raw` measurement, not `secondary` as originally documented
 **Key Devices and Fields**:
+- **main** (SDM630, `bus: primary`): real power `ap`/`bp`/`cp` and `total_p` (W);
+  apparent power `a_ap`/`b_ap`/`c_ap` and `total_va` (VA); counters `total_import_kwh`,
+  `total_export_kwh`, `total_kwh` (kWh). Note the names: on the SDM630 `a_ap` is
+  *apparent* power, on the DDS024MR it is *active* power.
 - **boiler** (DDS519MR, addr 20): `tot` (kWh), `v` (V), `c` (A), `p` (W), `pf`, `freq` (Hz)
-- **water_pump** (EX9EM, addr 1): Pump energy consumption
-- **kitchen appliances**: oven, stove, dishwasher, microwave - individual energy tracking
+- **water_pump** (EX9EM, addr 1) and **microwave** (OR-WE-514): `p` (real power, W),
+  `ap` (apparent power, VA), `rp` (reactive power), `pow` (power factor), `tot_act` (kWh)
+- **kitchen appliances**: oven, stove, dishwasher - individual energy tracking
 - **laundry** (addr 8): Washing machine energy monitoring
 **Use Cases**: Appliance-level energy analysis, boiler electric heater monitoring
 

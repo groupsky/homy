@@ -1,5 +1,7 @@
 const {Point} = require('@influxdata/influxdb-client')
 
+// On the DDS024MR, a_ap/b_ap/c_ap are active power in W, so they go into
+// current_power.p as they are. (On the SDM630 the same names are VA, #1749.)
 module.exports = function dds024mr(input) {
     return [
         new Point('current_power')
