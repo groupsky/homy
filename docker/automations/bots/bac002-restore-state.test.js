@@ -72,7 +72,9 @@ describe('bac002-restore-state bot', () => {
 
   describe('detects a restart and writes back only the values that differ, after the reload', () => {
     it.each([
-      ['a silence over 20 s', WEDNESDAY, (at) => reading(at + 60000, LOADED), 60000],
+      ['a silence of 60 s', WEDNESDAY, (at) => reading(at + 60000, LOADED), 60000],
+      // A self-restart on a Monday leaves the week day right; one poll is missed
+      ['a silence of 17 s on a Monday', MONDAY, (at) => reading(at + 9000, LOADED), 9000],
       ['the clock at Monday 00:xx', WEDNESDAY, (at) => reading(at, {...LOADED, ...CLOCK_RESET}), 0],
       ['the clock at 00:xx on a Monday', MONDAY, (at) => reading(at, {...LOADED, ...CLOCK_RESET}), 0],
       ['only the week day wrong', WEDNESDAY, (at) => reading(at, {...LOADED, weekDay: 'fri'}), 0],
@@ -83,7 +85,7 @@ describe('bac002-restore-state bot', () => {
 
       restart(at)
       // The unit reloads its saved values for about 24 s
-      readings(at + gap + 8000, 16000, LOADED)
+      readings(at + gap + 8000, 24000, LOADED)
       expect(writes()).toEqual([])
 
       reading(at + gap + 32000, LOADED)
@@ -194,6 +196,73 @@ describe('bac002-restore-state bot', () => {
     readings(at + 60000, 40000, LOADED)
     expect(writes()).toHaveLength(3)
     expect(writes()[2]).toEqual({mode: 'heating', targetTemp: 21.5})
+  })
+
+  it('writes again only the fields that still show the loaded value', async () => {
+    await startBot()
+    contact(false)
+    let at = readings(WEDNESDAY, 120000)
+    at = readings(at + 60000, 40000, LOADED)
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
+
+    // The mode write is lost; meanwhile a person sets 23 °C and the fan to low
+    readings(at, 5 * 60000, {...LOADED, targetTemp: 23, fanSetting: 'low'})
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}, {mode: 'heating'}])
+  })
+
+  it('writes for each of several quick restarts', async () => {
+    await startBot()
+    contact(false)
+    const at = readings(WEDNESDAY, 120000)
+    // A clock reset, then two silences of 20 s, each inside the check after
+    // the write before. The later restarts also load another fan setting.
+    for (const start of [at, at + 52000, at + 104000]) {
+      const loaded = start === at ? LOADED : {...LOADED, fanSetting: 'high'}
+      reading(start, {...loaded, ...(start === at ? CLOCK_RESET : {})})
+      readings(start + 8000, 32000, loaded)
+    }
+    readings(at + 144000, 5 * 60000, WANTED)
+
+    expect(writes()).toEqual([
+      {mode: 'heating', targetTemp: 21.5},
+      {mode: 'heating', fanSetting: 'auto', targetTemp: 21.5},
+      {mode: 'heating', fanSetting: 'auto', targetTemp: 21.5},
+    ])
+  })
+
+  describe('a reader outage over 2 min while the unit clock is still wrong from a restart', () => {
+    const outage = async (unitClock) => {
+      await startBot()
+      contact(false)
+      const at = readings(WEDNESDAY, 120000)
+      reading(at, {...LOADED, ...CLOCK_RESET})
+      reading(at + 8000, {...LOADED, ...CLOCK_RESET})
+      reading(at + 10 * 60000, {...LOADED, ...unitClock})
+      readings(at + 10 * 60000 + 8000, 32000, {...LOADED, ...unitClock})
+      readings(at + 10 * 60000 + 40000, 60000, {...WANTED, ...unitClock})
+    }
+
+    it('is a restart when the unit restarted in it', async () => {
+      await outage({weekDay: 'mon', hours: 0, minutes: 1})
+
+      expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
+    })
+
+    it('is not a restart when the unit ran through it', async () => {
+      await outage({weekDay: 'mon', hours: 0, minutes: 10})
+
+      expect(writes()).toEqual([])
+    })
+  })
+
+  it('does not store values the driver does not accept', async () => {
+    await startBot()
+    contact(false)
+    let at = readings(WEDNESDAY, 120000)
+    at = readings(at, 60000, {...WANTED, fanSetting: 4, targetTemp: 0})
+    readings(at + 60000, 40000, LOADED)
+
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
   })
 
   it('writes at most twice after a restart', async () => {

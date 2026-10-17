@@ -10,8 +10,6 @@ const VALUES = {
   fanSetting: ['auto', 'high', 'mid', 'low'],
 }
 const FIELDS = ['power', 'mode', 'fanSetting', 'targetTemp']
-// A write that has not shown in the readings after a reload time is sent once more
-const MAX_WRITES = 2
 // seenAt is saved to disk; once a minute is enough for a limit of hours
 const SEEN_AT_STEP_MS = 60 * 1000
 
@@ -34,6 +32,10 @@ const clockWrong = ({ weekDay, hours, _tz }) => {
   return weekDay === 'mon' && hours === 0 && minuteOfDay >= 62
 }
 
+// Minutes since Monday 00:00 on the unit's clock: its uptime, if it restarted
+const unitMinutes = ({ weekDay, hours, minutes }) =>
+  ((weekDays.indexOf(weekDay) + 6) % 7) * 24 * 60 + hours * 60 + minutes
+
 /**
  * Writes a BAC002 thermostat's wanted settings back after the unit restarts
  * (#1796). At a restart the unit loads the values last set on its own panel;
@@ -51,8 +53,8 @@ const clockWrong = ({ weekDay, hours, _tz }) => {
  * - The unit reloads its saved values for about 24 s, so readings in the next
  *   `reloadMs` are not stored. The first reading after that gets one write with
  *   only the values that differ. Readings in the next `reloadMs` are not stored
- *   either; what still differs then is written once more. Later changes are a
- *   person's and are stored.
+ *   either; a written field that still shows the loaded value then is written
+ *   once more. Later changes are a person's and are stored.
  * - No write without stored state, or when it was last seen more than
  *   `maxStateAgeMs` before the restart. No power write unless every contact is
  *   fresh and closed.
@@ -63,7 +65,7 @@ const clockWrong = ({ weekDay, hours, _tz }) => {
 module.exports = (name, {
   bacTopic: topicPrefix,
   switches = [],
-  silenceMs = 20 * 1000,
+  silenceMs = 15 * 1000,
   maxSilenceMs = 2 * 60 * 1000,
   reloadMs = 30 * 1000,
   maxStateAgeMs = 24 * 60 * 60 * 1000,
@@ -96,7 +98,8 @@ module.exports = (name, {
     let closedBefore = false
     let restartAt = null
     let restoreAfter = null
-    let writes = 0
+    // After the first write: each written field and the value the unit showed
+    let written = null
 
     switches.forEach(({ topic, isOpen }, index) => {
       mqtt.subscribe(topic, (payload) => {
@@ -123,28 +126,30 @@ module.exports = (name, {
         console.log(`[${name}] not writing back: the stored state is ${seenAt == null ? 'missing' : `from ${new Date(seenAt).toISOString()}`}`)
         return
       }
+      const again = written != null
       const write = {}
       for (const field of FIELDS) {
         if (wanted[field] == null || same(field, wanted[field], payload[field])) continue
+        // The second time, a new value is a person's change: write only the
+        // fields that still show the value they had at the first write.
+        if (again && !(field in written && same(field, written[field], payload[field]))) continue
         if (field === 'power' && !contactsClosed()) {
           console.log(`[${name}] not writing power ${wanted.power}: a contact is open or has no fresh data`)
           continue
         }
         write[field] = wanted[field]
       }
+      written = null
       if (Object.keys(write).length === 0) {
-        console.log(`[${name}] after the restart every setting is as wanted`)
+        console.log(`[${name}] nothing to write back after the restart`)
         return
       }
-      if (writes === MAX_WRITES) {
-        console.log(`[${name}] the unit still differs after ${writes} writes, giving up`, write)
-        return
-      }
-      writes++
-      console.log(`[${name}] writing back after the restart (write ${writes})`, write)
+      console.log(`[${name}] writing back after the restart${again ? ', again' : ''}`, write)
       mqtt.publish(writeTopic, write)
-      restored(`${name}: ${Object.entries(write).map(([field, value]) => `${field} ${value}`).join(', ')}${writes > 1 ? ' (again)' : ''}`)
+      restored(`${name}: ${Object.entries(write).map(([field, value]) => `${field} ${value}`).join(', ')}${again ? ' (again)' : ''}`)
+      if (again) return
       // Check after another reload time that the unit took it
+      written = Object.fromEntries(Object.keys(write).map((field) => [field, payload[field]]))
       restoreAfter = payload._tz + reloadMs
     }
 
@@ -152,8 +157,12 @@ module.exports = (name, {
       const at = payload._tz
       const gap = lastReadingAt == null ? 0 : at - lastReadingAt
       const wrong = clockWrong(payload)
+      // A unit whose clock is still wrong from a restart shows no clock change
+      // when it restarts again in a reader outage; its clock then shows less
+      // time since Monday 00:00 than the outage lasted.
+      const restartedInGap = gap > maxSilenceMs && (unitMinutes(payload) + 2) * 60 * 1000 < gap
       const signal = gap > silenceMs && gap <= maxSilenceMs ? `no reading for ${Math.round(gap / 1000)} s`
-        : wrong && !clockWasWrong ? `clock at ${payload.weekDay} ${payload.hours}:${String(payload.minutes).padStart(2, '0')}`
+        : wrong && (!clockWasWrong || restartedInGap) ? `clock at ${payload.weekDay} ${payload.hours}:${String(payload.minutes).padStart(2, '0')}`
           : null
       lastReadingAt = at
       if (wrong != null) clockWasWrong = wrong
@@ -166,13 +175,14 @@ module.exports = (name, {
       if (gap > maxSilenceMs && restoreAfter != null) {
         console.log(`[${name}] no reading for ${Math.round(gap / 1000)} s, dropping the waiting write-back`)
         restoreAfter = null
+        written = null
       }
       if (signal) {
         console.log(`[${name}] restart seen (${signal}), writing back the wanted state in ${reloadMs / 1000} s`)
-        if (restoreAfter == null) {
-          restartAt = at
-          writes = 0
-        }
+        // A restart while a write-back waits starts it over; the age check
+        // stays with the first one.
+        if (restoreAfter == null) restartAt = at
+        written = null
         restoreAfter = at + reloadMs
         return
       }
