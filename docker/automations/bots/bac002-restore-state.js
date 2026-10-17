@@ -36,6 +36,13 @@ const clockWrong = ({ weekDay, hours, _tz }) => {
 const unitMinutes = ({ weekDay, hours, minutes }) =>
   ((weekDays.indexOf(weekDay) + 6) % 7) * 24 * 60 + hours * 60 + minutes
 
+// A reset clock counts from 00:00; one that kept running shows the time of day
+const timeOfDayWrong = ({ hours, minutes, _tz }) => {
+  const time = new Date(_tz)
+  const diff = Math.abs(hours * 60 + minutes - (time.getHours() * 60 + time.getMinutes()))
+  return Math.min(diff, 24 * 60 - diff) > 2
+}
+
 /**
  * Writes a BAC002 thermostat's wanted settings back after the unit restarts
  * (#1796). At a restart the unit loads the values last set on its own panel;
@@ -53,8 +60,9 @@ const unitMinutes = ({ weekDay, hours, minutes }) =>
  * - The unit reloads its saved values for about 24 s, so readings in the next
  *   `reloadMs` are not stored. The first reading after that gets one write with
  *   only the values that differ. Readings in the next `reloadMs` are not stored
- *   either; a written field that still shows the loaded value then is written
- *   once more. Later changes are a person's and are stored.
+ *   either; a field that still differs and still shows its value from the
+ *   first write is written once more. Later changes are a person's and are
+ *   stored.
  * - No write without stored state, or when it was last seen more than
  *   `maxStateAgeMs` before the restart. No power write unless every contact is
  *   fresh and closed.
@@ -98,7 +106,7 @@ module.exports = (name, {
     let closedBefore = false
     let restartAt = null
     let restoreAfter = null
-    // After the first write: each written field and the value the unit showed
+    // After the first write: the value the unit showed for each field then
     let written = null
 
     switches.forEach(({ topic, isOpen }, index) => {
@@ -132,7 +140,7 @@ module.exports = (name, {
         if (wanted[field] == null || same(field, wanted[field], payload[field])) continue
         // The second time, a new value is a person's change: write only the
         // fields that still show the value they had at the first write.
-        if (again && !(field in written && same(field, written[field], payload[field]))) continue
+        if (again && !same(field, written[field], payload[field])) continue
         if (field === 'power' && !contactsClosed()) {
           console.log(`[${name}] not writing power ${wanted.power}: a contact is open or has no fresh data`)
           continue
@@ -149,7 +157,7 @@ module.exports = (name, {
       restored(`${name}: ${Object.entries(write).map(([field, value]) => `${field} ${value}`).join(', ')}${again ? ' (again)' : ''}`)
       if (again) return
       // Check after another reload time that the unit took it
-      written = Object.fromEntries(Object.keys(write).map((field) => [field, payload[field]]))
+      written = Object.fromEntries(FIELDS.map((field) => [field, payload[field]]))
       restoreAfter = payload._tz + reloadMs
     }
 
@@ -160,7 +168,8 @@ module.exports = (name, {
       // A unit whose clock is still wrong from a restart shows no clock change
       // when it restarts again in a reader outage; its clock then shows less
       // time since Monday 00:00 than the outage lasted.
-      const restartedInGap = gap > maxSilenceMs && (unitMinutes(payload) + 2) * 60 * 1000 < gap
+      const restartedInGap = gap > maxSilenceMs && timeOfDayWrong(payload) &&
+        (unitMinutes(payload) + 2) * 60 * 1000 < gap
       const signal = gap > silenceMs && gap <= maxSilenceMs ? `no reading for ${Math.round(gap / 1000)} s`
         : wrong && (!clockWasWrong || restartedInGap) ? `clock at ${payload.weekDay} ${payload.hours}:${String(payload.minutes).padStart(2, '0')}`
           : null

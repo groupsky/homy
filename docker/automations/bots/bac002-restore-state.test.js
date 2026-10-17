@@ -255,6 +255,42 @@ describe('bac002-restore-state bot', () => {
     })
   })
 
+  it('sees no restart after an overnight reader outage when only the week day is stuck at Monday', async () => {
+    await startBot()
+    contact(false)
+    const evening = new Date(2026, 9, 13, 20, 0, 0).getTime()
+    readings(evening, 120000, {...WANTED, weekDay: 'mon'})
+    // The reader is down until 08:00; a person sets 23 °C at the panel
+    readings(evening + 12 * 60 * 60000, 120000, {...WANTED, targetTemp: 23, weekDay: 'mon'})
+
+    expect(writes()).toEqual([])
+  })
+
+  it('checks the age of the stored state at the first of several restarts', async () => {
+    persistedCache = {wanted: {...WANTED}, seenAt: WEDNESDAY - 24 * 60 * 60000 + 30000}
+    await startBot()
+    contact(false)
+    // A clock reset, then silences of 20 s; the last signal is past the 24 h
+    reading(WEDNESDAY, {...LOADED, ...CLOCK_RESET})
+    for (let at = WEDNESDAY + 20000; at <= WEDNESDAY + 60000; at += 20000) reading(at, LOADED)
+    readings(WEDNESDAY + 68000, 40000, LOADED)
+
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
+  })
+
+  it('writes power at the second check when a contact closed after the first', async () => {
+    await startBot()
+    contact(false)
+    let at = readings(WEDNESDAY, 120000)
+    contact(true)
+    at = readings(at + 60000, 40000, {...LOADED, power: 'off'})
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
+
+    contact(false)
+    readings(at, 60000, {...WANTED, power: 'off'})
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}, {power: 'on'}])
+  })
+
   it('does not store values the driver does not accept', async () => {
     await startBot()
     contact(false)
