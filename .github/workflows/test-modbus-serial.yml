@@ -9,6 +9,7 @@ on:
       - 'docker/mqtt-ndjson/day-file-writer.js'
       - 'docker/mqtt-ndjson/day-file-writer.test.js'
       - 'docker/mqtt-ndjson/test-fixtures/day-file-writer-child.js'
+      - 'config/home-assistant/configuration/mqtt/climate.yaml'
       - '.github/workflows/test-modbus-serial.yml'
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - 'docker/mqtt-ndjson/day-file-writer.js'
       - 'docker/mqtt-ndjson/day-file-writer.test.js'
       - 'docker/mqtt-ndjson/test-fixtures/day-file-writer-child.js'
+      - 'config/home-assistant/configuration/mqtt/climate.yaml'
       - '.github/workflows/test-modbus-serial.yml'
   workflow_dispatch:
 

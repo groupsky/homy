@@ -10,7 +10,7 @@
   temperature_command_topic: /modbus/monitoring/thermostat-martin/write
   <<: &common_controllable_bac002
     fan_mode_command_template: >-
-      { "fanSetting": "{% if value == 'medium' %}med{% else %}{{ value }}{% endif %}" }
+      { "fanSetting": "{% if value == 'medium' %}mid{% else %}{{ value }}{% endif %}" }
     mode_command_template: >-
       {% if value == 'off' %}
         { "power": "off" }
