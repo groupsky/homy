@@ -161,6 +161,12 @@ module.exports = (name, {
       const powerIsWanted = closed && closedBefore
       closedBefore = closed
 
+      // A longer gap may hide a person's change at the panel, so a write-back
+      // still waiting from before it is dropped.
+      if (gap > maxSilenceMs && restoreAfter != null) {
+        console.log(`[${name}] no reading for ${Math.round(gap / 1000)} s, dropping the waiting write-back`)
+        restoreAfter = null
+      }
       if (signal) {
         console.log(`[${name}] restart seen (${signal}), writing back the wanted state in ${reloadMs / 1000} s`)
         if (restoreAfter == null) {

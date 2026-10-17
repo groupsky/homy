@@ -157,6 +157,17 @@ describe('bac002-restore-state bot', () => {
     })
   })
 
+  it('drops a waiting write-back when a reader outage over 2 min follows the restart', async () => {
+    await startBot()
+    contact(false)
+    const at = readings(WEDNESDAY, 120000)
+    reading(at, {...LOADED, ...CLOCK_RESET})
+    // The reader stops for 1 h; a person sets 23 °C at the panel meanwhile
+    readings(at + 60 * 60000, 120000, {...LOADED, targetTemp: 23})
+
+    expect(writes()).toEqual([])
+  })
+
   it('sees one restart when the unit clock stays wrong', async () => {
     await startBot()
     contact(false)
