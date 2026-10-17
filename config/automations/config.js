@@ -626,3 +626,15 @@ module.exports = {
     }
   }
 }
+
+// Each thermostat with a contact bot also gets a bot that writes its wanted
+// settings back after the unit restarts (#1796). It reads the same contacts,
+// so it leaves the power to the contact bot while one is open.
+for (const [botName, bot] of Object.entries(module.exports.bots)) {
+  if (bot.type !== 'bac002-toggle-power') continue
+  module.exports.bots[botName.replace(/^toggle(.+)Power$/, 'restore$1State')] = {
+    type: 'bac002-restore-state',
+    bacTopic: bot.bacTopic,
+    switches: bot.switches,
+  }
+}
