@@ -258,43 +258,52 @@ services:
     mem_limit: *node-mem-limit
     logging: *default-logging
 
+  # The main bus runs on ya-modbus (#1759), as tetriary does (see the comment
+  # at tetriary-power). The old reader also wrote the InfluxDB measurement
+  # `raw` with bus=primary; the adapter does not, and nothing read it.
   main-power:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
-    build: docker/modbus-serial
+    image: ghcr.io/groupsky/homy/ya-modbus-bridge:${IMAGE_TAG:-latest}
+    build: docker/ya-modbus-bridge
     depends_on:
       - broker
-      - mongo
     restart: unless-stopped
     privileged: true
     networks:
       - automation
     security_opt:
       - no-new-privileges:true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
+      - ${CONFIG_PATH}/ya-modbus/main.json:/etc/ya-modbus/config.json:ro
+    mem_limit: *node-mem-limit
+    logging: *default-logging
+
+  main-adapter:
+    image: ghcr.io/groupsky/homy/ya-modbus-adapter:${IMAGE_TAG:-latest}
+    build: docker/ya-modbus-adapter
+    depends_on:
+      - broker
+      - mongo
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
     secrets:
-      - influxdb_write_user
-      - influxdb_write_user_password
       - mongo_root_username
       - mongo_root_password
     environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/main/{name}/reading
       - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=main
-      - SERVICE_NAME=main-power
+      - SERVICE_NAME=main-adapter
       - RAW_DIR=/data/raw
-      - CONFIG=/etc/config.js
-      - BROKER=mqtt://broker
-      - TOPIC=/modbus/main/{name}/reading
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
-      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
-      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
-      - INFLUXDB_TAGS={"bus":"primary"}
-      - INFLUXDB_MEASUREMENT=raw
     volumes:
-      - /dev/bus/usb:/dev/bus/usb
-      - /dev/serial:/dev/serial
-      - ${MAIN_POWER_CONFIG_FILE}:/etc/config.js:ro
+      - ${CONFIG_PATH}/ya-modbus/main.json:/etc/ya-modbus/config.json:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     mem_limit: *node-mem-limit
     logging: *default-logging
