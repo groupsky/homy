@@ -89,31 +89,108 @@ describe('bac002-restore-state bot', () => {
       reading(at + gap + 32000, LOADED)
       expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
 
-      readings(at + gap + 40000, 60000, LOADED)
+      // The unit took the write
+      readings(at + gap + 40000, 60000, WANTED)
       expect(writes()).toHaveLength(1)
     })
   })
 
-  it('does not see a restart in normal readings', async () => {
-    await startBot()
-    contact(false)
-    readings(WEDNESDAY, 10 * 60000)
+  describe('sees no restart', () => {
+    // Readings from `from` for 8 min with the unit's clock `unitClockOffsetMs`
+    // off and its week day `weekDay` if set. A person sets 23 °C at the panel
+    // at `changeAt`, just after the time a false restart signal would come.
+    const panelChangeDuring = (from, changeAt, unitClockOffsetMs, weekDay) => {
+      for (let at = from; at < from + 8 * 60000; at += 8000) {
+        const clock = new Date(at + unitClockOffsetMs)
+        reading(at, {
+          ...(at >= changeAt ? {...WANTED, targetTemp: 23} : WANTED),
+          weekDay: weekDay ?? weekDays[clock.getDay()],
+          hours: clock.getHours(),
+          minutes: clock.getMinutes(),
+        })
+      }
+    }
 
-    expect(writes()).toEqual([])
+    it('in normal readings', async () => {
+      await startBot()
+      contact(false)
+      readings(WEDNESDAY, 10 * 60000)
+
+      expect(writes()).toEqual([])
+    })
+
+    it('at midnight when the unit clock is a minute behind', async () => {
+      await startBot()
+      contact(false)
+      panelChangeDuring(new Date(2026, 9, 13, 23, 57, 0).getTime(), new Date(2026, 9, 14, 0, 0, 10).getTime(), -60000)
+
+      expect(writes()).toEqual([])
+    })
+
+    it('on a Monday at 01:00 when the unit clock is a minute behind', async () => {
+      await startBot()
+      contact(false)
+      panelChangeDuring(new Date(2026, 9, 12, 0, 58, 0).getTime(), new Date(2026, 9, 12, 1, 0, 10).getTime(), -60000)
+
+      expect(writes()).toEqual([])
+    })
+
+    it('at the end of the midnight skip when the unit week day stays wrong', async () => {
+      await startBot()
+      contact(false)
+      const from = new Date(2026, 9, 13, 23, 50, 0).getTime()
+      // The week day was lost earlier and bac002-sync-clock does not fix it
+      reading(from, {...WANTED, weekDay: 'fri'})
+      readings(from + 8000, 5 * 60000, {...WANTED, weekDay: 'fri'})
+      panelChangeDuring(new Date(2026, 9, 13, 23, 56, 0).getTime(), new Date(2026, 9, 14, 0, 2, 10).getTime(), 0, 'fri')
+
+      expect(writes()).toEqual([])
+    })
+
+    it('in a reader outage longer than 2 min, during which the panel is used', async () => {
+      await startBot()
+      contact(false)
+      const at = readings(WEDNESDAY, 120000)
+      readings(at + 2 * 60 * 60000, 120000, {...WANTED, targetTemp: 23})
+
+      expect(writes()).toEqual([])
+    })
   })
 
-  it('does not store the values loaded at a restart as wanted', async () => {
+  it('sees one restart when the unit clock stays wrong', async () => {
+    await startBot()
+    contact(false)
+    const at = readings(WEDNESDAY, 120000)
+    reading(at, {...LOADED, weekDay: 'fri'})
+    // bac002-sync-clock does not fix it; the unit takes the write
+    readings(at + 8000, 32000, {...LOADED, weekDay: 'fri'})
+    readings(at + 40000, 5 * 60000, {...WANTED, weekDay: 'fri'})
+
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
+  })
+
+  it('does not store the values loaded at a restart as wanted, even when a write is lost', async () => {
     await startBot()
     contact(false)
     let at = readings(WEDNESDAY, 120000)
 
-    // First restart: the write is lost, so the unit keeps the loaded values
-    at = readings(at + 60000, 40000, LOADED)
-    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
-
-    // Second restart: the bot still wants the values from before
-    readings(at + 60000, 40000, LOADED)
+    // The first write is lost: the unit keeps the loaded values, so it is sent again
+    at = readings(at + 60000, 72000, LOADED)
     expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}, {mode: 'heating', targetTemp: 21.5}])
+    at = readings(at, 60000, WANTED)
+
+    // The next restart: the bot still wants the values from before
+    readings(at + 60000, 40000, LOADED)
+    expect(writes()).toHaveLength(3)
+    expect(writes()[2]).toEqual({mode: 'heating', targetTemp: 21.5})
+  })
+
+  it('writes at most twice after a restart', async () => {
+    await startBot()
+    contact(false)
+    readings(readings(WEDNESDAY, 120000) + 60000, 5 * 60000, LOADED)
+
+    expect(writes()).toHaveLength(2)
   })
 
   it('keeps a panel change made after the restart', async () => {
@@ -201,7 +278,9 @@ describe('bac002-restore-state bot', () => {
       contact(true)
       at = readings(at, 60000, {...WANTED, power: 'off'})
       contact(false)
-      restartWithPowerOff(at)
+      // The reading right after the contact closes still shows the contact bot's "off"
+      reading(at, {...WANTED, power: 'off'})
+      restartWithPowerOff(at + 8000)
 
       expect(writes()).toEqual([{power: 'on', mode: 'heating', targetTemp: 21.5}])
     })
