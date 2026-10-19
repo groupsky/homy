@@ -51,7 +51,7 @@ Multiple containerized services read hardware and publish to MQTT:
 
 **Modbus Services** (wired hardware):
 - **main-power**: Primary electrical monitoring bus (whole-house SDM630 meter). Read by the ya-modbus bridge; **main-adapter** publishes the old reader's outputs ([docs/ya-modbus.md](docs/ya-modbus.md))
-- **secondary-power**: Secondary circuits and boiler monitoring
+- **secondary-power**: Secondary circuits and boiler monitoring. Read by the ya-modbus bridge; **secondary-adapter** publishes the old reader's outputs, InfluxDB `raw` included ([docs/ya-modbus.md](docs/ya-modbus.md))
 - **tetriary-power**: Additional power monitoring points (heat pump meter). Read by the ya-modbus bridge; **tetriary-adapter** publishes the old reader's outputs ([docs/ya-modbus.md](docs/ya-modbus.md))
 - **monitoring/monitoring2**: HVAC and environmental sensors
 - **dry-switches**: Digital I/O for switches, sensors, and relays

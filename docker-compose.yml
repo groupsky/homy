@@ -308,14 +308,35 @@ services:
     mem_limit: *node-mem-limit
     logging: *default-logging
 
+  # The secondary bus runs on ya-modbus (#1803), as tetriary does (see the
+  # comment at tetriary-power). Unlike main, the adapter also writes the
+  # InfluxDB measurement `raw` with bus=secondary, as the old reader did: the
+  # boiler dashboard and an alert read it.
   secondary-power:
-    image: ghcr.io/groupsky/homy/modbus-serial:${IMAGE_TAG:-latest}
-    build: docker/modbus-serial
+    image: ghcr.io/groupsky/homy/ya-modbus-bridge:${IMAGE_TAG:-latest}
+    build: docker/ya-modbus-bridge
+    depends_on:
+      - broker
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev/serial:/dev/serial
+      - ${CONFIG_PATH}/ya-modbus/secondary.json:/etc/ya-modbus/config.json:ro
+    mem_limit: *node-mem-limit
+    logging: *default-logging
+
+  secondary-adapter:
+    image: ghcr.io/groupsky/homy/ya-modbus-adapter:${IMAGE_TAG:-latest}
+    build: docker/ya-modbus-adapter
     depends_on:
       - broker
       - mongo
     restart: unless-stopped
-    privileged: true
     networks:
       - automation
     security_opt:
@@ -326,15 +347,14 @@ services:
       - mongo_root_username
       - mongo_root_password
     environment:
+      - BROKER=mqtt://broker
+      - TOPIC=/modbus/secondary/{name}/reading
       - MONGODB_URL=mongodb://mongo:27017/${MONGO_DATABASE}?authSource=admin
       - MONGODB_USERNAME_FILE=/run/secrets/mongo_root_username
       - MONGODB_PASSWORD_FILE=/run/secrets/mongo_root_password
       - COLLECTION=secondary
-      - SERVICE_NAME=secondary-power
+      - SERVICE_NAME=secondary-adapter
       - RAW_DIR=/data/raw
-      - CONFIG=/etc/config.js
-      - BROKER=mqtt://broker
-      - TOPIC=/modbus/secondary/{name}/reading
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
@@ -342,9 +362,7 @@ services:
       - INFLUXDB_TAGS={"bus":"secondary"}
       - INFLUXDB_MEASUREMENT=raw
     volumes:
-      - /dev/bus/usb:/dev/bus/usb
-      - /dev/serial:/dev/serial
-      - ${SECONDARY_POWER_CONFIG_FILE}:/etc/config.js:ro
+      - ${CONFIG_PATH}/ya-modbus/secondary.json:/etc/ya-modbus/config.json:ro
       - ${RAW_DATA_PATH:?set RAW_DATA_PATH in .env (see example.env)}:/data/raw
     mem_limit: *node-mem-limit
     logging: *default-logging

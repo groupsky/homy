@@ -1,0 +1,114 @@
+{
+  "mqtt": {
+    "url": "mqtt://broker",
+    "clientId": "ya-modbus-secondary"
+  },
+  "topicPrefix": "ya-modbus",
+  "devices": [
+    {
+      "deviceId": "water_pump",
+      "driver": "@ya-modbus/driver-ex9em",
+      "connection": {
+        "type": "rtu",
+        "port": "/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0",
+        "baudRate": 9600,
+        "parity": "even",
+        "slaveId": 1
+      },
+      "polling": {
+        "interval": 1000,
+        "mode": "continuous"
+      }
+    },
+    {
+      "deviceId": "microwave",
+      "driver": "@ya-modbus/driver-or-we-514",
+      "connection": {
+        "type": "rtu",
+        "port": "/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0",
+        "baudRate": 9600,
+        "parity": "even",
+        "slaveId": 2
+      },
+      "polling": {
+        "interval": 1000,
+        "mode": "continuous"
+      }
+    },
+    {
+      "deviceId": "oven",
+      "driver": "@ya-modbus/driver-dds519mr",
+      "connection": {
+        "type": "rtu",
+        "port": "/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0",
+        "baudRate": 9600,
+        "parity": "even",
+        "slaveId": 4
+      },
+      "polling": {
+        "interval": 1000,
+        "mode": "continuous"
+      }
+    },
+    {
+      "deviceId": "stove",
+      "driver": "@ya-modbus/driver-dds519mr",
+      "connection": {
+        "type": "rtu",
+        "port": "/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0",
+        "baudRate": 9600,
+        "parity": "even",
+        "slaveId": 5
+      },
+      "polling": {
+        "interval": 1000,
+        "mode": "continuous"
+      }
+    },
+    {
+      "deviceId": "dishwasher",
+      "driver": "@ya-modbus/driver-dds519mr",
+      "connection": {
+        "type": "rtu",
+        "port": "/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0",
+        "baudRate": 9600,
+        "parity": "even",
+        "slaveId": 6
+      },
+      "polling": {
+        "interval": 1000,
+        "mode": "continuous"
+      }
+    },
+    {
+      "deviceId": "laundry",
+      "driver": "@ya-modbus/driver-dds519mr",
+      "connection": {
+        "type": "rtu",
+        "port": "/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0",
+        "baudRate": 9600,
+        "parity": "even",
+        "slaveId": 8
+      },
+      "polling": {
+        "interval": 1000,
+        "mode": "continuous"
+      }
+    },
+    {
+      "deviceId": "boiler",
+      "driver": "@ya-modbus/driver-dds519mr",
+      "connection": {
+        "type": "rtu",
+        "port": "/dev/serial/by-path/pci-0000:00:1a.0-usb-0:1.4:1.0-port0",
+        "baudRate": 9600,
+        "parity": "even",
+        "slaveId": 20
+      },
+      "polling": {
+        "interval": 1000,
+        "mode": "continuous"
+      }
+    }
+  ]
+}

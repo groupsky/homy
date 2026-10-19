@@ -125,6 +125,14 @@ describe('a ya-modbus data message', () => {
     expect(JSON.stringify(inserted[0])).toBe(JSON.stringify(EXPECTED))
   })
 
+  it('is written to InfluxDB as the old reading, without _ms, when InfluxDB is configured', () => {
+    const points = []
+    send(adapter({influx: {write: (reading) => points.push(reading)}}), MESSAGE)
+
+    expect(points).toStrictEqual([EXPECTED])
+    expect(published).toHaveLength(1)
+  })
+
   it('keeps a null value, as the old reader wrote a NaN', () => {
     send(adapter(), {...MESSAGE, data: {...MESSAGE.data, frequency: null}})
 
@@ -212,9 +220,9 @@ describe('devicesFromBridgeConfig', () => {
   })
 
   it('refuses a driver it has no mapping for', () => {
-    const config = {...BRIDGE_CONFIG, devices: [{...BRIDGE_CONFIG.devices[0], driver: '@ya-modbus/driver-ex9em'}]}
+    const config = {...BRIDGE_CONFIG, devices: [{...BRIDGE_CONFIG.devices[0], driver: '@ya-modbus/driver-or-we-516'}]}
 
-    expect(() => devicesFromBridgeConfig(config)).toThrow(/ex9em/)
+    expect(() => devicesFromBridgeConfig(config)).toThrow(/or-we-516/)
   })
 
   it('refuses a config without devices', () => {

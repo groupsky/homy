@@ -55,6 +55,21 @@ if (process.env.MONGODB_URL) {
   insert = (doc) => collection && collection.insertOne(doc)
 }
 
+// InfluxDB is optional too: only `secondary` writes its readings there, as
+// its old reader did (measurement `raw`, tag bus=secondary).
+let influx = null
+if (process.env.INFLUXDB_URL) {
+  const {createInfluxWriter} = require('./influxdb')
+  influx = createInfluxWriter({
+    url: process.env.INFLUXDB_URL,
+    username: fileEnv('INFLUXDB_USERNAME'),
+    password: fileEnv('INFLUXDB_PASSWORD'),
+    database: process.env.INFLUXDB_DATABASE,
+    tags: process.env.INFLUXDB_TAGS ? JSON.parse(process.env.INFLUXDB_TAGS) : [],
+    measurement: process.env.INFLUXDB_MEASUREMENT,
+  })
+}
+
 const client = mqtt.connect(mqttUrl)
 
 const handle = createAdapter({
@@ -63,6 +78,7 @@ const handle = createAdapter({
   publish: (topic, payload) => client.publish(topic, payload),
   writer,
   insert,
+  influx,
 })
 
 // Registered once, before connecting, so a reconnect does not add a second
