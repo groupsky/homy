@@ -104,7 +104,7 @@ back needs them.
 
 1. In `docker-compose.yml`, put back the `<bus>-power` block of the old
    reader. It is the block before the move (`tetriary`: PR #1716, `main`:
-   PR #1761, `secondary`: the PR of #1803):
+   PR #1761, `secondary`: PR #1804):
 
    ```bash
    git log --oneline -1 --grep='(#1716)'      # the move (PR #1716; #1761 for main)
