@@ -33,6 +33,8 @@ All modbus-serial instances write directly to InfluxDB using environment-configu
      - kitchen (DDS519MR, addr 7) - **dead**, laundry (DDS519MR, addr 8)
      - boiler (DDS519MR, addr 20) - **Primary boiler energy monitoring**
    - **Data**: Power consumption, voltage, current per device
+   - **Since the move to ya-modbus** (#1803) `secondary-adapter` writes these
+     points, the same as the old reader did.
    - **Dead devices**: `kitchen` last reported 2025-11-24T11:33:36Z and
      `waste_pump` 2026-06-25T21:29:47Z. Both are commented out of
      `config/modbus-serial/secondary.config.js` and write no series at all, so
@@ -175,6 +177,8 @@ the mesh reached InfluxDB at all.
 **Note**: Data appears in `raw` measurement, not `secondary` as originally documented
 **Note**: `raw` with `bus: "primary"` (the `main` bus) ended when `main` moved to
 ya-modbus (#1759); see item 1 under "Direct InfluxDB Writers".
+**Note**: `raw` with `bus: "secondary"` goes on after `secondary` moved to
+ya-modbus (#1803): `secondary-adapter` writes the same points.
 **Key Devices and Fields**:
 - **main** (SDM630, `bus: primary`): real power `ap`/`bp`/`cp` and `total_p` (W);
   apparent power `a_ap`/`b_ap`/`c_ap` and `total_va` (VA); counters `total_import_kwh`,

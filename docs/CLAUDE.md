@@ -39,7 +39,7 @@ This directory contains technical documentation for the home automation system.
 - **[weather](../docker/weather/CLAUDE.md)** - outdoor weather from Open-Meteo (current, forecast, history), and the rules for automations that read it
 
 ### Modbus Buses on ya-modbus
-- **[ya-modbus](ya-modbus.md)** - buses read by the ya-modbus bridge (today `tetriary` and `main`), the adapter that keeps the old reader's outputs, and how to move a bus there and back
+- **[ya-modbus](ya-modbus.md)** - buses read by the ya-modbus bridge (today `tetriary`, `main` and `secondary`), the adapter that keeps the old reader's outputs, and how to move a bus there and back
 
 ## Device Integration
 

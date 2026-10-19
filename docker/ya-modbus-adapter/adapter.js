@@ -9,7 +9,9 @@
  * - MQTT: the reading on the old topic, QoS 0, not retained;
  * - NDJSON: the same reading as one line of the day file;
  * - MongoDB: the same reading as one document (only while Mongo is
- *   configured; it is being retired, issue #1622).
+ *   configured; it is being retired, issue #1622);
+ * - InfluxDB: the same reading as one point (only when configured, as the
+ *   old reader's influxdb integration was for `secondary`).
  *
  * The reading has the old field names, in the old order, then `_tz` (the
  * message timestamp), `_addr`, `_type` and `device`. There is no `_ms`: the
@@ -89,8 +91,9 @@ function parseMessage(payload) {
  * @param publish (topic, payload) => void, the MQTT publish
  * @param writer the day-file writer
  * @param insert (document) => Promise, the Mongo insert; null without Mongo
+ * @param influx the InfluxDB writer; null without InfluxDB
  */
-function createAdapter({devices, publishTopic, publish, writer, insert}) {
+function createAdapter({devices, publishTopic, publish, writer, insert, influx}) {
   const byTopic = new Map(devices.map((device) => [device.topic, device]))
   // Message of the NDJSON error being reported, or null while writes work.
   let ndjsonFailing = null
@@ -132,6 +135,15 @@ function createAdapter({devices, publishTopic, publish, writer, insert}) {
         Promise.resolve(insert({...reading})).catch(reportInsertError)
       } catch (err) {
         reportInsertError(err)
+      }
+    }
+
+    // The client buffers and retries the writes itself and logs their errors.
+    if (influx) {
+      try {
+        influx.write(reading)
+      } catch (err) {
+        console.error('[adapter] failed to write a reading into InfluxDB', err)
       }
     }
   }

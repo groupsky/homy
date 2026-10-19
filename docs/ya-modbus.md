@@ -12,6 +12,7 @@ Buses on ya-modbus today:
 |---|---|---|---|---|
 | `tetriary` | `tetriary-power` | `tetriary-adapter` | `config/ya-modbus/tetriary.json` | #1707 |
 | `main` | `main-power` | `main-adapter` | `config/ya-modbus/main.json` | #1759 |
+| `secondary` | `secondary-power` | `secondary-adapter` | `config/ya-modbus/secondary.json` | #1803 |
 
 ## How a moved bus works
 
@@ -30,7 +31,10 @@ serial port ── bridge (<bus>-power) ── ya-modbus/<device>/data ── ad
   the old reader's reading, so no consumer changes (Home Assistant, the
   automations, `mqtt-influx`, the raw archive). It reads the same bridge
   config file (mounted at `/etc/ya-modbus/config.json`) for the devices,
-  their addresses and drivers. It does not write InfluxDB itself.
+  their addresses and drivers. It writes InfluxDB only when its
+  `INFLUXDB_*` variables are set, the same points as the old reader's
+  `influxdb` integration. Only `secondary-adapter` has them (measurement
+  `raw`, tag `bus=secondary`).
 
 The reading of the adapter is the old reading with two differences:
 
@@ -81,7 +85,8 @@ All in one PR:
    write those points. Check first that nothing reads them. For `main`
    nothing did, so its `raw` points with `bus=primary` ended at the move
    (#1759). On `secondary` the boiler dashboard and an alert read them, so
-   the adapter must learn to write InfluxDB before `secondary` moves.
+   `secondary-adapter` has the old service's `INFLUXDB_*` variables and
+   secrets and writes them (#1803).
 2. A mapping for each new driver in `docker/ya-modbus-adapter/mappings/<type>.js`
    (old field → ya-modbus data point id), and a test with a real old reading.
    `<type>` is the driver package name without `@ya-modbus/driver-`.
@@ -99,7 +104,7 @@ back needs them.
 
 1. In `docker-compose.yml`, put back the `<bus>-power` block of the old
    reader. It is the block before the move (`tetriary`: PR #1716, `main`:
-   PR #1761):
+   PR #1761, `secondary`: the PR of #1803):
 
    ```bash
    git log --oneline -1 --grep='(#1716)'      # the move (PR #1716; #1761 for main)

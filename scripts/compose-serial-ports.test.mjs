@@ -58,7 +58,7 @@ test('every serial port has one reader', () => {
 
 // The port of a moved bus is the one in the old reader's config, which stays
 // in the repo for the move back (docs/ya-modbus.md).
-for (const bus of ['tetriary', 'main']) {
+for (const bus of ['tetriary', 'main', 'secondary']) {
   test(`the ${bus} port is read by the ya-modbus bridge, not by the old reader`, () => {
     const { modbus: { port } } = require(join(root, `config/modbus-serial/${bus}.config.js`))
     assert.deepEqual(readers.filter((r) => r.port === port), [{ service: `${bus}-power`, image: 'ya-modbus-bridge', port }])
