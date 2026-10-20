@@ -9,7 +9,7 @@ It reads the `reading` topic of each room thermostat. The room list is the same 
 | Check | Warns when | Months |
 |---|---|---|
 | `valveOpenLong` | Mode is `cooling` and the valve is open for more than 3 h without a break | October to April (local) |
-| `lowCoolingTargetTemp` | Mode is `cooling` and the set point is under 15 °C. In cooling mode a low set point keeps the valve open and the borehole pump runs on | All year |
+| `lowCoolingTargetTemp` | Mode is `cooling` and the set point is under 15 °C. In cooling mode a low set point keeps the valve open. If the convectors have water, the borehole pump runs on | All year |
 | `coolingInColdNights` | Mode is `cooling` and the last night was cold: lowest outdoor temperature under 8 °C | All year |
 
 All numbers are in `config/automations/config.js`.
