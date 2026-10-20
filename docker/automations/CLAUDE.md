@@ -186,6 +186,12 @@ Key patterns:
 - **Target not written by the bot**: a controller reading whose target differs from the last one the bot wrote (or, before its first write, the first one it saw): one log line and one Telegram message for each change. Readings made within 15 min after the bot's own write are not checked, as they may still show the old target. A write that did not reach the controller shows the same way. No hold: the bot keeps its normal schedule
 - **State**: set point (default 21.5, 16..26), time of the last write, the last known controller target and the outdoor values of the last 24 h, in the persistent cache. Status shows the outdoor value used as `outdoorTemp`, `outdoorSource` (`24 h mean` or `monthly average`) and `outdoorSampleCount`. Status (retained) on `homy/thermostat/living_room/status`; set point from `homy/thermostat/living_room/set` as `{"setPoint": 22}`. Not under `homy/automation/+/status`, where automation-events-processor expects boiler-controller events
 
+#### `thermostat-season-guard` - Warns about a wrong thermostat mode or set point
+- **Purpose**: `thermostatSeasonGuard` (#1739) sends Telegram messages when a room thermostat looks wrong for the season. It never writes to a thermostat. Details: [docs/thermostat-season-guard.md](docs/thermostat-season-guard.md)
+- **Checks**: cooling valve open for over 3 h in October to April; set point under 15 °C in cooling mode; cooling mode after a cold night (needs `homy/weather/current`, skipped when the data is missing or old)
+- **Exceptions**: `THERMOSTAT_GUARD_SKIP` in the real `.env` (`room:check` pairs); never committed
+- **State**: the sent messages (one for each room, check and local day), the valve open times and the outdoor values of the last 36 h, in the persistent cache
+
 #### `stateful-counter` - Example with persistent cache and migration
 - **Purpose**: Demonstrates persistent cache patterns with versioning
 - **Features**: Incrementing counter with history tracking and reset functionality

@@ -698,3 +698,44 @@ for (const [botName, bot] of Object.entries(module.exports.bots)) {
     switches: bot.switches,
   }
 }
+
+// Warns by Telegram when a room thermostat looks wrong for the season (#1739).
+// It only sends messages and never changes a setting. It is added here so its
+// room list is the one the clock sync uses: the room thermostats.
+module.exports.bots.thermostatSeasonGuard = {
+  type: 'thermostat-season-guard',
+  thermostatTopics: Object.values(module.exports.bots)
+    .filter((bot) => bot.type === 'bac002-sync-clock')
+    .map((bot) => bot.topic),
+  // Outdoor temperature from the weather service (internet data, retained,
+  // every 15 min). Without it only the cold night check is off.
+  outdoorTopic: 'homy/weather/current',
+  // Checks that are not made for a room, as `room:check` pairs separated by
+  // commas (the room is the last part of its topic). It comes from the real
+  // .env and is never committed: it tells which room is kept cold on purpose.
+  // Checks: valveOpenLong, lowCoolingTargetTemp, coolingInColdNights.
+  skip: process.env.THERMOSTAT_GUARD_SKIP || '',
+  // Cooling valve open without a break for longer than this, in these local
+  // months, is a problem
+  valveOpenMaxMs: 3 * 60 * 60 * 1000,        // 3 h
+  valveOpenMonths: [10, 11, 12, 1, 2, 3, 4],
+  // A set point under this (°C) in cooling mode keeps the valve open
+  minCoolingTargetTemp: 15,
+  // Cooling mode after a night with a lowest outdoor temperature under this (°C).
+  // The night is from nightStartHour to nightEndHour local time, and counts
+  // when it has at least minNightSamples values (15 min apart: 3 h).
+  coldNightC: 8,
+  nightStartHour: 22,
+  nightEndHour: 7,
+  minNightSamples: 12,
+  // Outdoor data, by the rules in docker/weather/CLAUDE.md: a value older than
+  // this on arrival is dropped. When the newest is older than the hold time,
+  // the cold night check is skipped.
+  outdoorMaxAgeMs: 60 * 60 * 1000,           // 1 h
+  outdoorHoldMs: 12 * 60 * 60 * 1000,        // 12 h
+  // Longer between two readings of a room: the valve state in between is
+  // unknown, so the open time starts again
+  readingGapMs: 15 * 60 * 1000,              // 15 min
+  timeZone: 'Europe/Sofia',
+  telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
+}

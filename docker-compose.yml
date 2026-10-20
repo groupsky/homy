@@ -976,6 +976,8 @@ services:
       # House location for the sunset/sunrise lights (solar-emitter bots)
       - WEATHER_LATITUDE=${WEATHER_LATITUDE}
       - WEATHER_LONGITUDE=${WEATHER_LONGITUDE}
+      # Checks the season guard skips for a room; private, only in the real .env
+      - THERMOSTAT_GUARD_SKIP=${THERMOSTAT_GUARD_SKIP:-}
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
