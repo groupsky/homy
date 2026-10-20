@@ -52,7 +52,7 @@ const dateKey = (year, month, day) => new Date(Date.UTC(year, month - 1, day)).t
  *   because the valve state in between is not known.
  * - `lowCoolingTargetTemp`: cooling mode with a set point under
  *   `minCoolingTargetTemp`. In cooling mode a low set point keeps the valve
- *   open and the borehole pump runs on.
+ *   open. If the convectors have water, the borehole pump runs on.
  * - `coolingInColdNights`: cooling mode while the last night was cold. The
  *   last night is the newest local window `nightStartHour`..`nightEndHour`
  *   with at least `minNightSamples` outdoor values; it may be the night in
@@ -189,7 +189,7 @@ module.exports = (name, {
 
       if (payload.targetTemp < minCoolingTargetTemp) {
         send(room, 'lowCoolingTargetTemp', now,
-          `the set point is ${payload.targetTemp} °C in cooling mode. In cooling mode a low set point keeps the valve open and the borehole pump runs on.`)
+          `the set point is ${payload.targetTemp} °C in cooling mode. In cooling mode a low set point keeps the valve open. If the convectors have water, the borehole pump runs on.`)
       }
 
       const min = lastNightMin(now)
