@@ -121,8 +121,10 @@ microwave: `p`). The other meters (DDS519MR, DDS024MR) always wrote real power.
 Real power is signed: on the SDM630 a phase goes negative while it exports (no export
 so far). **For energy, use counter differences**, not the integral of `p`: `raw.tot_act`
 for the pump and microwave, and `raw.total_import_kwh` for `main`. (`power_meter.total`
-for `main` is written twice per reading, first `total_kwh` and then `total_import_kwh`;
-the second write wins, so it equals the import counter.) Since `main` moved to
+for `main` is the import counter, `total_import_kwh`, and `power_meter.total_export` the
+export counter. Before #1777 the converter also wrote `total_kwh`, import + export, into
+`total` first; the import write came second and won, so the stored value is the import
+counter, as a check on 2026-10-17 data showed.) Since `main` moved to
 ya-modbus (#1759), `raw` gets no new `main` points: use `power_meter.total` from then on.
 
 **Mains identification**: the whole-house grid meter is `bus = primary`,

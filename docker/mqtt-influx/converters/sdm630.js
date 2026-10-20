@@ -34,25 +34,15 @@ module.exports = function sdm630(input) {
             .floatField('c', input.cc)
             .floatField('p', input.cp),
 
+        // total is the import counter (kWh taken from the grid), total_export
+        // the export counter. total_kwh is import + export and is not written
+        // (#1777).
         new Point('power_meter')
             .tag('device.name', input.device)
             .tag('device.type', input._type)
             .tag('device.addr', input._addr)
             .timestamp(input._tz)
-            .floatField('total', input.total_kwh),
-
-        new Point('power_meter')
-            .tag('device.name', input.device)
-            .tag('device.type', input._type)
-            .tag('device.addr', input._addr)
-            .timestamp(input._tz)
-            .floatField('total', input.total_import_kwh),
-
-        new Point('power_meter')
-            .tag('device.name', input.device)
-            .tag('device.type', input._type)
-            .tag('device.addr', input._addr)
-            .timestamp(input._tz)
+            .floatField('total', input.total_import_kwh)
             .floatField('total_export', input.total_export_kwh),
     ]
 }

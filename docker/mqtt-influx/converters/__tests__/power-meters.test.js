@@ -60,6 +60,16 @@ describe('sdm630 (main meter)', () => {
         expect(field(points[0], 'v')).toBe(230)
         expect(field(points[2], 'c')).toBe(3)
     })
+
+    // total_kwh is import + export, so it differs from the import counter as
+    // soon as the house exports (#1777)
+    test('power_meter is one point: total is the import counter, total_export the export one', () => {
+        const points = sdm630({...reading(days[0]), total_kwh: 50390.84, total_import_kwh: 50000, total_export_kwh: 390.84})
+        const meters = points.filter(p => p.toLineProtocol().startsWith('power_meter'))
+        expect(meters).toHaveLength(1)
+        expect(field(meters[0], 'total')).toBe(50000)
+        expect(field(meters[0], 'total_export')).toBe(390.84)
+    })
 })
 
 describe('ex9em (borehole pump)', () => {
