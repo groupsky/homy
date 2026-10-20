@@ -27,7 +27,12 @@ describe('loadConfig', () => {
             location: {latitude: '12.35', longitude: '23.46'},
             influx: {url: 'http://influxdb:8086', token: 'writer:secret', org: '', bucket: 'homy/autogen'},
             reader: {url: 'http://influxdb:8086', database: 'homy', token: 'reader:readsecret'},
+            mqtt: null,
         })
+    })
+
+    test('takes the MQTT broker from BROKER', () => {
+        expect(loadConfig({...env, BROKER: 'mqtt://broker'}, readFile).mqtt).toEqual({url: 'mqtt://broker'})
     })
 
     test('accepts the credentials directly and a retention policy', () => {

@@ -100,6 +100,16 @@ function currentPoints(json) {
     return [point({kind: 'current', model: FORECAST_MODEL}, fields, {}, current.time)]
 }
 
+// The current temperature for MQTT (homy/weather/current), with the time of the
+// value itself, so a reader can tell how old it is. Null without both.
+function currentMessage(json) {
+    const current = json && json.current
+    if (!current || typeof current.time !== 'number') return null
+    const temperature = current.temperature_2m
+    if (typeof temperature !== 'number' || !Number.isFinite(temperature)) return null
+    return {temperature, time: new Date(current.time * 1000).toISOString()}
+}
+
 function hourlyPoints(json, makePoint) {
     const hourly = json && json.hourly
     if (!hourly || !Array.isArray(hourly.time)) return []
@@ -169,6 +179,7 @@ module.exports = {
     buildForecastUrl,
     buildArchiveUrl,
     currentPoints,
+    currentMessage,
     forecastPoints,
     historyPoints,
     checkResponse,

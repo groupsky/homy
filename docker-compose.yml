@@ -898,12 +898,14 @@ services:
     logging: *default-logging
 
   # Outdoor weather from Open-Meteo (current, forecast, history) and the
-  # collector night estimate, for analysis.
+  # collector night estimate, for analysis. The current temperature also goes
+  # to MQTT for the living-room thermostat, which keeps working without it.
   # No automation may depend on it for a decision in the moment: see docker/weather/CLAUDE.md.
   weather:
     image: ghcr.io/groupsky/homy/weather:${IMAGE_TAG:-latest}
     build: docker/weather
     depends_on:
+      - broker
       - influxdb
     restart: unless-stopped
     networks:
@@ -919,6 +921,8 @@ services:
     environment:
       - WEATHER_LATITUDE=${WEATHER_LATITUDE}
       - WEATHER_LONGITUDE=${WEATHER_LONGITUDE}
+      # The current temperature goes retained to homy/weather/current.
+      - BROKER=mqtt://broker
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password

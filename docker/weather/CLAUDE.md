@@ -2,8 +2,9 @@
 
 Records outdoor weather from [Open-Meteo](https://open-meteo.com/) into the InfluxDB
 `weather` measurement, for analysis: the heating curve, heat-pump energy per degree of
-cold, pre-heating with a forecast. The house has no outdoor sensor. These values are
-model data for the grid cell of the house, not a measurement at the house.
+cold, pre-heating with a forecast. It also publishes the current temperature to MQTT for
+the living-room thermostat. The house has no outdoor sensor. These values are model data
+for the grid cell of the house, not a measurement at the house.
 
 Tags, fields and example queries: [`weather` in the InfluxDB schema](../../docs/influxdb-schema.md#weather-measurement).
 
@@ -13,6 +14,12 @@ One poll every 15 minutes (2 minutes after each quarter hour):
 
 - **current** values on every poll (`kind=current`). A missed poll is not filled in later,
   so a gap stays visible.
+- the current **temperature to MQTT** on every poll, retained, on `homy/weather/current`:
+  `{"temperature": 7.3, "time": "2026-10-16T06:15:00.000Z"}`. `time` is the time of the
+  value itself, so a reader can tell how old it is. It is sent before the InfluxDB write;
+  a failed publish is logged and stops nothing. While the broker is away, also before the
+  first connection after a start, the MQTT client keeps the values and sends them when
+  the broker is back. A late value is harmless: it carries its own `time`.
 - the **forecast** for the next 48 hours, once per hour (`kind=forecast`), with the issue
   hour (`issued`) and the lead time (`lead_hours`), so forecast and actual can be compared.
 - **history** for the last 14 days, once per UTC day (`kind=history`), from two named models:
@@ -50,6 +57,7 @@ Queries name the policy: `FROM "weather"."weather"`.
 | `INFLUXDB_URL`, `INFLUXDB_DATABASE`, `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | InfluxDB 1.x write user, as for the other writers. |
 | `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | InfluxDB read user, for the solar controller and mower data of the local estimates. |
 | `INFLUXDB_RP` | Retention policy, `weather` in compose. Without it the service writes to `autogen`, which is fine only for a test database. |
+| `BROKER` | MQTT broker for `homy/weather/current`, `mqtt://broker` in compose. Without it nothing is published. |
 
 No API key is needed. The free service is for non-commercial use: 10,000 calls a day,
 5,000 an hour, 600 a minute. A call for more than 2 weeks of data counts as several calls.
@@ -166,7 +174,7 @@ docker exec homy-weather-1 node backfill-estimate.js mower 2025-08-26
 
 | Automation | Reads | When the data are missing or old |
 |---|---|---|
-| none yet (2026-10-16) | | |
+| `livingRoomThermostat` (`virtual-thermostat`, #1753): sets the heat-pump water target from the living-room temperature | `homy/weather/current` | `current` older than 1 hour counts as old. Step 1 (the collector estimate) is skipped: it is not on MQTT. Step 2: the last fresh value, kept over a restart, while it is up to 12 hours old. Step 3: the mean of the month (means of daily means of the `era5_seamless` history, 2021–2025, in `config/automations/config.js`). Step 4 is not needed. The room temperature still corrects the target. |
 
 ## Development
 
@@ -176,8 +184,9 @@ npm test
 ```
 
 The tests cover the request URLs, the conversion of answers into points, the poll
-schedule and retries, the backfill, the config, and the InfluxDB writes (against a local
-HTTP server). An end-to-end run against Open-Meteo and a throwaway InfluxDB:
+schedule and retries, the backfill, the config, the MQTT publish (with a fake client),
+and the InfluxDB writes (against a local HTTP server). An end-to-end run against
+Open-Meteo and a throwaway InfluxDB:
 
 ```bash
 docker network create wtest
