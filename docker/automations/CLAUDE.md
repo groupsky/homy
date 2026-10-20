@@ -265,7 +265,7 @@ const subscribe = (topic, callback) => {
 
 ### MQTT Publishing
 - **Important**: The `mqtt.publish()` function expects JavaScript objects, not JSON strings
-- The framework automatically adds metadata (`_bot`, `_tz`) and converts to JSON
+- The framework automatically adds metadata (`_bot`, `_tz`) and converts to JSON, except on zigbee2mqtt set topics (`z2m/<instance>/<device>/set...`): zigbee2mqtt logs a warning for each unknown key (#1713)
 - **Correct**: `mqtt.publish(topic, { state: true, reason: 'heating' })`
 - **Incorrect**: `mqtt.publish(topic, JSON.stringify({ state: true, reason: 'heating' }))`
 

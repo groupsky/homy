@@ -21,6 +21,9 @@ const {
 
 const stateManager = new StateManager({enabled, stateDir, debounceMs: stateDebounceMs})
 
+// zigbee2mqtt commands: z2m/<instance>/<device>/set, or a sub-topic of it
+const Z2M_SET_TOPIC = /^z2m\/[^/]+\/.+\/set(\/|$)/
+
 const playground = {
   bots: Object.entries(botConfigs).map(([name, config]) => {
     console.log(`[${config.type}] loading ${name}`)
@@ -197,7 +200,9 @@ playground.bots.forEach(async bot => {
           throw new Error(`Missing ${content} write transformation!`)
         }
         const writer = contentProcessors[content].write
-        const meta = {
+        // zigbee2mqtt has no converter for these keys and logs a warning for
+        // each one in a set command (#1713)
+        const meta = Z2M_SET_TOPIC.test(topic) ? {} : {
           _bot: {
             name: bot.name,
             type: bot.config.type
