@@ -5,6 +5,7 @@ const { sharedBatch } = require('../lib/group-alerts')
 module.exports = (name, {
   bacTopic: topicPrefix,
   switches,
+  openDelayMs = 30 * 1000,
   maxInputAgeMs = DEFAULT_MAX_INPUT_AGE_MS,
   telegramWebhookUrl,
   httpPost
@@ -45,9 +46,23 @@ module.exports = (name, {
       }
     })
 
+    // When the mains dips, the contact modules read every contact open for
+    // about 10 s (#1797). So a room is switched off only when a contact has
+    // been open without a break for openDelayMs. openSince is the time of the
+    // first open reading after a closed one (null while closed). It is kept in
+    // memory only: after a restart the count starts at the first open
+    // reading, which can only make an off come later.
+    const openSince = switches.map(() => null)
+
     switches.forEach(({topic, isOpen}, index) => {
       mqtt.subscribe(topic, (payload) => {
-        persistedCache.switchStates[index] = isOpen(payload)
+        const open = isOpen(payload)
+        persistedCache.switchStates[index] = open
+        if (!open) {
+          openSince[index] = null
+        } else if (openSince[index] == null) {
+          openSince[index] = typeof payload._tz === 'number' ? payload._tz : Date.now()
+        }
         contacts.seen(index, payload._tz)
       })
     })
@@ -55,9 +70,11 @@ module.exports = (name, {
     mqtt.subscribe(readingTopic, (payload) => {
       if (!contacts.isFresh()) return
 
+      const now = typeof payload._tz === 'number' ? payload._tz : Date.now()
+      const openLongEnough = openSince.some(since => since != null && now - since >= openDelayMs)
       const allClosed = persistedCache.switchStates.every(open => !open)
 
-      if (payload.power === 'on' && !allClosed) {
+      if (payload.power === 'on' && openLongEnough) {
         mqtt.publish(writeTopic, { power: 'off' })
         persistedCache.wasOn = true
       } else if (persistedCache.wasOn && payload.power === 'off' && allClosed) {
