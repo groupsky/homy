@@ -9,7 +9,7 @@ module.exports = function dds519mr(input) {
             .timestamp(input._tz)
             .floatField('v', input.v)
             .floatField('c', input.c)
-            .floatField('p', input.c),
+            .floatField('p', input.p),
 
         new Point('power_meter')
             .tag('device.name', input.device)

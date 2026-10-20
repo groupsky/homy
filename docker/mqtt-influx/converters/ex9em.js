@@ -11,7 +11,7 @@ module.exports = function ex9em(input) {
             .timestamp(input._tz)
             .floatField('v', input.v)
             .floatField('c', input.c)
-            .floatField('p', input.p),
+            .floatField('p', input.ap),
 
         new Point('power_meter')
             .tag('device.name', input.device)
