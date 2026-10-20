@@ -35,6 +35,11 @@ trap clean_up EXIT
 
 sudo ip netns > /dev/null
 
+# Docker creates a missing bind-mount dir as root. influxd runs as uid 1500
+# (the user of the influxdb image) and cannot write there, so it never gets
+# healthy, and grafana, which waits for it, fails the whole "up" (#1808).
+(cd .. && mkdir -p "$DATA_PATH/influxdb" && sudo chown 1500:1500 "$DATA_PATH/influxdb")
+
 $dc up --build --force-recreate --no-start
 
 echo start regular containers
