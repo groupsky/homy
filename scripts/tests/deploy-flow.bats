@@ -141,6 +141,53 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
     assert_output --partial "the pre-deploy snapshot failed. Nothing was changed."
 }
 
+# --- images CI has not pushed yet (#1748) --------------------------------------
+
+# The stack's images carry the deploy tag, as compose resolves ${IMAGE_TAG}
+tag_images_with_new() {
+    sed -i "s/:tag\"/:$NEW\"/g" "$MOCK_DIR/config.json" "$MOCK_DIR/images.json"
+}
+
+registry_misses() {
+    mkdir -p "$MOCK_DIR/registry-miss"
+    echo "$2" > "$MOCK_DIR/registry-miss/$(echo "$1" | tr '/:' '__')"
+}
+
+@test "deploy.sh: waits for an image CI has not pushed yet, then deploys" {
+    tag_images_with_new
+    registry_misses "ghcr.io/groupsky/homy/automations:$NEW" 2
+    export IMAGE_WAIT_INTERVAL=0
+
+    run deploy
+    assert_success
+    assert_output --partial "Waiting for 1 image(s) CI has not pushed yet, e.g. ghcr.io/groupsky/homy/automations:$NEW"
+    assert_output --partial "Deployment successful"
+    assert_equal "$(grep -c "Waiting for" <<<"$output")" "2"
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "1"
+    assert_equal "$(cat "$VERSION_FILE")" "$NEW"
+}
+
+@test "deploy.sh: an image that never appears stops the deploy before the snapshot, naming image and tag" {
+    tag_images_with_new
+    registry_misses "ghcr.io/groupsky/homy/automations:$NEW" always
+    export IMAGE_WAIT_SECONDS=0
+
+    run deploy
+    assert_failure
+    assert_output --partial "ghcr.io/groupsky/homy/automations:$NEW is not in the registry"
+
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "0"
+    run calls
+    refute_output --partial "compose pull"
+    refute_output --partial "compose up"
+    run cat "$GIT_CALLS"
+    refute_output --partial "pull origin"
+    assert_equal "$(cat "$VERSION_FILE")" "$OLD"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "ghcr.io/groupsky/homy/automations:$NEW is not in the registry"
+    assert_output --partial "Nothing was changed."
+}
+
 @test "deploy.sh: data that is not on ZFS stops the deploy before anything is touched" {
     : > "$MOCK_DIR/zfs/datasets"
 

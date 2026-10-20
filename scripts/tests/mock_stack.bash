@@ -106,6 +106,22 @@ if [ "$1" = "compose" ]; then
 fi
 
 case "$1" in
+    manifest)
+        # Stand-in registry: $MOCK_DIR/registry-miss/<image, / and : as _>
+        # holds how many more checks of that image answer "manifest unknown"
+        # ("always" for a tag that never appears). One file per image, as the
+        # checks run in parallel.
+        f="$MOCK_DIR/registry-miss/$(echo "$3" | tr '/:' '__')"
+        if [ -f "$f" ]; then
+            left=$(cat "$f")
+            if [ "$left" = always ] || [ "$left" -gt 0 ]; then
+                [ "$left" = always ] || echo $((left - 1)) > "$f"
+                echo "manifest unknown" >&2
+                exit 1
+            fi
+        fi
+        echo '{}'
+        ;;
     inspect)
         shift
         if [ -e "$MOCK_DIR/fail-inspect" ]; then

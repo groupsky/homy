@@ -38,6 +38,8 @@ FORCE_DEPLOY=0
 IMAGE_TAG="${IMAGE_TAG:-}"
 YES_FLAG=0
 SKIP_SNAPSHOT=0
+IMAGE_WAIT_SECONDS="${IMAGE_WAIT_SECONDS:-1800}"
+IMAGE_WAIT_INTERVAL="${IMAGE_WAIT_INTERVAL:-30}"
 
 usage() {
     cat <<EOF
@@ -69,6 +71,9 @@ Environment Variables:
   SNAPSHOT_MIN_FREE_GB  Refuse the snapshot below this much free pool space (default 20)
   HEALTH_STABLE_SECONDS A service without a healthcheck passes after running
                         this long without a restart (default 30)
+  IMAGE_WAIT_SECONDS    Wait this long for CI to push the images of the new
+                        version before giving up (default 1800)
+  IMAGE_WAIT_INTERVAL   Seconds between two registry checks (default 30)
 
 EOF
     exit 0
@@ -233,6 +238,41 @@ if [ "$SKIP_SNAPSHOT" -eq 1 ]; then
     fi
     log "Proceeding without a snapshot as confirmed..."
 fi
+
+# 0. Wait for the images. CI pushes them some minutes after a merge, and a
+#    deploy started before that failed at the pull with "manifest unknown",
+#    after the snapshot (#1748). Checked before the snapshot, a tag that never
+#    appears leaves nothing behind.
+
+# The tag the pull will use: what --tag resolves to as a commit, else as given
+PULL_TAG="$NEW_VERSION"
+if [ -n "$IMAGE_TAG" ] && sha=$(git rev-parse --verify -q "${IMAGE_TAG}^{commit}" 2>/dev/null) && [ -n "$sha" ]; then
+    PULL_TAG="$sha"
+fi
+
+# Prints the stack's homy images with tag $1 that are not in the registry. A
+# check takes about 2.5 s from routy, so they run in parallel.
+missing_images() {
+    local tag="$1" img
+    for img in $(IMAGE_TAG="$tag" dc_base config --format json | jq -r --arg t ":$tag" \
+            '.services[].image // empty | select(startswith("ghcr.io/groupsky/homy/") and endswith($t))' | LC_ALL=C sort -u); do
+        docker manifest inspect "$img" > /dev/null 2>&1 || echo "$img" &
+    done
+    wait
+}
+
+log "Checking that the images for $(format_version_short "$PULL_TAG") are in the registry..."
+WAIT_DEADLINE=$((SECONDS + IMAGE_WAIT_SECONDS))
+while MISSING=$(missing_images "$PULL_TAG" | LC_ALL=C sort) && [ -n "$MISSING" ]; do
+    FIRST_MISSING=$(head -n 1 <<<"$MISSING")
+    if [ "$SECONDS" -ge "$WAIT_DEADLINE" ]; then
+        error "$FIRST_MISSING is not in the registry after ${IMAGE_WAIT_SECONDS} s. Nothing was changed. Check that CI finished for this commit."
+        notify "Deployment of $(format_version_short "$PULL_TAG") stopped: $FIRST_MISSING is not in the registry after ${IMAGE_WAIT_SECONDS} s. Nothing was changed."
+        exit 1
+    fi
+    log "Waiting for $(wc -l <<<"$MISSING") image(s) CI has not pushed yet, e.g. $FIRST_MISSING..."
+    sleep "$IMAGE_WAIT_INTERVAL"
+done
 
 # 1. Snapshot, before anything is touched
 SNAPSHOT_NAME=""
