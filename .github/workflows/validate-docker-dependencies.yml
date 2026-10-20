@@ -10,6 +10,9 @@ on:
       - 'docker/*/Dockerfile'
       - '.github/workflows/validate-docker-dependencies.yml'
 
+permissions:
+  contents: read
+
 jobs:
   validate-ghcr-usage:
     runs-on: ubuntu-latest
