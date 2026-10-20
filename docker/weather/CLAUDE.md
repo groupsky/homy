@@ -174,7 +174,7 @@ docker exec homy-weather-1 node backfill-estimate.js mower 2025-08-26
 
 | Automation | Reads | When the data are missing or old |
 |---|---|---|
-| `livingRoomThermostat` (`virtual-thermostat`, #1753): sets the heat-pump water target from the living-room temperature | `homy/weather/current` | `current` older than 1 hour counts as old. Step 1 (the collector estimate) is skipped: it is not on MQTT. Step 2: the last fresh value, kept over a restart, while it is up to 12 hours old. Step 3: the mean of the month (means of daily means of the `era5_seamless` history, 2021–2025, in `config/automations/config.js`). Step 4 is not needed. The room temperature still corrects the target. |
+| `livingRoomThermostat` (`virtual-thermostat`, #1753): sets the heat-pump water target from the living-room temperature | `homy/weather/current` | Uses the mean of the values of the last 24 hours (the model is a fit on daily means). A value older than 1 hour on arrival is not kept. Step 1 (the collector estimate) is skipped: it is not on MQTT. Step 2: the mean of the kept values (kept over a restart) while the newest is up to 12 hours old. Step 3: the mean of the month (means of daily means of the `era5_seamless` history, 2021–2025, in `config/automations/config.js`). Step 4 is not needed. The room temperature still corrects the target. |
 
 ## Development
 

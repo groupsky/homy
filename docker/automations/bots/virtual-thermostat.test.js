@@ -14,8 +14,9 @@ const ROOM_OLD = CONFIG.roomMaxAgeMs + 10 * MIN
 const iso = (ms) => new Date(ms).toISOString()
 
 // Starts the bot with fake timers. `cache` is the persisted state from an
-// earlier run; without it the bot starts with its defaults.
-const startBot = ({ cache, at = START, isEnabled = () => true } = {}) => {
+// earlier run; without it the bot starts with its defaults. `oldState` is the
+// state of an older version: it goes through migrate, as after a deploy.
+const startBot = ({ cache, oldState, at = START, isEnabled = () => true } = {}) => {
   if (at) jest.useFakeTimers({ now: new Date(at) })
   const subscriptions = new Map()
   const published = []
@@ -26,7 +27,10 @@ const startBot = ({ cache, at = START, isEnabled = () => true } = {}) => {
     publish: (topic, payload, options) => { published.push({ topic, payload, options }) }
   }
   const bot = require('./virtual-thermostat')('livingRoomThermostat', { ...CONFIG, httpPost })
-  const persistedCache = cache ?? structuredClone(bot.persistedCache.default)
+  const { version, default: defaultState, migrate } = bot.persistedCache
+  const persistedCache = cache ?? (oldState
+    ? migrate({ version, defaultState: structuredClone(defaultState), state: structuredClone(oldState) })
+    : structuredClone(defaultState))
   bot.start({ mqtt, persistedCache, isEnabled })
 
   const deliver = (topic, payload) => {
@@ -40,8 +44,9 @@ const startBot = ({ cache, at = START, isEnabled = () => true } = {}) => {
     room: (temperature, lastSeen = Date.now()) =>
       deliver(CONFIG.roomTopic, { temperature, humidity: 45, linkquality: 120, last_seen: iso(lastSeen) }),
     outdoor: (temperature, time = Date.now()) => deliver(CONFIG.outdoorTopic, { temperature, time: iso(time) }),
+    // `at: null` sends a reading without its time (_tz)
     controller: ({ targetTemp = 26, mode = 'heating', at = Date.now() } = {}) =>
-      deliver(CONFIG.controllerTopic, { targetTemp, mode, s1Temp: 30.2, compEnabled: true, _tz: at }),
+      deliver(CONFIG.controllerTopic, { targetTemp, mode, s1Temp: 30.2, compEnabled: true, ...(at !== null && { _tz: at }) }),
     // Fresh data from all three inputs
     inputs: ({ room = 21.5, outdoor = 5, targetTemp = 26, mode = 'heating' } = {}) => {
       thermostat.room(room)
@@ -99,10 +104,12 @@ describe('virtual-thermostat (living room, #1753)', () => {
         maxWater: 32,
         minChange: 1,
         checkMs: 10 * MIN,
-        minWriteIntervalMs: 3 * HOUR,
-        roomMaxAgeMs: 90 * MIN,
+        minWriteIntervalMs: 6 * HOUR,
+        roomMaxAgeMs: 150 * MIN,
         controllerMaxAgeMs: 15 * MIN,
+        writeSettleMs: 15 * MIN,
         outdoorMaxAgeMs: 1 * HOUR,
+        outdoorMeanMs: 24 * HOUR,
         outdoorHoldMs: 12 * HOUR,
         outdoorMonthlyMeans: [3.7, 5.0, 7.6, 12.3, 16.7, 22.8, 26.1, 25.3, 20.1, 14.0, 9.5, 5.2]
       })
@@ -171,7 +178,7 @@ describe('virtual-thermostat (living room, #1753)', () => {
       const line = thermostat.logs().find((l) => l.includes('26 -> 28'))
       expect(line).toContain('set point 21.5')
       expect(line).toContain('room 20.5')
-      expect(line).toContain('outdoor 5 (weather)')
+      expect(line).toContain('outdoor 5 (24 h mean)')
     })
   })
 
@@ -198,7 +205,8 @@ describe('virtual-thermostat (living room, #1753)', () => {
         setPoint: 21.5,
         roomTemp: 20.5,
         outdoorTemp: 5,
-        outdoorSource: 'weather',
+        outdoorSource: '24 h mean',
+        outdoorSampleCount: 1,
         waterTarget: 28,
         // the written value, until the next reading
         controllerTarget: 28,
@@ -255,11 +263,11 @@ describe('virtual-thermostat (living room, #1753)', () => {
       expect(thermostat.writes()).toEqual([{ targetTemp: 28 }])
 
       // The controller took 28; then the room cools further: 30 is wanted.
-      keepReporting(thermostat, 3 * HOUR - 2 * MIN, { room: 19.5, targetTemp: 28 })
+      keepReporting(thermostat, CONFIG.minWriteIntervalMs - 2 * MIN, { room: 19.5, targetTemp: 28 })
       expect(thermostat.writes()).toEqual([{ targetTemp: 28 }])
       expect(thermostat.status()).toMatchObject({ waterTarget: 30, controllerTarget: 28 })
 
-      // The first check 3 h after the write
+      // The first check 6 h after the write
       keepReporting(thermostat, 10 * MIN, { room: 19.5, targetTemp: 28 })
       expect(thermostat.writes()).toEqual([{ targetTemp: 28 }, { targetTemp: 30 }])
     })
@@ -283,7 +291,8 @@ describe('virtual-thermostat (living room, #1753)', () => {
       thermostat.check()
       expect(thermostat.writes()).toEqual([{ targetTemp: 26 }])
 
-      keepReporting(thermostat, 30 * MIN, { room: 21.5, targetTemp: 26 })
+      // 5 h after the write, well within the 6 h
+      keepReporting(thermostat, 5 * HOUR, { room: 21.5, targetTemp: 26 })
       thermostat.setPoint({ setPoint: 22.5 })
       keepReporting(thermostat, 10 * MIN, { room: 21.5, targetTemp: 26 })
 
@@ -373,9 +382,26 @@ describe('virtual-thermostat (living room, #1753)', () => {
 
       expect(thermostat.writes()).toEqual([])
       expect(thermostat.status()).toMatchObject({ state: 'room data old', roomTemp: 21.5, waterTarget: null, controllerTarget: 24 })
-      expect(thermostat.alerts()).toHaveLength(1)
-      expect(thermostat.alerts()[0]).toContain('no living-room temperature for 90 min')
+      const roomAlerts = thermostat.alerts().filter((a) => a.includes('living-room temperature'))
+      expect(roomAlerts).toHaveLength(1)
+      expect(roomAlerts[0]).toContain('no living-room temperature for 150 min')
       expect(thermostat.logs().filter((l) => l.includes('no living-room temperature'))).toHaveLength(1)
+      // The change by hand has its own message
+      expect(thermostat.alerts().filter((a) => a.includes('target is 24 °C'))).toHaveLength(1)
+    })
+
+    // The sensor reports at least once an hour, but gaps of 115 min were seen
+    test.each([
+      [140, 'ok'],
+      [160, 'room data old']
+    ])('a reading %p min old at the check: %s', (minutes, state) => {
+      const thermostat = startBot()
+      thermostat.room(21.5, Date.now() + CONFIG.checkMs - minutes * MIN)
+      thermostat.outdoor(5)
+      thermostat.controller({ targetTemp: 26 })
+      thermostat.check()
+
+      expect(thermostat.status()).toMatchObject({ state })
     })
 
     test('treats an old reading (last_seen) as old', () => {
@@ -392,6 +418,8 @@ describe('virtual-thermostat (living room, #1753)', () => {
     // The sensor reports on change and at least once an hour (#1753)
     test('a sensor that reports only once an hour is not old', () => {
       const thermostat = startBot()
+      // The wanted target is the controller's 26, so nothing is written
+      thermostat.outdoor(5)
       for (let hour = 0; hour < 6; hour++) {
         thermostat.room(21.5)
         keepReporting(thermostat, HOUR, { withRoom: false })
@@ -496,46 +524,167 @@ describe('virtual-thermostat (living room, #1753)', () => {
     // START is in November
     const NOVEMBER = CONFIG.outdoorMonthlyMeans?.[10]
 
-    test('uses fresh weather data and keeps it in the persisted state', () => {
+    test('uses the mean of the weather values of the last 24 h', () => {
       const thermostat = startBot()
-      thermostat.inputs({ outdoor: 15 })
+      thermostat.outdoor(2)
+      jest.advanceTimersByTime(HOUR)
+      thermostat.outdoor(4)
+      jest.advanceTimersByTime(HOUR)
+      thermostat.outdoor(9)
+      thermostat.inputs({ outdoor: null, targetTemp: 26 })
       thermostat.check()
 
-      expect(thermostat.status()).toMatchObject({ outdoorTemp: 15, outdoorSource: 'weather', waterTarget: 23 })
-      expect(thermostat.persistedCache.outdoor).toEqual({ temperature: 15, time: Date.now() - CONFIG.checkMs })
+      expect(thermostat.status()).toMatchObject({ outdoorTemp: 5, outdoorSource: '24 h mean', outdoorSampleCount: 3, waterTarget: 26 })
     })
 
-    test('holds the last value when the weather data is 2 h old', () => {
+    test('rounds the mean to 0.1 °C', () => {
+      const thermostat = startBot()
+      thermostat.outdoor(1)
+      jest.advanceTimersByTime(HOUR)
+      thermostat.outdoor(2)
+      jest.advanceTimersByTime(HOUR)
+      thermostat.outdoor(2)
+      thermostat.inputs({ outdoor: null })
+      thermostat.check()
+
+      expect(thermostat.status()).toMatchObject({ outdoorTemp: 1.7, outdoorSampleCount: 3 })
+    })
+
+    test('keeps fresh weather values in the persisted state', () => {
+      const thermostat = startBot()
+      thermostat.outdoor(15)
+      jest.advanceTimersByTime(HOUR)
+      thermostat.outdoor(13)
+
+      expect(thermostat.persistedCache.outdoorSamples).toEqual([
+        { temperature: 15, time: Date.now() - HOUR },
+        { temperature: 13, time: Date.now() }
+      ])
+    })
+
+    // The message is retained, so it comes again after each reconnect
+    test('keeps a value with the same time only once', () => {
+      const thermostat = startBot()
+      const first = Date.now()
+      thermostat.outdoor(2)
+      jest.advanceTimersByTime(30 * MIN)
+      thermostat.outdoor(8)
+      thermostat.outdoor(8)
+      thermostat.outdoor(2, first)
+      thermostat.inputs({ outdoor: null })
+      thermostat.check()
+
+      expect(thermostat.persistedCache.outdoorSamples).toHaveLength(2)
+      expect(thermostat.status()).toMatchObject({ outdoorTemp: 5, outdoorSampleCount: 2 })
+    })
+
+    test('drops values older than 24 h', () => {
+      const thermostat = startBot()
+      thermostat.outdoor(-20)
+      jest.advanceTimersByTime(23 * HOUR)
+      thermostat.outdoor(5)
+      jest.advanceTimersByTime(HOUR)
+      thermostat.inputs({ outdoor: null })
+      thermostat.check()
+
+      expect(thermostat.status()).toMatchObject({ outdoorTemp: 5, outdoorSource: '24 h mean', outdoorSampleCount: 1 })
+      expect(thermostat.persistedCache.outdoorSamples).toEqual([{ temperature: 5, time: Date.now() - HOUR - CONFIG.checkMs }])
+    })
+
+    test('uses the mean while the newest value is up to 12 h old', () => {
       const thermostat = startBot()
       thermostat.inputs({ outdoor: 15, targetTemp: 23 })
-      keepReporting(thermostat, 2 * HOUR, { targetTemp: 23 })
+      keepReporting(thermostat, 12 * HOUR, { targetTemp: 23 })
 
-      expect(thermostat.status()).toMatchObject({ outdoorTemp: 15, outdoorSource: 'last value', waterTarget: 23 })
+      expect(thermostat.status()).toMatchObject({ outdoorTemp: 15, outdoorSource: '24 h mean', outdoorSampleCount: 1, waterTarget: 23 })
       expect(thermostat.writes()).toEqual([])
-      expect(thermostat.logs().filter((l) => l.includes('outdoor temperature from the last value'))).toHaveLength(1)
     })
 
-    test('uses the monthly average when the last value is 13 h old', () => {
+    test('uses the monthly average when the newest value is over 12 h old', () => {
       const thermostat = startBot()
       thermostat.inputs({ outdoor: 15, targetTemp: 23 })
       keepReporting(thermostat, 13 * HOUR, { targetTemp: 23 })
 
       expect(NOVEMBER).toBe(9.5)
       // needed 24.6
-      expect(thermostat.status()).toMatchObject({ outdoorTemp: 9.5, outdoorSource: 'monthly average', waterTarget: 24.5 })
+      expect(thermostat.status()).toMatchObject({ outdoorTemp: 9.5, outdoorSource: 'monthly average', outdoorSampleCount: 0, waterTarget: 24.5 })
       expect(thermostat.logs().filter((l) => l.includes('outdoor temperature from the monthly average'))).toHaveLength(1)
     })
 
-    test('holds the last value over a restart', () => {
+    test('keeps the values over a restart', () => {
       const first = startBot()
-      first.outdoor(15)
+      first.outdoor(2)
+      jest.advanceTimersByTime(HOUR)
+      first.outdoor(8)
 
       jest.advanceTimersByTime(2 * HOUR)
       const second = startBot({ cache: first.persistedCache, at: null })
-      second.inputs({ outdoor: null, targetTemp: 23 })
+      second.inputs({ outdoor: null, targetTemp: 26 })
       second.check()
 
-      expect(second.status()).toMatchObject({ outdoorTemp: 15, outdoorSource: 'last value', waterTarget: 23 })
+      expect(second.status()).toMatchObject({ outdoorTemp: 5, outdoorSource: '24 h mean', outdoorSampleCount: 2, waterTarget: 26 })
+    })
+
+    // The version before kept only the last value, as `outdoor`
+    test('takes the last value of the version before as its first value', () => {
+      const lastWriteAt = Date.parse(START) - HOUR
+      const time = Date.parse(START) - 2 * HOUR
+      const thermostat = startBot({
+        oldState: { setPoint: 22, setPointChanged: false, lastWriteAt, outdoor: { temperature: 15, time } }
+      })
+
+      expect(thermostat.persistedCache).toEqual({
+        setPoint: 22,
+        setPointChanged: false,
+        lastWriteAt,
+        outdoorSamples: [{ temperature: 15, time }],
+        knownTarget: null
+      })
+      thermostat.inputs({ outdoor: null, targetTemp: 23 })
+      thermostat.check()
+      expect(thermostat.status()).toMatchObject({ outdoorTemp: 15, outdoorSource: '24 h mean', outdoorSampleCount: 1 })
+      // The first target it sees is known, not a change
+      expect(thermostat.alerts()).toEqual([])
+    })
+
+    test('starts with no values when the version before had none', () => {
+      const thermostat = startBot({
+        oldState: { setPoint: 21.5, setPointChanged: false, lastWriteAt: null, outdoor: null }
+      })
+
+      expect(thermostat.persistedCache).toMatchObject({ outdoorSamples: [] })
+      expect(thermostat.persistedCache).not.toHaveProperty('outdoor')
+    })
+
+    // Another default in the config later
+    test('keeps the values and the known target when the default changes', () => {
+      const { migrate, default: defaultState } = require('./virtual-thermostat')('livingRoomThermostat', CONFIG).persistedCache
+      const outdoorSamples = [{ temperature: 4, time: 1000 }, { temperature: 6, time: 2000 }]
+      const state = { setPoint: 23, setPointChanged: false, lastWriteAt: 500, outdoorSamples, knownTarget: 27 }
+
+      expect(migrate({ version: 2, defaultState: { ...defaultState, setPoint: 22 }, state: structuredClone(state) })).toEqual(state)
+    })
+
+    // A rollback to version 1 keeps the new keys, writes without the known
+    // target and keeps its own last outdoor value
+    test('after a rollback to the version before and a new deploy', () => {
+      const { migrate, version, default: defaultState } = require('./virtual-thermostat')('livingRoomThermostat', CONFIG).persistedCache
+      const state = {
+        setPoint: 21.5,
+        setPointChanged: false,
+        lastWriteAt: 3000,
+        outdoor: { temperature: 8, time: 3000 },
+        outdoorSamples: [{ temperature: 4, time: 1000 }, { temperature: 6, time: 2000 }],
+        knownTarget: 25
+      }
+
+      expect(migrate({ version, defaultState, state })).toEqual({
+        setPoint: 21.5,
+        setPointChanged: false,
+        lastWriteAt: 3000,
+        outdoorSamples: [{ temperature: 4, time: 1000 }, { temperature: 6, time: 2000 }, { temperature: 8, time: 3000 }],
+        knownTarget: null
+      })
     })
 
     test('does not keep a value that is already old when it arrives', () => {
@@ -543,7 +692,7 @@ describe('virtual-thermostat (living room, #1753)', () => {
       thermostat.outdoor(15)
       thermostat.outdoor(-3, Date.now() - 2 * HOUR)
 
-      expect(thermostat.persistedCache.outdoor).toEqual({ temperature: 15, time: Date.now() })
+      expect(thermostat.persistedCache.outdoorSamples).toEqual([{ temperature: 15, time: Date.now() }])
     })
 
     test('uses the monthly average when no weather data was ever seen', () => {
@@ -577,8 +726,175 @@ describe('virtual-thermostat (living room, #1753)', () => {
       thermostat.outdoor(5)
       keepReporting(thermostat, HOUR - 2 * MIN)
 
-      expect(thermostat.status()).toMatchObject({ outdoorSource: 'weather' })
+      expect(thermostat.status()).toMatchObject({ outdoorSource: '24 h mean' })
       expect(thermostat.logs().filter((l) => l.includes('outdoor temperature from the weather data'))).toHaveLength(1)
+    })
+
+    // #1753: the model is a fit on daily means. With the hourly value, the
+    // target followed the day and night swing and was written several times
+    // a day.
+    test('the swing between day and night does not move the water target', () => {
+      const thermostat = startBot()
+      const outdoorAt = (hour) => 5 + 6 * Math.sin((2 * Math.PI * hour) / 24)
+      let writesAfterOneDay = null
+      for (let hour = 0; hour < 48; hour++) {
+        if (hour === 24) writesAfterOneDay = thermostat.writes().length
+        thermostat.outdoor(outdoorAt(hour))
+        for (let minute = 0; minute < 60; minute += 2) {
+          // The controller shows the last written target
+          thermostat.room(21.5)
+          thermostat.controller({ targetTemp: thermostat.writes().at(-1)?.targetTemp ?? 26 })
+          jest.advanceTimersByTime(2 * MIN)
+        }
+      }
+
+      // The second day, when the mean has a full day of values
+      const secondDay = thermostat.statuses().slice(-24 * 6).map((m) => m.payload)
+      const targets = secondDay.map((status) => status.waterTarget)
+      expect(Math.max(...targets) - Math.min(...targets)).toBeLessThan(CONFIG.minChange)
+      expect(thermostat.writes()).toHaveLength(writesAfterOneDay)
+      // The hourly value alone would move the target by 4 °C
+      const hourly = Array.from({ length: 24 }, (_, hour) => outdoorAt(hour))
+      expect((Math.max(...hourly) - Math.min(...hourly)) * CONFIG.model.perOutdoor / CONFIG.model.perWater).toBeGreaterThan(3.9)
+      expect(thermostat.alerts()).toEqual([])
+    })
+  })
+
+  describe('a water target the bot did not write', () => {
+    test('takes the first target it sees as known, without a message', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ targetTemp: 26.5 })
+      keepReporting(thermostat, HOUR, { targetTemp: 26.5 })
+
+      expect(thermostat.persistedCache.knownTarget).toBe(26.5)
+      expect(thermostat.alerts()).toEqual([])
+    })
+
+    test('says so once in the log and once on Telegram', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ targetTemp: 26 })
+      keepReporting(thermostat, 30 * MIN, { targetTemp: 26 })
+      // Less than minChange from the wanted 26, so the bot does not write
+      keepReporting(thermostat, 2 * HOUR, { targetTemp: 26.5 })
+
+      expect(thermostat.writes()).toEqual([])
+      expect(thermostat.alerts()).toEqual([expect.stringContaining('heat-pump water target is 26.5 °C, not the 26 °C this bot last wrote or saw')])
+      expect(thermostat.logs().filter((l) => l.includes('this bot last wrote or saw'))).toHaveLength(1)
+      expect(thermostat.persistedCache.knownTarget).toBe(26.5)
+    })
+
+    test('says so for each new change', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ targetTemp: 26 })
+      keepReporting(thermostat, 30 * MIN, { targetTemp: 26.5 })
+      keepReporting(thermostat, 30 * MIN, { targetTemp: 25.5 })
+
+      expect(thermostat.alerts()).toEqual([
+        expect.stringContaining('target is 26.5 °C, not the 26 °C'),
+        expect.stringContaining('target is 25.5 °C, not the 26.5 °C')
+      ])
+    })
+
+    // Readings already on the way may still show the old target
+    test('no message for readings soon after its own write', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ room: 20.5, targetTemp: 26 })
+      thermostat.check()
+      expect(thermostat.writes()).toEqual([{ targetTemp: 28 }])
+
+      keepReporting(thermostat, CONFIG.writeSettleMs - 2 * MIN, { room: 20.5, targetTemp: 26 })
+      keepReporting(thermostat, HOUR, { room: 20.5, targetTemp: 28 })
+
+      expect(thermostat.alerts()).toEqual([])
+      expect(thermostat.persistedCache.knownTarget).toBe(28)
+    })
+
+    // No hold: the bot does not stop for a change by hand
+    test('keeps its normal schedule after a change', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ room: 20.5, targetTemp: 26 })
+      thermostat.check()
+      keepReporting(thermostat, HOUR, { room: 20.5, targetTemp: 28 })
+      keepReporting(thermostat, CONFIG.minWriteIntervalMs - HOUR - 2 * MIN, { room: 20.5, targetTemp: 24 })
+      expect(thermostat.writes()).toEqual([{ targetTemp: 28 }])
+      expect(thermostat.alerts()).toEqual([expect.stringContaining('target is 24 °C, not the 28 °C')])
+      expect(thermostat.alerts()[0]).toContain('The bot may change it again at its next write.')
+
+      keepReporting(thermostat, 10 * MIN, { room: 20.5, targetTemp: 24 })
+      expect(thermostat.writes()).toEqual([{ targetTemp: 28 }, { targetTemp: 28 }])
+      expect(thermostat.alerts()).toHaveLength(1)
+    })
+
+    test('a write that did not arrive: one message once the time after the write is over', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ room: 20.5, targetTemp: 26 })
+      thermostat.check()
+      expect(thermostat.writes()).toEqual([{ targetTemp: 28 }])
+
+      keepReporting(thermostat, CONFIG.writeSettleMs - 2 * MIN, { room: 20.5, targetTemp: 26 })
+      expect(thermostat.alerts()).toEqual([])
+      keepReporting(thermostat, HOUR, { room: 20.5, targetTemp: 26 })
+      expect(thermostat.alerts()).toEqual([expect.stringContaining('target is 26 °C, not the 28 °C')])
+    })
+
+    test('says nothing of a next write while the controller is not heating', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ targetTemp: 26, mode: 'cooling' })
+      thermostat.controller({ targetTemp: 20, mode: 'cooling' })
+
+      expect(thermostat.alerts()).toHaveLength(1)
+      expect(thermostat.alerts()[0]).not.toContain('next write')
+    })
+
+    test('a reading without its time counts as made now', () => {
+      const thermostat = startBot()
+      thermostat.inputs({ room: 20.5, targetTemp: 26 })
+      thermostat.check()
+      thermostat.controller({ targetTemp: 26, at: null })
+      expect(thermostat.alerts()).toEqual([])
+
+      jest.advanceTimersByTime(CONFIG.writeSettleMs)
+      thermostat.controller({ targetTemp: 26, at: null })
+      expect(thermostat.alerts()).toEqual([expect.stringContaining('target is 26 °C, not the 28 °C')])
+    })
+
+    // After a restart, a reading made before the last write may come late
+    test('no message for a reading made before its own write', () => {
+      const first = startBot()
+      first.inputs({ room: 20.5, targetTemp: 26 })
+      first.check()
+      const writtenAt = first.persistedCache.lastWriteAt
+
+      jest.advanceTimersByTime(HOUR)
+      const second = startBot({ cache: first.persistedCache, at: null })
+      second.controller({ targetTemp: 26, at: writtenAt - 2 * MIN })
+      second.controller({ targetTemp: 28 })
+
+      expect(second.alerts()).toEqual([])
+      expect(second.persistedCache.knownTarget).toBe(28)
+    })
+
+    // The version before did not keep the target it wrote
+    test('does not take the first target as known soon after a write of the version before', () => {
+      const thermostat = startBot({
+        oldState: { setPoint: 21.5, setPointChanged: false, lastWriteAt: Date.parse(START) - 5 * MIN, outdoor: null }
+      })
+      thermostat.controller({ targetTemp: 26 })
+      keepReporting(thermostat, HOUR, { targetTemp: 28 })
+
+      expect(thermostat.persistedCache.knownTarget).toBe(28)
+      expect(thermostat.alerts().filter((a) => a.includes('this bot last wrote or saw'))).toEqual([])
+    })
+
+    test('keeps the known target over a restart', () => {
+      const first = startBot()
+      first.inputs({ targetTemp: 26 })
+
+      jest.advanceTimersByTime(HOUR)
+      const second = startBot({ cache: first.persistedCache, at: null })
+      second.controller({ targetTemp: 26.5 })
+
+      expect(second.alerts()).toEqual([expect.stringContaining('target is 26.5 °C, not the 26 °C')])
     })
   })
 })

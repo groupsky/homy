@@ -5,6 +5,9 @@ const MIN = 60 * 1000
 // Targets come in 0.1 °C steps; this keeps a change of exactly minChange
 // from looking smaller because of float rounding.
 const EPSILON = 1e-6
+// Where the outdoor temperature in the status comes from
+const MEAN = '24 h mean'
+const MONTHLY = 'monthly average'
 
 const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
 const roundTo = (value, step) => Math.round(value / step) * step
@@ -27,11 +30,19 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
  *   wait for that time.
  * - Old or missing room data: no writes, so the controller keeps its last
  *   target; one log line and one Telegram message, and one each when it is back.
- * - Outdoor, by the rules in docker/weather/CLAUDE.md: the weather service's
- *   value while it is up to `outdoorMaxAgeMs` old; then that last value (kept
- *   over a restart) while it is up to `outdoorHoldMs` old; then the mean of the
- *   month from `outdoorMonthlyMeans`. The weather comes from the internet, so
- *   the bot keeps working without it.
+ * - Outdoor: the mean of the weather service's values of the last
+ *   `outdoorMeanMs` (24 h), because the model is a fit on daily means and the
+ *   hourly value made the target follow the day and night swing. A value is
+ *   kept only when it is at most `outdoorMaxAgeMs` old on arrival, once per
+ *   time, and over a restart. When the newest value is more than
+ *   `outdoorHoldMs` old: the mean of the month from `outdoorMonthlyMeans`
+ *   (the rules in docker/weather/CLAUDE.md). The weather comes from the
+ *   internet, so the bot keeps working without it.
+ * - A controller target the bot did not write (changed on the controller or
+ *   in Home Assistant, or a write that did not arrive): one log line and one
+ *   Telegram message for each change. Readings made within `writeSettleMs`
+ *   after the bot's own write are not checked: they may still show the old
+ *   target. The bot keeps its normal schedule and may change it again.
  * - Status (retained): set point, inputs, water target and a short state, after
  *   each check and each set point change.
  */
@@ -53,10 +64,12 @@ module.exports = (name, {
   maxWater = 32,
   minChange = 1,
   checkMs = 10 * MIN,
-  minWriteIntervalMs = 3 * 60 * MIN,
-  roomMaxAgeMs = 90 * MIN,
+  minWriteIntervalMs = 6 * 60 * MIN,
+  roomMaxAgeMs = 150 * MIN,
   controllerMaxAgeMs = 15 * MIN,
+  writeSettleMs = 15 * MIN,
   outdoorMaxAgeMs = 60 * MIN,
+  outdoorMeanMs = 24 * 60 * MIN,
   outdoorHoldMs = 12 * 60 * MIN,
   // °C, January..December
   outdoorMonthlyMeans = [3.7, 5.0, 7.6, 12.3, 16.7, 22.8, 26.1, 25.3, 20.1, 14.0, 9.5, 5.2],
@@ -64,17 +77,34 @@ module.exports = (name, {
   httpPost
 }) => ({
   persistedCache: {
-    version: 1,
+    version: 2,
     default: {
       setPoint: defaultSetPoint,
       // Lets the next check write before minWriteIntervalMs is over
       setPointChanged: false,
       lastWriteAt: null,
-      // The last fresh outdoor value: {temperature, time} (time in ms)
-      outdoor: null
+      // Fresh outdoor values of the last outdoorMeanMs: [{temperature, time}] (time in ms)
+      outdoorSamples: [],
+      // The last target the bot wrote, or before its first write the first one it saw
+      knownTarget: null
     },
-    // A new default (another set point in the config) keeps the stored values
-    migrate: ({ defaultState, state }) => ({ ...defaultState, ...state })
+    // A new default (another set point in the config) keeps the stored values.
+    // Only version 1 has `outdoor`, its last outdoor value: it is added to the
+    // values of the mean. Version 1 did not keep the target it wrote, also
+    // after a rollback to it, so the known target is taken again.
+    migrate: ({ defaultState, state }) => {
+      const { outdoor, ...rest } = state
+      const migrated = { ...defaultState, ...rest }
+      if (!Array.isArray(migrated.outdoorSamples)) migrated.outdoorSamples = []
+      if ('outdoor' in state) {
+        migrated.knownTarget = null
+        if (isNumber(outdoor?.temperature) && isNumber(outdoor?.time) &&
+          !migrated.outdoorSamples.some((sample) => sample.time === outdoor.time)) {
+          migrated.outdoorSamples = [...migrated.outdoorSamples, { temperature: outdoor.temperature, time: outdoor.time }]
+        }
+      }
+      return migrated
+    }
   },
 
   start: ({ mqtt, persistedCache, isEnabled = () => true }) => {
@@ -109,20 +139,46 @@ module.exports = (name, {
         : 'heat-pump controller data is back')
     })
 
-    const outdoorNow = () => {
-      const last = persistedCache.outdoor
-      const age = last ? Date.now() - last.time : Infinity
-      if (age <= outdoorMaxAgeMs) return { temperature: last.temperature, time: last.time, source: 'weather' }
-      if (age <= outdoorHoldMs) return { temperature: last.temperature, time: last.time, source: 'last value' }
-      return { temperature: outdoorMonthlyMeans[new Date().getMonth()], source: 'monthly average' }
+    // The kept outdoor values without the ones older than outdoorMeanMs. The
+    // persisted list is changed only when a value drops out, so it is not
+    // saved on each check.
+    const recentSamples = () => {
+      const samples = persistedCache.outdoorSamples.filter((sample) => Date.now() - sample.time < outdoorMeanMs)
+      if (samples.length !== persistedCache.outdoorSamples.length) persistedCache.outdoorSamples = samples
+      return samples
     }
 
-    const outdoorMessage = ({ temperature, time, source }) => {
-      if (source === 'weather') return `outdoor temperature from the weather data again: ${temperature} °C`
-      if (source === 'last value') {
-        return `outdoor temperature from the last value: ${temperature} °C at ${new Date(time).toISOString()}; the weather data is old or missing`
+    const outdoorNow = () => {
+      const samples = recentSamples()
+      const newest = Math.max(...samples.map((sample) => sample.time))
+      if (Date.now() - newest <= outdoorHoldMs) {
+        const mean = samples.reduce((sum, sample) => sum + sample.temperature, 0) / samples.length
+        return { temperature: Math.round(mean * 10) / 10, source: MEAN, sampleCount: samples.length }
       }
-      return `outdoor temperature from the monthly average: ${temperature} °C; no weather data for ${Math.round(outdoorHoldMs / (60 * MIN))} h`
+      return { temperature: outdoorMonthlyMeans[new Date().getMonth()], source: MONTHLY, sampleCount: 0 }
+    }
+
+    const outdoorMessage = ({ temperature, source, sampleCount }) => source === MEAN
+      ? `outdoor temperature from the weather data again: ${temperature} °C, the mean of ${sampleCount} values`
+      : `outdoor temperature from the monthly average: ${temperature} °C; no weather data for ${Math.round(outdoorHoldMs / (60 * MIN))} h`
+
+    // A target the bot did not write. `madeAt` is the time of the reading.
+    const checkTarget = (targetTemp, madeAt) => {
+      const { knownTarget, lastWriteAt } = persistedCache
+      // A reading made soon after a write (also a write by the version before)
+      // may still show the old target
+      if (lastWriteAt != null && madeAt - lastWriteAt < writeSettleMs) return
+      if (knownTarget == null) {
+        persistedCache.knownTarget = targetTemp
+        return
+      }
+      if (Math.abs(targetTemp - knownTarget) <= EPSILON) return
+      const message = `heat-pump water target is ${targetTemp} °C, not the ${knownTarget} °C this bot last wrote or saw: ` +
+        'changed outside the bot, or its write did not arrive.' +
+        (controller.mode === 'heating' ? ' The bot may change it again at its next write.' : '')
+      say(message)
+      alert(name, `⚠️ ${name}: ${message}`)
+      persistedCache.knownTarget = targetTemp
     }
 
     const waterFor = (setPoint, roomTemp, outdoorTemp) => {
@@ -148,6 +204,7 @@ module.exports = (name, {
         roomTemp: room ? room.temperature : null,
         outdoorTemp: outdoor.temperature,
         outdoorSource: outdoor.source,
+        outdoorSampleCount: outdoor.sampleCount,
         waterTarget,
         controllerTarget: controller ? controller.targetTemp : null,
         state
@@ -163,7 +220,7 @@ module.exports = (name, {
 
       // Weather data at the start is normal, so only a change is logged then
       if (outdoor.source !== outdoorSource) {
-        if (outdoorSource !== null || outdoor.source !== 'weather') say(outdoorMessage(outdoor))
+        if (outdoorSource !== null || outdoor.source !== MEAN) say(outdoorMessage(outdoor))
         outdoorSource = outdoor.source
       }
 
@@ -185,6 +242,7 @@ module.exports = (name, {
             (intervalOver ? '' : ', right after a set point change'))
           mqtt.publish(controllerWriteTopic, { targetTemp: waterTarget })
           persistedCache.lastWriteAt = now
+          persistedCache.knownTarget = waterTarget
           // Until the next reading, so a quick set point change does not send
           // the same value again
           controller.targetTemp = waterTarget
@@ -210,15 +268,18 @@ module.exports = (name, {
       if (!isNumber(payload?.targetTemp)) return
       controller = { targetTemp: payload.targetTemp, mode: payload.mode }
       controllerAge.seen('controller', payload._tz)
+      checkTarget(payload.targetTemp, isNumber(payload._tz) ? payload._tz : Date.now())
     })
 
-    // Only a fresh value is kept, and never one older than the kept one
+    // Only a fresh value is kept. The message is retained and comes again
+    // after a reconnect, so a time already kept is skipped.
     mqtt.subscribe(outdoorTopic, (payload) => {
       const time = Date.parse(payload?.time)
       if (!isNumber(payload?.temperature) || !Number.isFinite(time)) return
-      const last = persistedCache.outdoor
-      if (Date.now() - time > outdoorMaxAgeMs || (last && time < last.time)) return
-      persistedCache.outdoor = { temperature: payload.temperature, time }
+      if (Date.now() - time > outdoorMaxAgeMs) return
+      const samples = recentSamples()
+      if (samples.some((sample) => sample.time === time)) return
+      persistedCache.outdoorSamples = [...samples, { temperature: payload.temperature, time }]
     })
 
     mqtt.subscribe(setTopic, (payload) => {
