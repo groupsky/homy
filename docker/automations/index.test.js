@@ -71,6 +71,24 @@ describe('index.js MQTT message handler', () => {
     expect(JSON.parse(publishedTo(OUTPUT_TOPIC)[0][1])).toMatchObject({ value: 1 })
   })
 
+  // zigbee2mqtt logs "No converter available for '_bot'" for every internal
+  // key in a /set command (#1713); other consumers read _bot and _tz
+  test('adds _bot and _tz to a published payload', () => {
+    client.emit('message', INPUT_TOPIC, Buffer.from(JSON.stringify({ value: 1 })))
+
+    const sent = JSON.parse(publishedTo(OUTPUT_TOPIC)[0][1])
+    expect(sent._bot).toEqual({ name: 'malformedProbe', type: 'mqtt-transform' })
+    expect(typeof sent._tz).toBe('number')
+  })
+
+  test('sends a zigbee2mqtt set command without _bot and _tz', () => {
+    client.emit('message', 'test/z2m/in', Buffer.from(JSON.stringify({ state: 'ON' })))
+
+    const sent = publishedTo('z2m/house1/test-device/set')
+    expect(sent).toHaveLength(1)
+    expect(JSON.parse(sent[0][1])).toEqual({ state: 'ON' })
+  })
+
   test('does not throw out of the handler on a malformed payload', () => {
     expect(() => client.emit('message', INPUT_TOPIC, Buffer.from('{"value": '))).not.toThrow()
   })
