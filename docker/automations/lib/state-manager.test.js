@@ -1,9 +1,23 @@
 const fs = require('fs').promises
+const os = require('os')
 const path = require('path')
 const StateManager = require('./state-manager')
 const {afterEach, beforeEach, describe, expect, it, jest, test} = require('@jest/globals')
 
-const TEST_STATE_DIR = '/tmp/state-manager-test'
+// Each test gets its own new folder under the system temp dir (mkdtemp), so
+// two test runs never share files. The state dir inside it does not exist
+// yet, like on a first start of the service.
+let tmpRoot
+let TEST_STATE_DIR
+
+beforeEach(async () => {
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'state-manager-test-'))
+  TEST_STATE_DIR = path.join(tmpRoot, 'state')
+})
+
+afterEach(async () => {
+  await fs.rm(tmpRoot, { recursive: true, force: true })
+})
 
 describe('StateManager', () => {
   let stateManager

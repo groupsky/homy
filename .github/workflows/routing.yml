@@ -11,6 +11,9 @@ on:
   # Manual debugging/validation
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
 

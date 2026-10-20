@@ -89,7 +89,7 @@ describe('Telegram Bridge Service', () => {
       expect(requests).toHaveLength(1)
 
       const telegramRequest = requests[0]
-      expect(telegramRequest.url).toMatch(/https:\/\/api\.telegram\.org\/bot.*\/sendMessage/)
+      expect(telegramRequest.url).toMatch(/^https:\/\/api\.telegram\.org\/bot[^/]+\/sendMessage$/)
       expect(telegramRequest.method).toBe('POST')
       expect(telegramRequest.body.chat_id).toBe('-123456789')
       expect(telegramRequest.body.parse_mode).toBe('HTML')

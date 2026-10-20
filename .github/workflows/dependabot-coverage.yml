@@ -14,6 +14,9 @@ on:
       - 'docker/*/package.json'
       - '.github/workflows/dependabot-coverage.yml'
 
+permissions:
+  contents: read
+
 jobs:
   validate-coverage:
     runs-on: ubuntu-latest
