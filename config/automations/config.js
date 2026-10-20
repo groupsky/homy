@@ -557,20 +557,26 @@ module.exports = {
       minWater: 22,
       maxWater: 32,
       // Smallest change worth a write, and the time between writes, so the
-      // controller gets a few writes a day at most. After a set point change,
+      // controller gets 4 writes a day at most. After a set point change,
       // the first check that can write may do so before the time is up.
       minChange: 1,
       checkMs: 10 * 60 * 1000,                 // 10 min
-      minWriteIntervalMs: 3 * 60 * 60 * 1000,  // 3 h
+      minWriteIntervalMs: 6 * 60 * 60 * 1000,  // 6 h
       // Older inputs are not used. The room sensor reports on change and at
-      // least once an hour, so a quiet hour is normal; the controller reports
-      // at least every 5 min.
-      roomMaxAgeMs: 90 * 60 * 1000,            // 90 min
+      // least once an hour, but gaps of 115 min were seen; the controller
+      // reports at least every 5 min.
+      roomMaxAgeMs: 150 * 60 * 1000,           // 150 min
       controllerMaxAgeMs: 15 * 60 * 1000,      // 15 min
-      // Outdoor, by the rules in docker/weather/CLAUDE.md: the weather service
-      // value (every 15 min) while it is up to 1 h old, then the last value
-      // while it is up to 12 h old, then the mean of the month.
+      // A controller target the bot did not write gets one Telegram message.
+      // Readings made this soon after the bot's own write may still show the
+      // old target, so they are not checked.
+      writeSettleMs: 15 * 60 * 1000,           // 15 min
+      // Outdoor: the mean of the weather service values of the last 24 h (the
+      // model is a fit on daily means). A value counts only when it is up to
+      // 1 h old on arrival. When the newest is over 12 h old, the mean of the
+      // month, by the rules in docker/weather/CLAUDE.md.
       outdoorMaxAgeMs: 60 * 60 * 1000,         // 1 h
+      outdoorMeanMs: 24 * 60 * 60 * 1000,      // 24 h
       outdoorHoldMs: 12 * 60 * 60 * 1000,      // 12 h
       // °C, January..December: means of daily means of the era5_seamless
       // history, 2021–2025
