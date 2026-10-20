@@ -204,6 +204,18 @@ registry_misses() {
     assert_output --partial "docker manifest inspect ghcr.io/groupsky/homy/automations:$NEW"
 }
 
+@test "deploy.sh: a tag that is not a commit is checked against the compose file on disk" {
+    echo '    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}' >> "$PROJECT_DIR/docker-compose.yml"
+    echo '    # image: ghcr.io/groupsky/homy/old:${IMAGE_TAG:-latest}' >> "$PROJECT_DIR/docker-compose.yml"
+    registry_misses "ghcr.io/groupsky/homy/automations:latest" always
+    export IMAGE_WAIT_SECONDS=0
+
+    run deploy --tag latest
+    assert_failure
+    assert_output --partial "ghcr.io/groupsky/homy/automations:latest was not found in the registry"
+    refute_output --partial "homy/old"
+}
+
 @test "deploy.sh: data that is not on ZFS stops the deploy before anything is touched" {
     : > "$MOCK_DIR/zfs/datasets"
 

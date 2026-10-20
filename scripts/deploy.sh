@@ -259,7 +259,8 @@ fi
 COMPOSE_TEXT=$(git show "$PULL_TAG:docker-compose.yml" 2>/dev/null || true)
 [ -n "$COMPOSE_TEXT" ] || COMPOSE_TEXT=$(cat "$PROJECT_DIR/docker-compose.yml" 2>/dev/null || true)
 # shellcheck disable=SC2016  # matches the literal ${IMAGE_TAG} in the file
-WAIT_IMAGES=$(grep -oE 'ghcr\.io/groupsky/homy/[A-Za-z0-9._/-]+:\$\{IMAGE_TAG' <<<"$COMPOSE_TEXT" |
+WAIT_IMAGES=$(grep -E '^[[:space:]]*image:' <<<"$COMPOSE_TEXT" |
+    grep -oE 'ghcr\.io/groupsky/homy/[A-Za-z0-9._/-]+:\$\{IMAGE_TAG' |
     sed 's/:\${IMAGE_TAG$//' | LC_ALL=C sort -u | sed "s|\$|:$PULL_TAG|" || true)
 
 # Prints the images of $1 (one per line) that are not in the registry. A check
@@ -282,7 +283,7 @@ while WAIT_IMAGES=$(missing_images "$WAIT_IMAGES" | LC_ALL=C sort) && [ -n "$WAI
     FIRST_MISSING=$(head -n 1 <<<"$WAIT_IMAGES")
     if [ "$SECONDS" -ge "$WAIT_DEADLINE" ]; then
         error "$FIRST_MISSING was not found in the registry (or the registry did not answer) for ${IMAGE_WAIT_SECONDS} s. Nothing was changed. Check that CI finished for this commit."
-        notify "Deployment of $(format_version_short "$PULL_TAG") stopped: $FIRST_MISSING was not found in the registry for ${IMAGE_WAIT_SECONDS} s. Nothing was changed."
+        notify "Deployment of $(format_version_short "$PULL_TAG") stopped: $FIRST_MISSING was not found in the registry (or the registry did not answer) for ${IMAGE_WAIT_SECONDS} s. Nothing was changed."
         exit 1
     fi
     log "Waiting for $(wc -l <<<"$WAIT_IMAGES") image(s) CI has not pushed yet, e.g. $FIRST_MISSING..."
