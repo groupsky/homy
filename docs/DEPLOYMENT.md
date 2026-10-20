@@ -202,7 +202,7 @@ cd /path/to/homy
 The script:
 
 1. Checks that `docker compose` v2 is installed, and stops if it is not (see [Hosts without docker compose v2](#hosts-without-docker-compose-v2)).
-2. Shows the deployment plan and asks for confirmation.
+2. Shows the deployment plan and asks for confirmation. Then **waits for the images**: CI pushes the images of a commit some minutes after the merge. Every homy image that the new commit's `docker-compose.yml` names with `${IMAGE_TAG}` is checked in the registry (`docker manifest inspect`, in parallel, each with a 60 s timeout); while one is missing, the missing ones are checked again every `IMAGE_WAIT_INTERVAL` (30 s), for up to `IMAGE_WAIT_SECONDS` (1800 s). If one is still missing then, it stops with the image and tag in the message, before the snapshot: nothing was changed (#1748).
 3. **Takes the snapshot** (`snapshot.sh`) before anything else. If it fails, the deploy stops here: the code, the images and every container are untouched.
 4. Updates the code to `origin/master` and pulls the images for that commit. If the pull fails, the code is put back and nothing is restarted.
 5. Writes `docker-compose.deploy.yml` (not in git): every service pinned to its image **digest** and labelled with a hash of the host files it mounts (see [Recreating only what changed](#recreating-only-what-changed)).

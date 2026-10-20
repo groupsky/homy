@@ -44,6 +44,7 @@ case "\$*" in
         # only OLD and NEW are commits this repository knows
         case "\$*" in *$OLD*|*$NEW*) echo "$NEW" ;; *) exit 1 ;; esac ;;
     *rev-parse*) echo "$NEW" ;;
+    show\ *) cat "\$MOCK_DIR/compose-at-commit" 2>/dev/null || exit 128 ;;
 esac
 exit 0
 EOF
@@ -139,6 +140,80 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
     assert_equal "$(cat "$VERSION_FILE")" "$OLD"
     run cat "$MOCK_DIR/notify.log"
     assert_output --partial "the pre-deploy snapshot failed. Nothing was changed."
+}
+
+# --- images CI has not pushed yet (#1748) --------------------------------------
+
+# The docker-compose.yml of the commit being deployed (git show <sha>:...)
+compose_at_commit() {
+    printf '    image: ghcr.io/groupsky/homy/%s:${IMAGE_TAG:-latest}\n' "$@" > "$MOCK_DIR/compose-at-commit"
+}
+
+registry_misses() {
+    mkdir -p "$MOCK_DIR/registry-miss"
+    echo "$2" > "$MOCK_DIR/registry-miss/$(echo "$1" | tr '/:' '__')"
+}
+
+@test "deploy.sh: waits for an image CI has not pushed yet, then deploys" {
+    compose_at_commit automations homeassistant
+    registry_misses "ghcr.io/groupsky/homy/automations:$NEW" 2
+    export IMAGE_WAIT_INTERVAL=0
+
+    run deploy
+    assert_success
+    assert_output --partial "Waiting for 1 image(s) CI has not pushed yet, e.g. ghcr.io/groupsky/homy/automations:$NEW"
+    assert_output --partial "Deployment successful"
+    assert_equal "$(grep -c "Waiting for" <<<"$output")" "2"
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "1"
+    assert_equal "$(cat "$VERSION_FILE")" "$NEW"
+}
+
+@test "deploy.sh: an image that never appears stops the deploy before the snapshot, naming image and tag" {
+    compose_at_commit automations homeassistant
+    registry_misses "ghcr.io/groupsky/homy/automations:$NEW" always
+    export IMAGE_WAIT_SECONDS=0
+
+    run deploy
+    assert_failure
+    assert_output --partial "ghcr.io/groupsky/homy/automations:$NEW was not found in the registry"
+
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "0"
+    run calls
+    refute_output --partial "compose pull"
+    refute_output --partial "compose up"
+    run cat "$GIT_CALLS"
+    refute_output --partial "pull origin"
+    assert_equal "$(cat "$VERSION_FILE")" "$OLD"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "ghcr.io/groupsky/homy/automations:$NEW was not found in the registry"
+    assert_output --partial "Nothing was changed."
+}
+
+@test "deploy.sh: an image the new commit no longer uses is not waited for" {
+    # On disk the stack still has nodered; the new commit removed it, so CI
+    # never pushes nodered with the new tag
+    echo '    image: ghcr.io/groupsky/homy/nodered:${IMAGE_TAG:-latest}' >> "$PROJECT_DIR/docker-compose.yml"
+    compose_at_commit automations
+    registry_misses "ghcr.io/groupsky/homy/nodered:$NEW" always
+    export IMAGE_WAIT_SECONDS=0
+
+    run deploy
+    assert_success
+    refute_output --partial "nodered"
+    run calls
+    assert_output --partial "docker manifest inspect ghcr.io/groupsky/homy/automations:$NEW"
+}
+
+@test "deploy.sh: a tag that is not a commit is checked against the compose file on disk" {
+    echo '    image: ghcr.io/groupsky/homy/automations:${IMAGE_TAG:-latest}' >> "$PROJECT_DIR/docker-compose.yml"
+    echo '    # image: ghcr.io/groupsky/homy/old:${IMAGE_TAG:-latest}' >> "$PROJECT_DIR/docker-compose.yml"
+    registry_misses "ghcr.io/groupsky/homy/automations:latest" always
+    export IMAGE_WAIT_SECONDS=0
+
+    run deploy --tag latest
+    assert_failure
+    assert_output --partial "ghcr.io/groupsky/homy/automations:latest was not found in the registry"
+    refute_output --partial "homy/old"
 }
 
 @test "deploy.sh: data that is not on ZFS stops the deploy before anything is touched" {
