@@ -163,3 +163,75 @@ describe('collector estimate', () => {
         expect(estimates(written)).toHaveLength(0)
     })
 })
+
+describe('current temperature to MQTT', () => {
+    function setupPublish({publishCurrent, writePoints, fetchJson} = {}) {
+        const log = {info: jest.fn(), error: jest.fn()}
+        const written = []
+        const published = []
+        const poller = createPoller({
+            location,
+            fetchJson: fetchJson || (async (url) => url.startsWith('https://archive-api.') ? historyJson : forecastJson(t0)),
+            writePoints: writePoints || (async (points) => { written.push(...points) }),
+            log,
+            publishCurrent: publishCurrent || (async (message) => { published.push(message) }),
+        })
+        return {poller, written, published, log}
+    }
+
+    test('every poll publishes the current temperature with its own time', async () => {
+        const {poller, published} = setupPublish()
+        await poller.pollOnce(t0 + 2 * 60)
+        await poller.pollOnce(t0 + 17 * 60)
+        expect(published).toEqual([
+            {temperature: 7, time: '2026-10-16T06:00:00.000Z'},
+            {temperature: 7, time: '2026-10-16T06:00:00.000Z'},
+        ])
+    })
+
+    test('a failed forecast call publishes nothing', async () => {
+        const {poller, published} = setupPublish({
+            fetchJson: async (url) => {
+                if (url.startsWith('https://archive-api.')) return historyJson
+                throw new Error('forecast down')
+            },
+        })
+        await poller.pollOnce(t0 + 2 * 60)
+        expect(published).toEqual([])
+    })
+
+    test('an answer without a current temperature publishes nothing', async () => {
+        const {poller, published, written} = setupPublish({
+            fetchJson: async (url) => url.startsWith('https://archive-api.')
+                ? historyJson
+                : {current: {time: t0, temperature_2m: null, cloud_cover: 50}, hourly: {time: []}},
+        })
+        await poller.pollOnce(t0 + 2 * 60)
+        expect(published).toEqual([])
+        expect(kinds(written)).toContain('current')
+    })
+
+    test.each([
+        ['throws', () => { throw new Error('broker down') }],
+        ['rejects', async () => { throw new Error('broker down') }],
+    ])('a publish that %s is logged and the InfluxDB writes still happen', async (_, publishCurrent) => {
+        const {poller, written, log} = setupPublish({publishCurrent})
+        await poller.pollOnce(t0 + 2 * 60)
+        expect(kinds(written)).toEqual(['current', 'forecast', 'forecast', 'history', 'history', 'history', 'history'])
+        expect(log.error).toHaveBeenCalledWith(expect.stringContaining('broker down'))
+    })
+
+    test('a failed InfluxDB write still publishes', async () => {
+        const {poller, published} = setupPublish({
+            writePoints: async () => { throw new Error('influx down') },
+        })
+        await poller.pollOnce(t0 + 2 * 60)
+        expect(published).toHaveLength(1)
+    })
+
+    test('a poller without a publisher only writes', async () => {
+        const {poller, written} = setup()
+        await poller.pollOnce(t0 + 2 * 60)
+        expect(kinds(written)).toContain('current')
+    })
+})

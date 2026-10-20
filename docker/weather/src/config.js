@@ -37,6 +37,8 @@ function loadConfig(env, readFile) {
             bucket: `${database}/${env.INFLUXDB_RP || 'autogen'}`,
         },
         reader: {url, database, token: `${readUsername}:${readPassword}`},
+        // Without a broker the current values go only to InfluxDB.
+        mqtt: env.BROKER ? {url: env.BROKER} : null,
     }
 }
 

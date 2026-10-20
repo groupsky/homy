@@ -5,10 +5,12 @@
 // - the local estimates (collector #1735, mower #1736) once per hour. It redoes the last 3
 //   hours, so readings that reached InfluxDB late are counted, and the last 48
 //   hours on start. The same points are overwritten.
+// - the current temperature to MQTT on every poll, before the InfluxDB write, so
+//   neither one stops the other.
 // A failed step is logged and tried again on the next poll. A missed poll is
 // not filled in later, so a gap in the current values stays visible.
 
-const {buildForecastUrl, buildArchiveUrl, currentPoints, forecastPoints, historyPoints} = require('./open-meteo')
+const {buildForecastUrl, buildArchiveUrl, currentPoints, currentMessage, forecastPoints, historyPoints} = require('./open-meteo')
 
 // era5_seamless: ERA5-Land temperature and humidity (about 11 km) with ERA5
 // cloud cover, wind and sun (about 25 km). It lags about 5 days.
@@ -26,13 +28,14 @@ function utcDate(sec) {
 const ESTIMATE_HOURS_ON_START = 48
 const ESTIMATE_HOURS_REDONE = 3
 
-function createPoller({location, fetchJson, writePoints, log = console, estimateHours = null}) {
+function createPoller({location, fetchJson, writePoints, log = console, estimateHours = null, publishCurrent = null}) {
     let lastForecastHour = null
     let lastHistoryDay = null
     let estimatedUntil = null
 
     async function pollForecast(nowSec) {
         const json = await fetchJson(buildForecastUrl(location))
+        await publish(json)
         const hour = Math.floor(nowSec / 3600) * 3600
         const withForecast = lastForecastHour !== hour
         const current = currentPoints(json)
@@ -41,6 +44,16 @@ function createPoller({location, fetchJson, writePoints, log = console, estimate
         if (withForecast) {
             lastForecastHour = hour
             log.info(`Wrote ${current.length} current and ${forecast.length} forecast points`)
+        }
+    }
+
+    async function publish(json) {
+        const message = publishCurrent && currentMessage(json)
+        if (!message) return
+        try {
+            await publishCurrent(message)
+        } catch (error) {
+            log.error(`Publishing the current values failed: ${error.message}`)
         }
     }
 

@@ -526,6 +526,52 @@ module.exports = {
       outputContent: 'plain',
     },
 
+    // Living-room thermostat (#1753): sets the heat-pump water target from the
+    // living-room temperature, its set point from Home Assistant and the
+    // outdoor temperature. The controller keeps its own start/stop band.
+    livingRoomThermostat: {
+      type: 'virtual-thermostat',
+      roomTopic: 'z2m/house1/living-temp-humid',
+      outdoorTopic: 'homy/weather/current',
+      controllerTopic: '/modbus/monitoring2/heatpump-ctrl/reading',
+      controllerWriteTopic: '/modbus/monitoring2/heatpump-ctrl/write',
+      setTopic: 'homy/thermostat/living_room/set',
+      statusTopic: 'homy/thermostat/living_room/status',
+      // Set point in °C, from Home Assistant
+      defaultSetPoint: 21.5,
+      minSetPoint: 16,
+      maxSetPoint: 26,
+      setPointStep: 0.5,
+      // Fit of last winter's daily data: living = 11.5 + 0.36 × water + 0.12 × outdoor
+      model: { intercept: 11.5, perWater: 0.36, perOutdoor: 0.12 },
+      // Water °C added for each °C the room is under the set point
+      roomGain: 2,
+      // Water target in °C: step, lowest and highest
+      waterStep: 0.5,
+      minWater: 22,
+      maxWater: 32,
+      // Smallest change worth a write, and the time between writes, so the
+      // controller gets a few writes a day at most. After a set point change,
+      // the first check that can write may do so before the time is up.
+      minChange: 1,
+      checkMs: 10 * 60 * 1000,                 // 10 min
+      minWriteIntervalMs: 3 * 60 * 60 * 1000,  // 3 h
+      // Older inputs are not used. The room sensor reports on change and at
+      // least once an hour, so a quiet hour is normal; the controller reports
+      // at least every 5 min.
+      roomMaxAgeMs: 90 * 60 * 1000,            // 90 min
+      controllerMaxAgeMs: 15 * 60 * 1000,      // 15 min
+      // Outdoor, by the rules in docker/weather/CLAUDE.md: the weather service
+      // value (every 15 min) while it is up to 1 h old, then the last value
+      // while it is up to 12 h old, then the mean of the month.
+      outdoorMaxAgeMs: 60 * 60 * 1000,         // 1 h
+      outdoorHoldMs: 12 * 60 * 60 * 1000,      // 12 h
+      // °C, January..December: means of daily means of the era5_seamless
+      // history, 2021–2025
+      outdoorMonthlyMeans: [3.7, 5.0, 7.6, 12.3, 16.7, 22.8, 26.1, 25.3, 20.1, 14.0, 9.5, 5.2],
+      telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
+    },
+
     ioniqDtc: {
       type: 'ioniq-dtc',
       storedTopic: 'ioniq/parsed/dtc/stored',

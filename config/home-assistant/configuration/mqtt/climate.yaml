@@ -84,3 +84,24 @@
   mode_command_topic: /modbus/monitoring/thermostat-bedroom/write
   temperature_command_topic: /modbus/monitoring/thermostat-bedroom/write
   <<: *common_controllable_bac002
+
+# Living-room thermostat (#1753): the set point goes to the virtual-thermostat
+# bot in automations, which sets the heat-pump water target from it.
+- name: Living room
+  modes:
+    - "heat"
+  mode_state_topic: homy/thermostat/living_room/status
+  mode_state_template: "heat"
+  current_temperature_topic: z2m/house1/living-temp-humid
+  current_temperature_template: "{{ value_json.temperature }}"
+  temperature_state_topic: homy/thermostat/living_room/status
+  temperature_state_template: "{{ value_json.setPoint }}"
+  temperature_command_topic: homy/thermostat/living_room/set
+  temperature_command_template: >-
+    { "setPoint": {{ value }} }
+  json_attributes_topic: homy/thermostat/living_room/status
+  min_temp: 16
+  max_temp: 26
+  temp_step: 0.5
+  precision: 0.1
+  temperature_unit: "C"

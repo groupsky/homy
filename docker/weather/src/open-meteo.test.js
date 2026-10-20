@@ -3,6 +3,7 @@ const {
     buildForecastUrl,
     buildArchiveUrl,
     currentPoints,
+    currentMessage,
     forecastPoints,
     historyPoints,
     checkResponse,
@@ -83,6 +84,20 @@ describe('currentPoints', () => {
             .toEqual({temperature: 5})
         expect(currentPoints({current: {time: t0, temperature_2m: null}})).toEqual([])
         expect(currentPoints({})).toEqual([])
+    })
+})
+
+describe('currentMessage', () => {
+    test('gives the current temperature with its own time', () => {
+        const json = {current: {time: t0 + 900, interval: 900, temperature_2m: 7.3, cloud_cover: 100}}
+        expect(currentMessage(json)).toEqual({temperature: 7.3, time: '2026-10-16T06:15:00.000Z'})
+    })
+
+    test('gives nothing without a temperature or a time', () => {
+        expect(currentMessage({current: {time: t0, temperature_2m: null, cloud_cover: 10}})).toBeNull()
+        expect(currentMessage({current: {temperature_2m: 5}})).toBeNull()
+        expect(currentMessage({})).toBeNull()
+        expect(currentMessage(null)).toBeNull()
     })
 })
 

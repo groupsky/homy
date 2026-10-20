@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Polls Open-Meteo every 15 minutes and writes outdoor weather into InfluxDB.
+// The current temperature also goes to MQTT (homy/weather/current).
 // See CLAUDE.md for what is stored and who may use it.
 
 const fs = require('fs')
@@ -10,6 +11,7 @@ const {createPoller, msUntilNextRun} = require('./src/poller')
 const {createReader} = require('./src/influx-query')
 const {createEstimator} = require('./src/collector')
 const {createMowerEstimator} = require('./src/mower')
+const {createPublisher} = require('./src/mqtt')
 
 let config
 try {
@@ -31,12 +33,14 @@ const named = (name, estimator) => (from, to) => estimator.estimateHours(from, t
 const collectorHours = named('collector', collector)
 const mowerHours = named('mower', mower)
 const estimateHours = async (from, to) => [...await collectorHours(from, to), ...await mowerHours(from, to)]
+const publisher = config.mqtt ? createPublisher({url: config.mqtt.url}) : null
 const poller = createPoller({
     location: config.location,
     fetchJson,
     writePoints: writer.writePoints,
     log: console,
     estimateHours,
+    publishCurrent: publisher && publisher.publishCurrent,
 })
 
 let timer = null
@@ -54,10 +58,11 @@ async function run() {
 
 function shutdown() {
     clearTimeout(timer)
-    writer.close().finally(() => process.exit(0))
+    Promise.allSettled([writer.close(), publisher && publisher.close()]).finally(() => process.exit(0))
 }
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 
-console.log(`Weather poller starting; location configured, writing to ${config.influx.bucket}`)
+console.log(`Weather poller starting; location configured, writing to ${config.influx.bucket}` +
+    (publisher ? ', publishing the current temperature to MQTT' : ', no MQTT broker set'))
 run()
