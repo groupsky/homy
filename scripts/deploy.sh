@@ -3,6 +3,7 @@
 # Production Deployment Script
 #
 # Deploys the homy stack from prebuilt GHCR images while it keeps running:
+#   0. wait until CI has pushed the images of the new version
 #   1. one ZFS snapshot of all the stack's data (about a second, nothing stops)
 #   2. update the code and pull the images
 #   3. pin every service to its image digest and a hash of the config files it
@@ -204,6 +205,7 @@ echo "  Target version:   $NEW_VERSION"
 echo "  Force deploy:     $FORCE_DEPLOY"
 echo ""
 echo "  This will:"
+echo "    0. Wait until CI has pushed the new images (up to ${IMAGE_WAIT_SECONDS} s)"
 if [ "$SKIP_SNAPSHOT" -eq 0 ]; then
     echo "    1. Snapshot the stack's data (ZFS; nothing is stopped)"
 else
@@ -250,27 +252,40 @@ if [ -n "$IMAGE_TAG" ] && sha=$(git rev-parse --verify -q "${IMAGE_TAG}^{commit}
     PULL_TAG="$sha"
 fi
 
-# Prints the stack's homy images with tag $1 that are not in the registry. A
-# check takes about 2.5 s from routy, so they run in parallel.
+# The images CI pushes with that tag: every homy image named with ${IMAGE_TAG}
+# in the new commit's docker-compose.yml (the file on disk when the tag is not
+# a commit). Not the compose files on disk: an image the new commit removes
+# would never appear.
+COMPOSE_TEXT=$(git show "$PULL_TAG:docker-compose.yml" 2>/dev/null || true)
+[ -n "$COMPOSE_TEXT" ] || COMPOSE_TEXT=$(cat "$PROJECT_DIR/docker-compose.yml" 2>/dev/null || true)
+# shellcheck disable=SC2016  # matches the literal ${IMAGE_TAG} in the file
+WAIT_IMAGES=$(grep -oE 'ghcr\.io/groupsky/homy/[A-Za-z0-9._/-]+:\$\{IMAGE_TAG' <<<"$COMPOSE_TEXT" |
+    sed 's/:\${IMAGE_TAG$//' | LC_ALL=C sort -u | sed "s|\$|:$PULL_TAG|" || true)
+
+# Prints the images of $1 (one per line) that are not in the registry. A check
+# takes about 2.5 s from routy, so they run in parallel; the timeout keeps a
+# registry that stops answering (#1698) from holding the deploy forever.
 missing_images() {
-    local tag="$1" img
-    for img in $(IMAGE_TAG="$tag" dc_base config --format json | jq -r --arg t ":$tag" \
-            '.services[].image // empty | select(startswith("ghcr.io/groupsky/homy/") and endswith($t))' | LC_ALL=C sort -u); do
-        docker manifest inspect "$img" > /dev/null 2>&1 || echo "$img" &
+    local img
+    for img in $1; do
+        timeout -k 5 60 docker manifest inspect "$img" > /dev/null 2>&1 || echo "$img" &
     done
     wait
 }
 
+if [ -z "$WAIT_IMAGES" ]; then
+    warn "Found no homy images in docker-compose.yml to check in the registry; not waiting for them"
+fi
 log "Checking that the images for $(format_version_short "$PULL_TAG") are in the registry..."
 WAIT_DEADLINE=$((SECONDS + IMAGE_WAIT_SECONDS))
-while MISSING=$(missing_images "$PULL_TAG" | LC_ALL=C sort) && [ -n "$MISSING" ]; do
-    FIRST_MISSING=$(head -n 1 <<<"$MISSING")
+while WAIT_IMAGES=$(missing_images "$WAIT_IMAGES" | LC_ALL=C sort) && [ -n "$WAIT_IMAGES" ]; do
+    FIRST_MISSING=$(head -n 1 <<<"$WAIT_IMAGES")
     if [ "$SECONDS" -ge "$WAIT_DEADLINE" ]; then
-        error "$FIRST_MISSING is not in the registry after ${IMAGE_WAIT_SECONDS} s. Nothing was changed. Check that CI finished for this commit."
-        notify "Deployment of $(format_version_short "$PULL_TAG") stopped: $FIRST_MISSING is not in the registry after ${IMAGE_WAIT_SECONDS} s. Nothing was changed."
+        error "$FIRST_MISSING was not found in the registry (or the registry did not answer) for ${IMAGE_WAIT_SECONDS} s. Nothing was changed. Check that CI finished for this commit."
+        notify "Deployment of $(format_version_short "$PULL_TAG") stopped: $FIRST_MISSING was not found in the registry for ${IMAGE_WAIT_SECONDS} s. Nothing was changed."
         exit 1
     fi
-    log "Waiting for $(wc -l <<<"$MISSING") image(s) CI has not pushed yet, e.g. $FIRST_MISSING..."
+    log "Waiting for $(wc -l <<<"$WAIT_IMAGES") image(s) CI has not pushed yet, e.g. $FIRST_MISSING..."
     sleep "$IMAGE_WAIT_INTERVAL"
 done
 
