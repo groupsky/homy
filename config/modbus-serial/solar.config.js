@@ -46,6 +46,7 @@ module.exports = {
     mqtt: {
       url: process.env.BROKER,
       publishTopic: process.env.TOPIC,
+      subscribeTopic: process.env.SUBSCRIBE_TOPIC,
     },
     mongodb: {
       collection: process.env.COLLECTION,

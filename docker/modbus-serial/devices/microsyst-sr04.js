@@ -397,6 +397,98 @@ const readTimer = async (client) => {
   }
 }
 
+// The allowed range of each clock field, as the reading shows it: dayWeek 0 is
+// Sunday, year is the last two digits.
+const TIMER_RANGES = {
+  ss: [0, 59],
+  mm: [0, 59],
+  hh: [0, 23],
+  dayWeek: [0, 6],
+  day: [1, 31],
+  month: [1, 12],
+  year: [0, 99],
+}
+
+/**
+ * @param {number} val 0..99
+ * @return {number} the same number in BCD, e.g. 59 -> 0x59
+ */
+const writeHex = (val) => Math.floor(val / 10) * 16 + val % 10
+
+/**
+ * @param {number} high
+ * @param {number} low
+ * @return {number}
+ */
+const writeBytes = (high, low) => (high << 8) | low
+
+/**
+ * Checks that the message is a full clock and nothing else, so a write can
+ * never reach a setting. Keys that start with `_` are the metadata the
+ * automations add to every message (`_bot`, `_tz`) and are ignored.
+ * @param {unknown} message
+ * @return {MICROSYST_SR04_TIMER_STATE}
+ */
+const validateTimer = (message) => {
+  if (message == null || typeof message !== 'object' || Array.isArray(message)) {
+    throw new Error('The message must be an object')
+  }
+  const keys = Object.keys(message).filter((key) => !key.startsWith('_'))
+  if (keys.length !== 1 || keys[0] !== 'timer') {
+    throw new Error(`Only the timer can be written, got: ${keys.join(', ') || 'nothing'}`)
+  }
+  const { timer } = message
+  if (timer == null || typeof timer !== 'object' || Array.isArray(timer)) {
+    throw new Error('The timer must be an object')
+  }
+  const unknown = Object.keys(timer).filter((key) => !Object.hasOwn(TIMER_RANGES, key))
+  if (unknown.length) {
+    throw new Error(`Unknown timer fields: ${unknown.join(', ')}`)
+  }
+  for (const [field, [min, max]] of Object.entries(TIMER_RANGES)) {
+    const val = timer[field]
+    if (!Number.isInteger(val) || val < min || val > max) {
+      throw new Error(`The timer ${field} must be a whole number from ${min} to ${max}, got: ${val}`)
+    }
+  }
+  return timer
+}
+
+/**
+ * Sets the clock (holding registers 1024..1027, manual page 16). Nothing else
+ * can be written. The device supports only FC06 (write single register), so
+ * the clock takes four writes. Seconds and minutes go first: the caller sends
+ * a time with seconds away from 59, so the clock cannot roll over to the next
+ * minute or hour between the writes.
+ *
+ * @param {import('modbus-serial').ModbusRTU} client
+ * @param {{timer: MICROSYST_SR04_TIMER_STATE}} message
+ * @param {Object} config
+ * @param {Partial<MICROSYST_SR04_STATE>} state
+ * @return {Promise<void>}
+ */
+async function write(client, message, config, state = {}) {
+  const { ss, mm, hh, dayWeek, day, month, year } = validateTimer(message)
+
+  // The low byte of 1027 is not documented, so it is written back as it is
+  await sleep(INTER_COMM_DELAY)
+  const { data: [yearRegister] } = await client.readHoldingRegisters(1027, 1)
+
+  await sleep(INTER_COMM_DELAY)
+  await client.writeRegister(1024, writeBytes(writeHex(ss), writeHex(mm)))
+  await sleep(INTER_COMM_DELAY)
+  // The device counts week days from 1 (Sunday), the reading from 0
+  await client.writeRegister(1025, writeBytes(writeHex(hh), dayWeek + 1))
+  await sleep(INTER_COMM_DELAY)
+  await client.writeRegister(1026, writeBytes(writeHex(day), writeHex(month)))
+  await sleep(INTER_COMM_DELAY)
+  await client.writeRegister(1027, writeBytes(writeHex(year), readByte(yearRegister)))
+
+  // The next poll reads the settings again, so the readings show them before
+  // and after the write
+  state.configuration = undefined
+}
+
 /**
  * @param {import('modbus-serial').ModbusRTU} client
  * @param {number} maxMsBetweenReports
@@ -417,4 +509,5 @@ async function read(client, { options: { maxMsBetweenReports = 1000 } = {} } = {
 
 module.exports = {
   read,
+  write,
 }

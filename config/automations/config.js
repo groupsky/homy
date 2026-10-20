@@ -52,6 +52,12 @@ module.exports = {
       type: 'bac002-sync-clock',
       topic: '/modbus/monitoring/thermostat-martin'
     },
+    // Keeps the solar controller's clock on local time, summer time included.
+    // It writes only the clock registers (#1752).
+    syncSolarHeaterClock: {
+      type: 'sr04-sync-clock',
+      topic: '/modbus/monitoring/solar_heater'
+    },
     toggleThermostatBedroomPower: {
       type: 'bac002-toggle-power',
       bacTopic: '/modbus/monitoring/thermostat-bedroom',

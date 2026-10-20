@@ -24,7 +24,7 @@ The boiler system consists of a 200L Eldom cylindrical water heater (height: 140
 - **Electric heater contactor:** Relay bit 14 on `/modbus/dry-switches/relays00-15`
 - **Solar circulation pump:** Controlled by external solar heater controller
 - **Energy meter:** Connected to `/modbus/secondary/boiler/reading`
-- **External solar controller:** Connected to `/modbus/monitoring/solar_heater` (monitoring only)
+- **External solar controller:** Connected to `/modbus/monitoring/solar_heater` (monitoring only; `sr04-sync-clock` sets its clock and nothing else)
 
 ## MQTT Topics
 

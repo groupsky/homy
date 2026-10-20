@@ -52,6 +52,20 @@ Device-specific drivers in `devices/` directory:
 - Handle device-specific register mapping
 - Provide data validation and error handling
 
+### Microsyst SR-04: clock writes only
+The SR-04 driver can write only the clock (holding registers 1024..1027). It
+takes `{"timer": {"ss", "mm", "hh", "dayWeek", "day", "month", "year"}}` on
+`/modbus/monitoring/solar_heater/write`, in the same form as the reading
+(dayWeek 0 is Sunday, year has two digits). All seven fields must be there. Any
+other key, or a value out of range, is refused before anything reaches the bus;
+keys that start with `_` (the metadata the automations add) are ignored.
+
+The device has no function 16, so the driver makes four single-register writes
+(function 06), seconds and minutes first. It reads 1027 first and keeps its
+undocumented low byte. After a write the next poll reads the settings again, so
+the readings show them before and after the write. The `sr04-sync-clock`
+automation sends these writes (#1752).
+
 ## Configuration
 
 ### Environment Variables
@@ -173,8 +187,10 @@ restarts it and checks that no line is glued to another.
 
 The `mqtt` integration (`integrations/mqtt.js`) publishes readings to
 `publishTopic` and, when `subscribeTopic` is configured, subscribes each writable
-device to its own `.../write` command topic. Five instances subscribe in
-production (`monitoring`, `monitoring2`, `dry-switches`, `solar`, `inverter`).
+device to its own `.../write` command topic. `docker-compose.yml` sets
+`SUBSCRIBE_TOPIC` for five instances, but only the four whose config passes it
+as `subscribeTopic` subscribe: `monitoring`, `monitoring2`, `dry-switches` and
+`solar`. `inverter` does not; the SUN2000 driver has no `write`.
 
 ### Malformed Payload Handling
 
