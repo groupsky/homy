@@ -15,6 +15,10 @@ This document provides comprehensive documentation of all data stored in the Inf
 ### Direct InfluxDB Writers (modbus-serial services)
 All modbus-serial instances write directly to InfluxDB using environment-configured measurements:
 
+**`_id.buffer.0` to `_id.buffer.11`**: points written by modbus-serial before the fix of
+#1778 (2026-10-20) carry these 12 extra numeric fields. They are the bytes of the
+MongoDB `_id` of the same reading, not data. They were left in place; ignore them.
+
 1. **main-power** → `raw` measurement, tag `bus: "primary"` — **ended**
    - **Device**: SDM630 energy meter (address 1) - "main" power consumption
    - **Data**: 3-phase power, voltage, current, frequency measurements
