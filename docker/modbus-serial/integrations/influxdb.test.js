@@ -7,6 +7,7 @@ jest.mock('@influxdata/influxdb-client', () => {
   return {...actual, InfluxDB: jest.fn()}
 })
 const {InfluxDB} = require('@influxdata/influxdb-client')
+const {ObjectId} = require('mongodb')
 const createInfluxIntegration = require('./influxdb')
 
 describe('influxdb publish', () => {
@@ -29,5 +30,15 @@ describe('influxdb publish', () => {
     expect(written[0]).not.toMatch(/[ ,]time=/)
     expect(written[0]).toContain('v=230')
     expect(written[0]).toMatch(/ 1700000000000$/)
+  })
+
+  it('does not write the _id that the mongodb integration adds to the shared reading', () => {
+    const {publish} = createInfluxIntegration({url: 'http://influxdb', database: 'homy', measurement: 'raw'})
+
+    publish({device: 'main', _type: 'sdm630', _addr: 1, _tz: 1700000000000, v: 230, _id: new ObjectId()})
+
+    expect(written).toHaveLength(1)
+    expect(written[0]).not.toContain('_id')
+    expect(written[0]).toContain('v=230')
   })
 })

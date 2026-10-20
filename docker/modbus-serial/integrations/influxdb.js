@@ -54,7 +54,10 @@ module.exports = ({
       .tag('device.addr', entry._addr)
       .timestamp(entry._tz)
 
-    mapObject('', entry, point, ['device', '_type', '_addr', '_ms', '_tz'])
+    // index.js hands the same object to every integration, and the mongodb
+    // integration's insertOne adds an ObjectId _id to it. Written as is, its
+    // bytes became 12 fields _id.buffer.0 to _id.buffer.11 (#1778).
+    mapObject('', entry, point, ['device', '_type', '_addr', '_ms', '_tz', '_id'])
 
     writeApi.writePoint(point)
   }
