@@ -35,21 +35,9 @@
             "path": "ioniq",
             "cards": [
               {
-                "type": "gauge",
-                "entity": "sensor.ioniq_soc",
-                "name": "Заряд",
-                "min": 0,
-                "max": 100,
-                "severity": {
-                  "green": 50,
-                  "yellow": 20,
-                  "red": 0
-                }
-              },
-              {
                 "type": "markdown",
                 "title": "Сега",
-                "content": "{%- macro age(t) -%}\n{%- if t is none -%}няма данни\n{%- else -%}{%- set m = ((now() - t).total_seconds() / 60) | int -%}\n{%- if m < 2 -%}сега\n{%- elif m < 60 -%}преди {{ m }} мин\n{%- elif m < 2880 -%}преди {{ (m / 60) | int }} ч\n{%- else -%}преди {{ (m / 1440) | int }} дни\n{%- endif -%}{%- endif -%}\n{%- endmacro -%}\n{%- macro read(e) -%}{{ age(states(e) | as_datetime(none)) }}{%- endmacro -%}\n\n{%- set s = states('sensor.ioniq_state') -%}\n{%- set soc = states('sensor.ioniq_soc') | float(none) -%}\n{%- set w = states('sensor.ev_charger_power') | float(none) -%}\n| | | |\n|---|---|---|\n| Заряд | {{ '**%d %%**' % soc if soc is not none else '—' }} | {{ read('sensor.ioniq_soc_time') }} |\n| Колата | {{ {'active': 'включена', 'charging': 'зарежда', 'parked': 'паркирана'}.get(s, '—') }} | {{ read('sensor.ioniq_last_seen') }} |\n| Зарядната у дома | {% if w is none %}няма данни{% elif w > 100 %}🔌 зарежда, {{ (w / 1000) | round(1) }} kW{% else %}не зарежда{% endif %} | {{ age(states.sensor.ev_charger_power.last_updated if states.sensor.ev_charger_power else none) }} |\n\nКолата праща данни само когато е будна. Когато е далеч или спи, стойностите са от последния път, а дясната колона казва колко са стари."
+                "content": "{%- macro age(t) -%}\n{%- if t is none -%}няма данни\n{%- else -%}{%- set m = ((now() - t).total_seconds() / 60) | int -%}\n{%- if m < 2 -%}сега\n{%- elif m < 60 -%}преди {{ m }} мин\n{%- elif m < 2880 -%}преди {{ (m / 60) | int }} ч\n{%- else -%}преди {{ (m / 1440) | int }} дни\n{%- endif -%}{%- endif -%}\n{%- endmacro -%}\n{%- macro read(e) -%}{{ age(states(e) | as_datetime(none)) }}{%- endmacro -%}\n\n{%- set s = states('sensor.ioniq_state') -%}\n{%- set soc = states('sensor.ioniq_soc') | float(none) -%}\n{%- set w = states('sensor.ev_charger_power') | float(none) -%}\n| | | |\n|---|---|---|\n| Заряд | {{ '**%d %%**' % soc if soc is not none else '—' }} | {{ read('sensor.ioniq_soc_time') }} |\n| Колата | {{ {'active': 'включена', 'charging': 'зарежда', 'parked': 'паркирана'}.get(s, '—') }} | {{ read('sensor.ioniq_last_seen') }} |\n| Зарядната у дома | {% if w is none %}няма данни{% elif w > 100 %}🔌 зарежда, {{ (w / 1000) | round(1) }} kW{% else %}не зарежда{% endif %} | {{ 'сега' if w is not none else '' }} |\n\nКолата праща данни само когато е будна. Когато е далеч или спи, стойностите са от последния път, а дясната колона казва колко са стари."
               },
               {
                 "type": "markdown",
@@ -59,7 +47,7 @@
               {
                 "type": "markdown",
                 "title": "Здраве",
-                "content": "{%- macro age(t) -%}\n{%- if t is none -%}няма данни\n{%- else -%}{%- set m = ((now() - t).total_seconds() / 60) | int -%}\n{%- if m < 2 -%}сега\n{%- elif m < 60 -%}преди {{ m }} мин\n{%- elif m < 2880 -%}преди {{ (m / 60) | int }} ч\n{%- else -%}преди {{ (m / 1440) | int }} дни\n{%- endif -%}{%- endif -%}\n{%- endmacro -%}\n{%- macro read(e) -%}{{ age(states(e) | as_datetime(none)) }}{%- endmacro -%}\n\n{%- set v = states('sensor.ioniq_12v') | float(none) -%}\n{%- set km = states('sensor.ioniq_odometer') | float(none) -%}\n{%- set stored = state_attr('binary_sensor.ioniq_fault_stored', 'codes') or [] -%}\n{%- set pending = state_attr('binary_sensor.ioniq_fault_pending', 'codes') or [] -%}\n| | | |\n|---|---|---|\n| 12 V | {% if v is none %}—{% else %}{% if v < 11.8 %}🔴{% elif v < 12.2 %}🟠{% else %}🟢{% endif %} {{ '%.1f' % v }} V{% endif %} | {{ read('sensor.ioniq_last_seen') }} |\n| Грешки | {% if is_state('binary_sensor.ioniq_fault_stored', 'on') or is_state('binary_sensor.ioniq_fault_pending', 'on') %}🔴 {{ (stored + pending) | join(', ') }}{% elif states('binary_sensor.ioniq_fault_stored') in ['on', 'off'] %}🟢 няма{% else %}няма данни{% endif %} | {{ read('sensor.ioniq_faults_time') }} |\n| Километраж | {{ '%d km' % km if km is not none else '—' }} | {{ read('sensor.ioniq_odometer_time') }} |"
+                "content": "{%- macro age(t) -%}\n{%- if t is none -%}няма данни\n{%- else -%}{%- set m = ((now() - t).total_seconds() / 60) | int -%}\n{%- if m < 2 -%}сега\n{%- elif m < 60 -%}преди {{ m }} мин\n{%- elif m < 2880 -%}преди {{ (m / 60) | int }} ч\n{%- else -%}преди {{ (m / 1440) | int }} дни\n{%- endif -%}{%- endif -%}\n{%- endmacro -%}\n{%- macro read(e) -%}{{ age(states(e) | as_datetime(none)) }}{%- endmacro -%}\n\n{%- set v = states('sensor.ioniq_12v') | float(none) -%}\n{%- set km = states('sensor.ioniq_odometer') | float(none) -%}\n{%- set stored = state_attr('binary_sensor.ioniq_fault_stored', 'codes') or [] -%}\n{%- set pending = state_attr('binary_sensor.ioniq_fault_pending', 'codes') or [] -%}\n| | | |\n|---|---|---|\n| 12 V | {{ '%.1f V' % v if v is not none else '—' }} | {{ read('sensor.ioniq_last_seen') }} |\n| Грешки | {% if is_state('binary_sensor.ioniq_fault_stored', 'on') or is_state('binary_sensor.ioniq_fault_pending', 'on') %}🔴 {{ (stored + pending) | join(', ') }}{% elif states('binary_sensor.ioniq_fault_stored') in ['on', 'off'] %}🟢 няма{% else %}няма данни{% endif %} | {{ read('sensor.ioniq_faults_time') }} |\n| Километраж | {{ '%d km' % km if km is not none else '—' }} | {{ read('sensor.ioniq_odometer_time') }} |\n\n12 V без цвят: докато колата е паркирана, напрежението пада за кратко и не казва нищо за батерията. Здравето на 12 V е в Grafana."
               },
               {
                 "type": "markdown",

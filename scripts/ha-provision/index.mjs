@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Applies config/home-assistant/provision.json to a running Home Assistant:
 // the state HA keeps only in .storage and offers no YAML for - rows of
-// storage-mode dashboards and entity exposure to assistants. Safe to re-run;
+// storage-mode dashboards, whole dashboards the repo owns, and entity
+// exposure to assistants. Safe to re-run;
 // --dry-run reports what would change and writes nothing. See README.md.
 import { readFileSync } from 'node:fs'
 import { applyRows, planExposure, planFullDashboard } from './lib.mjs'

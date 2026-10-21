@@ -281,7 +281,8 @@ For daily use by the family there is also a Home Assistant dashboard, **Ioniq**
 (`/dashboard-ioniq`). It shows the charge, the car's state, whether the house
 charger is charging, the four cold tyre pressures, 12 V, the fault codes and
 the odometer, with links to the Grafana dashboards above. It has no map and
-reads no position.
+reads no position. The logger payload also carries the VIN; the fault sensors
+keep only `codes` and `ts` as attributes, so HA does not store it.
 
 - The entities are MQTT sensors in `config/home-assistant/configuration/mqtt/`
   (`sensor.ioniq_*`, `binary_sensor.ioniq_fault_*`, `sensor.ev_charger_power`).
@@ -292,8 +293,16 @@ reads no position.
 - **Over an HA restart.** The logger's topics are retained, so the broker
   sends the last values again. The cold tyre values come from the `ioniq-tpms`
   bot, which does not retain; `expire_after` (30 days) makes HA restore them.
-- **Colours** use the same limits as the Grafana rules: tyres 🔴 under 1.9 bar,
-  🟠 under 2.2 or over 2.9 bar; 12 V 🔴 under 11.8 V, 🟠 under 12.2 V.
+- **Colours** use the limits of the Grafana tyre rules: 🔴 under 1.9 bar, 🟠
+  under 2.2 or over 2.9 bar, on the cold-start value (the over-inflation rule
+  reads `tire_<w>_bar_cold` instead; the limit is the same). 12 V has no
+  colour: the parked 12 V rules were removed because shutdown dips look like a
+  weak battery (`delete-ioniq-12v-transient-alerts.yaml`), and the retained
+  frame of a parked car is such a dip. A mis-decoded `bms/2101` frame (all cell
+  voltages 0) is skipped, as in mqtt-influx.
+- **The house charger** row has no age: the value changes rarely, so HA's
+  last-changed would look old while the meter reports every few seconds.
+  `expire_after: 60` makes it unavailable when the meter stops.
 - The dashboard is `dashboards.dashboard-ioniq` in
   `config/home-assistant/provision.json`, applied by
   [`scripts/ha-provision`](../scripts/ha-provision/README.md). The repo owns it in

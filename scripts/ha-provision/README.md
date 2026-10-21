@@ -12,8 +12,9 @@ cannot take from YAML:
 - **Whole dashboards** (`dashboards.<url_path>.config`, with `title` and
   `icon`). The script creates the dashboard when it is missing and saves the
   whole config when it differs, so the repo owns it in full: an edit in the UI
-  is replaced on the next run. The `url_path` needs a hyphen. Today:
-  `dashboard-ioniq` (#1800).
+  is replaced on the next run. The `url_path` needs a hyphen. `title` and
+  `icon` are used only when the dashboard is created; change them later in the
+  UI (Settings → Dashboards). Today: `dashboard-ioniq` (#1800).
 
 A rebuilt data volume, or a row edited in the UI, reverts both. Re-run the
 script to restore them. It is idempotent.

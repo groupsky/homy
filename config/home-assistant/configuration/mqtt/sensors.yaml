@@ -163,6 +163,9 @@
   device_class: power
   state_class: measurement
   unit_of_measurement: W
+  # The meter reports every few seconds; without a report for 60 s the value
+  # shows as unavailable instead of an old one.
+  expire_after: 60
 
 # The Ioniq (#1800). The logger's topics (ioniq/parsed/<group>) are retained
 # and carry `ts`, the time of the reading in epoch ms. So after an HA restart
@@ -183,14 +186,16 @@
   value_template: &ioniq_ts "{{ (value_json.ts / 1000) | as_datetime if value_json.ts is number else '' }}"
   device_class: timestamp
 
-# active, charging or parked, as the car reported it last
+# active, charging or parked, as the car reported it last. A mis-decoded
+# bms/2101 frame (all cell voltages 0, the signature that mqtt-influx drops,
+# docker/mqtt-influx/converters/ioniq.js) is skipped: an empty value is ignored.
 - name: ioniq_state
   state_topic: "ioniq/parsed/bms/2101"
-  value_template: "{{ value_json.state }}"
+  value_template: "{{ '' if value_json.cell_min_v == 0 and value_json.cell_max_v == 0 else value_json.state }}"
 
 - name: ioniq_12v
   state_topic: "ioniq/parsed/bms/2101"
-  value_template: "{{ value_json.aux_12v }}"
+  value_template: "{{ '' if value_json.cell_min_v == 0 and value_json.cell_max_v == 0 else value_json.aux_12v }}"
   device_class: voltage
   state_class: measurement
   unit_of_measurement: V
