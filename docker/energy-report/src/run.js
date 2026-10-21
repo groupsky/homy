@@ -80,7 +80,7 @@ export async function catchUp (deps) {
 }
 
 // Waits for the first report time after `after`, then computes the month
-// before it again and sends its message. Returns the report time.
+// that has just ended and sends its message. Returns the report time.
 export async function runScheduled (deps, after) {
   const at = nextRunAfter(after)
   await sleepUntil(deps, at)

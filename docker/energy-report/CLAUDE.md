@@ -79,14 +79,9 @@ counts as not set.
 
 ## Every July
 
-When the prices change, the new prices in `energy.json` and `ENERGY_REPORT_PRICES_FROM`
-in the real `.env` (the first month of the new prices, for example `2027-07`) go live
-together, on 1 July after the June report is written (00:30, then check the log or the
-message). Before that, the new prices would give June the wrong cost, and the new
-`ENERGY_REPORT_PRICES_FROM` would give June no cost. The steps, and how to fix June when
-a deploy came first: "Change the prices every July" in
+The new prices and `ENERGY_REPORT_PRICES_FROM` go live together on 1 July, after the
+June report. The steps: "Change the prices every July" in
 [the energy dashboard doc](../../docs/energy-dashboard.md#change-the-prices-every-july).
-Months already stored keep their cost.
 
 ## Compute a month again
 
@@ -114,6 +109,10 @@ docker compose logs --tail 20 energy-report
 
 - A gap of more than 7 days across the start or the end of a month loses the energy of
   its hours in that month.
+- The report runs at 00:30 on the 1st. A meter gap that is still open then, across the
+  end of the month, cannot be spread yet: that energy is missing from the month.
+- The message rounds each number on its own, so day + night can differ from the total
+  by 1 kWh.
 
 ## Tests
 

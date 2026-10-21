@@ -9,12 +9,14 @@ on:
       # the tests check that the copied rules still match the backfill's
       - 'scripts/energy-backfill/**'
       - 'config/home-assistant/energy.json'
+      - 'config/grafana/dashboards/energy-monthly.json'
       - '.github/workflows/test-energy-report.yml'
   pull_request:
     paths:
       - 'docker/energy-report/**'
       - 'scripts/energy-backfill/**'
       - 'config/home-assistant/energy.json'
+      - 'config/grafana/dashboards/energy-monthly.json'
       - '.github/workflows/test-energy-report.yml'
   workflow_dispatch:
 

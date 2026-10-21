@@ -531,7 +531,7 @@ The following standalone workflows run unit tests independently from the unified
 | `test-automations.yml` | automations | `docker/automations/**` |
 | `test-automation-events-processor.yml` | automation-events-processor | `docker/automation-events-processor/**` |
 | `test-dmx-driver.yml` | dmx-driver | `docker/dmx-driver/**` |
-| `test-energy-report.yml` | energy-report | `docker/energy-report/**`, `scripts/energy-backfill/**` (the tests compare the copied rules) and `config/home-assistant/energy.json` |
+| `test-energy-report.yml` | energy-report | `docker/energy-report/**`, `scripts/energy-backfill/**` (the tests compare the copied rules), `config/home-assistant/energy.json` and `config/grafana/dashboards/energy-monthly.json` (the tests check its queries) |
 | `test-modbus-serial.yml` | modbus-serial | `docker/modbus-serial/**`, mqtt-ndjson's `day-file-writer` copies (a `cmp` step checks the two copies are identical) |
 | `test-mqtt-influx.yml` | mqtt-influx | `docker/mqtt-influx/**` |
 | `test-mqtt-mongo.yml` | mqtt-mongo | `docker/mqtt-mongo/**` |
