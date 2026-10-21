@@ -23,16 +23,18 @@ const kwh = (x) => x.toFixed(0)
 const pct = (x) => (x === undefined ? 'n/a' : `${x.toFixed(1)} %`)
 const signed = (x) => `${x > 0 ? '+' : ''}${x.toFixed(1)} %`
 
-// The dashboard link opens the month of the message.
-function monthLink (dashboardUrl, month) {
+// The dashboard link opens the month of the message. Without a URL the
+// message names the dashboard instead.
+function dashboardLine (dashboardUrl, month) {
+  if (!dashboardUrl) return `Dashboard: Grafana, "Energy by month", month ${month}`
   const url = new URL(dashboardUrl)
   url.searchParams.set('var-month', month)
-  return url.toString()
+  return `Dashboard: ${url}`
 }
 
 // A short summary of one month: main with day/night and the night share, the
 // cost, the change against the same month of last year, the 3 largest loads,
-// and the dashboard link. A line without data (no cost before the current
+// and the dashboard (a link when one is set). A line without data (no cost before the current
 // prices, no last year in the first year) is left out.
 export function telegramText (month, rows, dashboardUrl) {
   const main = rows.find((r) => r.meter === MAIN.name).fields
@@ -49,7 +51,7 @@ export function telegramText (month, rows, dashboardUrl) {
     .slice(0, 3)
     .map(({ meter, fields }) => `${LABELS[meter] ?? meter} ${kwh(fields.kwh)} kWh (${pct(fields.share_pct)})`)
   if (top.length > 0) lines.push(`Top loads: ${top.join(', ')}`)
-  lines.push(`Dashboard: ${monthLink(dashboardUrl, month)}`)
+  lines.push(dashboardLine(dashboardUrl, month))
   return [`<b>Energy ${month}</b>`, ...lines.map(escape)].join('\n')
 }
 

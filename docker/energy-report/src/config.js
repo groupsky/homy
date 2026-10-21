@@ -19,16 +19,17 @@ function secret (env, readFile, name) {
   return value
 }
 
-// The dashboard link is checked at start, so a bad one cannot fail the
-// message after a month is already written.
-function url (env, name, fallback) {
-  const value = setting(env, name, fallback)
+// The dashboard link is optional and checked at start, so a bad one cannot
+// fail the message after a month is already written.
+function url (env, name) {
+  const value = setting(env, name, '')
+  if (!value) return undefined
   let protocol
   try {
     protocol = new URL(value).protocol
   } catch {}
   if (protocol !== 'http:' && protocol !== 'https:') {
-    throw new Error(`${name} must be a full http or https URL like ${fallback}, not "${value}"`)
+    throw new Error(`${name} must be a full http or https URL, not "${value}"`)
   }
   return value
 }
@@ -74,7 +75,9 @@ export function loadConfig (env = process.env, readFile = readFileSync) {
       write: { username: secret(env, readFile, 'INFLUXDB_USERNAME'), password: secret(env, readFile, 'INFLUXDB_PASSWORD') }
     },
     telegramUrl: TELEGRAM_URL,
-    dashboardUrl: url(env, 'ENERGY_REPORT_DASHBOARD_URL', 'http://grafana/d/energy-monthly'),
+    // No link unless set: there is no Grafana address that is known to open on
+    // a phone away from home, and the real one must not be in this repo.
+    dashboardUrl: url(env, 'ENERGY_REPORT_DASHBOARD_URL'),
     firstMonth,
     // Older months had other prices, in BGN, so they get no cost.
     pricesFrom: month(env, 'ENERGY_REPORT_PRICES_FROM', '2026-07'),

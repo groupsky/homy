@@ -41,7 +41,7 @@ test('loadConfig reads the secrets and uses the defaults', () => {
       write: { username: 'writer', password: 'write-secret' }
     },
     telegramUrl: 'http://telegram-bridge:3000/webhook',
-    dashboardUrl: 'http://grafana/d/energy-monthly',
+    dashboardUrl: undefined,
     firstMonth: '2023-11',
     pricesFrom: '2026-07',
     prices: { day: 0.2, night: 0.1 }
@@ -78,7 +78,7 @@ test('loadConfig never takes an InfluxDB or telegram-bridge address from the env
 test('loadConfig treats an empty setting as not set', () => {
   const config = loadConfig({ ...env, ENERGY_REPORT_PRICES_FROM: '', ENERGY_REPORT_DASHBOARD_URL: '' }, readFile)
   assert.equal(config.pricesFrom, '2026-07')
-  assert.equal(config.dashboardUrl, 'http://grafana/d/energy-monthly')
+  assert.equal(config.dashboardUrl, undefined)
 })
 
 test('loadConfig accepts the credentials directly', () => {
