@@ -187,11 +187,17 @@
   device_class: timestamp
 
 # active, charging or parked, as the car reported it last. A mis-decoded
-# bms/2101 frame (all cell voltages 0, the signature that mqtt-influx drops,
-# docker/mqtt-influx/converters/ioniq.js) is skipped: an empty value is ignored.
+# bms/2101 frame with all cell voltages 0 (one of the shapes mqtt-influx
+# drops, docker/mqtt-influx/converters/ioniq.js) is skipped: the empty value
+# is not one of the enum options, and a numeric sensor ignores it.
 - name: ioniq_state
   state_topic: "ioniq/parsed/bms/2101"
   value_template: "{{ '' if value_json.cell_min_v == 0 and value_json.cell_max_v == 0 else value_json.state }}"
+  device_class: enum
+  options:
+    - active
+    - charging
+    - parked
 
 - name: ioniq_12v
   state_topic: "ioniq/parsed/bms/2101"

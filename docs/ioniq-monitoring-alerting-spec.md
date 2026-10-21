@@ -298,8 +298,8 @@ keep only `codes` and `ts` as attributes, so HA does not store it.
   reads `tire_<w>_bar_cold` instead; the limit is the same). 12 V has no
   colour: the parked 12 V rules were removed because shutdown dips look like a
   weak battery (`delete-ioniq-12v-transient-alerts.yaml`), and the retained
-  frame of a parked car is such a dip. A mis-decoded `bms/2101` frame (all cell
-  voltages 0) is skipped, as in mqtt-influx.
+  frame of a parked car is such a dip. A mis-decoded `bms/2101` frame with all
+  cell voltages 0 is skipped (mqtt-influx also drops that shape).
 - **The house charger** row has no age: the value changes rarely, so HA's
   last-changed would look old while the meter reports every few seconds.
   `expire_after: 60` makes it unavailable when the meter stops.
