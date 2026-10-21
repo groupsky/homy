@@ -19,6 +19,18 @@ function secret (env, readFile, name) {
   return value
 }
 
+// The dashboard link is checked at start, so a bad one cannot fail the
+// message after a month is already written.
+function url (env, name, fallback) {
+  const value = setting(env, name, fallback)
+  try {
+    new URL(value)
+    return value
+  } catch {
+    throw new Error(`${name} must be a full URL like ${fallback}, not "${value}"`)
+  }
+}
+
 function month (env, name, fallback) {
   const value = setting(env, name, fallback)
   if (!isMonth(value)) throw new Error(`${name} must be a month in the form YYYY-MM, not "${value}"`)
@@ -55,7 +67,7 @@ export function loadConfig (env = process.env, readFile = readFileSync) {
       write: { username: secret(env, readFile, 'INFLUXDB_USERNAME'), password: secret(env, readFile, 'INFLUXDB_PASSWORD') }
     },
     telegramUrl: setting(env, 'TELEGRAM_BRIDGE_URL', 'http://telegram-bridge:3000/webhook'),
-    dashboardUrl: setting(env, 'ENERGY_REPORT_DASHBOARD_URL', 'http://grafana/d/energy-monthly'),
+    dashboardUrl: url(env, 'ENERGY_REPORT_DASHBOARD_URL', 'http://grafana/d/energy-monthly'),
     firstMonth,
     // Older months had other prices, in BGN, so they get no cost.
     pricesFrom: month(env, 'ENERGY_REPORT_PRICES_FROM', '2026-07'),

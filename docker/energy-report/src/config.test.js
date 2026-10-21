@@ -91,6 +91,10 @@ test('loadConfig rejects a month that is not YYYY-MM, and a start before 2023-11
   assert.throws(() => loadConfig({ ...env, ENERGY_REPORT_FIRST_MONTH: '2023-10' }, readFile), /2023-11/)
 })
 
+test('loadConfig rejects a dashboard link that is not a URL, at start', () => {
+  assert.throws(() => loadConfig({ ...env, ENERGY_REPORT_DASHBOARD_URL: 'grafana/d/energy-monthly' }, readFile), /ENERGY_REPORT_DASHBOARD_URL/)
+})
+
 test('gridPrices takes the day and night price of the two grid sources', () => {
   assert.deepEqual(gridPrices(JSON.parse(ENERGY_JSON)), { day: 0.2, night: 0.1 })
 })
