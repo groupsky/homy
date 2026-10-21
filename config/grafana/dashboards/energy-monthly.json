@@ -77,7 +77,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"kwh\") AS \"kWh\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main'",
+          "query": "SELECT \"kwh\" AS \"kWh\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main' ORDER BY time DESC LIMIT 1",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -141,7 +141,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"kwh_day\") AS \"Day\", last(\"kwh_night\") AS \"Night\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main'",
+          "query": "SELECT \"kwh_day\" AS \"Day\", \"kwh_night\" AS \"Night\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main' ORDER BY time DESC LIMIT 1",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -193,7 +193,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^Night share$/",
           "values": false
         },
         "textMode": "auto"
@@ -205,7 +205,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"night_share_pct\") AS \"Night share\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main'",
+          "query": "SELECT \"kwh\", \"night_share_pct\" AS \"Night share\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main' ORDER BY time DESC LIMIT 1",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -258,7 +258,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^Cost$/",
           "values": false
         },
         "textMode": "auto"
@@ -270,7 +270,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"cost_eur\") AS \"Cost\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main'",
+          "query": "SELECT \"kwh\", \"cost_eur\" AS \"Cost\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main' ORDER BY time DESC LIMIT 1",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -323,7 +323,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^Change$/",
           "values": false
         },
         "textMode": "auto"
@@ -335,7 +335,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"change_pct\") AS \"Change\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main'",
+          "query": "SELECT \"kwh\", \"change_pct\" AS \"Change\" FROM \"energy_monthly\" WHERE \"month\" = '$month' AND \"meter\" = 'main' ORDER BY time DESC LIMIT 1",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -661,7 +661,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"kwh\") AS \"kwh\", last(\"share_pct\") AS \"share_pct\", last(\"kwh_day\") AS \"kwh_day\", last(\"kwh_night\") AS \"kwh_night\", last(\"night_share_pct\") AS \"night_share_pct\", last(\"cost_eur\") AS \"cost_eur\", last(\"kwh_last_year\") AS \"kwh_last_year\", last(\"change_pct\") AS \"change_pct\" FROM \"energy_monthly\" WHERE \"month\" = '$month' GROUP BY \"meter\"",
+          "query": "SELECT \"kwh\", \"share_pct\", \"kwh_day\", \"kwh_night\", \"night_share_pct\", \"cost_eur\", \"kwh_last_year\", \"change_pct\" FROM \"energy_monthly\" WHERE \"month\" = '$month' GROUP BY \"meter\" ORDER BY time DESC LIMIT 1",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"

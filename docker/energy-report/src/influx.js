@@ -28,7 +28,7 @@ export function createInflux ({ url, database, read, write }, fetch = globalThis
   }
 }
 
-// The months that have a report in energy_monthly.
+// The months that have a report in energy_monthly, from the `month` tag.
 export async function storedMonths (influx) {
   const [series] = await influx.query(`SHOW TAG VALUES FROM "${MEASUREMENT}" WITH KEY = "month"`)
   return (series?.values ?? []).map(([, month]) => month)
@@ -46,8 +46,10 @@ export async function hourlyReadings (influx, { measurement, bus, device, type, 
   return series?.values ?? []
 }
 
-// The kWh of each meter in a stored month, as { meter: kWh }.
+// The kWh of each meter in a stored month, as { meter: kWh }, from the
+// newest point of each meter. No time range: the points are at the time
+// they were written, and the month is the tag.
 export async function lastYearKwh (influx, month) {
-  const series = await influx.query(`SELECT last("kwh") AS "kwh" FROM "${MEASUREMENT}" WHERE "month" = '${month}' GROUP BY "meter"`)
+  const series = await influx.query(`SELECT "kwh" FROM "${MEASUREMENT}" WHERE "month" = '${month}' GROUP BY "meter" ORDER BY time DESC LIMIT 1`)
   return Object.fromEntries(series.map((s) => [s.tags.meter, s.values[0][1]]))
 }

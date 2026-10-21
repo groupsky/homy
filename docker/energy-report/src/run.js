@@ -36,7 +36,10 @@ export async function computeMonth (deps, month) {
   for (const meter of LOADS) loads[meter.name] = await energyOf(meter)
   const lastYear = await lastYearKwh(influx, addMonths(month, -12))
   const rows = monthReport({ month, main, loads, prices: config.prices, pricesFrom: config.pricesFrom, lastYear })
-  await influx.write(toLineProtocol(month, rows, bounds.start))
+  // Stamped with the time of the write, not the month: so every write goes
+  // into the current InfluxDB shard, and no old shard is rewritten. The
+  // month is in the `month` tag.
+  await influx.write(toLineProtocol(month, rows, deps.now()))
   log(`${month}: main ${main.kwh.toFixed(1)} kWh (day ${main.day.toFixed(1)}, night ${main.night.toFixed(1)}), written`)
   return rows
 }
@@ -67,7 +70,7 @@ export async function catchUp (deps) {
   const now = deps.now()
   const stored = new Set(await storedMonths(deps.influx))
   const months = monthsToCompute({ stored, first: deps.config.firstMonth, last: lastReadyMonth(now) })
-  if (months.length > 0) deps.log(`computing ${months.length} months: ${months[0]} to ${months.at(-1)}`)
+  if (months.length > 0) deps.log(`months to compute: ${months.length}, ${months[0]} to ${months.at(-1)}`)
   let lastRows
   for (const month of months) lastRows = await computeMonth(deps, month)
   if (shouldSendOnStart(now, months)) {

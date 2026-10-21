@@ -86,8 +86,8 @@ test('monthReport: no shares when the main meter counted nothing', () => {
 
 test('toLineProtocol: one point per meter, tagged with the meter and the month', () => {
   const rows = [{ meter: 'main', fields: { kwh: 1322.3, kwh_day: 681.1, kwh_night: 641.2, share_pct: 100 } }]
-  assert.deepEqual(toLineProtocol('2025-11', rows, at('2025-10-31T22:00:00Z')), [
-    'energy_monthly,meter=main,month=2025-11 kwh=1322.3,kwh_day=681.1,kwh_night=641.2,share_pct=100 1761948000000'
+  assert.deepEqual(toLineProtocol('2025-11', rows, at('2026-10-21T08:00:00Z')), [
+    'energy_monthly,meter=main,month=2025-11 kwh=1322.3,kwh_day=681.1,kwh_night=641.2,share_pct=100 1792569600000'
   ])
 })
 

@@ -62,9 +62,10 @@ export function monthReport ({ month, main, loads, prices, pricesFrom, lastYear 
   return rows
 }
 
-// InfluxDB line protocol, one point per row, at `timeMs` (the start of the
-// month). A second write of the same month, meter and time overwrites the
-// fields it writes; a field it leaves out keeps its old value.
+// InfluxDB line protocol, one point per row, at `timeMs` (the time of the
+// write). The month is only in the `month` tag. A month that is written
+// again gets new points next to the old ones, so readers take the newest
+// point of each series (ORDER BY time DESC LIMIT 1).
 export function toLineProtocol (month, rows, timeMs) {
   return rows.map(({ meter, fields }) => {
     const values = Object.entries(fields).map(([key, value]) => `${key}=${value}`).join(',')

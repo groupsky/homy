@@ -73,7 +73,9 @@ test('computeMonth reads each meter around the month and writes one point per me
   assert.deepEqual(rows.map((r) => r.meter), ['main', ...Object.keys(RATE).slice(1), 'not_metered'])
   const lines = deps.influx.written
   assert.equal(lines.length, 11)
-  for (const line of lines) assert.match(line, /^energy_monthly,meter=\w+,month=2025-11 .* 1761948000000$/)
+  // stamped with the time of the write, so it goes into the current shard;
+  // the month is only in the tag
+  for (const line of lines) assert.match(line, new RegExp(`^energy_monthly,meter=\\w+,month=2025-11 .* ${at('2026-10-21T08:00:00Z')}$`))
   // 720 hours, 240 of them at night
   const main = rows[0].fields
   assert.deepEqual([main.kwh, main.kwh_day, main.kwh_night, main.night_share_pct], [1440, 960, 480, 33.333])

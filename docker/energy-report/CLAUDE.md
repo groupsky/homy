@@ -48,6 +48,10 @@ checks that both give the same results.
   `ENERGY_REPORT_PRICES_FROM` on: older months had other prices, in BGN.
 - **Last year**: the kWh of the same month one year before, as stored in
   `energy_monthly`, and the change in percent.
+- **Point time**: each point is stamped with the time it is written, not with its
+  month, so every write goes into the current InfluxDB shard and no old shard is
+  rewritten. The month is the `month` tag. Readers find a month by its tag and take the
+  newest point of each series (`ORDER BY time DESC LIMIT 1`), with no time range.
 
 The meters are the physical meters of `scripts/energy-backfill/index.mjs` that count
 from 2023-11: `MAIN` and `LOADS` in `src/report.js`. Left out on purpose:
@@ -86,8 +90,9 @@ Months already stored keep their cost.
 
 ## Compute a month again
 
-A month is computed again when its points are gone. Drop them with the write user, then
-restart the service. It computes the missing month at start.
+A month is computed again when its points are gone: at start the service takes the
+months from the `month` tag, and computes only the ones that are missing. Drop all points
+of the month with the write user, then restart the service.
 
 ```bash
 docker exec -i homy-influxdb-1 sh <<'EOF'
@@ -107,9 +112,6 @@ docker compose logs --tail 20 energy-report
 
 ## Known limits
 
-- The months are written at the start of each month, so each write goes into an old,
-  weekly InfluxDB shard, and InfluxDB compacts that shard once more. The first start
-  does this for about 36 shards, and then one shard each month.
 - A gap of more than 7 days across the start or the end of a month loses the energy of
   its hours in that month.
 

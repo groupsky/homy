@@ -604,9 +604,12 @@ SELECT "temperature" FROM "weather"."weather" WHERE "kind" = 'forecast' AND "lea
 #### `energy_monthly` Measurement
 **Source**: `energy-report` service (#1757), from the counters `power_meter.total` and
 `xymd1.tot_act` (car charger). One point per meter and month, from 2023-11. A month is a
-local month (Europe/Sofia), and its point is at the start of the month (00:00 local).
-Writing the same month again overwrites the fields it writes, but a field it leaves out
-keeps its old value; so to compute a month again, drop it first. How the numbers are made:
+local month (Europe/Sofia).
+**Point time**: the time the point was written, not the month. So every write goes into
+the current shard, and no old shard is rewritten. The month is only in the `month` tag:
+find a month by its tag, with no time range, and take the newest point of each series
+(`ORDER BY time DESC LIMIT 1`). A month that is written again (after a drop, or a rerun)
+gets new points next to the old ones. How the numbers are made:
 `docker/energy-report/CLAUDE.md`. Dashboard: **Energy by month** (`energy-monthly`).
 
 **Tags**:
@@ -630,10 +633,10 @@ keeps its old value; so to compute a month again, drop it first. How the numbers
 ```sql
 -- The months in the report
 SHOW TAG VALUES FROM "energy_monthly" WITH KEY = "month"
--- Each meter in one month
-SELECT last("kwh") AS "kwh", last("kwh_night") AS "kwh_night", last("cost_eur") AS "cost_eur" FROM "energy_monthly" WHERE "month" = '2025-11' GROUP BY "meter"
--- The main meter, month by month
-SELECT "kwh", "night_share_pct" FROM "energy_monthly" WHERE "meter" = 'main'
+-- Each meter in one month, from the newest point of each meter
+SELECT "kwh", "kwh_night", "cost_eur" FROM "energy_monthly" WHERE "month" = '2025-11' GROUP BY "meter" ORDER BY time DESC LIMIT 1
+-- The main meter, month by month (the time column is the write time, not the month)
+SELECT "kwh", "night_share_pct" FROM "energy_monthly" WHERE "meter" = 'main' GROUP BY "month" ORDER BY time DESC LIMIT 1
 ```
 
 ### Automation System Monitoring

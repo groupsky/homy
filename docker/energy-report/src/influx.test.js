@@ -86,7 +86,7 @@ test('hourlyReadings asks for the last reading of each hour of one meter, like t
     'AND "device.type" = \'dds519mr\' AND "total" > 0 AND time >= 1000ms AND time < 2000ms GROUP BY time(1h) fill(none)')
 })
 
-test('lastYearKwh gives the kWh of each meter in a month', async () => {
+test('lastYearKwh gives the kWh of the newest point of each meter in a month', async () => {
   const { fetch, calls } = fakeFetch({
     results: [{
       series: [
@@ -96,5 +96,5 @@ test('lastYearKwh gives the kWh of each meter in a month', async () => {
     }]
   })
   assert.deepEqual(await lastYearKwh(createInflux(options, fetch), '2024-11'), { main: 1257.1, charger: 0 })
-  assert.equal(calls[0].url.searchParams.get('q'), 'SELECT last("kwh") AS "kwh" FROM "energy_monthly" WHERE "month" = \'2024-11\' GROUP BY "meter"')
+  assert.equal(calls[0].url.searchParams.get('q'), 'SELECT "kwh" FROM "energy_monthly" WHERE "month" = \'2024-11\' GROUP BY "meter" ORDER BY time DESC LIMIT 1')
 })
