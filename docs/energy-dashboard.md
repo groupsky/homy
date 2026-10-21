@@ -82,18 +82,27 @@ KEVR sets new prices every year, usually from 1 July.
    household two-rate (day/night) prices, all-in, with VAT.
 2. Change the two `number_energy_price` values in
    `config/home-assistant/energy.json`. Update the table above, with the dates.
-3. Open a PR and merge it. Wait with the deploy until 1 July, after 00:30.
-   The monthly energy report ([energy-report](../docker/energy-report/CLAUDE.md))
-   reads the same prices, and makes the June report at 00:30 on 1 July. A
-   deploy before that would give June the new prices.
-4. On 1 July after 00:30, just before the deploy, set `ENERGY_REPORT_PRICES_FROM`
-   in the real `.env` on the host to the first month of the new prices, for
-   example `ENERGY_REPORT_PRICES_FROM=2027-07`. The energy report gives a cost
-   only to the months from this month on. Do not set it earlier: any deploy
-   before the June report would then give June no cost at all.
-5. Deploy. Home Assistant restarts and uses the new prices from then on. Past
-   costs keep the old prices, and so do the months already in the energy
-   report.
+3. Open a PR, but merge it only on 1 July, after the June report. The monthly
+   energy report ([energy-report](../docker/energy-report/CLAUDE.md)) reads the
+   same prices and makes the June report at 00:30 on 1 July. A merged PR is
+   soon deployed, and any deploy before the June report would give June the
+   new prices. The June report is done when its Telegram message has arrived,
+   or when `docker compose logs energy-report` shows the line
+   `<year>-06: main ... written`.
+4. Before the deploy, set `ENERGY_REPORT_PRICES_FROM` in the real `.env` on the
+   host to the first month of the new prices, for example
+   `ENERGY_REPORT_PRICES_FROM=2027-07`. The energy report gives a cost only to
+   the months from this month on. Do not set it before the June report: a
+   deploy would then give June no cost at all.
+5. Merge and deploy. Home Assistant restarts and uses the new prices from then
+   on. Past costs keep the old prices, and so do the months already in the
+   energy report.
+
+If a deploy came before the June report anyway, June has the wrong cost or no
+cost. To fix it, deploy the old prices and the old `ENERGY_REPORT_PRICES_FROM`
+again for a moment, compute June again ("Compute a month again" in
+[energy-report](../docker/energy-report/CLAUDE.md#compute-a-month-again)), and
+then deploy the new ones again.
 
 ## Devices
 
