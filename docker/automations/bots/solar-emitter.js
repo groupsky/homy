@@ -60,20 +60,32 @@ module.exports = (name, {
     let holdOffOnAt = null
     let lastOffAt = null
     let offRequested = false
+    // What was last written to the log, so each event is logged once.
+    let loggedSwitchOn = null
+    let loggedWanted = null
 
     // The switch counts only while no sunrise has passed since it was turned on.
     const holdOffExpired = () => holdOffOnAt != null && lastOffAt != null && lastOffAt >= holdOffOnAt
     const holdOffActive = () => holdOffOn && !holdOffExpired()
 
-    const requestHoldOffOff = () => {
+    const requestHoldOffOff = (reason) => {
       if (!holdOffOn || offRequested) return
       offRequested = true
+      console.log(`[${name}] ${reason}`)
       if (verbose) console.log(`[${name}] turning the hold-off switch off`, holdOffSetTopic)
       mqtt.publish(holdOffSetTopic, { state: false })
     }
 
     const update = () => {
-      if (holdOffConfigured && holdOffExpired()) requestHoldOffOff()
+      if (holdOffConfigured && holdOffExpired()) requestHoldOffOff('hold-off switch is from before the last sunrise: turning it off')
+      if (wantedStatus != null && holdOffConfigured) {
+        const held = wantedStatus === true && holdOffActive()
+        const wanted = wantedStatus && !held ? 'on' : held ? 'off (hold-off)' : 'off'
+        if (wanted !== loggedWanted) {
+          loggedWanted = wanted
+          console.log(`[${name}] wanted: ${wanted}`)
+        }
+      }
       if (status == null || wantedStatus == null) return
       const effective = wantedStatus === true && holdOffActive() ? false : wantedStatus
       if (status !== effective) {
@@ -117,7 +129,7 @@ module.exports = (name, {
         const offEvents = passed.filter(({ state }) => solarTimeStates[state] === false)
         lastOffAt = offEvents.length ? now.getTime() + Math.max(...offEvents.map(({ eta }) => eta)) : null
         // Sunrise ends the night the switch was for.
-        if (previousWanted === true && wantedStatus === false) requestHoldOffOff()
+        if (previousWanted === true && wantedStatus === false) requestHoldOffOff('sunrise: turning the hold-off switch off')
       }
       // With every configured event missing - a full polar day or night - there
       // is nothing to schedule against, so retry once a day until one returns.
@@ -136,10 +148,10 @@ module.exports = (name, {
     if (holdOffConfigured) {
       mqtt.subscribe(holdOffStatusTopic, (payload) => {
         const state = holdOffStateOf(payload)
-        offRequested = false
+        const previousOnAt = holdOffOnAt
         holdOffOn = state === true
         if (holdOffOn) {
-          if (typeof payload._tz === 'number') {
+          if (Number.isFinite(payload._tz)) {
             holdOffOnAt = payload._tz
           } else {
             if (cache.holdOffSince == null) cache.holdOffSince = Date.now()
@@ -149,6 +161,15 @@ module.exports = (name, {
           holdOffOnAt = null
           if (state === false) cache.holdOffSince = null
         }
+        // The switch-off is asked for, and logged, once per on-period: until the
+        // switch goes off or is turned on again with a new time.
+        if (!holdOffOn || holdOffOnAt !== previousOnAt) offRequested = false
+        if (holdOffOn && loggedSwitchOn !== true) {
+          console.log(`[${name}] hold-off switch on (since ${new Date(holdOffOnAt).toISOString()})`)
+        } else if (!holdOffOn && loggedSwitchOn === true) {
+          console.log(`[${name}] hold-off switch off`)
+        }
+        loggedSwitchOn = holdOffOn
         if (verbose) console.log(`[${name}] hold-off switch is`, holdOffOn)
         update()
       })

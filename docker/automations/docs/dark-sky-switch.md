@@ -35,6 +35,18 @@ is not a clear on or off. A missing switch never blocks the lights.
 - It works without internet: the sun times come from the local `suncalc`
   library, and MQTT and the features service are local.
 
+## Log lines
+
+A bot with the hold-off switch configured writes these lines to the container
+log (`<name>` is the bot name), each once per event. A check can read them to see a night.
+
+- `[<name>] hold-off switch on (since <ISO time>)`
+- `[<name>] hold-off switch off` (after it was on)
+- `[<name>] wanted: on`, `wanted: off` or `wanted: off (hold-off)`, when the
+  wanted state of the lights changes
+- `[<name>] sunrise: turning the hold-off switch off`
+- `[<name>] hold-off switch is from before the last sunrise: turning it off`
+
 ## Note
 
 On a night with the switch on, there is less security light outside.
