@@ -1,0 +1,14 @@
+{
+  "name": "energy-report",
+  "version": "1.0.0",
+  "description": "Monthly energy report from the meter counters: InfluxDB energy_monthly and a Telegram message",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test",
+    "test:coverage": "mkdir -p coverage && node --test --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info"
+  }
+}

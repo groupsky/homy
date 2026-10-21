@@ -1,0 +1,50 @@
+name: Test Energy Report
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docker/energy-report/**'
+      # the tests check that the copied rules still match the backfill's
+      - 'scripts/energy-backfill/**'
+      - 'config/home-assistant/energy.json'
+      - 'config/grafana/dashboards/energy-monthly.json'
+      - '.github/workflows/test-energy-report.yml'
+  pull_request:
+    paths:
+      - 'docker/energy-report/**'
+      - 'scripts/energy-backfill/**'
+      - 'config/home-assistant/energy.json'
+      - 'config/grafana/dashboards/energy-monthly.json'
+      - '.github/workflows/test-energy-report.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test energy-report
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # No npm install and no npm cache: the service has no dependencies, and
+      # its tests use node:test.
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: 'docker/energy-report/.nvmrc'
+
+      - name: Run tests
+        working-directory: docker/energy-report
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v5
+        continue-on-error: true
+        with:
+          directory: docker/energy-report/coverage
+          flags: energy-report

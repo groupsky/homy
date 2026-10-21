@@ -94,6 +94,9 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
   broker) → `sunseeker_*` measurements
 - **weather**: outdoor weather polled from the Open-Meteo web API every 15 minutes, plus a
   one-time history load → `weather` measurement. See `docker/weather/CLAUDE.md`.
+- **energy-report**: the energy of each month from the meter counters in InfluxDB, written
+  at start for the missing months and on the 1st of each month → `energy_monthly` measurement.
+  See `docker/energy-report/CLAUDE.md`.
 
 ## Measurements and Schema
 
@@ -596,6 +599,46 @@ SELECT "temperature" FROM "weather"."weather" WHERE "source" = 'collector' AND "
 SELECT "temperature" FROM "weather"."weather" WHERE "kind" = 'forecast' AND "lead_hours" = '24' AND time > now() - 7d
 ```
 
+### Monthly Energy Report
+
+#### `energy_monthly` Measurement
+**Source**: `energy-report` service (#1757), from the counters `power_meter.total` and
+`xymd1.tot_act` (car charger). One point per meter and month, from 2023-11. A month is a
+local month (Europe/Sofia).
+**Point time**: the time the point was written, not the month. So every write goes into
+the current shard, and no old shard is rewritten. The month is only in the `month` tag:
+find a month by its tag, with no time range, and take the newest point of each series
+(`ORDER BY time DESC LIMIT 1`). A month that is written again (after a drop, or a rerun)
+gets new points next to the old ones. How the numbers are made:
+`docker/energy-report/CLAUDE.md`. Dashboard: **Energy by month** (`energy-monthly`).
+
+**Tags**:
+- `month`: `YYYY-MM`
+- `meter`: `main` (the grid import of the house), one of `water_pump`, `oven`, `stove`,
+  `dishwasher`, `laundry`, `boiler`, `heat_pump`, `microwave`, `charger`, or `not_metered`
+  (main minus the sum of the meters)
+
+**Fields** (floats):
+| Field | Unit | Note |
+|---|---|---|
+| `kwh` | kWh | the energy of the month, from counter differences |
+| `kwh_day`, `kwh_night` | kWh | by the EVN day/night zones; `kwh_day + kwh_night = kwh` |
+| `share_pct` | % | `kwh` over the `kwh` of `main`; missing when main is 0 |
+| `night_share_pct` | % | `kwh_night` over `kwh`; missing when `kwh` is 0 |
+| `cost_eur` | EUR | day kWh × day price + night kWh × night price, with VAT; only for months from `ENERGY_REPORT_PRICES_FROM` (2026-07) on |
+| `kwh_last_year` | kWh | `kwh` of the same month one year before; missing when that month is not stored |
+| `change_pct` | % | change of `kwh` against `kwh_last_year`; missing when there is no last year or it is 0 |
+
+**Queries**:
+```sql
+-- The months in the report
+SHOW TAG VALUES FROM "energy_monthly" WITH KEY = "month"
+-- Each meter in one month, from the newest point of each meter
+SELECT "kwh", "kwh_night", "cost_eur" FROM "energy_monthly" WHERE "month" = '2025-11' GROUP BY "meter" ORDER BY time DESC LIMIT 1
+-- The main meter, month by month (the time column is the write time, not the month)
+SELECT "kwh", "night_share_pct" FROM "energy_monthly" WHERE "meter" = 'main' GROUP BY "month" ORDER BY time DESC LIMIT 1
+```
+
 ### Automation System Monitoring
 
 #### `automation_status` Measurement
@@ -827,6 +870,8 @@ Modbus Devices → modbus-serial-* → MQTT Publish → mqtt-influx-* → Influx
 Sunseeker mower → vendor cloud broker (mqtts.sk-robot.com) → sunseeker-monitoring → InfluxDB Write
 
 Open-Meteo web API → weather → InfluxDB Write
+
+Meter counters in InfluxDB → energy-report → InfluxDB Write (energy_monthly)
 ```
 
 **Note**: `sunseeker-monitoring` is the one writer that bypasses the local broker entirely — it

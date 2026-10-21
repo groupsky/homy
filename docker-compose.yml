@@ -936,6 +936,42 @@ services:
     mem_limit: *node-mem-limit
     logging: *default-logging
 
+  # Monthly energy report from the meter counters (#1757): writes the
+  # energy_monthly measurement and sends a short Telegram message on the 1st.
+  # See docker/energy-report/CLAUDE.md.
+  energy-report:
+    image: ghcr.io/groupsky/homy/energy-report:${IMAGE_TAG:-latest}
+    build: docker/energy-report
+    depends_on:
+      - influxdb
+      - telegram-bridge
+    restart: unless-stopped
+    networks:
+      - automation
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - influxdb_read_user
+      - influxdb_read_user_password
+      - influxdb_write_user
+      - influxdb_write_user_password
+    environment:
+      # The InfluxDB and telegram-bridge addresses are fixed in the code.
+      # Reads the meter counters and the stored months with the read user.
+      - INFLUXDB_READ_USERNAME_FILE=/run/secrets/influxdb_read_user
+      - INFLUXDB_READ_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
+      # Writes only energy_monthly, with the write user.
+      - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
+      - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
+      - ENERGY_REPORT_DASHBOARD_URL=${ENERGY_REPORT_DASHBOARD_URL:-}
+      - ENERGY_REPORT_FIRST_MONTH=${ENERGY_REPORT_FIRST_MONTH:-}
+      - ENERGY_REPORT_PRICES_FROM=${ENERGY_REPORT_PRICES_FROM:-}
+    volumes:
+      # The day and night prices of the Home Assistant energy dashboard.
+      - ${HOMEASSISTANT_CONFIG}/energy.json:/config/energy.json:ro
+    mem_limit: *node-mem-limit
+    logging: *default-logging
+
   dmx-driver:
     image: ghcr.io/groupsky/homy/dmx-driver:${IMAGE_TAG:-latest}
     build: docker/dmx-driver

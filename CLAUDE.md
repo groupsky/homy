@@ -189,7 +189,7 @@ The CI/CD pipeline uses a hybrid approach combining the unified pipeline with st
   - **Test-only optimization**: Services with only test file changes pull existing images instead of rebuilding (50-60% faster)
 
 - **Unit Testing**: Standalone workflows for fast feedback (50-60% faster than dockerized tests)
-  - `test-automations.yml`, `test-automation-events-processor.yml`, `test-dmx-driver.yml`, `test-modbus-serial.yml`, `test-mqtt-influx.yml`, `test-mqtt-mongo.yml`, `test-mqtt-ndjson.yml`, `test-sunseeker-monitoring.yml`, `test-telegram-bridge.yml`, `test-weather.yml`, `test-ya-modbus-adapter.yml`
+  - `test-automations.yml`, `test-automation-events-processor.yml`, `test-dmx-driver.yml`, `test-energy-report.yml`, `test-modbus-serial.yml`, `test-mqtt-influx.yml`, `test-mqtt-mongo.yml`, `test-mqtt-ndjson.yml`, `test-sunseeker-monitoring.yml`, `test-telegram-bridge.yml`, `test-weather.yml`, `test-ya-modbus-adapter.yml`
   - Triggered on service file changes with path filtering
   - Run independently and in parallel with ci-unified.yml
   - **Branch protection recommended**: Configure required status checks to enforce test passage before merge
@@ -331,6 +331,7 @@ When adding new features that affect architecture:
 - `mqtt-influx` - MQTT message conversion
 - `sunseeker-monitoring` - Specialized monitoring with own mqtt-influx integration
 - `weather` - Outdoor weather from the Open-Meteo web API
+- `energy-report` - The `energy_monthly` measurement, from the meter counters
 
 ### Git Workflow
 When committing changes:
