@@ -61,6 +61,13 @@ module.exports = (name, config) => {
     start: async ({ mqtt, persistedCache }) => {
       let timers = []
       let doorState = persistedCache.doorState
+      // When this bot's own last sound ends. A door close stops the siren only
+      // before then, so it never cuts a safety-siren sound (#1770). It is set
+      // before each alarm command; after a restart it comes from the steps
+      // that had already sounded.
+      let ownSoundUntil = Math.max(0, ...(persistedCache.pendingAlarms || [])
+        .filter(a => a.triggered && escalationSteps[a.stepIndex])
+        .map(a => a.scheduledTime + escalationSteps[a.stepIndex].durationSec * 1000))
 
       // Defensive: an "open" without an open-time is an inconsistent persisted
       // state that the normal open/close paths never produce. Treat it as
@@ -101,6 +108,7 @@ module.exports = (name, config) => {
 
             log(`triggering alarm - step ${index + 1}:`, step)
 
+            ownSoundUntil = Date.now() + step.durationSec * 1000
             try {
               await mqtt.publish(alarmDevice.commandTopic, alarmPayload)
 
@@ -120,10 +128,18 @@ module.exports = (name, config) => {
 
       const cancelAlarms = async () => {
         clearAllTimers()
+        // The siren is shared with the safety-siren bot (#1770). Stop it only
+        // while this bot's own sound still plays, so a door closing never
+        // silences a safety alert.
+        const ownSoundPlays = Date.now() < ownSoundUntil
+        ownSoundUntil = 0
         persistedCache.doorOpenTime = null
         persistedCache.pendingAlarms = []
+        if (!ownSoundPlays) {
+          return
+        }
 
-        // Stop any currently sounding alarm
+        // Stop the alarm this bot sounded
         try {
           await mqtt.publish(alarmDevice.commandTopic, { alarm: false })
           log('stopped alarm on door close')
@@ -162,6 +178,7 @@ module.exports = (name, config) => {
 
               log(`triggering alarm - step ${alarm.stepIndex + 1} (restored):`, step)
 
+              ownSoundUntil = Date.now() + step.durationSec * 1000
               try {
                 await mqtt.publish(alarmDevice.commandTopic, alarmPayload)
                 alarm.triggered = true
@@ -182,6 +199,7 @@ module.exports = (name, config) => {
               melody
             }
 
+            ownSoundUntil = Date.now() + step.durationSec * 1000
             mqtt.publish(alarmDevice.commandTopic, alarmPayload)
               .then(() => {
                 alarm.triggered = true

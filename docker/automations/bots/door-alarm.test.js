@@ -379,12 +379,9 @@ describe('door-alarm bot', () => {
 
       jest.advanceTimersByTime(180000) // Fast forward past all timers
 
-      // Should publish alarm OFF command when door closes
-      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
-      expect(mockMqtt.publish).toHaveBeenCalledWith(
-        'z2m/house1/floor1-alarm/set',
-        { alarm: false }
-      )
+      // No step fired, and the bot did not sound the siren, so nothing is
+      // sent: not even alarm OFF (#1770)
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
     })
 
     it('should cancel timers even after first alarm has triggered', async () => {
@@ -403,12 +400,42 @@ describe('door-alarm bot', () => {
 
       jest.advanceTimersByTime(180000) // Fast forward
 
-      // Should publish alarm OFF command
+      // The first sound (10 s) ended at 70 s, so the close at 90 s sends no
+      // alarm OFF: the siren may be sounding a safety alert by then (#1770)
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
+    })
+
+    it('should stop its own sound when the door closes while it still plays', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      jest.advanceTimersByTime(65000) // the first sound (10 s) started at 60 s
+      mockMqtt.publish.mockClear()
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
+      expect(mockMqtt.publish).toHaveBeenCalledWith('z2m/house1/floor1-alarm/set', { alarm: false })
+    })
+
+    it('should stop its own sound after a restart when the door closes while it still plays', async () => {
+      const doorOpenTime = Date.now() - 190000
+      persistedCache.doorState = true
+      persistedCache.doorOpenTime = doorOpenTime
+      persistedCache.pendingAlarms = [
+        { stepIndex: 0, scheduledTime: doorOpenTime + 60000, triggered: true },
+        { stepIndex: 1, scheduledTime: doorOpenTime + 120000, triggered: true },
+        // the last step (60 s) started 10 s ago, so it still plays
+        { stepIndex: 2, scheduledTime: doorOpenTime + 180000, triggered: true }
+      ]
+
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
       expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
-      expect(mockMqtt.publish).toHaveBeenCalledWith(
-        'z2m/house1/floor1-alarm/set',
-        { alarm: false }
-      )
+      expect(mockMqtt.publish).toHaveBeenCalledWith('z2m/house1/floor1-alarm/set', { alarm: false })
     })
 
     it('should restart escalation if door opens again after closing', async () => {
@@ -481,6 +508,19 @@ describe('door-alarm bot', () => {
       )
     })
 
+    it('should not stop the siren on door close when it did not sound it (#1770)', async () => {
+      // The siren is shared with the safety-siren bot. A door closing must
+      // never silence a safety alert, so the door bot only stops its own sound.
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      jest.advanceTimersByTime(30000) // before the first step
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
+    })
+
     it('should handle alarm stop failure gracefully', async () => {
       const verboseConfig = { ...defaultConfig, verbose: true }
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation()
@@ -491,6 +531,7 @@ describe('door-alarm bot', () => {
       await bot.start({ mqtt: mockMqtt, persistedCache })
 
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      jest.advanceTimersByTime(60000) // the first step tries to sound
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
 
       // Wait for async cancelAlarms to complete
@@ -667,12 +708,9 @@ describe('door-alarm bot', () => {
 
       jest.advanceTimersByTime(180000)
 
-      // Only the alarm-OFF command should have been sent; no escalation steps
-      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
-      expect(mockMqtt.publish).toHaveBeenCalledWith(
-        'z2m/house1/floor1-alarm/set',
-        { alarm: false }
-      )
+      // No escalation step fired and none had fired before the restart, so
+      // nothing is sent, not even alarm OFF (#1770)
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
       expect(persistedCache.doorState).toBe(false)
     })
 
@@ -795,11 +833,9 @@ describe('door-alarm bot', () => {
         jest.advanceTimersByTime(5000)
       }
 
-      // Should send alarm OFF command for each close (no alarm ON commands since timers never reached)
-      expect(mockMqtt.publish).toHaveBeenCalledTimes(5)
-      mockMqtt.publish.mock.calls.forEach(call => {
-        expect(call[1]).toEqual({ alarm: false })
-      })
+      // No step was ever reached, so nothing is sent: no alarm ON and no
+      // alarm OFF (#1770)
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
     })
 
     it('should handle door already open on startup', async () => {
@@ -825,12 +861,9 @@ describe('door-alarm bot', () => {
       // Should update persisted state to closed
       expect(persistedCache.doorState).toBe(false)
 
-      // Should send alarm OFF command (ensuring alarm is off)
-      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
-      expect(mockMqtt.publish).toHaveBeenCalledWith(
-        'z2m/house1/floor1-alarm/set',
-        { alarm: false }
-      )
+      // Sends nothing: the bot did not sound the siren, and the siren may be
+      // sounding a safety alert (#1770)
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
     })
 
     it('should recognize duplicate closed messages even from initial null state', async () => {
@@ -844,8 +877,8 @@ describe('door-alarm bot', () => {
       // Wait for async operations
       await Promise.resolve()
 
-      // Should only process the first message (send alarm OFF once)
-      expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
+      // Processes only the first message, and sends nothing (#1770)
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
       expect(persistedCache.doorState).toBe(false)
     })
 
@@ -857,8 +890,7 @@ describe('door-alarm bot', () => {
       await Promise.resolve()
 
       expect(persistedCache.doorState).toBe(false)
-      expect(mockMqtt.publish).toHaveBeenCalledTimes(1) // alarm OFF
-      mockMqtt.publish.mockClear()
+      expect(mockMqtt.publish).not.toHaveBeenCalled() // it did not sound, so no alarm OFF (#1770)
 
       // Door opens
       await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })

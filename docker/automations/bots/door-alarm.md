@@ -82,7 +82,7 @@ The door alarm bot monitors a door sensor and triggers escalating alarms on a Zi
 1. **Door Closed**: No alarms, all timers cleared
 2. **Door Opens**: Schedules all escalation alarms
 3. **Alarm Triggers**: Each alarm fires at its configured delay with specified volume and duration
-4. **Door Closes**: Immediately cancels all pending alarms
+4. **Door Closes**: Immediately cancels all pending alarms. It stops the siren (`{alarm: false}`) only while this bot's own last sound still plays
 
 ### Escalation Example
 
@@ -102,7 +102,8 @@ Using the default configuration:
 - **Initial state handling**: First message initializes the door state correctly, whether door starts open or closed
 - **Message republishing**: Sensors that republish the same state multiple times are handled correctly through duplicate detection
 - **Door already open on startup**: Starts monitoring from first state message received
-- **Door closes after some alarms**: Only cancels pending alarms, doesn't stop currently sounding alarm
+- **Door closes while its own sound plays**: Cancels the pending alarms and stops the sound (also after a restart, from the steps that had sounded)
+- **Door closes before any step, or after its sound ended**: Sends nothing. The siren is shared with the `safetySiren` bot (#1770), so a door closing must not silence a safety alert (`docs/safety-siren.md`)
 
 ### State Persistence
 

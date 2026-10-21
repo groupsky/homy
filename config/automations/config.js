@@ -421,6 +421,59 @@ module.exports = {
       verbose: false
     },
 
+    // Life-safety alerts on the hall siren (#1770, docker/automations/docs/
+    // safety-siren.md). The owner approved the alert table on 2026-10-16.
+    // Only the tank row has a sensor today: smoke, CO and water leak wait for
+    // sensors, and the heat-pump freeze row waits for a signal.
+    safetySiren: {
+      type: 'safety-siren',
+      siren: {
+        stateTopic: 'z2m/house1/floor1-alarm',
+        commandTopic: 'z2m/house1/floor1-alarm/set'
+      },
+      alerts: [
+        {
+          name: 'tank_overheat',
+          label: 'Tank over 85 °C',
+          // SR-04 t2, the top of the tank: about one reading a second
+          topic: `${featuresPrefix}/sensor/temperature_boiler_high/status`,
+          above: 85,
+          confirmMs: 2 * 60 * 1000,
+          // The sensor sends about once a second, so 60 s without a reading
+          // means the data stopped
+          maxAgeMs: 60 * 1000,
+          // Day only at first; night after some weeks of real data (owner, 2026-10-16)
+          dayOnly: true,
+          melody: 6,          // High Pitch Siren
+          volume: 'high',
+          durationSec: 60,
+          times: 3,
+          pauseSec: 60
+        }
+      ],
+      // The hall wall buttons. A press while the siren sounds stops it, and
+      // also toggles that button's light, as always.
+      stopButtonTopics: [
+        `${featuresPrefix}/button/corridor1_kitchen_left/status`,
+        `${featuresPrefix}/button/corridor1_kitchen_right/status`
+      ],
+      stopTopic: `${featuresPrefix}/button/safety_siren_stop/trigger`,
+      test: {
+        topic: `${featuresPrefix}/button/safety_siren_test/trigger`,
+        melody: 6,
+        volume: 'high',
+        durationSec: 30
+      },
+      mute: {
+        commandTopic: `${featuresPrefix}/switch/safety_siren_mute/set`,
+        statusTopic: `${featuresPrefix}/switch/safety_siren_mute/status`,
+        maxMs: 2 * 60 * 60 * 1000
+      },
+      // The same hours as the Telegram quiet hours (docker/telegram-bridge/CLAUDE.md)
+      day: { fromHour: 7, toHour: 23, timeZone: 'Europe/Sofia' },
+      aliveMaxAgeMs: 3 * 60 * 60 * 1000
+    },
+
     heatPumpCirculationPowerCycle: {
       type: 'power-cycle-on-low-power',
       powerMonitor: {
