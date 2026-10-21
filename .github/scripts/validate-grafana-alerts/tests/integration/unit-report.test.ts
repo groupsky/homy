@@ -336,6 +336,7 @@ describe('runDashboardUnits', () => {
     const result = runDashboardUnits(REAL_DASHBOARD_DIR);
 
     expect(result.out.join('\n')).toContain('Ioniq EV/ioniq-overview.json');
-    expect(result.out.join('\n')).toContain('Checking units in 13 dashboard(s)');
+    expect(result.out.join('\n')).toContain('batteries.json');
+    expect(result.out.join('\n')).toContain('Checking units in 14 dashboard(s)');
   });
 });
