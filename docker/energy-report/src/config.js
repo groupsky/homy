@@ -23,12 +23,14 @@ function secret (env, readFile, name) {
 // message after a month is already written.
 function url (env, name, fallback) {
   const value = setting(env, name, fallback)
+  let protocol
   try {
-    new URL(value)
-    return value
-  } catch {
-    throw new Error(`${name} must be a full URL like ${fallback}, not "${value}"`)
+    protocol = new URL(value).protocol
+  } catch {}
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    throw new Error(`${name} must be a full http or https URL like ${fallback}, not "${value}"`)
   }
+  return value
 }
 
 function month (env, name, fallback) {
