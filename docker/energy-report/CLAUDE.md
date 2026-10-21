@@ -75,9 +75,11 @@ counts as not set.
 
 ## Every July
 
-When the prices change, set `ENERGY_REPORT_PRICES_FROM` in the real `.env` to the first
-month of the new prices (for example `2027-07`), together with the new prices in
-`energy.json`. See "Change the prices every July" in
+When the prices change, the new prices in `energy.json` and `ENERGY_REPORT_PRICES_FROM`
+in the real `.env` (the first month of the new prices, for example `2027-07`) go live
+together, on 1 July after 00:30, when the June report is made. Before that, new prices
+would give June the wrong cost, and the new `ENERGY_REPORT_PRICES_FROM` would give June
+no cost. The steps: "Change the prices every July" in
 [the energy dashboard doc](../../docs/energy-dashboard.md#change-the-prices-every-july).
 Months already stored keep their cost.
 
