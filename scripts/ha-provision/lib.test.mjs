@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyRows, planExposure } from './lib.mjs'
+import { applyRows, planExposure, planFullDashboard } from './lib.mjs'
 
 const RELAY = 'switch.relay'
 const desiredRow = {
@@ -93,4 +93,32 @@ test('plans only the exposure calls whose state differs', () => {
   assert.deepEqual(planExposure(current, desired), [
     { assistant: 'conversation', entityId: RELAY, from: true, to: false }
   ])
+})
+
+const IONIQ = { title: 'Ioniq', icon: 'mdi:car-electric', config: { views: [{ title: 'Ioniq', cards: [{ type: 'markdown', content: 'x' }] }] } }
+
+test('creates a missing full dashboard and saves its config', () => {
+  assert.deepEqual(planFullDashboard('dashboard-ioniq', undefined, null, IONIQ), {
+    create: { url_path: 'dashboard-ioniq', title: 'Ioniq', icon: 'mdi:car-electric', show_in_sidebar: true, require_admin: false },
+    save: true
+  })
+})
+
+test('saves a full dashboard whose config differs, and only then', () => {
+  const existing = { url_path: 'dashboard-ioniq', mode: 'storage' }
+  assert.deepEqual(planFullDashboard('dashboard-ioniq', existing, { views: [] }, IONIQ), { create: null, save: true })
+  assert.deepEqual(planFullDashboard('dashboard-ioniq', existing, structuredClone(IONIQ.config), IONIQ), { create: null, save: false })
+})
+
+test('saves an existing full dashboard that has no config yet', () => {
+  assert.deepEqual(planFullDashboard('dashboard-ioniq', { url_path: 'dashboard-ioniq', mode: 'storage' }, null, IONIQ), { create: null, save: true })
+})
+
+test('refuses a full dashboard that is in YAML mode', () => {
+  assert.throws(() => planFullDashboard('dashboard-ioniq', { url_path: 'dashboard-ioniq', mode: 'yaml' }, null, IONIQ), /YAML mode/)
+})
+
+test('refuses a url_path without a hyphen and an entry with both rows and config', () => {
+  assert.throws(() => planFullDashboard('ioniq', undefined, null, IONIQ), /hyphen/)
+  assert.throws(() => planFullDashboard('dashboard-ioniq', undefined, null, { ...IONIQ, rows: [] }), /both/)
 })

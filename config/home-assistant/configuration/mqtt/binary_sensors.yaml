@@ -13,3 +13,19 @@
 - name: Stove
   state_topic: "/modbus/secondary/stove/reading"
   value_template: "{{ 'ON' if value_json.p|float(default=0) > 10 else 'OFF' }}"
+
+# The Ioniq has a fault code (#1800). Retained logger topics; the codes are in
+# the attributes. Stored codes stay until cleared; pending ones may not repeat.
+- name: ioniq_fault_stored
+  state_topic: "ioniq/parsed/dtc/stored"
+  value_template: "{{ 'ON' if value_json.codes | length > 0 else 'OFF' }}"
+  json_attributes_topic: "ioniq/parsed/dtc/stored"
+  json_attributes_template: "{{ {'codes': value_json.codes, 'ts': value_json.ts} | tojson }}"
+  device_class: problem
+
+- name: ioniq_fault_pending
+  state_topic: "ioniq/parsed/dtc/pending"
+  value_template: "{{ 'ON' if value_json.codes | length > 0 else 'OFF' }}"
+  json_attributes_topic: "ioniq/parsed/dtc/pending"
+  json_attributes_template: "{{ {'codes': value_json.codes, 'ts': value_json.ts} | tojson }}"
+  device_class: problem
