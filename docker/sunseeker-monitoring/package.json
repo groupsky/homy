@@ -16,12 +16,12 @@
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.33.2",
-    "mqtt": "^5.15.1"
+    "mqtt": "^5.16.1"
   },
   "devDependencies": {
-    "jest": "^30.3.0",
-    "msw": "^2.12.14",
-    "testcontainers": "^11.13.0"
+    "jest": "^30.5.2",
+    "msw": "^3.0.3",
+    "testcontainers": "^12.2.1"
   },
   "engines": {
     "node": "22"
