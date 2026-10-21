@@ -1,0 +1,10 @@
+# Test files
+**/*.test.js
+coverage/
+
+# Documentation
+*.md
+
+# Development files
+.nvmrc
+node_modules/
