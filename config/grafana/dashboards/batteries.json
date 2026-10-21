@@ -27,7 +27,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Level is the median of the last UTC day, so single odd readings do not count. Change/day is (median of today - median of the day 14 days ago) / 14. Days to 25 % is (level - 25) / -change. It is a straight line; real batteries fall faster at the end. Cycles/day is the same 14-day slope of the mower's charge counter.",
+      "description": "Level is the median of the current UTC day (since 00:00 UTC), so single odd readings do not count. Change/day is (median of today - median of the day 14 days ago) / 14. Days to 25 % is (level - 25) / -change. It is a straight line through two whole percents, so it jumps when one of them moves by 1 %; read it as months. Cycles/day is the growth of the mower's charge counter over the last 90 days.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -343,7 +343,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT last(\"charge_times\") AS \"cycles\", (last(\"charge_times\") - first(\"charge_times\")) / 14 AS \"cycles_per_day\" FROM \"sunseeker_battery_info\" WHERE time >= now() - 14d GROUP BY \"service\"",
+          "query": "SELECT last(\"charge_times\") AS \"cycles\", (last(\"charge_times\") - first(\"charge_times\")) / 90 AS \"cycles_per_day\" FROM \"sunseeker_battery_info\" WHERE time >= now() - 90d GROUP BY \"service\"",
           "rawQuery": true,
           "refId": "mower",
           "resultFormat": "table"
@@ -413,7 +413,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "**What the table cannot say**\n\n- **Zigbee sensors with only a low flag** (no level): the sensor says only *ok* or *LOW*. There is no level, no trend and no days left. Change the battery when it says LOW.\n- **Mower**: the counter of charge cycles and how fast it grows. There is no document with the cycle life of this battery, so there are no days left.\n- **UPS**: the charge right now and the runtime right now. The charge goes down in a power cut and up again after it, so it says nothing about wear. The UPS service on the host already sends a message for a low battery and for \"replace battery\". The 25 % alert does not include the UPS.\n- **Days to 25 %** is *no estimate* when the level did not fall in the last 14 days, or when it is already under 25 %.\n\nThe alert \"Battery under 25 %\" (folder Infrastructure) sends one message when the daily median of a Zigbee battery is under 25 %, and a reminder once a week until the battery is changed. More: `docs/batteries.md`.",
+        "content": "**What the table cannot say**\n\n- **Zigbee sensors with only a low flag** (no level): the sensor says only *ok* or *LOW*. There is no level, no trend and no days left. Change the battery when it says LOW.\n- **Mower**: the counter of charge cycles and how fast it grew in the last 90 days. There is no document with the cycle life of this battery, so there are no days left.\n- **UPS**: the charge right now and the runtime right now. The charge goes down in a power cut and up again after it, so it says nothing about wear. The UPS service on the host already sends a message for a low battery and for \"replace battery\". The 25 % alert does not include the UPS.\n- **Days to 25 %** is *no estimate* when the level did not fall in the last 14 days, or when a falling level is already under 25 %. It jumps when a daily level moves by 1 %: read it as months, not as a date.\n\nThe alert \"Battery under 25 %\" (folder Infrastructure) sends one message when the daily median of a Zigbee battery is under 25 %, and a reminder every 5 days until the battery is changed. More: `docs/batteries.md`.",
         "mode": "markdown"
       },
       "pluginVersion": "9.5.21",
@@ -434,7 +434,9 @@
     "from": "now-14d",
     "to": "now"
   },
-  "timepicker": {},
+  "timepicker": {
+    "hidden": true
+  },
   "timezone": "",
   "title": "Batteries",
   "uid": "batteries",

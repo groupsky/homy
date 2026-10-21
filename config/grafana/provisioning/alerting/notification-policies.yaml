@@ -64,10 +64,11 @@ policies:
         group_interval: 30m
         repeat_interval: 24h
       # A battery under 25 % lasts weeks until someone changes it (#1750).
-      # One message, then a reminder once a week, not every 4 h.
+      # One message, then a reminder every 5 days, not every 4 h. Not 7 days:
+      # Grafana 9.5 forgets a sent message after 5 days and sends it again.
       - receiver: telegram-webhook
         matchers:
           - rule_uid = battery-under-25
         group_wait: 1m
         group_interval: 5m
-        repeat_interval: 168h
+        repeat_interval: 120h

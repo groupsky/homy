@@ -64,7 +64,8 @@ groups:
               intervalMs: 1000
               maxDataPoints: 43200
         # No battery data at all is not a low battery. A sensor that stops
-        # reporting drops off the Batteries table instead.
+        # reporting drops off the Batteries table instead; if it was firing,
+        # its alert resolves. With OK/OK a broken query is silent too.
         noDataState: OK
         execErrState: OK
         for: 1h
@@ -72,6 +73,6 @@ groups:
           summary: '🔋 Battery under 25 % on {{ $labels.device }}'
           description: 'The battery of {{ $labels.device }} is at {{ $values.median.Value }} % (median of the last day). Change it soon. The Batteries dashboard shows all batteries.'
         labels:
-          # notification-policies.yaml routes on rule_uid (weekly reminder).
+          # notification-policies.yaml routes on rule_uid (reminder every 5 days).
           rule_uid: battery-under-25
           alert_type: webhook
