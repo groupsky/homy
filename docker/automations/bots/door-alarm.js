@@ -61,6 +61,10 @@ module.exports = (name, config) => {
     start: async ({ mqtt, persistedCache }) => {
       let timers = []
       let doorState = persistedCache.doorState
+      // Set before each alarm command, so a door close right after a step
+      // still stops it (the persisted `triggered` is set only once the
+      // publish has finished).
+      let soundedSinceOpen = false
 
       // Defensive: an "open" without an open-time is an inconsistent persisted
       // state that the normal open/close paths never produce. Treat it as
@@ -77,6 +81,7 @@ module.exports = (name, config) => {
 
       const scheduleAlarms = () => {
         clearAllTimers()
+        soundedSinceOpen = false
 
         const now = Date.now()
         persistedCache.doorOpenTime = now
@@ -101,6 +106,7 @@ module.exports = (name, config) => {
 
             log(`triggering alarm - step ${index + 1}:`, step)
 
+            soundedSinceOpen = true
             try {
               await mqtt.publish(alarmDevice.commandTopic, alarmPayload)
 
@@ -120,10 +126,18 @@ module.exports = (name, config) => {
 
       const cancelAlarms = async () => {
         clearAllTimers()
+        // The siren is shared with the safety-siren bot (#1770). Stop it only
+        // when this bot sounded it, so a door closing never silences a
+        // safety alert.
+        const sounded = soundedSinceOpen || (persistedCache.pendingAlarms || []).some(a => a.triggered)
+        soundedSinceOpen = false
         persistedCache.doorOpenTime = null
         persistedCache.pendingAlarms = []
+        if (!sounded) {
+          return
+        }
 
-        // Stop any currently sounding alarm
+        // Stop the alarm this bot sounded
         try {
           await mqtt.publish(alarmDevice.commandTopic, { alarm: false })
           log('stopped alarm on door close')
@@ -162,6 +176,7 @@ module.exports = (name, config) => {
 
               log(`triggering alarm - step ${alarm.stepIndex + 1} (restored):`, step)
 
+              soundedSinceOpen = true
               try {
                 await mqtt.publish(alarmDevice.commandTopic, alarmPayload)
                 alarm.triggered = true
@@ -182,6 +197,7 @@ module.exports = (name, config) => {
               melody
             }
 
+            soundedSinceOpen = true
             mqtt.publish(alarmDevice.commandTopic, alarmPayload)
               .then(() => {
                 alarm.triggered = true

@@ -1129,6 +1129,40 @@ const config = {
         icon: 'mdi:power',
       }
     }),
+
+    // The safety siren (#1770): stop it, test it, and a maintenance mute
+    // that the safetySiren bot turns off by itself after 2 h.
+    ...haButton({
+      name: 'safetySirenStop',
+      feature: 'safety_siren_stop',
+      config: {
+        name: 'Спри сирената',
+        device: devices.corridor1,
+        object_id: 'safety_siren_stop',
+        icon: 'mdi:alarm-light-off',
+      }
+    }),
+    ...haButton({
+      name: 'safetySirenTest',
+      feature: 'safety_siren_test',
+      config: {
+        name: 'Тест на сирената',
+        device: devices.corridor1,
+        object_id: 'safety_siren_test',
+        icon: 'mdi:bullhorn',
+      }
+    }),
+    ...haSwitch({
+      name: 'safetySirenMute',
+      feature_type: 'switch',
+      feature: 'safety_siren_mute',
+      config: {
+        name: 'Сирената без звук',
+        device: devices.corridor1,
+        object_id: 'safety_siren_mute',
+        icon: 'mdi:bell-off',
+      }
+    }),
   },
   gates: {
     mqtt: {
