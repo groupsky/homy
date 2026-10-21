@@ -1,0 +1,78 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Batteries
+    folder: Infrastructure
+    # A battery falls by about 0.2 % a day, so once an hour is plenty. The
+    # 1-day look-back covers the interval many times.
+    interval: 1h
+    rules:
+      - uid: battery-under-25
+        title: Battery under 25 %
+        # One instance per Zigbee device with a battery level (#1750). reduce
+        # + threshold keeps the `device` tag as a label, like the phase-loss
+        # rule. The daily median ignores single odd readings (the sensors
+        # sometimes report 93 % in the middle of a slow fall). Devices that
+        # report only `battery_low`, the mower and the UPS are on the
+        # Batteries dashboard, not in this rule: see docs/batteries.md.
+        condition: low
+        data:
+          - refId: battery
+            queryType: ''
+            relativeTimeRange:
+              from: 86400
+              to: 0
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: SELECT median("battery") FROM "zigbee" WHERE time >= now() - 1d GROUP BY "device"
+              rawQuery: true
+              resultFormat: time_series
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: median
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: battery
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: low
+            queryType: ''
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: median
+              conditions:
+                - evaluator:
+                    params: [25]
+                    type: lt
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+        # No battery data at all is not a low battery. A sensor that stops
+        # reporting drops off the Batteries table instead; if it was firing,
+        # its alert resolves. With OK/OK a broken query is silent too.
+        noDataState: OK
+        execErrState: OK
+        for: 1h
+        annotations:
+          summary: '🔋 Battery under 25 % on {{ $labels.device }}'
+          description: 'The battery of {{ $labels.device }} is at {{ $values.median.Value }} % (median of the last day). Change it soon. The Batteries dashboard shows all batteries.'
+        labels:
+          # notification-policies.yaml routes on rule_uid (reminder every 5 days).
+          rule_uid: battery-under-25
+          alert_type: webhook

@@ -49,6 +49,9 @@ This directory contains technical documentation for the home automation system.
 ### Home Assistant Provisioning
 - **[ha-provision](../scripts/ha-provision/README.md)** - Applies the dashboard rows and assistant exposure that Home Assistant keeps only in `.storage`, from `config/home-assistant/provision.json`
 
+### Batteries
+- **[Batteries](batteries.md)** - The Grafana table of every battery (level, 14-day trend, days to 25 %), and what the "Battery under 25 %" alert means
+
 ### Home Assistant Energy Dashboard
 - **[Energy dashboard](energy-dashboard.md)** - Grid import split into the day/night tariff, the device counters, where the prices live and how to change them each July
 

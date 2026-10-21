@@ -1,0 +1,445 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "All batteries in the house: level, 14-day trend and days left until 25 % (#1750). The alert is the rule \"Battery under 25 %\" in the Infrastructure folder.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "Level is the median of the current UTC day (since 00:00 UTC), so single odd readings do not count. Change/day is (median of today - median of the day 14 days ago) / 14. Days to 25 % is (level - 25) / -change. It is a straight line through two whole percents, so it jumps when one of them moves by 1 %; read it as months. Cycles/day is the growth of the mower's charge counter over the last 90 days.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "minWidth": 100
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "device"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Battery"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "sunseeker-mqtt-influx": {
+                        "index": 0,
+                        "text": "Mower"
+                      },
+                      "eaton5s": {
+                        "index": 1,
+                        "text": "UPS"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "level"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Level"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 25
+                    },
+                    {
+                      "color": "green",
+                      "value": 40
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "slope"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change/day"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: %/day"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "days_left"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Days to 25 %"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": -1000000000,
+                      "to": 0,
+                      "result": {
+                        "index": 0,
+                        "text": "no estimate"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "battery_low"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Low flag"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "true",
+                      "result": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "LOW"
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "false",
+                      "result": {
+                        "color": "green",
+                        "index": 1,
+                        "text": "ok"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycles"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Cycles"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycles_per_day"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Cycles/day"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ups_charge"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "UPS charge"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "runtime"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "UPS runtime"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"m\") AS \"level\", (last(\"m\") - first(\"m\")) / 14 AS \"slope\", (last(\"m\") - 25) / (first(\"m\") - last(\"m\")) * 14 AS \"days_left\" FROM (SELECT median(\"battery\") AS \"m\" FROM \"zigbee\" WHERE time >= now() - 14d GROUP BY time(1d), \"device\") GROUP BY \"device\"",
+          "rawQuery": true,
+          "refId": "zigbee_percent",
+          "resultFormat": "table"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"battery_low\") AS \"battery_low\" FROM \"zigbee\" WHERE time >= now() - 14d GROUP BY \"device\"",
+          "rawQuery": true,
+          "refId": "zigbee_low_flag",
+          "resultFormat": "table"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"charge_times\") AS \"cycles\", (last(\"charge_times\") - first(\"charge_times\")) / 90 AS \"cycles_per_day\" FROM \"sunseeker_battery_info\" WHERE time >= now() - 90d GROUP BY \"service\"",
+          "rawQuery": true,
+          "refId": "mower",
+          "resultFormat": "table"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT last(\"battery_charge\") AS \"ups_charge\", last(\"battery_runtime\") AS \"runtime\" FROM \"fleet_ups\" WHERE time >= now() - 1d GROUP BY \"ups\"",
+          "rawQuery": true,
+          "refId": "ups",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Batteries",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "service": "device",
+              "ups": "device"
+            }
+          }
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "device",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "device": 0,
+              "level": 1,
+              "slope": 2,
+              "days_left": 3,
+              "battery_low": 4,
+              "cycles": 5,
+              "cycles_per_day": 6,
+              "ups_charge": 7,
+              "runtime": 8
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "id": 2,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "**What the table cannot say**\n\n- **Zigbee sensors with only a low flag** (no level): the sensor says only *ok* or *LOW*. There is no level, no trend and no days left. Change the battery when it says LOW.\n- **Mower**: the counter of charge cycles and how fast it grew in the last 90 days. There is no document with the cycle life of this battery, so there are no days left.\n- **UPS**: the charge right now and the runtime right now. The charge goes down in a power cut and up again after it, so it says nothing about wear. The UPS service on the host already sends a message for a low battery and for \"replace battery\". The 25 % alert does not include the UPS.\n- **Days to 25 %** is *no estimate* when the level did not fall in the last 14 days, or when a falling level is already under 25 %. It jumps when a daily level moves by 1 %: read it as months, not as a date.\n\nThe alert \"Battery under 25 %\" (folder Infrastructure) sends one message when the daily median of a Zigbee battery is under 25 %, and a reminder every 5 days until the battery is changed. More: `docs/batteries.md`.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "9.5.21",
+      "title": "Notes",
+      "type": "text"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "battery"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-14d",
+    "to": "now"
+  },
+  "timepicker": {
+    "hidden": true
+  },
+  "timezone": "",
+  "title": "Batteries",
+  "uid": "batteries",
+  "version": 1,
+  "weekStart": ""
+}
