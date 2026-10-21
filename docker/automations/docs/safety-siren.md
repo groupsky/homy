@@ -22,7 +22,8 @@ The owner approved this table on 2026-10-16.
   second). It fires when every reading for 2 min is above 85 °C. It sounds
   60 s, then again after a 60 s pause, up to 3 times, while the value stays
   above 85 °C. It clears when every reading for 2 min is 85 °C or below, so a
-  value near the limit does not start it again and again. The Grafana rule `boiler-controller-overheating` also sends a
+  value near the limit does not start it again and again. The Grafana rule
+  `boiler-controller-overheating` also sends a
   Telegram message for the same thing.
 - **Day** is 07:00 to 23:00 in `Europe/Sofia`, the same hours as the Telegram
   quiet hours. An alert that starts at night sounds at 07:00 if it still holds.
@@ -44,7 +45,8 @@ Grafana alert never sounds the siren.
 
 - **A hall wall button**: `corridor1_kitchen_left` or `corridor1_kitchen_right`.
   It works only while a siren alert sounds or in the pause after a sound,
-  until the next sound is due, and during the test. Not while the mute is on. At other times the bot ignores the buttons, so they keep working for
+  until the next sound is due, and during the test. Not while the mute is on.
+  At other times the bot ignores the buttons, so they keep working for
   the lights. A light press at night or during the mute never stops an alert
   that waits quietly. A press always toggles that button's light too: no bot
   can keep a press from the light bots.
