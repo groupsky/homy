@@ -133,12 +133,13 @@ module.exports = (name, config) => {
         await sound(alert)
       }
 
-      // An episode is "in its sound cycle" from its first sound until its
-      // last sound has ended, pauses included.
+      // An episode is "in its sound cycle" during a sound and the pause after
+      // it, until the next sound is due. Not while muted, and not while a
+      // repeat waits for the day: then a light press must not stop it.
       const inCycle = (w) => {
         const e = w.episode
-        if (!e || e.stopped || e.times === 0) return false
-        return e.times < (w.alert.times ?? 1) || isSounding()
+        if (!e || e.stopped || e.times === 0 || isMuted()) return false
+        return isSounding() || Date.now() < e.nextAt
       }
 
       // A wall button stops only what is sounding or in its sound cycle, so a

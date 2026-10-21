@@ -294,6 +294,29 @@ describe('safety-siren bot', () => {
       expect(sirenCalls()).toEqual([TANK_SOUND])
     })
 
+    it('a wall button at night does not stop an alert that sounded in the evening', async () => {
+      jest.setSystemTime(Date.parse('2026-10-21T19:56:00Z')) // 22:56 local
+      await start()
+      await send(BUTTON_LEFT, { state: false })
+      await tankFor(90, 130 * 1000) // sounds at 22:58; the next sound waits for the day
+      expect(sirenCalls()).toEqual([TANK_SOUND])
+      await tankFor(90, 3 * 60 * 60 * 1000) // to about 02:00 local
+      await pressLeft()
+      await tankFor(90, 5.1 * 60 * 60 * 1000) // past 07:02 local
+      expect(sirenCalls()).toEqual([TANK_SOUND, TANK_SOUND, TANK_SOUND])
+    })
+
+    it('a wall button during the mute does not stop an alert that sounded before the mute', async () => {
+      await start()
+      await send(BUTTON_LEFT, { state: false })
+      await tankFor(90, 130 * 1000) // the first sound
+      await send(MUTE_SET, { state: true, _src: 'ha' }) // stops the sound
+      await pressLeft()
+      await send(MUTE_SET, { state: false, _src: 'ha' })
+      await tankFor(90, 3 * 60 * 1000)
+      expect(sirenCalls()).toEqual([TANK_SOUND, { alarm: false }, TANK_SOUND])
+    })
+
     it('a wall button in the pause between two sounds stops the repeats', async () => {
       await start()
       await send(BUTTON_LEFT, { state: false })

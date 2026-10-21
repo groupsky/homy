@@ -162,7 +162,7 @@ Key patterns:
 
 #### `safety-siren` - Life-safety alerts on the hall siren
 - **Purpose**: Sounds the hall siren when a safety value stays above its limit for the confirm time with fresh readings; never for missing, stale or bad data. Rows can be day-only
-- **Stop**: a hall wall button (only while it sounds or between its repeats, so the lights keep working and a quiet alert is never stopped by a light press), the HA button `safety_siren_stop`, the alert clearing, or the HA switch `safety_siren_mute` (it turns itself off)
+- **Stop**: a hall wall button (only during a sound or the pause after it, so the lights keep working and a quiet alert at night or during the mute is never stopped by a light press), the HA button `safety_siren_stop`, the alert clearing, or the HA switch `safety_siren_mute` (it turns itself off)
 - **Alive check**: one Telegram message when the siren's zigbee2mqtt `last_seen` is older than 3 h
 - **Documentation**: See `docs/safety-siren.md` (#1770)
 

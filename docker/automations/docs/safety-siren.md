@@ -43,9 +43,8 @@ Grafana alert never sounds the siren.
 ## Stop
 
 - **A hall wall button**: `corridor1_kitchen_left` or `corridor1_kitchen_right`.
-  It works only while a siren alert sounds or is in its sound cycle (from the
-  first sound until the last one has ended, pauses included), and during the
-  test. At other times the bot ignores the buttons, so they keep working for
+  It works only while a siren alert sounds or in the pause after a sound,
+  until the next sound is due, and during the test. Not while the mute is on. At other times the bot ignores the buttons, so they keep working for
   the lights. A light press at night or during the mute never stops an alert
   that waits quietly. A press always toggles that button's light too: no bot
   can keep a press from the light bots.
