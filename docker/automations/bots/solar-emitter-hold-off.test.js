@@ -215,6 +215,78 @@ describe.each(Object.keys(bots))('solar-emitter hold-off (%s)', (kind) => {
     })
   })
 
+  describe('log lines', () => {
+    let log
+    beforeEach(() => { log = jest.spyOn(console, 'log').mockImplementation(() => {}) })
+    afterEach(() => { log.mockRestore() })
+    const lines = () => log.mock.calls.map(([line]) => line)
+
+    it('logs one night once each', () => {
+      start()
+      holdOff(on('2024-06-15T12:00:00Z'))
+      setLight(false)
+      holdOff(on('2024-06-15T12:00:00Z'))
+      expect(lines()).toEqual([
+        '[nightLights] wanted: off',
+        '[nightLights] hold-off switch on (since 2024-06-15T12:00:00.000Z)'
+      ])
+
+      advanceTo('2024-06-15T19:00:01Z')
+      setLight(false)
+      expect(lines().slice(2)).toEqual(['[nightLights] wanted: off (hold-off)'])
+
+      advanceTo('2024-06-16T05:00:01Z')
+      expect(lines().slice(3)).toEqual([
+        '[nightLights] sunrise: turning the hold-off switch off',
+        '[nightLights] wanted: off'
+      ])
+      holdOff({ state: false, _tz: Date.now() })
+      holdOff({ state: false, _tz: Date.now() })
+      expect(lines().slice(5)).toEqual(['[nightLights] hold-off switch off'])
+
+      advanceTo('2024-06-16T19:00:01Z')
+      expect(lines().slice(6)).toEqual(['[nightLights] wanted: on'])
+      expect(lines()).toHaveLength(7)
+    })
+
+    it('logs the expired on-state, and no off line for a first off status', () => {
+      at('2024-06-15T22:00:00Z')
+      start()
+      holdOff({ state: false })
+      expect(lines()).toEqual(['[nightLights] wanted: on'])
+      log.mockClear()
+      holdOff(on('2024-06-14T22:00:00Z'))
+      expect(lines()).toContain('[nightLights] hold-off switch is from before the last sunrise: turning it off')
+    })
+
+    it('asks and logs once while an expired on-state keeps being reported', () => {
+      start()
+      holdOff(on('2024-06-15T12:00:00Z'))
+      setLight(false)
+      advanceTo('2024-06-16T05:00:01Z')
+      holdOff(on('2024-06-15T12:00:00Z'))
+      holdOff(on('2024-06-15T12:00:00Z'))
+      const expired = lines().filter((l) => l.includes('turning'))
+      expect(expired).toEqual(['[nightLights] sunrise: turning the hold-off switch off'])
+      expect(holdOffSets()).toHaveLength(1)
+    })
+
+    it('uses the first-seen time when the status time is not a number', () => {
+      at('2024-06-15T21:00:00Z')
+      start()
+      holdOff({ state: true, _tz: 'x' })
+      expect(persistedCache.holdOffSince).toBe(Date.now())
+      expect(lines()).toContain('[nightLights] hold-off switch on (since 2024-06-15T21:00:00.000Z)')
+    })
+
+    it('logs nothing new without the hold-off topics', () => {
+      start({ holdOffStatusTopic: undefined, holdOffSetTopic: undefined })
+      setLight(false)
+      advanceTo('2024-06-16T05:00:01Z')
+      expect(lines()).toEqual([])
+    })
+  })
+
   it('behaves as before without the hold-off topics', () => {
     start({ holdOffStatusTopic: undefined, holdOffSetTopic: undefined })
     expect(subscriptions[HOLD_STATUS]).toBeUndefined()
