@@ -65,10 +65,10 @@ describe('boiler-controller night tariff hold', () => {
       expect(decisionAt('2026-11-02T21:00:00+02:00')).toMatchObject(held)
     })
 
-    test('keeps the 10-minute margin after the zone starts, then allows a start', () => {
+    test('keeps the 15-minute margin after the zone starts, then allows a start', () => {
       expect(decisionAt('2026-11-02T22:05:00+02:00')).toMatchObject(held)
       expect(decisionAt('2026-11-02T22:09:59+02:00')).toMatchObject(held)
-      expect(decisionAt('2026-11-02T22:10:00+02:00')).toMatchObject(heating)
+      expect(decisionAt('2026-11-02T22:15:00+02:00')).toMatchObject(heating)
     })
 
     test('starts the element on the first reading after the margin ends', () => {
@@ -76,7 +76,7 @@ describe('boiler-controller night tariff hold', () => {
       boiler.temperatures({ top: WARM_ENOUGH })
       expect(boiler.relay()).toMatchObject(held)
 
-      boiler.at('2026-11-02T22:10:30+02:00')
+      boiler.at('2026-11-02T22:15:30+02:00')
       boiler.temperatures({ top: WARM_ENOUGH - 0.1 })
       expect(boiler.relay()).toMatchObject(heating)
     })
@@ -114,11 +114,11 @@ describe('boiler-controller night tariff hold', () => {
   })
 
   describe('summer table (23:00 zone start)', () => {
-    test('allows a start before the hold and holds from 22:00 to 23:10', () => {
+    test('allows a start before the hold and holds from 22:00 to 23:15', () => {
       expect(decisionAt('2026-07-15T21:55:00+03:00')).toMatchObject(heating)
       expect(decisionAt('2026-07-15T22:00:00+03:00')).toMatchObject(held)
       expect(decisionAt('2026-07-15T23:05:00+03:00')).toMatchObject(held)
-      expect(decisionAt('2026-07-15T23:10:00+03:00')).toMatchObject(heating)
+      expect(decisionAt('2026-07-15T23:15:00+03:00')).toMatchObject(heating)
     })
   })
 
@@ -144,21 +144,21 @@ describe('boiler-controller night tariff hold', () => {
     // Summer time starts on 2026-03-29 at 03:00 local. The zone still starts at
     // 22:00 on the wall clock, which is 19:00 UTC that evening and 20:00 UTC the
     // evening before. A fixed UTC+2 offset would put the hold an hour late.
-    test('2026-03-29: the hold is 21:00-22:10 on the new summer clock', () => {
+    test('2026-03-29: the hold is 21:00-22:15 on the new summer clock', () => {
       expect(decisionAt('2026-03-28T21:05:00+02:00')).toMatchObject(held)
       expect(decisionAt('2026-03-29T20:55:00+03:00')).toMatchObject(heating)
       expect(decisionAt('2026-03-29T21:05:00+03:00')).toMatchObject(held)
-      expect(decisionAt('2026-03-29T22:10:00+03:00')).toMatchObject(heating)
+      expect(decisionAt('2026-03-29T22:15:00+03:00')).toMatchObject(heating)
     })
 
     // Summer time ends on 2026-10-25 at 04:00 local. October keeps the 23:00
     // zone start until 31 October, now on the winter clock. A fixed UTC+3 offset
     // would put the hold an hour early.
-    test('2026-10-25: the hold is 22:00-23:10 on the new winter clock', () => {
+    test('2026-10-25: the hold is 22:00-23:15 on the new winter clock', () => {
       expect(decisionAt('2026-10-24T22:05:00+03:00')).toMatchObject(held)
       expect(decisionAt('2026-10-25T21:55:00+02:00')).toMatchObject(heating)
       expect(decisionAt('2026-10-25T22:05:00+02:00')).toMatchObject(held)
-      expect(decisionAt('2026-10-25T23:10:00+02:00')).toMatchObject(heating)
+      expect(decisionAt('2026-10-25T23:15:00+02:00')).toMatchObject(heating)
     })
   })
 

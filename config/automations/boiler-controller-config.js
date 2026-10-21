@@ -24,8 +24,10 @@ module.exports = {
       // EVN night tariff zone on the local wall clock. The zone hours change on
       // 1 April and 1 November, not on the clock-change days. The element does
       // not run from `holdBeforeMinutes` before the zone starts until
-      // `marginMinutes` after it (the meter clock may drift), unless the tank
-      // top is under `floor` °C; then it heats to `floor` + `hysteresis`.
+      // `marginMinutes` after it, unless the tank top is under `floor` °C; then
+      // it heats to `floor` + `hysteresis`. The margin covers drift of the meter
+      // clock and also staggers the night load: the car charger starts at the
+      // zone start and the element 15 minutes later.
       // See docker/automations/docs/boiler-controller.md.
       nightTariff: {
         timeZone: 'Europe/Sofia',
@@ -34,9 +36,19 @@ module.exports = {
           { months: [4, 5, 6, 7, 8, 9, 10], start: '23:00', end: '07:00' }
         ],
         holdBeforeMinutes: 60,
-        marginMinutes: 10,
+        marginMinutes: 15,
         floor: 40
       },
+      // Load stagger: the element does not START while the dishwasher runs or
+      // the main meter's recent mean power is high. A running element is never
+      // stopped by these, and without the two topics the gates are off.
+      dishwasherTopic: '/modbus/secondary/dishwasher/reading', // field `p` (W)
+      mainPowerTopic: '/modbus/main/main/reading', // field `total_p` (W)
+      dishwasherOnW: 10, // a reading above this is load
+      dishwasherHoldMs: 10 * 60 * 1000, // load this recently counts as running (cycles pause)
+      mainPowerCapW: 6000, // no start at or above this mean (a choice: the main breaker size is not known)
+      mainPowerMeanMs: 5 * 60 * 1000, // window of the mean
+      maxLoadInputAgeMs: 10 * 60 * 1000, // newer reading than this or the input is ignored
       verbose: true
     }
   },

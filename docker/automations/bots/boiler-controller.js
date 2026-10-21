@@ -50,6 +50,15 @@ module.exports = (name, {
   solarDisadvantageMax = -3,
   hysteresis = 3,
   nightTariff,
+  // Load stagger: the element does not start while the dishwasher runs or the
+  // main meter's recent mean power is high. Both gates are off without topics.
+  dishwasherTopic,
+  mainPowerTopic,
+  dishwasherOnW = 10,
+  dishwasherHoldMs = 10 * 60 * 1000,
+  mainPowerCapW = 6000,
+  mainPowerMeanMs = 5 * 60 * 1000,
+  maxLoadInputAgeMs = 10 * 60 * 1000,
   maxInputAgeMs = DEFAULT_MAX_INPUT_AGE_MS,
   telegramWebhookUrl,
   httpPost,
@@ -112,6 +121,67 @@ module.exports = (name, {
     const finalControlModeStatusTopic = controlModeStatusTopic || controlModeTopic.replace('/set', '/status')
     const finalAutomationStatusTopic = automationStatusTopic || `homy/automation/${name}/status`
 
+    // Load inputs. Times are the message's own `_tz` (the time of the reading),
+    // or now when it has none. A time in the future counts as now. A reading without a numeric field is ignored.
+    const readingTime = (payload) => typeof payload?._tz === 'number' ? Math.min(payload._tz, Date.now()) : Date.now()
+    let mainReadings = [] // { at, watts } within the mean window
+    let newestMainAt = null
+    let lastDishwasherLoadAt = null
+    let newestDishwasherAt = null
+
+    const loadInputs = () => {
+      const now = Date.now()
+      // The window ends at the newest reading, so a short silence keeps the mean.
+      if (newestMainAt !== null) mainReadings = mainReadings.filter(({ at }) => at >= newestMainAt - mainPowerMeanMs)
+      // Ignored when there is no reading or the newest is too old: a dead meter must not block.
+      const capIgnored = !mainPowerTopic || newestMainAt === null ||
+        now - newestMainAt > maxLoadInputAgeMs
+      const mean = mainReadings.length
+        ? mainReadings.reduce((sum, { watts }) => sum + watts, 0) / mainReadings.length
+        : null
+      const dishwasherRunning = Boolean(dishwasherTopic) && newestDishwasherAt !== null &&
+        now - newestDishwasherAt <= maxLoadInputAgeMs &&
+        lastDishwasherLoadAt !== null && now - lastDishwasherLoadAt <= dishwasherHoldMs
+      return {
+        mainPowerMeanW: mean === null ? null : Math.round(mean),
+        dishwasherRunning,
+        capIgnored,
+        capExceeded: !capIgnored && mean >= mainPowerCapW
+      }
+    }
+    const loadStatus = () => {
+      const { mainPowerMeanW, dishwasherRunning, capIgnored } = loadInputs()
+      return { mainPowerMeanW, dishwasherRunning, capIgnored }
+    }
+
+    // Reasons that must start the element whatever the load. Only the real
+    // low-top emergency; the overheat shut-off and the manual and vacation
+    // modes never reach the gate (they are not starts by an automatic rule).
+    const LOAD_EXEMPT_REASONS = ['emergency_heating_top_cold']
+
+    // The one place the gates apply: an automatic rule that would switch the
+    // element on while it is off. A running element is never stopped here.
+    const gateStart = (result) => {
+      if (!result.decision || currentState.heaterState || LOAD_EXEMPT_REASONS.includes(result.reason)) return result
+      const { dishwasherRunning, capExceeded } = loadInputs()
+      if (dishwasherRunning) return { decision: false, reason: 'load_wait_dishwasher' }
+      if (capExceeded) return { decision: false, reason: 'load_wait_main_power' }
+      return result
+    }
+
+    // Decide again only when a load reading changes which gate blocks.
+    let lastGateKey = null
+    const gateKey = () => {
+      const { dishwasherRunning, capExceeded } = loadInputs()
+      return `${dishwasherRunning}/${capExceeded}`
+    }
+    const loadChanged = () => {
+      const key = gateKey()
+      if (key === lastGateKey) return
+      lastGateKey = key
+      updateHeaterState()
+    }
+
     const publishControlModeStatus = () => {
       mqtt.publish(finalControlModeStatusTopic, {
         mode: currentState.controlMode,
@@ -159,6 +229,12 @@ module.exports = (name, {
           }
         }
       }
+
+      return gateStart(decideAutomatic())
+    }
+
+    const decideAutomatic = () => {
+      const now = Date.now()
 
       // A reader that stops leaves the last temperatures here, and heating on
       // them could run the element with no real reading (#1743).
@@ -258,7 +334,8 @@ module.exports = (name, {
             solar: currentState.solarTemperature,
             ambient: currentState.ambientTemperature
           },
-          solarCirculation: currentState.solarCirculation
+          solarCirculation: currentState.solarCirculation,
+          load: loadStatus()
         })
 
         // Publish control mode status
@@ -352,6 +429,31 @@ module.exports = (name, {
       }
     })
 
+    if (mainPowerTopic) {
+      mqtt.subscribe(mainPowerTopic, (payload) => {
+        const watts = payload?.total_p
+        if (typeof watts !== 'number' || isNaN(watts)) return
+        const at = readingTime(payload)
+        mainReadings.push({ at, watts })
+        newestMainAt = Math.max(newestMainAt ?? at, at)
+        loadChanged()
+      })
+    }
+
+    if (dishwasherTopic) {
+      mqtt.subscribe(dishwasherTopic, (payload) => {
+        const watts = payload?.p
+        if (typeof watts !== 'number' || isNaN(watts)) return
+        const at = readingTime(payload)
+        newestDishwasherAt = Math.max(newestDishwasherAt ?? at, at)
+        if (watts > dishwasherOnW) lastDishwasherLoadAt = Math.max(lastDishwasherLoadAt ?? at, at)
+        loadChanged()
+      })
+    }
+
+    // A hold or a window that runs out needs no new reading; look every 30 s.
+    if (mainPowerTopic || dishwasherTopic) setInterval(loadChanged, 30 * 1000).unref?.()
+
     // Control mode topic
     mqtt.subscribe(controlModeTopic, (payload) => {
       try {
@@ -424,6 +526,7 @@ module.exports = (name, {
     })
 
     // Initial decision and status
+    lastGateKey = gateKey()
     updateHeaterState()
     publishControlModeStatus()
 
@@ -444,6 +547,7 @@ module.exports = (name, {
           ambient: currentState.ambientTemperature
         },
         solarCirculation: currentState.solarCirculation,
+        load: loadStatus(),
         lastDecision: currentState.lastDecision,
         heartbeat: true,
         timestamp: Date.now()
@@ -463,6 +567,8 @@ module.exports = (name, {
         solarDisadvantageMax,
         hysteresis,
         nightTariff,
+        dishwasherTopic,
+        mainPowerTopic,
         manualOverrideExpiry: manualOverrideExpiry / 60000 + ' minutes',
         heartbeatInterval: '15 minutes'
       })
