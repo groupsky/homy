@@ -467,6 +467,7 @@ The following services are built as prebuilt images in CI:
 | automations | Core automation engine |
 | automation-events-processor | Automation event processing |
 | dmx-driver | DMX lighting control |
+| energy-report | Monthly energy report from the meter counters to InfluxDB and Telegram |
 | grafana | Metrics visualization |
 | historian | Historical data processing |
 | homeassistant | Home Assistant integration |
