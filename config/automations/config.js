@@ -800,3 +800,27 @@ module.exports.bots.thermostatSeasonGuard = {
   timeZone: 'Europe/Sofia',
   telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
 }
+
+// Away mode (#1756): the Home Assistant switch `away_mode` and the text
+// `away_return_date` (both in ha_discovery.js) set the house back for a trip.
+// The room list is the one the season guard uses, so no thermostat topic is
+// written out here. Details: docker/automations/docs/away-mode.md
+module.exports.bots.awayMode = {
+  type: 'away-mode',
+  thermostatTopics: module.exports.bots.thermostatSeasonGuard.thermostatTopics,
+  // The living-room virtual thermostat: set point in, retained status out
+  livingRoomSetTopic: module.exports.bots.livingRoomThermostat.setTopic,
+  livingRoomStatusTopic: module.exports.bots.livingRoomThermostat.statusTopic,
+  boilerSetTopic: `${featuresPrefix}/control_mode/boiler_controller/set`,
+  boilerStatusTopic: `${featuresPrefix}/control_mode/boiler_controller/status`,
+  switchSetTopic: `${featuresPrefix}/switch/away_mode/set`,
+  switchStatusTopic: `${featuresPrefix}/switch/away_mode/status`,
+  returnDateSetTopic: `${featuresPrefix}/text/away_return_date/set`,
+  returnDateStatusTopic: `${featuresPrefix}/text/away_return_date/status`,
+  // K lower in heating rooms and in the living room
+  setbackK: 3,
+  // Lowest living-room set point, °C (the same as minSetPoint above)
+  livingMin: module.exports.bots.livingRoomThermostat.minSetPoint,
+  timeZone: 'Europe/Sofia',
+  telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
+}

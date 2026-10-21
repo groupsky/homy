@@ -135,6 +135,37 @@ const haSelect = (
   }
 })
 
+// A text box. Home Assistant sends the typed text as plain text, which the
+// features topics do not read, so the command template wraps it as JSON:
+// {"value": "..."}. The bot that owns it publishes the same shape as status.
+const haText = (
+  {
+    name,
+    feature_type,
+    feature,
+    config
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          command_topic: `${featuresPrefix}/${feature_type}/${feature}/set`,
+          command_template: `{"value": "{{ value }}", "_src": "ha"}`,
+          state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
+          value_template: `{{ value_json.value if value_json.value is defined else '' }}`,
+          unique_id: `homy_${feature_type}_${feature}`,
+          ...config,
+          ...(config.object_id && { default_entity_id: `text.${config.object_id}` })
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/text/${feature}/config`, retain: true } }
+  }
+})
+
 const haAutomationSwitch = (
   {
     name,
@@ -987,7 +1018,7 @@ const config = {
       name: 'boilerControllerMode',
       feature_type: 'control_mode',
       feature: 'boiler_controller',
-      options: ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d'],
+      options: ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until'],
       config: {
         name: 'Режим управление бойлер',
         unique_id: 'boiler_controller_mode',
@@ -1173,6 +1204,34 @@ const config = {
         device: devices.external,
         object_id: 'dark_sky_tonight',
         icon: 'mdi:weather-night',
+      }
+    }),
+
+    // Away mode (#1756): the `away-mode` bot in config.js owns both entities
+    ...haSwitch({
+      name: 'awayMode',
+      feature_type: 'switch',
+      feature: 'away_mode',
+      config: {
+        name: 'Отсъствие',
+        device: devices.antre,
+        object_id: 'away_mode',
+        icon: 'mdi:airplane',
+      }
+    }),
+    // Local date of the return, YYYY-MM-DD, or empty for no date
+    ...haText({
+      name: 'awayReturnDate',
+      feature_type: 'text',
+      feature: 'away_return_date',
+      config: {
+        name: 'Дата на връщане',
+        device: devices.antre,
+        object_id: 'away_return_date',
+        icon: 'mdi:calendar-arrow-right',
+        min: 0,
+        max: 10,
+        pattern: '^(\\d{4}-\\d{2}-\\d{2})?$',
       }
     }),
   },

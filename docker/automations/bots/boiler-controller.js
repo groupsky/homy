@@ -1,6 +1,9 @@
 const { watchInputAge, DEFAULT_MAX_INPUT_AGE_MS } = require('../lib/input-age')
 const telegramAlert = require('../lib/telegram-alert')
 
+// The longest vacation_until: 60 days (#1756)
+const MAX_VACATION_UNTIL_MS = 60 * 24 * 60 * 60 * 1000
+
 const MINUTES_PER_DAY = 24 * 60
 
 const minutesOfDay = (hhmm) => {
@@ -485,8 +488,21 @@ module.exports = (name, {
           return vacationHours[mode] ? vacationHours[mode] * 60 * 60 * 1000 : duration
         }
 
+        // vacation_until ends at the time in the payload (#1756), at most
+        // 60 days ahead. Without a valid time the command is refused and the
+        // mode stays as it was.
+        let until = null
+        if (newMode === 'vacation_until') {
+          until = typeof payload === 'object' ? payload.until : undefined
+          const now = Date.now()
+          if (!Number.isFinite(until) || until <= now || until > now + MAX_VACATION_UNTIL_MS) {
+            console.log(`[${name}] vacation_until refused: "until" must be a time in ms, in the future and at most 60 days ahead (got ${JSON.stringify(until)})`)
+            return
+          }
+        }
+
         // Validate and set new mode
-        const validModes = ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d']
+        const validModes = ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until']
 
         if (validModes.includes(newMode)) {
           currentState.controlMode = newMode
@@ -494,6 +510,8 @@ module.exports = (name, {
           if (newMode === 'automatic') {
             // Clear manual override expiry for automatic mode
             currentState.manualOverrideExpires = null
+          } else if (newMode === 'vacation_until') {
+            currentState.manualOverrideExpires = until
           } else if (newMode.startsWith('vacation_')) {
             // Calculate smart vacation timing (6 hours before evening return)
             const vacationDuration = calculateVacationDuration(newMode)

@@ -199,6 +199,11 @@ Key patterns:
 - **Exceptions**: `THERMOSTAT_GUARD_SKIP` in the real `.env` (`room:check` pairs); never committed
 - **State**: the sent messages (one for each room, check and local day), the valve open times and the outdoor values of the last 36 h, in the persistent cache
 
+#### `away-mode` - One switch sets the house back for a trip
+- **Purpose**: `awayMode` (#1756): the HA switch `away_mode` and the text `away_return_date` set the heating rooms and the living room 3 K lower and put the boiler in `vacation_until`. The rooms go back 3 days before the return date, the boiler ends 6 hours before it, the switch turns itself off at the return. Details: [docs/away-mode.md](docs/away-mode.md)
+- **Never**: changes a thermostat mode, or touches irrigation
+- **State**: away flag, return date, saved values, boiler mode set, unconfirmed writes, in the persistent cache
+
 #### `solar-emitter` - Night lights from sunset to sunrise
 - **Dark sky switch** (#1751): the night light bots `nightExternalLights` and `nightExternalLightsZ2M` (`solar-emitter`) can be held off for one night by the HA switch `dark_sky_tonight`. Details: [docs/dark-sky-switch.md](docs/dark-sky-switch.md)
 

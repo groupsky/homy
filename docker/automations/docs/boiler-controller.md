@@ -110,7 +110,13 @@ After the rules, a start while the element is off waits when a [load stagger](#l
 is closed (`load_wait_dishwasher` or `load_wait_main_power`), except `emergency_heating_top_cold`.
 
 **Control modes** (`homy/features/control_mode/boiler_controller/set`): `automatic`, `manual_on`,
-`manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`.
+`manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`, `vacation_until`.
+
+`vacation_until` (#1756) is a vacation mode with an end time from the command:
+`{"mode": "vacation_until", "until": <epoch ms>}`. The heater is off until `until`, then the mode goes back to
+automatic. `until` must be in the future and at most 60 days ahead. Otherwise the command is refused and logged, and the
+mode stays. The `away-mode` bot uses it; see [away-mode.md](away-mode.md). A pick of `vacation_until` in Home Assistant
+has no `until`, so it is refused.
 
 The 50 °C cutout from step 10 is what makes `max(t2)` a usable solar-contribution signal: a day whose
 top temperature never exceeds 50 °C got all of its heat from the immersion heater. That is the basis
