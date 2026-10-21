@@ -34,8 +34,8 @@ function dashboardLine (dashboardUrl, month) {
 
 // A short summary of one month: main with day/night and the night share, the
 // cost, the change against the same month of last year, the 3 largest loads,
-// and the dashboard (a link when one is set). A line without data (no cost before the current
-// prices, no last year in the first year) is left out.
+// and the dashboard (a link when one is set). A line without data (no cost
+// before the current prices, no last year in the first year) is left out.
 export function telegramText (month, rows, dashboardUrl) {
   const main = rows.find((r) => r.meter === MAIN.name).fields
   const lines = [

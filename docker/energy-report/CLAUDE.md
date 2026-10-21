@@ -4,7 +4,8 @@ Makes a monthly energy report from the meter counters (#1757). For each local mo
 (Europe/Sofia) it writes the kWh of the main meter and of each meter, with the day/night
 split, the cost and the same month of last year, into the InfluxDB measurement
 `energy_monthly`. On the 1st of each month it sends a short Telegram message with the
-totals and a link to the Grafana dashboard **Energy by month** (`energy-monthly`).
+totals. It names the Grafana dashboard **Energy by month** (`energy-monthly`), with a
+link only when `ENERGY_REPORT_DASHBOARD_URL` is set.
 
 Tags and fields: [`energy_monthly` in the InfluxDB schema](../../docs/influxdb-schema.md#energy_monthly-measurement).
 The tariff zones and the prices: [Energy dashboard](../../docs/energy-dashboard.md).
