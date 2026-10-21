@@ -64,7 +64,8 @@ homy/features/relay/solar_heater_electric_heater/status # Solar controller elect
 ### Electric Heater Control (`boilerController`)
 
 The heater is **threshold-based**, with one time rule: it does not heat in the hour before the night
-tariff zone (see [Night tariff hold](#night-tariff-hold)). The legacy `boilerOnSchedule`
+tariff zone (see [Night tariff hold](#night-tariff-hold)). It also does not start while the
+dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). The legacy `boilerOnSchedule`
 `solar-emitter` bot (ON at golden hour, OFF at nadir) was removed in `11ed714` and no longer exists.
 
 - **Type:** `boiler-controller` (`docker/automations/bots/boiler-controller.js`)
@@ -105,6 +106,9 @@ tariff zone (see [Night tariff hold](#night-tariff-hold)). The legacy `boilerOnS
 10. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
 11. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
 
+After the rules, a start while the element is off waits when a [load stagger](#load-stagger) gate
+is closed (`load_wait_dishwasher` or `load_wait_main_power`), except `emergency_heating_top_cold`.
+
 **Control modes** (`homy/features/control_mode/boiler_controller/set`): `automatic`, `manual_on`,
 `manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`.
 
@@ -127,9 +131,10 @@ The zone hours change on 1 April and 1 November, not on the clock-change days. I
 sources and the cost model.
 
 - The element does not run from `holdBeforeMinutes` (60) before the zone starts until
-  `marginMinutes` (10) after it: 21:00–22:10 in winter, 22:00–23:10 in summer. A run that is on when
-  the hold begins is switched off. The 10 minutes after the zone start allow for drift of the meter
-  clock.
+  `marginMinutes` (15) after it: 21:00–22:15 in winter, 22:00–23:15 in summer. A run that is on when
+  the hold begins is switched off. The 15 minutes after the zone start allow for drift of the meter
+  clock. They are also the stagger: the car starts at the zone start and the element 15 minutes
+  later (see [Load stagger](#load-stagger)).
 - After the hold, the normal rules apply again on the next temperature reading. The element starts
   if the top is under `comfortMin`. A run that the hold cut off does not resume while the top is
   still between `comfortMin` and `comfortMin + hysteresis` (47–50 °C).
@@ -193,6 +198,62 @@ The Home Assistant automation `grid_tariff_by_zone` has the same table for the e
    is running, and otherwise holds the top between 47 °C and 50 °C, except in the night tariff hold
 4. **Energy tracking:** Power consumption monitored separately via energy meter
 5. **Manual override:** Available through Home Assistant for electric heater only
+
+### Load stagger
+
+The night zone is cheap, so several big loads want to start at once. The bot spreads out the
+element. Plan for one night (T is the night zone start: 22:00 in winter, 23:00 in summer):
+
+| When | What | How |
+|---|---|---|
+| T | Car charging starts | By hand (see below) |
+| T + 0:15 | Element may start | The night hold margin (`nightTariff.marginMinutes`, 15) |
+| T + 3:00 | Dishwasher starts | By hand: the dishwasher's delay timer |
+| All night | Heat pump | Runs on its own |
+
+**Two gates.** The element does not **start** when:
+
+- **Dishwasher:** the dishwasher meter showed more than `dishwasherOnW` (10 W) in the last
+  `dishwasherHoldMs` (10 min). A cycle has pauses with almost no power. A short pause does not mean
+  the cycle is over.
+- **House load:** the mean of the main meter readings in the `mainPowerMeanMs` (5 min) up to the newest
+  reading is at or above `mainPowerCapW` (6000 W). 6 kW is a choice, because the size of the main breaker is not
+  known. A short spike does not block when the mean stays under the cap.
+
+When both apply, the reason is `load_wait_dishwasher`. When only the cap applies, it is
+`load_wait_main_power`. The bot decides again when a reading changes a gate, so the element starts
+soon after the load is gone.
+
+After a restart the bot starts with the element off, so the gates apply to the first decision too.
+
+**The gates only block a start.** An element that is already on is never switched off by them. The
+element itself adds about 2.9 kW to the main power. If the cap could stop it, it would switch on
+and off.
+
+**Gated rules** (when the element is off and the rule would switch it on):
+`emergency_heating_bottom_cold`, the floor heating inside the night hold,
+`comfort_heating_insufficient`, `solar_insufficient_boost_needed`, and any other automatic start.
+**Never gated:** `emergency_heating_top_cold` (the real low-top emergency),
+`safety_shutoff_overheated`, and the manual and vacation modes.
+
+**Missing data never blocks.** If the newest main power reading is older than `maxLoadInputAgeMs`
+(10 min, by the message's `_tz`), the cap is ignored. An old dishwasher reading counts as "not
+running". A reading without a number is ignored. Only the start offset still applies.
+
+**Status.** The status message has `load: { mainPowerMeanW, dishwasherRunning, capIgnored }`. The
+mean is in whole watts, or `null` when there is no recent reading.
+
+**Hand settings** (homy cannot do these):
+
+- Car charger: homy has no control of it and it has no timer of its own (it has a meter only). Use
+  the car's scheduled charging, if it has one, to start at T or later.
+- Dishwasher: set its delay timer so it starts at about T + 3:00.
+
+**To change the values**, edit `dishwasherOnW`, `dishwasherHoldMs`, `mainPowerCapW`,
+`mainPowerMeanMs` and `maxLoadInputAgeMs` in `config/automations/boiler-controller-config.js`. The
+inputs are the topics `dishwasherTopic` (field `p`) and `mainPowerTopic` (field `total_p`). Without
+the topics the gates are off. The tests are in
+`docker/automations/bots/boiler-controller-load-stagger.test.js`.
 
 ### Old input
 
