@@ -11,6 +11,6 @@
     "@ya-modbus/driver-ex9em": "0.6.22",
     "@ya-modbus/driver-or-we-514": "0.1.0",
     "@ya-modbus/driver-sdm630": "0.1.3",
-    "@ya-modbus/mqtt-bridge": "0.23.0"
+    "@ya-modbus/mqtt-bridge": "0.23.1"
   }
 }

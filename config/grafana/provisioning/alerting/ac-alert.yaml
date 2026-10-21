@@ -100,8 +100,9 @@ groups:
         #    reason the old comment gave ("occasionally returns 0V readings").
         #    `kitchen` last reported 2025-11-24T11:33:36Z and is commented out of
         #    config/modbus-serial/secondary.config.js, so it currently produces
-        #    no series and the filter excludes nothing (`waste_pump` is likewise
-        #    dead since 2026-06-25T21:29:47Z, and needs no filter). It is kept
+        #    no series and the filter excludes nothing (`waste_pump`, silent from
+        #    2026-06-25T21:29:47Z, is polled again since #1805; its medians
+        #    above stay inside the band, so it needs no filter). It is kept
         #    because that meter's fault was not the isolated-sample kind the
         #    median absorbs: while it was alive it produced 115 samples above
         #    253 V in 2024-09-01 -> 2025-09-01, and 25 separate 3-minute windows

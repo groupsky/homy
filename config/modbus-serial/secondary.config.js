@@ -44,12 +44,11 @@ module.exports = {
       address: 0x02,
       type: 'or-we-514',
     },
-    // Disabled - device not responding, likely broken
-    // {
-    //   name: 'waste_pump',
-    //   address: 0x03,
-    //   type: 'ex9em',
-    // },
+    {
+      name: 'waste_pump',
+      address: 0x03,
+      type: 'ex9em',
+    },
     {
       name: 'oven',
       address: 0x04,
