@@ -4,7 +4,8 @@ Makes a monthly energy report from the meter counters (#1757). For each local mo
 (Europe/Sofia) it writes the kWh of the main meter and of each meter, with the day/night
 split, the cost and the same month of last year, into the InfluxDB measurement
 `energy_monthly`. On the 1st of each month it sends a short Telegram message with the
-totals and a link to the Grafana dashboard **Energy by month** (`energy-monthly`).
+totals. It names the Grafana dashboard **Energy by month** (`energy-monthly`), with a
+link only when `ENERGY_REPORT_DASHBOARD_URL` is set.
 
 Tags and fields: [`energy_monthly` in the InfluxDB schema](../../docs/influxdb-schema.md#energy_monthly-measurement).
 The tariff zones and the prices: [Energy dashboard](../../docs/energy-dashboard.md).
@@ -72,7 +73,7 @@ the environment would be a request-forgery path (CodeQL).
 |---|---|
 | `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | The read user, for the counters and the stored months. |
 | `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | The write user. The service writes only `energy_monthly`. |
-| `ENERGY_REPORT_DASHBOARD_URL` | The link in the message. Default `http://grafana/d/energy-monthly` (the short host name). |
+| `ENERGY_REPORT_DASHBOARD_URL` | Optional: a full link to the dashboard for the message, set only in the real `.env` (never a real domain in this repo). Not set: the message names the dashboard, with no link. Grafana has no public address, and the short name `grafana` does not open away from home. |
 | `ENERGY_REPORT_PRICES_FROM` | The first month of the current prices. Default `2026-07`. Change it every July (below). |
 | `ENERGY_REPORT_FIRST_MONTH` | The first month of the report. Default `2023-11`, and it cannot be earlier. |
 | `ENERGY_REPORT_PRICES_FILE` | The prices file. Default `/config/energy.json`; compose mounts `energy.json` there read-only. |

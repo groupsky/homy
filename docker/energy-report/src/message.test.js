@@ -22,6 +22,12 @@ test('telegramText: totals, cost, last year, the top 3 loads and the link', () =
   ].join('\n'))
 })
 
+test('telegramText names the dashboard and has no link when no URL is set', () => {
+  const text = telegramText('2025-11', rows, undefined)
+  assert.equal(text.split('\n').at(-1), 'Dashboard: Grafana, "Energy by month", month 2025-11')
+  assert.doesNotMatch(text, /https?:/)
+})
+
 test('telegramText leaves out the cost and last year when the month has none', () => {
   const main = { kwh: 1100, kwh_day: 700, kwh_night: 400, share_pct: 100, night_share_pct: 36.364 }
   const text = telegramText('2024-02', [{ meter: 'main', fields: main }, rows[1]], 'http://grafana/d/energy-monthly')
