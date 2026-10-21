@@ -531,6 +531,7 @@ The following standalone workflows run unit tests independently from the unified
 | `test-automations.yml` | automations | `docker/automations/**` |
 | `test-automation-events-processor.yml` | automation-events-processor | `docker/automation-events-processor/**` |
 | `test-dmx-driver.yml` | dmx-driver | `docker/dmx-driver/**` |
+| `test-energy-report.yml` | energy-report | `docker/energy-report/**`, `scripts/energy-backfill/**` (the tests compare the copied rules) and `config/home-assistant/energy.json` |
 | `test-modbus-serial.yml` | modbus-serial | `docker/modbus-serial/**`, mqtt-ndjson's `day-file-writer` copies (a `cmp` step checks the two copies are identical) |
 | `test-mqtt-influx.yml` | mqtt-influx | `docker/mqtt-influx/**` |
 | `test-mqtt-mongo.yml` | mqtt-mongo | `docker/mqtt-mongo/**` |
@@ -553,6 +554,12 @@ The following standalone workflows run unit tests independently from the unified
 `dmx` dependency is a native addon built against libftdi, which the runner does
 not have; the unit tests exercise `message-handler.js`, which does not require
 it.
+
+**Exception**: `test-energy-report.yml` has no `npm ci` and no npm cache. The
+service has no dependencies, and its tests use `node:test`. It also runs when
+`scripts/energy-backfill/` or `config/home-assistant/energy.json` changes,
+because the tests read them: they check that the copied backfill rules still
+give the same results.
 
 **Exception**: `test-detect-changes.yml` covers CI's own tooling rather than a compose
 service, and also runs `npm run typecheck`. Until issue #1544 nothing ran this suite at all
