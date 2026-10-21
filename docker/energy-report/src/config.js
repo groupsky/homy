@@ -53,9 +53,14 @@ export function gridPrices (energyConfig) {
   return { day: price(GRID_TARIFFS.day), night: price(GRID_TARIFFS.night) }
 }
 
+// Fixed on purpose, not configurable, as in scripts/energy-backfill: the
+// service talks only to these two containers on the automation network, and a
+// request URL taken from the environment would be a request-forgery path.
+const INFLUX_URL = 'http://influxdb:8086'
+const INFLUX_DB = 'homy'
+const TELEGRAM_URL = 'http://telegram-bridge:3000/webhook'
+
 export function loadConfig (env = process.env, readFile = readFileSync) {
-  const database = env.INFLUXDB_DATABASE
-  if (!database) throw new Error('INFLUXDB_DATABASE is required')
   const firstMonth = month(env, 'ENERGY_REPORT_FIRST_MONTH', FIRST_MONTH)
   if (firstMonth < FIRST_MONTH) {
     throw new Error(`ENERGY_REPORT_FIRST_MONTH cannot be before ${FIRST_MONTH}: the main meter was swapped in 2023-10`)
@@ -63,12 +68,12 @@ export function loadConfig (env = process.env, readFile = readFileSync) {
   const pricesFile = setting(env, 'ENERGY_REPORT_PRICES_FILE', '/config/energy.json')
   return {
     influx: {
-      url: setting(env, 'INFLUXDB_URL', 'http://influxdb:8086'),
-      database,
+      url: INFLUX_URL,
+      database: INFLUX_DB,
       read: { username: secret(env, readFile, 'INFLUXDB_READ_USERNAME'), password: secret(env, readFile, 'INFLUXDB_READ_PASSWORD') },
       write: { username: secret(env, readFile, 'INFLUXDB_USERNAME'), password: secret(env, readFile, 'INFLUXDB_PASSWORD') }
     },
-    telegramUrl: setting(env, 'TELEGRAM_BRIDGE_URL', 'http://telegram-bridge:3000/webhook'),
+    telegramUrl: TELEGRAM_URL,
     dashboardUrl: url(env, 'ENERGY_REPORT_DASHBOARD_URL', 'http://grafana/d/energy-monthly'),
     firstMonth,
     // Older months had other prices, in BGN, so they get no cost.

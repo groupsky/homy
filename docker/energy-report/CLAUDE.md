@@ -63,12 +63,15 @@ from 2023-11: `MAIN` and `LOADS` in `src/report.js`. Left out on purpose:
 
 ## Configuration
 
+The service talks only to `http://influxdb:8086` (database `homy`) and
+`http://telegram-bridge:3000/webhook`, on the automation network. These are fixed in
+`src/config.js` on purpose, as in `scripts/energy-backfill`: a request address taken from
+the environment would be a request-forgery path (CodeQL).
+
 | Variable | Meaning |
 |---|---|
-| `INFLUXDB_URL`, `INFLUXDB_DATABASE` | InfluxDB 1.x. |
 | `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | The read user, for the counters and the stored months. |
 | `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | The write user. The service writes only `energy_monthly`. |
-| `TELEGRAM_BRIDGE_URL` | `http://telegram-bridge:3000/webhook` |
 | `ENERGY_REPORT_DASHBOARD_URL` | The link in the message. Default `http://grafana/d/energy-monthly` (the short host name). |
 | `ENERGY_REPORT_PRICES_FROM` | The first month of the current prices. Default `2026-07`. Change it every July (below). |
 | `ENERGY_REPORT_FIRST_MONTH` | The first month of the report. Default `2023-11`, and it cannot be earlier. |

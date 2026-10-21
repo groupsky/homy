@@ -26,7 +26,6 @@ const readFile = (path) => {
   return files[path]
 }
 const env = {
-  INFLUXDB_DATABASE: 'homy',
   INFLUXDB_READ_USERNAME_FILE: '/run/secrets/read_user',
   INFLUXDB_READ_PASSWORD_FILE: '/run/secrets/read_password',
   INFLUXDB_USERNAME_FILE: '/run/secrets/write_user',
@@ -52,18 +51,28 @@ test('loadConfig reads the secrets and uses the defaults', () => {
 test('loadConfig takes the settings from the environment', () => {
   const config = loadConfig({
     ...env,
-    INFLUXDB_URL: 'http://db:8086',
-    TELEGRAM_BRIDGE_URL: 'http://bridge/webhook',
     ENERGY_REPORT_DASHBOARD_URL: 'http://grafana/d/other',
     ENERGY_REPORT_FIRST_MONTH: '2024-01',
     ENERGY_REPORT_PRICES_FROM: '2027-07',
     ENERGY_REPORT_PRICES_FILE: '/other/energy.json'
   }, (path) => (path === '/other/energy.json' ? ENERGY_JSON : readFile(path)))
-  assert.equal(config.influx.url, 'http://db:8086')
-  assert.equal(config.telegramUrl, 'http://bridge/webhook')
   assert.equal(config.dashboardUrl, 'http://grafana/d/other')
   assert.equal(config.firstMonth, '2024-01')
   assert.equal(config.pricesFrom, '2027-07')
+})
+
+test('loadConfig never takes an InfluxDB or telegram-bridge address from the environment', () => {
+  // Fixed on purpose: a request URL from the environment is a request-forgery
+  // path for CodeQL, and the service only ever talks to these two containers.
+  const config = loadConfig({
+    ...env,
+    INFLUXDB_URL: 'http://elsewhere:8086',
+    INFLUXDB_DATABASE: 'other',
+    TELEGRAM_BRIDGE_URL: 'http://elsewhere/webhook'
+  }, readFile)
+  assert.equal(config.influx.url, 'http://influxdb:8086')
+  assert.equal(config.influx.database, 'homy')
+  assert.equal(config.telegramUrl, 'http://telegram-bridge:3000/webhook')
 })
 
 test('loadConfig treats an empty setting as not set', () => {
@@ -73,15 +82,14 @@ test('loadConfig treats an empty setting as not set', () => {
 })
 
 test('loadConfig accepts the credentials directly', () => {
-  const direct = { INFLUXDB_DATABASE: 'homy', INFLUXDB_READ_USERNAME: 'r', INFLUXDB_READ_PASSWORD: 'rp', INFLUXDB_USERNAME: 'w', INFLUXDB_PASSWORD: 'wp' }
+  const direct = { INFLUXDB_READ_USERNAME: 'r', INFLUXDB_READ_PASSWORD: 'rp', INFLUXDB_USERNAME: 'w', INFLUXDB_PASSWORD: 'wp' }
   const config = loadConfig(direct, readFile)
   assert.deepEqual(config.influx.read, { username: 'r', password: 'rp' })
   assert.deepEqual(config.influx.write, { username: 'w', password: 'wp' })
 })
 
-test('loadConfig needs the database and both users', () => {
+test('loadConfig needs both users', () => {
   const without = (name) => Object.fromEntries(Object.entries(env).filter(([k]) => k !== name))
-  assert.throws(() => loadConfig(without('INFLUXDB_DATABASE'), readFile), /INFLUXDB_DATABASE/)
   assert.throws(() => loadConfig(without('INFLUXDB_READ_PASSWORD_FILE'), readFile), /INFLUXDB_READ_PASSWORD/)
   assert.throws(() => loadConfig(without('INFLUXDB_USERNAME_FILE'), readFile), /INFLUXDB_USERNAME/)
 })

@@ -956,15 +956,13 @@ services:
       - influxdb_write_user
       - influxdb_write_user_password
     environment:
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      # The InfluxDB and telegram-bridge addresses are fixed in the code.
       # Reads the meter counters and the stored months with the read user.
       - INFLUXDB_READ_USERNAME_FILE=/run/secrets/influxdb_read_user
       - INFLUXDB_READ_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
       # Writes only energy_monthly, with the write user.
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
-      - TELEGRAM_BRIDGE_URL=http://telegram-bridge:3000/webhook
       - ENERGY_REPORT_DASHBOARD_URL=${ENERGY_REPORT_DASHBOARD_URL:-}
       - ENERGY_REPORT_FIRST_MONTH=${ENERGY_REPORT_FIRST_MONTH:-}
       - ENERGY_REPORT_PRICES_FROM=${ENERGY_REPORT_PRICES_FROM:-}
