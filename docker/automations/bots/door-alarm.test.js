@@ -400,12 +400,42 @@ describe('door-alarm bot', () => {
 
       jest.advanceTimersByTime(180000) // Fast forward
 
-      // Should publish alarm OFF command
+      // The first sound (10 s) ended at 70 s, so the close at 90 s sends no
+      // alarm OFF: the siren may be sounding a safety alert by then (#1770)
+      expect(mockMqtt.publish).not.toHaveBeenCalled()
+    })
+
+    it('should stop its own sound when the door closes while it still plays', async () => {
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      jest.advanceTimersByTime(65000) // the first sound (10 s) started at 60 s
+      mockMqtt.publish.mockClear()
+
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
+      expect(mockMqtt.publish).toHaveBeenCalledWith('z2m/house1/floor1-alarm/set', { alarm: false })
+    })
+
+    it('should stop its own sound after a restart when the door closes while it still plays', async () => {
+      const doorOpenTime = Date.now() - 190000
+      persistedCache.doorState = true
+      persistedCache.doorOpenTime = doorOpenTime
+      persistedCache.pendingAlarms = [
+        { stepIndex: 0, scheduledTime: doorOpenTime + 60000, triggered: true },
+        { stepIndex: 1, scheduledTime: doorOpenTime + 120000, triggered: true },
+        // the last step (60 s) started 10 s ago, so it still plays
+        { stepIndex: 2, scheduledTime: doorOpenTime + 180000, triggered: true }
+      ]
+
+      await bot.start({ mqtt: mockMqtt, persistedCache })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: true })
+      await mockMqtt._triggerMessage('homy/features/open/front_main_door_open/status', { state: false })
+      await Promise.resolve()
+
       expect(mockMqtt.publish).toHaveBeenCalledTimes(1)
-      expect(mockMqtt.publish).toHaveBeenCalledWith(
-        'z2m/house1/floor1-alarm/set',
-        { alarm: false }
-      )
+      expect(mockMqtt.publish).toHaveBeenCalledWith('z2m/house1/floor1-alarm/set', { alarm: false })
     })
 
     it('should restart escalation if door opens again after closing', async () => {

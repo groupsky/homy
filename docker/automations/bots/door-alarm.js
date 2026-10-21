@@ -61,10 +61,13 @@ module.exports = (name, config) => {
     start: async ({ mqtt, persistedCache }) => {
       let timers = []
       let doorState = persistedCache.doorState
-      // Set before each alarm command, so a door close right after a step
-      // still stops it (the persisted `triggered` is set only once the
-      // publish has finished).
-      let soundedSinceOpen = false
+      // When this bot's own last sound ends. A door close stops the siren only
+      // before then, so it never cuts a safety-siren sound (#1770). It is set
+      // before each alarm command; after a restart it comes from the steps
+      // that had already sounded.
+      let ownSoundUntil = Math.max(0, ...(persistedCache.pendingAlarms || [])
+        .filter(a => a.triggered && escalationSteps[a.stepIndex])
+        .map(a => a.scheduledTime + escalationSteps[a.stepIndex].durationSec * 1000))
 
       // Defensive: an "open" without an open-time is an inconsistent persisted
       // state that the normal open/close paths never produce. Treat it as
@@ -81,7 +84,6 @@ module.exports = (name, config) => {
 
       const scheduleAlarms = () => {
         clearAllTimers()
-        soundedSinceOpen = false
 
         const now = Date.now()
         persistedCache.doorOpenTime = now
@@ -106,7 +108,7 @@ module.exports = (name, config) => {
 
             log(`triggering alarm - step ${index + 1}:`, step)
 
-            soundedSinceOpen = true
+            ownSoundUntil = Date.now() + step.durationSec * 1000
             try {
               await mqtt.publish(alarmDevice.commandTopic, alarmPayload)
 
@@ -127,13 +129,13 @@ module.exports = (name, config) => {
       const cancelAlarms = async () => {
         clearAllTimers()
         // The siren is shared with the safety-siren bot (#1770). Stop it only
-        // when this bot sounded it, so a door closing never silences a
-        // safety alert.
-        const sounded = soundedSinceOpen || (persistedCache.pendingAlarms || []).some(a => a.triggered)
-        soundedSinceOpen = false
+        // while this bot's own sound still plays, so a door closing never
+        // silences a safety alert.
+        const ownSoundPlays = Date.now() < ownSoundUntil
+        ownSoundUntil = 0
         persistedCache.doorOpenTime = null
         persistedCache.pendingAlarms = []
-        if (!sounded) {
+        if (!ownSoundPlays) {
           return
         }
 
@@ -176,7 +178,7 @@ module.exports = (name, config) => {
 
               log(`triggering alarm - step ${alarm.stepIndex + 1} (restored):`, step)
 
-              soundedSinceOpen = true
+              ownSoundUntil = Date.now() + step.durationSec * 1000
               try {
                 await mqtt.publish(alarmDevice.commandTopic, alarmPayload)
                 alarm.triggered = true
@@ -197,7 +199,7 @@ module.exports = (name, config) => {
               melody
             }
 
-            soundedSinceOpen = true
+            ownSoundUntil = Date.now() + step.durationSec * 1000
             mqtt.publish(alarmDevice.commandTopic, alarmPayload)
               .then(() => {
                 alarm.triggered = true

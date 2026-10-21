@@ -74,31 +74,42 @@ module.exports = (name, config) => {
     start: async ({ mqtt, persistedCache, isEnabled }) => {
       const sendTelegram = telegramAlert({ url: telegramUrl, httpPost, isEnabled })
 
-      // Per alert: when the value went above the limit, the last good reading,
-      // and the current episode (from confirmed to cleared).
-      const watch = alerts.map((alert) => ({ alert, aboveSince: null, lastReadingAt: null, episode: null }))
+      // Per alert: since when the value is above (or at or below) the limit,
+      // the last good reading, and the current episode (confirmed to cleared).
+      const watch = alerts.map((alert) => ({ alert, aboveSince: null, belowSince: null, lastReadingAt: null, episode: null }))
       let soundingUntil = 0
       let testSoundingUntil = 0
 
+      // A failed publish is logged and never thrown: the service runs with
+      // --unhandled-rejections=strict, and one bot must not stop the others.
+      const publish = async (topic, ...args) => {
+        try {
+          await mqtt.publish(topic, ...args)
+        } catch (error) {
+          console.error(`[${name}] failed to publish to ${topic}:`, error.message)
+        }
+      }
       const sound = async ({ melody, volume, durationSec }) => {
         soundingUntil = Date.now() + durationSec * 1000
-        await mqtt.publish(siren.commandTopic, { alarm: true, melody, volume, duration: durationSec })
-      }
-      const silence = async () => {
-        soundingUntil = 0
-        testSoundingUntil = 0
-        await mqtt.publish(siren.commandTopic, { alarm: false })
+        await publish(siren.commandTopic, { alarm: true, melody, volume, duration: durationSec })
       }
       const isSounding = () => Date.now() < soundingUntil
+      // Only a sound of this bot is stopped, so a door-alarm sound is not cut.
+      const silenceIfSounding = async () => {
+        if (!isSounding()) return
+        soundingUntil = 0
+        testSoundingUntil = 0
+        await publish(siren.commandTopic, { alarm: false })
+      }
 
       const isMuted = () => persistedCache.muteUntil != null && Date.now() < persistedCache.muteUntil
-      const publishMute = () => mqtt.publish(mute.statusTopic, { state: isMuted() }, { retain: true })
+      const publishMute = () => publish(mute.statusTopic, { state: isMuted() }, { retain: true })
 
       const clear = async (w, why) => {
         if (!w.episode) return
-        log(`${w.alert.name} cleared (${why})`)
+        log(`${w.alert.label || w.alert.name} cleared (${why})`)
         w.episode = null
-        if (isSounding()) await silence()
+        await silenceIfSounding()
       }
 
       // Called on every reading and every CHECK_INTERVAL_MS. It starts no
@@ -108,26 +119,38 @@ module.exports = (name, config) => {
         const { alert } = w
         if (w.lastReadingAt == null || now - w.lastReadingAt > alert.maxAgeMs) {
           w.aboveSince = null
+          w.belowSince = null
           await clear(w, 'no fresh reading')
           return
         }
         const e = w.episode
-        if (!e || e.stopped || isMuted() || e.times >= (alert.times ?? 1) || now < e.nextAt) return
+        if (!e || e.stopped || isMuted() || w.belowSince != null) return
+        if (e.times >= (alert.times ?? 1) || now < e.nextAt) return
         if (alert.dayOnly && !isDay(now)) return
         e.times += 1
         e.nextAt = now + (alert.durationSec + (alert.pauseSec ?? 60)) * 1000
-        log(`${alert.name}: sounding (${e.times}/${alert.times ?? 1})`)
+        log(`${alert.label || alert.name}: sounding (${e.times}/${alert.times ?? 1})`)
         await sound(alert)
       }
 
-      const stop = async (why) => {
-        const active = watch.filter((w) => w.episode && !w.episode.stopped)
+      // An episode is "in its sound cycle" from its first sound until its
+      // last sound has ended, pauses included.
+      const inCycle = (w) => {
+        const e = w.episode
+        if (!e || e.stopped || e.times === 0) return false
+        return e.times < (w.alert.times ?? 1) || isSounding()
+      }
+
+      // A wall button stops only what is sounding or in its sound cycle, so a
+      // light press never stops a quiet alert (night, mute). The Home
+      // Assistant button is a deliberate stop and also stops quiet alerts.
+      const stop = async (why, { onlySounding }) => {
         const testActive = Date.now() < testSoundingUntil
-        if (active.length === 0 && !testActive) return false
+        const active = watch.filter((w) => w.episode && !w.episode.stopped && (!onlySounding || inCycle(w)))
+        if (active.length === 0 && !testActive) return
         log(`stopped by ${why}`)
         active.forEach((w) => { w.episode.stopped = true })
-        await silence()
-        return true
+        await silenceIfSounding()
       }
 
       for (const w of watch) {
@@ -136,19 +159,26 @@ module.exports = (name, config) => {
           if (typeof value !== 'number' || !Number.isFinite(value)) return
           const now = Date.now()
           // A gap longer than maxAgeMs means the value was not seen to hold.
-          if (w.lastReadingAt == null || now - w.lastReadingAt > w.alert.maxAgeMs) w.aboveSince = null
+          if (w.lastReadingAt == null || now - w.lastReadingAt > w.alert.maxAgeMs) {
+            w.aboveSince = null
+            w.belowSince = null
+          }
           w.lastReadingAt = now
           if (value > w.alert.above) {
             w.aboveSince ??= now
+            w.belowSince = null
             // Confirmed only by a reading that is still above the limit once
             // confirmMs has passed, never by the clock alone.
             if (!w.episode && now - w.aboveSince >= w.alert.confirmMs) {
-              log(`${w.alert.name} confirmed`)
+              log(`${w.alert.label || w.alert.name} confirmed`)
               w.episode = { times: 0, nextAt: now, stopped: false }
             }
           } else {
             w.aboveSince = null
-            await clear(w, `value ${value}`)
+            w.belowSince ??= now
+            // Cleared the same way: at or below the limit for confirmMs, so a
+            // value near the limit does not start a new episode again and again.
+            if (now - w.belowSince >= w.alert.confirmMs) await clear(w, `value ${value}`)
           }
           await evaluate(w)
         })
@@ -162,12 +192,12 @@ module.exports = (name, config) => {
           if (typeof payload?.state !== 'boolean') return
           const before = buttonState.get(topic)
           buttonState.set(topic, payload.state)
-          if (before === false && payload.state === true) await stop(topic)
+          if (before === false && payload.state === true) await stop(topic, { onlySounding: true })
         })
       }
 
       if (stopTopic) {
-        await mqtt.subscribe(stopTopic, async (payload) => { if (payload) await stop('Home Assistant') })
+        await mqtt.subscribe(stopTopic, async (payload) => { if (payload) await stop('Home Assistant', { onlySounding: false }) })
       }
 
       if (test) {
@@ -197,7 +227,7 @@ module.exports = (name, config) => {
           log(payload.state ? 'muted' : 'mute off')
           armMuteEnd()
           await publishMute()
-          if (payload.state && isSounding()) await silence()
+          if (payload.state) await silenceIfSounding()
           if (!payload.state) await Promise.all(watch.map(evaluate))
         })
         if (persistedCache.muteUntil != null && !isMuted()) persistedCache.muteUntil = null
@@ -212,8 +242,10 @@ module.exports = (name, config) => {
           ? `🔕 The hall siren has sent nothing for ${Math.round(aliveMaxAgeMs / 3600000)} h. Safety alerts may not sound. Check zigbee2mqtt and the siren.`
           : '🔔 The hall siren is back and sends again.')
       })
+      // zigbee2mqtt sends last_seen as ISO text or as epoch ms, by its setting.
       await mqtt.subscribe(siren.stateTopic, (payload) => {
-        const lastSeen = Date.parse(payload?.last_seen)
+        const raw = payload?.last_seen
+        const lastSeen = typeof raw === 'number' ? raw : Date.parse(raw)
         alive.seen('siren', Number.isFinite(lastSeen) ? lastSeen : undefined)
       })
 

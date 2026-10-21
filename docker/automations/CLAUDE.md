@@ -158,11 +158,11 @@ Key patterns:
     verbose: false
   }
   ```
-- **Shared siren**: on a door close it stops the siren only if it sounded a step itself, so it never silences a `safety-siren` alert (#1770)
+- **Shared siren**: on a door close it stops the siren only while its own last sound still plays, so it does not silence a `safety-siren` alert (#1770)
 
 #### `safety-siren` - Life-safety alerts on the hall siren
 - **Purpose**: Sounds the hall siren when a safety value stays above its limit for the confirm time with fresh readings; never for missing, stale or bad data. Rows can be day-only
-- **Stop**: a hall wall button (only while it sounds, so the lights keep working), the HA button `safety_siren_stop`, the alert clearing, or the HA switch `safety_siren_mute` (it turns itself off)
+- **Stop**: a hall wall button (only while it sounds or between its repeats, so the lights keep working and a quiet alert is never stopped by a light press), the HA button `safety_siren_stop`, the alert clearing, or the HA switch `safety_siren_mute` (it turns itself off)
 - **Alive check**: one Telegram message when the siren's zigbee2mqtt `last_seen` is older than 3 h
 - **Documentation**: See `docs/safety-siren.md` (#1770)
 

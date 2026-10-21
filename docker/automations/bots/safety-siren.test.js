@@ -30,7 +30,7 @@ describe('safety-siren bot', () => {
       topic: TANK,
       above: 85,
       confirmMs: 2 * 60 * 1000,
-      maxAgeMs: 10 * 60 * 1000,
+      maxAgeMs: 60 * 1000,
       dayOnly: true,
       melody: 6,
       volume: 'high',
@@ -161,7 +161,7 @@ describe('safety-siren bot', () => {
       await start()
       // A non-safety alert, a door opening, a light button and HA stop/mute
       // messages: none of them is a safety input, so none sounds the siren.
-      for (const topic of Object.keys(mqtt._callbacks).filter((t) => t !== TANK && t !== HA_TEST)) {
+      for (const topic of Object.keys(mqtt._callbacks).filter((t) => t !== TANK && t !== HA_TEST && t !== MUTE_SET)) {
         await send(topic, { state: true, _src: 'ha' })
         await send(topic, { state: 99 })
       }
@@ -205,20 +205,45 @@ describe('safety-siren bot', () => {
       expect(sirenCalls()).toEqual([TANK_SOUND, TANK_SOUND, TANK_SOUND])
     })
 
-    it('stops the sound and the repeats when the value goes back under the limit', async () => {
+    it('stops the sound and the repeats when the value stays under the limit for the confirm time', async () => {
       await start()
       await tankFor(90, 130 * 1000)
       expect(sirenCalls()).toEqual([TANK_SOUND])
       await send(TANK, { state: 80 })
-      expect(sirenCalls()).toEqual([TANK_SOUND, { alarm: false }])
       await tankFor(80, 30 * 60 * 1000)
+      // no repeat while the value is under the limit, and the sound ends by itself
+      expect(sirenCalls()).toEqual([TANK_SOUND])
+    })
+
+    it('stops a sound that still plays when the alert clears', async () => {
+      const cfg = config()
+      cfg.alerts[0].durationSec = 600
+      await start(cfg)
+      await tankFor(90, 130 * 1000)
+      await tankFor(80, 130 * 1000)
+      expect(sirenCalls()).toEqual([{ ...TANK_SOUND, duration: 600 }, { alarm: false }])
+    })
+
+    it('one reading at the limit does not end the alert: no new episode after a stop', async () => {
+      await start()
+      await tankFor(90, 130 * 1000)
+      await send(HA_STOP, { _src: 'ha' })
+      await send(TANK, { state: 85 })
+      await tankFor(90, 30 * 60 * 1000)
       expect(sirenCalls()).toEqual([TANK_SOUND, { alarm: false }])
+    })
+
+    it('sounds no more repeats when the readings stop after the first sound', async () => {
+      await start()
+      await tankFor(90, 130 * 1000)
+      await jest.advanceTimersByTimeAsync(30 * 60 * 1000)
+      expect(sirenCalls()).toEqual([TANK_SOUND])
     })
 
     it('a new episode after the alert cleared sounds again', async () => {
       await start()
       await tankFor(90, 130 * 1000)
-      await tankFor(80, 60 * 1000)
+      await tankFor(80, 130 * 1000)
       await tankFor(90, 130 * 1000)
       expect(sirenCalls().filter((p) => p.alarm)).toHaveLength(2)
     })
@@ -248,6 +273,45 @@ describe('safety-siren bot', () => {
       expect(sirenCalls()).toEqual([])
     })
 
+    it('a wall button does nothing while a confirmed alert waits quietly for the day', async () => {
+      jest.setSystemTime(Date.parse('2026-10-20T23:00:00Z')) // 02:00 local
+      await start()
+      await send(BUTTON_LEFT, { state: false })
+      await tankFor(90, 3 * 60 * 1000)
+      await pressLeft() // someone turns on the hall light at night
+      await tankFor(90, 5.2 * 60 * 60 * 1000) // until after 07:04 local
+      expect(sirenCalls()).toEqual([TANK_SOUND, TANK_SOUND, TANK_SOUND])
+    })
+
+    it('a wall button does nothing while the mute holds the alert quiet', async () => {
+      await start()
+      await send(BUTTON_LEFT, { state: false })
+      await send(MUTE_SET, { state: true, _src: 'ha' })
+      await tankFor(90, 3 * 60 * 1000)
+      await pressLeft()
+      await send(MUTE_SET, { state: false, _src: 'ha' })
+      await tankFor(90, 20 * 1000)
+      expect(sirenCalls()).toEqual([TANK_SOUND])
+    })
+
+    it('a wall button in the pause between two sounds stops the repeats', async () => {
+      await start()
+      await send(BUTTON_LEFT, { state: false })
+      await tankFor(90, 130 * 1000)
+      await tankFor(90, 70 * 1000) // the first sound has ended, the pause runs
+      await pressLeft()
+      await tankFor(90, 30 * 60 * 1000)
+      expect(sirenCalls()).toEqual([TANK_SOUND])
+    })
+
+    it('a wall button after all repeats are done does nothing', async () => {
+      await start()
+      await send(BUTTON_LEFT, { state: false })
+      await tankFor(90, 30 * 60 * 1000)
+      await pressLeft()
+      expect(sirenCalls()).toEqual([TANK_SOUND, TANK_SOUND, TANK_SOUND])
+    })
+
     it('the first (retained) button message is not a press', async () => {
       await start()
       await tankFor(90, 130 * 1000)
@@ -255,11 +319,29 @@ describe('safety-siren bot', () => {
       expect(sirenCalls()).toEqual([TANK_SOUND])
     })
 
+    it('the Home Assistant stop button also stops a quiet alert, without a command', async () => {
+      jest.setSystemTime(Date.parse('2026-10-20T23:00:00Z')) // 02:00 local
+      await start()
+      await tankFor(90, 3 * 60 * 1000)
+      await send(HA_STOP, { _src: 'ha' })
+      await tankFor(90, 5 * 60 * 60 * 1000)
+      expect(sirenCalls()).toEqual([])
+    })
+
     it('the Home Assistant stop button stops it', async () => {
       await start()
       await tankFor(90, 130 * 1000)
       await send(HA_STOP, { _src: 'ha' })
       expect(sirenCalls()).toEqual([TANK_SOUND, { alarm: false }])
+    })
+  })
+
+  describe('MQTT failures', () => {
+    it('a failed publish is caught, and the next repeat still sounds', async () => {
+      await start()
+      mqtt.publish.mockRejectedValueOnce(new Error('broker down'))
+      await tankFor(90, 30 * 60 * 1000)
+      expect(sirenCalls()).toEqual([TANK_SOUND, TANK_SOUND, TANK_SOUND])
     })
   })
 
@@ -345,6 +427,15 @@ describe('safety-siren bot', () => {
       await jest.advanceTimersByTimeAsync(2.5 * 60 * 60 * 1000)
       // zigbee2mqtt restarts and sends the old state again, with the old last_seen
       await seenAt(Date.now() - 2.5 * 60 * 60 * 1000)
+      await jest.advanceTimersByTimeAsync(0.6 * 60 * 60 * 1000)
+      expect(telegrams()).toHaveLength(1)
+    })
+
+    it('reads a numeric last_seen too', async () => {
+      await start()
+      await send(SIREN_STATE, { last_seen: Date.now() })
+      await jest.advanceTimersByTimeAsync(2.5 * 60 * 60 * 1000)
+      await send(SIREN_STATE, { last_seen: Date.now() - 2.5 * 60 * 60 * 1000 })
       await jest.advanceTimersByTimeAsync(0.6 * 60 * 60 * 1000)
       expect(telegrams()).toHaveLength(1)
     })

@@ -439,7 +439,9 @@ module.exports = {
           topic: `${featuresPrefix}/sensor/temperature_boiler_high/status`,
           above: 85,
           confirmMs: 2 * 60 * 1000,
-          maxAgeMs: 10 * 60 * 1000,
+          // The sensor sends about once a second, so 60 s without a reading
+          // means the data stopped
+          maxAgeMs: 60 * 1000,
           // Day only at first; night after some weeks of real data (owner, 2026-10-16)
           dayOnly: true,
           melody: 6,          // High Pitch Siren

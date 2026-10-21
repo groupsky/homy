@@ -21,7 +21,8 @@ The owner approved this table on 2026-10-16.
   `homy/features/sensor/temperature_boiler_high/status`, about one reading a
   second). It fires when every reading for 2 min is above 85 °C. It sounds
   60 s, then again after a 60 s pause, up to 3 times, while the value stays
-  above 85 °C. The Grafana rule `boiler-controller-overheating` also sends a
+  above 85 °C. It clears when every reading for 2 min is 85 °C or below, so a
+  value near the limit does not start it again and again. The Grafana rule `boiler-controller-overheating` also sends a
   Telegram message for the same thing.
 - **Day** is 07:00 to 23:00 in `Europe/Sofia`, the same hours as the Telegram
   quiet hours. An alert that starts at night sounds at 07:00 if it still holds.
@@ -33,20 +34,29 @@ The owner approved this table on 2026-10-16.
 
 An alert is confirmed only by a live reading that is still above the limit
 when the confirm time has passed. The clock alone never confirms it. A null,
-text or missing value is not a reading. A gap of more than 10 min (`maxAgeMs`)
-starts the confirm time again, and it clears an active alert. The bot reads no
-other alerts: a Telegram or Grafana alert never sounds the siren.
+text or missing value is not a reading. A gap of more than 60 s (`maxAgeMs`)
+starts the confirm time again, and it clears an active alert, so no repeat
+sounds after the readings stop. While the newest reading is at or below the
+limit, no repeat sounds either. The bot reads no other alerts: a Telegram or
+Grafana alert never sounds the siren.
 
 ## Stop
 
 - **A hall wall button**: `corridor1_kitchen_left` or `corridor1_kitchen_right`.
-  It works only while a siren alert or the test sounds. At other times the
-  bot ignores the buttons, so they keep working for the lights. A press always
-  toggles that button's light too: no bot can keep a press from the light bots.
+  It works only while a siren alert sounds or is in its sound cycle (from the
+  first sound until the last one has ended, pauses included), and during the
+  test. At other times the bot ignores the buttons, so they keep working for
+  the lights. A light press at night or during the mute never stops an alert
+  that waits quietly. A press always toggles that button's light too: no bot
+  can keep a press from the light bots.
 - **Home Assistant**: the button *Спри сирената* (`button.safety_siren_stop`,
-  device Коридор 1).
-- **The alert clears**: the value goes back to the limit or below it, or the
-  readings stop.
+  device Коридор 1). It is a deliberate stop, so it also stops an alert that
+  waits quietly (at night or during the mute).
+- **The alert clears**: the value stays at the limit or below it for 2 min, or
+  the readings stop.
+
+The bot sends `{"alarm": false}` only while its own sound plays, so it does
+not cut a front-door sound.
 
 A stopped alert does not sound again until it has cleared and comes back.
 
@@ -75,9 +85,10 @@ reports at least once an hour.
 ## The front-door bot
 
 `frontDoorAlarm` (`door-alarm`) uses the same siren. On a door close it stops
-the siren only when it sounded a step itself, so a door closing never silences
-a safety alert. If the door bot sounds while a safety alert is active, its
-sound replaces the safety sound until the next repeat.
+the siren only while its own last sound still plays. So a door closing does
+not silence a safety alert, unless both sounds play at the same time. If the
+door bot sounds while a safety alert is active, its sound replaces the safety
+sound until the next repeat.
 
 ## Commands
 
