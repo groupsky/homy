@@ -9,6 +9,12 @@ cannot take from YAML:
 - **Rows of storage-mode dashboards** (`dashboards.<url_path>.rows`). Each
   desired row replaces the row for the same entity on any `entities` card, in
   place. The rest of the dashboard stays editable in the UI.
+- **Whole dashboards** (`dashboards.<url_path>.config`, with `title` and
+  `icon`). The script creates the dashboard when it is missing and saves the
+  whole config when it differs, so the repo owns it in full: an edit in the UI
+  is replaced on the next run. The `url_path` needs a hyphen. `title` and
+  `icon` are used only when the dashboard is created; change them later in the
+  UI (Settings → Dashboards). Today: `dashboard-ioniq` (#1800).
 
 A rebuilt data volume, or a row edited in the UI, reverts both. Re-run the
 script to restore them. It is idempotent.
@@ -23,8 +29,9 @@ The script refuses to save, and exits `1`, in two cases:
   not cover**, such as a tile card or a glance card. A default toggle row, a
   tile's icon and the more-info dialog all switch the entity without asking.
 
-Every replaced row is printed before and after, so the run's own output is the
-rollback.
+Every replaced row, and the previous config of a whole dashboard, is printed,
+so the run's own output is the rollback. A whole dashboard in YAML mode cannot
+be saved, and the script stops.
 
 ## Running it on routy
 

@@ -76,3 +76,21 @@ export function planExposure (current, desired) {
   }
   return plan
 }
+
+/**
+ * Plans a dashboard that the repo owns in full (`dashboards.<url_path>.config`
+ * in provision.json, #1800): create it when it is missing, and save the whole
+ * config when it differs. Edits made in the UI are replaced on the next run.
+ *
+ * - `existing`: the entry for `urlPath` from `lovelace/dashboards/list`, if any
+ * - `current`: its config from `lovelace/config`, or null when it has none
+ */
+export function planFullDashboard (urlPath, existing, current, desired) {
+  if (!urlPath.includes('-')) throw new Error(`dashboard ${urlPath}: a new dashboard's url_path needs a hyphen`)
+  if (desired.rows) throw new Error(`dashboard ${urlPath}: has both rows and config; use one`)
+  if (existing && existing.mode !== 'storage') throw new Error(`dashboard ${urlPath}: is in YAML mode and cannot be saved`)
+  const create = existing
+    ? null
+    : { url_path: urlPath, title: desired.title, icon: desired.icon, show_in_sidebar: true, require_admin: false }
+  return { create, save: !isDeepStrictEqual(current, desired.config) }
+}

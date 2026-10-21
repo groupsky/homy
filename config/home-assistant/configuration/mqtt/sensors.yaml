@@ -154,3 +154,126 @@
   state_topic: "/modbus/monitoring/charger/reading"
   value_template: "{{ value_json.tot_act | float(default=0) }}"
   <<: *common_used_energy
+
+# The house charger's power now, in W. It shows whether the car charges at
+# home even when the car's own logger is asleep (#1800).
+- name: ev_charger_power
+  state_topic: "/modbus/monitoring/charger/reading"
+  value_template: "{{ value_json.ap }}"
+  device_class: power
+  state_class: measurement
+  unit_of_measurement: W
+  # The meter reports every few seconds; without a report for 60 s the value
+  # shows as unavailable instead of an old one.
+  expire_after: 60
+
+# The Ioniq (#1800). The logger's topics (ioniq/parsed/<group>) are retained
+# and carry `ts`, the time of the reading in epoch ms. So after an HA restart
+# the broker sends the last values again, and each *_time sensor gives their
+# real age; HA's own last-changed would show the restart time instead. The
+# tyre values come from the ioniq-tpms bot, whose topics are not retained:
+# `expire_after` makes HA restore them over a restart (30 days, then they
+# show as unavailable). The car's position is not read, on purpose.
+- name: ioniq_soc
+  state_topic: "ioniq/parsed/bms/2105"
+  value_template: "{{ value_json.soc_display }}"
+  device_class: battery
+  state_class: measurement
+  unit_of_measurement: "%"
+
+- name: ioniq_soc_time
+  state_topic: "ioniq/parsed/bms/2105"
+  value_template: &ioniq_ts "{{ (value_json.ts / 1000) | as_datetime if value_json.ts is number else '' }}"
+  device_class: timestamp
+
+# active, charging or parked, as the car reported it last. A mis-decoded
+# bms/2101 frame with all cell voltages 0 (one of the shapes mqtt-influx
+# drops, docker/mqtt-influx/converters/ioniq.js) is skipped: the empty value
+# is not one of the enum options, and a numeric sensor ignores it.
+- name: ioniq_state
+  state_topic: "ioniq/parsed/bms/2101"
+  value_template: "{{ '' if value_json.cell_min_v == 0 and value_json.cell_max_v == 0 else value_json.state }}"
+  device_class: enum
+  options:
+    - active
+    - charging
+    - parked
+
+- name: ioniq_12v
+  state_topic: "ioniq/parsed/bms/2101"
+  value_template: "{{ '' if value_json.cell_min_v == 0 and value_json.cell_max_v == 0 else value_json.aux_12v }}"
+  device_class: voltage
+  state_class: measurement
+  unit_of_measurement: V
+
+# When the car sent data last
+- name: ioniq_last_seen
+  state_topic: "ioniq/parsed/bms/2101"
+  value_template: *ioniq_ts
+  device_class: timestamp
+
+- name: ioniq_odometer
+  state_topic: "ioniq/parsed/odometer"
+  value_template: "{{ value_json.km }}"
+  device_class: distance
+  state_class: total_increasing
+  unit_of_measurement: km
+
+- name: ioniq_odometer_time
+  state_topic: "ioniq/parsed/odometer"
+  value_template: *ioniq_ts
+  device_class: timestamp
+
+- name: ioniq_faults_time
+  state_topic: "ioniq/parsed/dtc/stored"
+  value_template: *ioniq_ts
+  device_class: timestamp
+
+# Tyre pressure after a long park (cold), once a day per wheel: the value
+# the Grafana tyre rules use (config/grafana/provisioning/alerting/
+# ioniq-tpms-alerts.yaml).
+- name: ioniq_tyre_fl
+  state_topic: "ioniq/parsed/derived/tire_fl_bar_coldstart"
+  value_template: &ioniq_value "{{ value_json.value }}"
+  <<: &ioniq_tyre
+    device_class: pressure
+    state_class: measurement
+    unit_of_measurement: bar
+    expire_after: 2592000
+
+- name: ioniq_tyre_fr
+  state_topic: "ioniq/parsed/derived/tire_fr_bar_coldstart"
+  value_template: *ioniq_value
+  <<: *ioniq_tyre
+
+- name: ioniq_tyre_rl
+  state_topic: "ioniq/parsed/derived/tire_rl_bar_coldstart"
+  value_template: *ioniq_value
+  <<: *ioniq_tyre
+
+- name: ioniq_tyre_rr
+  state_topic: "ioniq/parsed/derived/tire_rr_bar_coldstart"
+  value_template: *ioniq_value
+  <<: *ioniq_tyre
+
+- name: ioniq_tyre_fl_time
+  state_topic: "ioniq/parsed/derived/tire_fl_bar_coldstart"
+  value_template: *ioniq_ts
+  <<: &ioniq_tyre_time
+    device_class: timestamp
+    expire_after: 2592000
+
+- name: ioniq_tyre_fr_time
+  state_topic: "ioniq/parsed/derived/tire_fr_bar_coldstart"
+  value_template: *ioniq_ts
+  <<: *ioniq_tyre_time
+
+- name: ioniq_tyre_rl_time
+  state_topic: "ioniq/parsed/derived/tire_rl_bar_coldstart"
+  value_template: *ioniq_ts
+  <<: *ioniq_tyre_time
+
+- name: ioniq_tyre_rr_time
+  state_topic: "ioniq/parsed/derived/tire_rr_bar_coldstart"
+  value_template: *ioniq_ts
+  <<: *ioniq_tyre_time

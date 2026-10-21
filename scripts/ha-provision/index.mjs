@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Applies config/home-assistant/provision.json to a running Home Assistant:
 // the state HA keeps only in .storage and offers no YAML for - rows of
-// storage-mode dashboards and entity exposure to assistants. Safe to re-run;
+// storage-mode dashboards, whole dashboards the repo owns, and entity
+// exposure to assistants. Safe to re-run;
 // --dry-run reports what would change and writes nothing. See README.md.
 import { readFileSync } from 'node:fs'
-import { applyRows, planExposure } from './lib.mjs'
+import { applyRows, planExposure, planFullDashboard } from './lib.mjs'
 import { connect, readToken } from './ha-websocket.mjs'
 
 // Fixed on purpose, not configurable: the script only ever talks to the HA
@@ -55,6 +56,34 @@ async function provisionDashboard (ha, urlPath, rows, dryRun) {
   return true
 }
 
+// A dashboard the repo owns in full: created when missing, saved when it
+// differs (#1800).
+async function provisionFullDashboard (ha, urlPath, desired, dryRun) {
+  const dashboards = await ha.call({ type: 'lovelace/dashboards/list' })
+  const existing = dashboards.find((d) => d.url_path === urlPath)
+  let current = null
+  if (existing) {
+    try {
+      current = await ha.call({ type: 'lovelace/config', url_path: urlPath })
+    } catch (err) {
+      if (!/config_not_found/.test(err.message)) throw err
+    }
+  }
+  const plan = planFullDashboard(urlPath, existing, current, desired)
+  if (plan.create) {
+    console.log(`dashboard ${urlPath}: ${dryRun ? 'would create' : 'create'} ${JSON.stringify(plan.create)}`)
+    if (!dryRun) await ha.call({ type: 'lovelace/dashboards/create', ...plan.create })
+  }
+  if (!plan.save) {
+    console.log(`dashboard ${urlPath}: up to date`)
+    return
+  }
+  // The previous config is printed in full so a run's output is its own rollback.
+  console.log(`dashboard ${urlPath}: ${dryRun ? 'would save' : 'save'} the config from provision.json`)
+  console.log(`  before: ${JSON.stringify(current)}`)
+  if (!dryRun) await ha.call({ type: 'lovelace/config/save', url_path: urlPath, config: desired.config })
+}
+
 async function main () {
   const dryRun = process.argv.slice(2).includes('--dry-run')
   const desired = JSON.parse(readFileSync(DESIRED, 'utf8'))
@@ -63,8 +92,9 @@ async function main () {
   try {
     await provisionExposure(ha, desired.exposure ?? {}, dryRun)
     let ok = true
-    for (const [urlPath, { rows }] of Object.entries(desired.dashboards ?? {})) {
-      ok = (await provisionDashboard(ha, urlPath, rows, dryRun)) && ok
+    for (const [urlPath, entry] of Object.entries(desired.dashboards ?? {})) {
+      if (entry.config) await provisionFullDashboard(ha, urlPath, entry, dryRun)
+      else ok = (await provisionDashboard(ha, urlPath, entry.rows, dryRun)) && ok
     }
     return ok ? 0 : 1
   } finally {
