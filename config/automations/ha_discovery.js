@@ -1163,6 +1163,18 @@ const config = {
         icon: 'mdi:bell-off',
       }
     }),
+    // Read by the night light bots in config.js; it turns itself off at sunrise
+    ...haSwitch({
+      name: 'darkSkyTonight',
+      feature_type: 'switch',
+      feature: 'dark_sky_tonight',
+      config: {
+        name: 'Тъмно небе тази нощ',
+        device: devices.external,
+        object_id: 'dark_sky_tonight',
+        icon: 'mdi:weather-night',
+      }
+    }),
   },
   gates: {
     mqtt: {

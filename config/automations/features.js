@@ -729,6 +729,17 @@ const config = {
       ],
       output: {topic: 'relay/solar_heater_electric_heater'},
     }),
+    // "Dark sky tonight": a switch with no hardware. A set command becomes the
+    // retained status, which the night light bots read. The status carries the
+    // time it was published, which is when the switch was turned on.
+    darkSkyTonightState: {
+      type: 'transform',
+      input: { name: 'inputs/mqtt', params: { topic: `${prefix}/switch/dark_sky_tonight/set` } },
+      filterInput: 'not_null',
+      transform: ['from_state', 'to_state'],
+      filterOutput: 'state_not_null',
+      output: { name: 'outputs/mqtt', params: { topic: `${prefix}/switch/dark_sky_tonight/status`, retain: true } }
+    },
   },
   gates: {
     mqtt: {

@@ -13,6 +13,13 @@ const timestampOf = (time) => {
   return Number.isNaN(ms) ? null : ms
 }
 
+// A clear on or off. Anything else - no message, a missing or odd value - is
+// unknown, and unknown means the lights follow the sun as usual.
+const holdOffStateOf = (payload) => {
+  const state = payload != null && typeof payload === 'object' ? payload.state : undefined
+  return typeof state === 'boolean' ? state : null
+}
+
 module.exports = (name, {
   statusTopic,
   commandTopic,
@@ -21,9 +28,22 @@ module.exports = (name, {
   lat,
   lon,
   solarTimeStates,
+  // Optional "hold off" switch, for example a night with a clear sky. While it
+  // is on, a state that wants the lights on (`true`) is held at `false`. It
+  // counts only for the night after it was turned on, and turns itself off at
+  // the next sunrise. The switch is a feature in the local features service.
+  holdOffStatusTopic,
+  holdOffSetTopic,
   verbose
 }) => ({
-  start: ({ mqtt }) => {
+  // The time the switch was turned on is kept only when the status message
+  // does not carry one.
+  ...(holdOffStatusTopic && holdOffSetTopic && {
+    persistedCache: { version: 1, default: { holdOffSince: null } }
+  }),
+  start: (params) => {
+    const { mqtt } = params
+    const holdOffConfigured = Boolean(holdOffStatusTopic && holdOffSetTopic)
     // The house location comes from the real .env. Without it SunCalc gives no
     // times, and the bot would silently never switch, so it says so and stays off.
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
@@ -33,13 +53,34 @@ module.exports = (name, {
     let status = null
     let wantedStatus = null
 
+    // Hold-off state. `lastOffAt` is the most recent event that wants the
+    // lights off (sunrise) that has already happened.
+    const cache = holdOffConfigured ? (params.persistedCache || {}) : null
+    let holdOffOn = false
+    let holdOffOnAt = null
+    let lastOffAt = null
+    let offRequested = false
+
+    // The switch counts only while no sunrise has passed since it was turned on.
+    const holdOffExpired = () => holdOffOnAt != null && lastOffAt != null && lastOffAt >= holdOffOnAt
+    const holdOffActive = () => holdOffOn && !holdOffExpired()
+
+    const requestHoldOffOff = () => {
+      if (!holdOffOn || offRequested) return
+      offRequested = true
+      if (verbose) console.log(`[${name}] turning the hold-off switch off`, holdOffSetTopic)
+      mqtt.publish(holdOffSetTopic, { state: false })
+    }
+
     const update = () => {
+      if (holdOffConfigured && holdOffExpired()) requestHoldOffOff()
       if (status == null || wantedStatus == null) return
-      if (status !== wantedStatus) {
+      const effective = wantedStatus === true && holdOffActive() ? false : wantedStatus
+      if (status !== effective) {
         if (verbose) {
-          console.log(`[${name}] state different than wanted, publishing`, commandTopic, commandTemplate(wantedStatus))
+          console.log(`[${name}] state different than wanted, publishing`, commandTopic, commandTemplate(effective))
         }
-        mqtt.publish(commandTopic, commandTemplate(wantedStatus))
+        mqtt.publish(commandTopic, commandTemplate(effective))
       }
     }
 
@@ -70,7 +111,14 @@ module.exports = (name, {
         if (next) console.log(`[${name}] next state`, next.state, 'in', Math.round(next.eta / 60000), 'm')
         else console.log(`[${name}] no configured solar event ahead, checking again in a day`)
       }
+      const previousWanted = wantedStatus
       if (current) wantedStatus = solarTimeStates[current.state]
+      if (holdOffConfigured) {
+        const offEvents = passed.filter(({ state }) => solarTimeStates[state] === false)
+        lastOffAt = offEvents.length ? now.getTime() + Math.max(...offEvents.map(({ eta }) => eta)) : null
+        // Sunrise ends the night the switch was for.
+        if (previousWanted === true && wantedStatus === false) requestHoldOffOff()
+      }
       // With every configured event missing - a full polar day or night - there
       // is nothing to schedule against, so retry once a day until one returns.
       setTimeout(computeWantedStatus, next ? next.eta : MS_IN_DAY)
@@ -84,6 +132,27 @@ module.exports = (name, {
       }
       update()
     })
+
+    if (holdOffConfigured) {
+      mqtt.subscribe(holdOffStatusTopic, (payload) => {
+        const state = holdOffStateOf(payload)
+        offRequested = false
+        holdOffOn = state === true
+        if (holdOffOn) {
+          if (typeof payload._tz === 'number') {
+            holdOffOnAt = payload._tz
+          } else {
+            if (cache.holdOffSince == null) cache.holdOffSince = Date.now()
+            holdOffOnAt = cache.holdOffSince
+          }
+        } else {
+          holdOffOnAt = null
+          if (state === false) cache.holdOffSince = null
+        }
+        if (verbose) console.log(`[${name}] hold-off switch is`, holdOffOn)
+        update()
+      })
+    }
 
     computeWantedStatus()
   }
