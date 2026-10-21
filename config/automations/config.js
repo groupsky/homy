@@ -300,6 +300,10 @@ module.exports = {
         sunset: true,
         sunrise: false
       },
+      // The "Dark sky tonight" switch holds the lights off until the next
+      // sunrise, then turns itself off. Without a state the lights follow the sun.
+      holdOffStatusTopic: `${featuresPrefix}/switch/dark_sky_tonight/status`,
+      holdOffSetTopic: `${featuresPrefix}/switch/dark_sky_tonight/set`,
       verbose: false
     },
     nightExternalLightsZ2M: {
@@ -314,6 +318,10 @@ module.exports = {
         sunset: true,
         sunrise: false
       },
+      // The "Dark sky tonight" switch holds the lights off until the next
+      // sunrise, then turns itself off. Without a state the lights follow the sun.
+      holdOffStatusTopic: `${featuresPrefix}/switch/dark_sky_tonight/status`,
+      holdOffSetTopic: `${featuresPrefix}/switch/dark_sky_tonight/set`,
       verbose: false
     },
     haBoilerEnergyMeter: {

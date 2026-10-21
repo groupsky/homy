@@ -199,6 +199,9 @@ Key patterns:
 - **Exceptions**: `THERMOSTAT_GUARD_SKIP` in the real `.env` (`room:check` pairs); never committed
 - **State**: the sent messages (one for each room, check and local day), the valve open times and the outdoor values of the last 36 h, in the persistent cache
 
+#### `solar-emitter` - Night lights from sunset to sunrise
+- **Dark sky switch** (#1751): the night light bots `nightExternalLights` and `nightExternalLightsZ2M` (`solar-emitter`) can be held off for one night by the HA switch `dark_sky_tonight`. Details: [docs/dark-sky-switch.md](docs/dark-sky-switch.md)
+
 #### `stateful-counter` - Example with persistent cache and migration
 - **Purpose**: Demonstrates persistent cache patterns with versioning
 - **Features**: Incrementing counter with history tracking and reset functionality
