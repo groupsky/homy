@@ -327,10 +327,6 @@ services:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/serial:/dev/serial
       - ${CONFIG_PATH}/ya-modbus/secondary.json:/etc/ya-modbus/config.json:ro
-    # Temporary (#1805): logs each request that is sent again and the full
-    # error of a failed poll. Remove about 3 days after the deploy.
-    environment:
-      - YA_MODBUS_DEBUG=1
     mem_limit: *node-mem-limit
     logging: *default-logging
 
