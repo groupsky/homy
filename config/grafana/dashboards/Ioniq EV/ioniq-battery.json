@@ -147,6 +147,7 @@
           "resultFormat": "time_series"
         }
       ],
+      "timeFrom": "90d",
       "title": "Usable capacity per charge session",
       "type": "timeseries"
     },
@@ -219,6 +220,7 @@
           "resultFormat": "time_series"
         }
       ],
+      "timeFrom": "90d",
       "title": "Mean capacity over window",
       "type": "stat"
     },
@@ -1164,7 +1166,7 @@
           },
           "query": "SELECT last(\"cum_chg_ah\") AS \"Charge (Ah)\", last(\"cum_dis_ah\") AS \"Discharge (Ah)\", last(\"cum_in_kwh\") AS \"Energy In (kWh)\", last(\"cum_out_kwh\") AS \"Energy Out (kWh)\", last(\"cum_dis_ah\") / 78 AS \"Equivalent full cycles\", (last(\"cum_out_kwh\") / last(\"cum_in_kwh\")) * 100 AS \"Round-trip eff (%)\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND time > now() - 30d",
           "rawQuery": true,
-          "resultFormat": "time_series"
+          "resultFormat": "table"
         }
       ],
       "title": "Cumulative Counters",
@@ -1299,7 +1301,8 @@
           },
           "query": "SELECT spread(\"cum_in_kwh\") AS \"Energy In (window kWh)\", spread(\"cum_out_kwh\") AS \"Energy Out (window kWh)\", spread(\"cum_chg_ah\") AS \"Charge (window Ah)\", spread(\"cum_dis_ah\") AS \"Discharge (window Ah)\", (spread(\"cum_out_kwh\") / spread(\"cum_in_kwh\")) * 100 AS \"Approx round-trip eff (%)\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND $timeFilter",
           "rawQuery": true,
-          "refId": "A"
+          "refId": "A",
+          "resultFormat": "table"
         }
       ],
       "title": "Windowed Throughput & Approx Round-trip Efficiency",

@@ -293,6 +293,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
+      "description": "Estimated COP: heat moved by the water (temperature difference times an estimated flow) divided by the electric power of the heat pump (sum of the three phases of its meter). It is only calculated while the compressor runs (state = 1); when the compressor is off the line has a gap. The flow is an estimate, so read the trend, not the exact number.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -392,7 +393,7 @@
             "type": "__expr__",
             "uid": "__expr__"
           },
-          "expression": "($output * (7 + $bedroom*2 + $boris*2 + $gergana*2 + $martin*2) * 60 * 4184 / 3600 / $input) / $state",
+          "expression": "($output * (7 + $bedroom*2 + $boris*2 + $gergana*2 + $martin*2) * 60 * 4184 / 3600 / $input) * ($state / $state)",
           "hide": false,
           "refId": "COP",
           "type": "math"
@@ -535,16 +536,18 @@
             }
           ],
           "hide": true,
-          "measurement": "sdm630raw",
+          "measurement": "current_power",
           "orderByTime": "ASC",
           "policy": "default",
+          "query": "SELECT sum(\"p\") FROM (SELECT mean(\"p\") AS \"p\" FROM \"current_power\" WHERE \"device.name\" = 'heat_pump' AND $timeFilter GROUP BY time($__interval), \"phase\" fill(none)) WHERE $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
           "refId": "input",
           "resultFormat": "time_series",
           "select": [
             [
               {
                 "params": [
-                  "total_p"
+                  "p"
                 ],
                 "type": "field"
               },
@@ -2499,7 +2502,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": "1m",
   "schemaVersion": 37,
   "style": "dark",
   "tags": [],

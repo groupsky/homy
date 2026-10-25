@@ -768,6 +768,7 @@
           "resultFormat": "time_series"
         }
       ],
+      "timeFrom": "30d",
       "title": "12 V sag events per day",
       "type": "timeseries"
     },
@@ -864,6 +865,7 @@
           "resultFormat": "time_series"
         }
       ],
+      "timeFrom": "30d",
       "title": "LDC on-voltage, daily trend (low HV load)",
       "type": "timeseries"
     }

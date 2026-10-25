@@ -890,7 +890,7 @@
           },
           "query": "SELECT \"soc_start\" AS \"SoC start\", \"soc_end\" AS \"SoC end\", \"soc_delta_pct\" AS \"SoC added\", \"charge_ah\" AS \"Pack Ah\", \"energy_in_kwh\" AS \"Pack kWh\", \"ac_energy_kwh\" AS \"Wall kWh\", \"duration_sec\" / 60 AS \"Minutes\", \"charge_ah\" / \"soc_delta_pct\" * 100 AS \"cap_ah\" FROM \"ioniq_sessions\" WHERE \"kind\"='charge' AND $timeFilter ORDER BY time DESC LIMIT 60",
           "rawQuery": true,
-          "resultFormat": "time_series"
+          "resultFormat": "table"
         }
       ],
       "title": "Charge sessions",

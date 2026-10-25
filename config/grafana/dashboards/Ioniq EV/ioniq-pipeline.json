@@ -986,6 +986,7 @@
           "resultFormat": "time_series"
         }
       ],
+      "timeFrom": "7d",
       "title": "BMS frames per day (car in use)",
       "type": "timeseries"
     },
@@ -1033,6 +1034,7 @@
           "decimals": 0,
           "mappings": [],
           "min": 0,
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1085,6 +1087,7 @@
           "resultFormat": "time_series"
         }
       ],
+      "timeFrom": "7d",
       "title": "Mis-decoded BMS frames per day",
       "type": "timeseries"
     }
