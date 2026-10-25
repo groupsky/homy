@@ -126,9 +126,9 @@ describe('living-room volume in Home Assistant discovery', () => {
   const discoveryPayload = (name) => bots[`${name}HaDiscovery`].input.params.payload
 
   test.each([
-    ['tvLivingVolumeUp', 'tv_living_volume_up', 'Living Volume Up'],
-    ['tvLivingVolumeDown', 'tv_living_volume_down', 'Living Volume Down'],
-  ])('%s drops "TV" from its name and keeps its entity and command topic', (name, feature, label) => {
+    ['tvLivingVolumeUp', 'tv_living_volume_up', 'Усили звука'],
+    ['tvLivingVolumeDown', 'tv_living_volume_down', 'Намали звука'],
+  ])('%s has a Bulgarian name and keeps its entity and command topic', (name, feature, label) => {
     expect(discoveryPayload(name)).toMatchObject({
       name: label,
       unique_id: `homy_button_${feature}`,
@@ -138,9 +138,9 @@ describe('living-room volume in Home Assistant discovery', () => {
     })
   })
 
-  test('TV power button is unchanged', () => {
+  test('TV power button only changes its shown name', () => {
     expect(discoveryPayload('tvLivingPower')).toMatchObject({
-      name: 'TV Power',
+      name: 'Телевизор',
       unique_id: 'homy_button_tv_living_power',
       command_topic: 'homy/features/button/tv_living_power/trigger',
     })
