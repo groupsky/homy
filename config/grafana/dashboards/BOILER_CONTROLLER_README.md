@@ -10,7 +10,7 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
 - **Control Mode**: Current automation mode (automatic, manual, vacation)
 - **Heater State**: Current boiler heater on/off status
 - **Solar Circulation**: Solar pump circulation status
-- **Last Decision Reason**: Most recent automation decision explanation
+- **Last Decision Reason**: The reason of the most recent automation decision (one value)
 
 ### 2. Temperature Monitoring
 - **Temperature Sensors**: Real-time multi-point temperature tracking
@@ -22,12 +22,12 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
 
 ### 3. Energy Consumption
 - **Boiler Power**: Real-time power consumption monitoring
-- **Energy Total**: Cumulative energy consumption tracking
+- **Energy per Hour**: Bars of the energy used each hour (difference of the meter total, kWh, 2 decimals)
 - **Efficiency Analysis**: Power usage correlation with temperature demands
 
 ### 4. Decision History & Analysis
 - **Recent Decisions**: Detailed table of automation decisions with timestamps
-- **Decision Distribution**: Pie chart showing reason categories breakdown
+- **Decision Distribution**: Pie chart of how many status records each reason has (counts `heaterState`, grouped by the `reason` tag)
 - **Control Mode Usage**: Analysis of automatic vs manual operation patterns
 
 ## Key Metrics

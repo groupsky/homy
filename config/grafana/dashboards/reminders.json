@@ -95,6 +95,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
+      "description": "Червената линия (10 W) е прагът „работи“. Над нея миялната работи. Когато мощността падне под линията, се изпраща съобщението „готова“.",
       "fieldConfig": {
         "defaults": {
           "displayName": "Power",
@@ -297,6 +298,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
+      "description": "Червената линия (2 W) е прагът „работи“. Над нея пералнята работи.",
       "fieldConfig": {
         "defaults": {
           "displayName": "Power",

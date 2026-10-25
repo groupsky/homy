@@ -236,12 +236,22 @@
                 "0": {
                   "color": "red",
                   "index": 0,
-                  "text": "Away"
+                  "text": "Извън станцията"
                 },
                 "1": {
                   "color": "green",
                   "index": 1,
-                  "text": "At Station"
+                  "text": "На станцията"
+                },
+                "false": {
+                  "color": "red",
+                  "index": 2,
+                  "text": "Извън станцията"
+                },
+                "true": {
+                  "color": "green",
+                  "index": 3,
+                  "text": "На станцията"
                 }
               },
               "type": "value"
@@ -280,7 +290,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^(?!Time$)/",
           "values": false
         },
         "textMode": "auto"
@@ -317,12 +327,22 @@
                 "0": {
                   "color": "red",
                   "index": 0,
-                  "text": "Disconnected"
+                  "text": "Няма връзка"
                 },
                 "1": {
                   "color": "green",
                   "index": 1,
-                  "text": "Connected"
+                  "text": "Свързан"
+                },
+                "false": {
+                  "color": "red",
+                  "index": 2,
+                  "text": "Няма връзка"
+                },
+                "true": {
+                  "color": "green",
+                  "index": 3,
+                  "text": "Свързан"
                 }
               },
               "type": "value"
@@ -361,7 +381,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^(?!Time$)/",
           "values": false
         },
         "textMode": "auto"
@@ -715,6 +735,7 @@
           "refId": "A"
         }
       ],
+      "timeFrom": "7d",
       "title": "Recent State Changes",
       "type": "table"
     },
@@ -790,6 +811,7 @@
           "refId": "A"
         }
       ],
+      "timeFrom": "7d",
       "title": "Recent Commands",
       "type": "table"
     }

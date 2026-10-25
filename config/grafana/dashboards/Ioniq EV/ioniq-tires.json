@@ -1128,6 +1128,9 @@
           "fields": "/^[Tt]ime$/",
           "values": false
         },
+        "text": {
+          "valueSize": 24
+        },
         "textMode": "auto"
       },
       "pluginVersion": "9.5.2",

@@ -167,13 +167,26 @@
       },
       "targets": [
         {
-          "query": "SELECT last(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY controlMode",
+          "query": "SELECT last(heaterState), \"controlMode\"::tag AS \"controlMode\" FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY time(30m) fill(none)",
           "rawQuery": true,
           "refId": "A",
-          "resultFormat": "time_series"
+          "resultFormat": "table"
         }
       ],
       "title": "Control Mode",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "controlMode"
+              ]
+            }
+          }
+        }
+      ],
       "type": "state-timeline"
     },
     {
@@ -192,12 +205,12 @@
                 "false": {
                   "color": "red",
                   "index": 0,
-                  "text": "OFF"
+                  "text": "Изкл"
                 },
                 "true": {
                   "color": "green",
                   "index": 1,
-                  "text": "ON"
+                  "text": "Вкл"
                 }
               },
               "type": "value"
@@ -236,7 +249,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^(?!Time$)/",
           "values": false
         },
         "textMode": "auto"
@@ -269,12 +282,12 @@
                 "false": {
                   "color": "red",
                   "index": 0,
-                  "text": "OFF"
+                  "text": "Изкл"
                 },
                 "true": {
                   "color": "blue",
                   "index": 1,
-                  "text": "ON"
+                  "text": "Вкл"
                 }
               },
               "type": "value"
@@ -313,7 +326,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^(?!Time$)/",
           "values": false
         },
         "textMode": "auto"
@@ -370,18 +383,18 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^reason$/",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "query": "SELECT last(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason",
+          "query": "SELECT last(heaterState), \"reason\"::tag AS \"reason\" FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter",
           "rawQuery": true,
           "refId": "A",
-          "resultFormat": "time_series"
+          "resultFormat": "table"
         }
       ],
       "title": "Last Decision Reason",
@@ -686,11 +699,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "Energy (kWh)",
+            "axisLabel": "Energy per hour (kWh)",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
+            "drawStyle": "bars",
+            "fillOpacity": 60,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -723,6 +736,7 @@
               }
             ]
           },
+          "decimals": 2,
           "unit": "kwatth"
         },
         "overrides": []
@@ -737,8 +751,8 @@
       "options": {
         "legend": {
           "calcs": [
-            "last",
-            "diff"
+            "sum",
+            "max"
           ],
           "displayMode": "table",
           "placement": "bottom"
@@ -749,14 +763,14 @@
       },
       "targets": [
         {
-          "alias": "Total Energy",
-          "query": "SELECT last(\"tot\") FROM \"raw\" WHERE \"device.name\" = 'boiler' AND $timeFilter GROUP BY time(5m) fill(previous)",
+          "alias": "Energy per hour",
+          "query": "SELECT difference(last(\"tot\")) FROM \"raw\" WHERE \"device.name\" = 'boiler' AND $timeFilter GROUP BY time(1h) fill(none)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series"
         }
       ],
-      "title": "Boiler Energy Total",
+      "title": "Boiler Energy per Hour",
       "type": "timeseries"
     },
     {
@@ -810,12 +824,12 @@
                       "false": {
                         "color": "red",
                         "index": 0,
-                        "text": "OFF"
+                        "text": "Изкл"
                       },
                       "true": {
                         "color": "green",
                         "index": 1,
-                        "text": "ON"
+                        "text": "Вкл"
                       }
                     },
                     "type": "value"
@@ -842,12 +856,12 @@
                       "false": {
                         "color": "red",
                         "index": 0,
-                        "text": "OFF"
+                        "text": "Изкл"
                       },
                       "true": {
                         "color": "blue",
                         "index": 1,
-                        "text": "ON"
+                        "text": "Вкл"
                       }
                     },
                     "type": "value"
@@ -941,10 +955,11 @@
       },
       "targets": [
         {
-          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason",
+          "alias": "$tag_reason",
+          "query": "SELECT count(heaterState) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY reason",
           "rawQuery": true,
           "refId": "A",
-          "resultFormat": "table"
+          "resultFormat": "time_series"
         }
       ],
       "title": "Decision Reasons Distribution",
@@ -1001,10 +1016,11 @@
       },
       "targets": [
         {
-          "query": "SELECT count(*) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY controlMode",
+          "alias": "$tag_controlMode",
+          "query": "SELECT count(heaterState) FROM automation_status WHERE \"service\"='boilerController' AND $timeFilter GROUP BY controlMode",
           "rawQuery": true,
           "refId": "A",
-          "resultFormat": "table"
+          "resultFormat": "time_series"
         }
       ],
       "title": "Control Mode Usage",
