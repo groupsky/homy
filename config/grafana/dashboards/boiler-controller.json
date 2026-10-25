@@ -203,12 +203,12 @@
             {
               "options": {
                 "false": {
-                  "color": "red",
+                  "color": "#8e8e8e",
                   "index": 0,
                   "text": "Изкл"
                 },
                 "true": {
-                  "color": "green",
+                  "color": "orange",
                   "index": 1,
                   "text": "Вкл"
                 }
@@ -220,11 +220,11 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#8e8e8e",
                 "value": null
               },
               {
-                "color": "green",
+                "color": "orange",
                 "value": 1
               }
             ]
@@ -280,12 +280,12 @@
             {
               "options": {
                 "false": {
-                  "color": "red",
+                  "color": "#8e8e8e",
                   "index": 0,
                   "text": "Изкл"
                 },
                 "true": {
-                  "color": "blue",
+                  "color": "yellow",
                   "index": 1,
                   "text": "Вкл"
                 }
@@ -297,11 +297,11 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#8e8e8e",
                 "value": null
               },
               {
-                "color": "blue",
+                "color": "yellow",
                 "value": 1
               }
             ]
@@ -822,12 +822,12 @@
                   {
                     "options": {
                       "false": {
-                        "color": "red",
+                        "color": "#8e8e8e",
                         "index": 0,
                         "text": "Изкл"
                       },
                       "true": {
-                        "color": "green",
+                        "color": "orange",
                         "index": 1,
                         "text": "Вкл"
                       }
@@ -854,12 +854,12 @@
                   {
                     "options": {
                       "false": {
-                        "color": "red",
+                        "color": "#8e8e8e",
                         "index": 0,
                         "text": "Изкл"
                       },
                       "true": {
-                        "color": "blue",
+                        "color": "yellow",
                         "index": 1,
                         "text": "Вкл"
                       }

@@ -293,7 +293,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Estimated COP: heat moved by the water (temperature difference times an estimated flow) divided by the electric power of the heat pump (sum of the three phases of its meter). It is only calculated while the compressor runs (state = 1); when the compressor is off the line has a gap. The flow is an estimate, so read the trend, not the exact number.",
+      "description": "Estimated COP: heat moved by the water (temperature difference times an estimated flow) divided by the electric power of the heat pump (sum of the three phases of its meter). It is only calculated while the compressor runs (state = 1); when the compressor is off the line has a gap. The flow is not measured: it is assumed as 7 L/min plus 2 L/min per open room valve. The real loop flow is likely about twice that, so the value reads low (about 1.6 where a real COP above 3 is likely). Read the trend, not the exact number.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -757,7 +757,7 @@
         }
       ],
       "thresholds": [],
-      "title": "COP",
+      "title": "COP (estimate, assumed flow)",
       "transformations": [],
       "type": "timeseries"
     },

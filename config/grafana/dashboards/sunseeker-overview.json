@@ -699,7 +699,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Timestamp"
+                "value": "Време"
               },
               {
                 "id": "unit",
@@ -730,9 +730,10 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT \"message_code\", \"timestamp\" FROM \"sunseeker_state_change\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
+          "query": "SELECT \"message_code\" AS \"Код\" FROM \"sunseeker_state_change\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
           "rawQuery": true,
-          "refId": "A"
+          "refId": "A",
+          "resultFormat": "table"
         }
       ],
       "timeFrom": "7d",
@@ -775,7 +776,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Timestamp"
+                "value": "Време"
               },
               {
                 "id": "unit",
@@ -784,6 +785,32 @@
               {
                 "id": "custom.width",
                 "value": 180
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Резултат"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "false": {
+                        "index": 0,
+                        "text": "Неуспех"
+                      },
+                      "true": {
+                        "index": 1,
+                        "text": "Успех"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
               }
             ]
           }
@@ -806,9 +833,10 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT \"command\", \"result\" FROM \"sunseeker_commands\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
+          "query": "SELECT \"command\" AS \"Команда\", \"result\" AS \"Резултат\" FROM \"sunseeker_commands\" WHERE $timeFilter ORDER BY time DESC LIMIT 20",
           "rawQuery": true,
-          "refId": "A"
+          "refId": "A",
+          "resultFormat": "table"
         }
       ],
       "timeFrom": "7d",
