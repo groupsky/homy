@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Applies config/home-assistant/provision.json to a running Home Assistant:
 // the state HA keeps only in .storage and offers no YAML for - rows of
-// storage-mode dashboards, whole dashboards the repo owns, and entity
-// exposure to assistants. Safe to re-run;
+// storage-mode dashboards, whole dashboards the repo owns, entity
+// exposure to assistants, and device and entity registry names. Safe to re-run;
 // --dry-run reports what would change and writes nothing. See README.md.
 import { readFileSync } from 'node:fs'
-import { applyRows, fillGrafanaLinks, planExposure, planFullDashboard } from './lib.mjs'
+import { applyRows, describeRegistryChanges, fillGrafanaLinks, planExposure, planFullDashboard, planRegistryNames } from './lib.mjs'
 import { connect, readToken } from './ha-websocket.mjs'
 
 // Fixed on purpose, not configurable: the script only ever talks to the HA
@@ -27,6 +27,33 @@ async function provisionExposure (ha, desired, dryRun) {
     }
   }
   if (plan.length === 0) console.log('exposure: up to date')
+}
+
+// Sets the device name_by_user and the entity registry name, never the entity
+// id (#1849). Returns false when an entity cannot be named.
+async function provisionRegistryNames (ha, desired, dryRun) {
+  const entities = {}
+  for (const entityId of Object.keys(desired)) {
+    try {
+      entities[entityId] = await ha.call({ type: 'config/entity_registry/get', entity_id: entityId })
+    } catch (err) {
+      if (!/not_found/.test(err.message)) throw err
+    }
+  }
+  const devices = await ha.call({ type: 'config/device_registry/list' })
+  const plan = planRegistryNames(desired, entities, devices)
+  for (const error of plan.errors) console.error(`registry: ${error}`)
+  if (plan.errors.length > 0) return false
+  for (const line of describeRegistryChanges(plan, dryRun)) console.log(line)
+  if (plan.entityChanges.length === 0 && plan.deviceChanges.length === 0) console.log('registry names: up to date')
+  if (dryRun) return true
+  for (const { deviceId, to } of plan.deviceChanges) {
+    await ha.call({ type: 'config/device_registry/update', device_id: deviceId, name_by_user: to })
+  }
+  for (const { entityId, to } of plan.entityChanges) {
+    await ha.call({ type: 'config/entity_registry/update', entity_id: entityId, name: to })
+  }
+  return true
 }
 
 // Returns false when the dashboard cannot be brought to the desired state
@@ -93,7 +120,7 @@ async function main () {
   const ha = await connect(HA_URL, readToken(TOKEN_FILE))
   try {
     await provisionExposure(ha, desired.exposure ?? {}, dryRun)
-    let ok = true
+    let ok = await provisionRegistryNames(ha, desired.registry_names ?? {}, dryRun)
     for (const [urlPath, entry] of Object.entries(desired.dashboards ?? {})) {
       if (entry.config) {
         const config = fillGrafanaLinks(entry.config, process.env.HA_GRAFANA_BASE_URL)

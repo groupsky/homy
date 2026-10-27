@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyRows, fillGrafanaLinks, planExposure, planFullDashboard } from './lib.mjs'
+import { applyRows, describeRegistryChanges, fillGrafanaLinks, planExposure, planFullDashboard, planRegistryNames } from './lib.mjs'
 
 const RELAY = 'switch.relay'
 const desiredRow = {
@@ -142,4 +142,59 @@ test('does not mutate the config it fills in', () => {
   const config = structuredClone(LINKS)
   fillGrafanaLinks(config, 'https://grafana.example.com')
   assert.deepEqual(config, LINKS)
+})
+
+const registryDevices = [{ id: 'dev1', name: 'living-temp-humid', name_by_user: null }]
+const registryEntities = {
+  'sensor.room_temperature': { entity_id: 'sensor.room_temperature', device_id: 'dev1', name: null },
+  'sensor.room_humidity': { entity_id: 'sensor.room_humidity', device_id: 'dev1', name: null }
+}
+
+test('plans the device and entity names that differ, and prints them old -> new in a dry run', () => {
+  const plan = planRegistryNames({
+    'sensor.room_temperature': { device: 'Хол', name: 'Температура' },
+    'sensor.room_humidity': { device: 'Хол', name: 'Влажност' }
+  }, registryEntities, registryDevices)
+
+  assert.deepEqual(plan.errors, [])
+  assert.deepEqual(plan.deviceChanges, [{ deviceId: 'dev1', device: 'living-temp-humid', entityId: 'sensor.room_temperature', from: null, to: 'Хол' }])
+  assert.deepEqual(describeRegistryChanges(plan, true), [
+    'registry: would set name_by_user of device living-temp-humid (of sensor.room_temperature): null -> "Хол"',
+    'registry: would set name of sensor.room_temperature: null -> "Температура"',
+    'registry: would set name of sensor.room_humidity: null -> "Влажност"'
+  ])
+})
+
+test('plans no write when the registry names are already set', () => {
+  const entities = { 'sensor.room_temperature': { ...registryEntities['sensor.room_temperature'], name: 'Температура' } }
+  const devices = [{ ...registryDevices[0], name_by_user: 'Хол' }]
+
+  const plan = planRegistryNames({ 'sensor.room_temperature': { device: 'Хол', name: 'Температура' } }, entities, devices)
+
+  assert.deepEqual(plan, { entityChanges: [], deviceChanges: [], errors: [] })
+  assert.deepEqual(describeRegistryChanges(plan, true), [])
+})
+
+test('names only the device when the entity has no name of its own', () => {
+  const plan = planRegistryNames({ 'sensor.room_temperature': { device: 'Хол' } }, registryEntities, registryDevices)
+
+  assert.deepEqual(plan.entityChanges, [])
+  assert.equal(plan.deviceChanges.length, 1)
+})
+
+test('reports an entity not in the registry, without a device, or a device with two names', () => {
+  const entities = { ...registryEntities, 'sensor.template': { entity_id: 'sensor.template', device_id: null, name: null } }
+
+  const plan = planRegistryNames({
+    'sensor.gone': { name: 'X' },
+    'sensor.template': { device: 'Хол' },
+    'sensor.room_temperature': { device: 'Хол' },
+    'sensor.room_humidity': { device: 'Кухня' }
+  }, entities, registryDevices)
+
+  assert.deepEqual(plan.errors, [
+    'sensor.gone: not in the entity registry',
+    'sensor.template: has no device to name',
+    'sensor.room_humidity: device living-temp-humid is named both "Хол" (by sensor.room_temperature) and "Кухня"'
+  ])
 })

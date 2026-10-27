@@ -114,3 +114,60 @@ export function fillGrafanaLinks (config, baseUrl) {
   }
   return fill(config)
 }
+
+/**
+ * Plans the registry names (`registry_names` in provision.json, #1849):
+ * `{ entity_id: { name, device } }`, where `name` is the entity registry name
+ * and `device` the `name_by_user` of the entity's device. Either may be left
+ * out. Only values that differ are planned; entity ids are never changed.
+ *
+ * - `entities`: `{ entity_id: entry }` from `config/entity_registry/get`,
+ *   with no key for an entity that is not in the registry
+ * - `devices`: the list from `config/device_registry/list`
+ *
+ * `errors` lists entities that cannot be named: not in the registry, without
+ * a device, or a device given two different names.
+ */
+export function planRegistryNames (desired, entities, devices) {
+  const byId = new Map(devices.map((device) => [device.id, device]))
+  const entityChanges = []
+  const deviceChanges = []
+  const errors = []
+  const deviceNames = new Map()
+  for (const [entityId, want] of Object.entries(desired)) {
+    const entry = entities[entityId]
+    if (!entry) {
+      errors.push(`${entityId}: not in the entity registry`)
+      continue
+    }
+    if (want.name !== undefined && entry.name !== want.name) {
+      entityChanges.push({ entityId, from: entry.name, to: want.name })
+    }
+    if (want.device === undefined) continue
+    const device = byId.get(entry.device_id)
+    if (!device) {
+      errors.push(`${entityId}: has no device to name`)
+      continue
+    }
+    const seen = deviceNames.get(device.id)
+    if (seen && seen.to !== want.device) {
+      errors.push(`${entityId}: device ${device.name} is named both ${JSON.stringify(seen.to)} (by ${seen.entityId}) and ${JSON.stringify(want.device)}`)
+      continue
+    }
+    if (seen) continue
+    deviceNames.set(device.id, { entityId, to: want.device })
+    if (device.name_by_user !== want.device) {
+      deviceChanges.push({ deviceId: device.id, device: device.name, entityId, from: device.name_by_user, to: want.device })
+    }
+  }
+  return { entityChanges, deviceChanges, errors }
+}
+
+/** One output line per planned registry change: old -> new. */
+export function describeRegistryChanges ({ entityChanges, deviceChanges }, dryRun) {
+  const verb = dryRun ? 'would set' : 'set'
+  return [
+    ...deviceChanges.map((c) => `registry: ${verb} name_by_user of device ${c.device} (of ${c.entityId}): ${JSON.stringify(c.from)} -> ${JSON.stringify(c.to)}`),
+    ...entityChanges.map((c) => `registry: ${verb} name of ${c.entityId}: ${JSON.stringify(c.from)} -> ${JSON.stringify(c.to)}`)
+  ]
+}
