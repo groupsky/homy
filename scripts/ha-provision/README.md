@@ -22,8 +22,11 @@ cannot take from YAML:
   `device_id`. It never changes an entity id, and it writes only a value that
   differs. The More-info header is built from these names, so they are the
   Bulgarian names of devices that come from outside the repo, such as the
-  Zigbee2MQTT ones (#1849). Entities without a device keep their name in
-  `configuration/customize.yaml`. Do not put an IEEE address, MAC or serial
+  Zigbee2MQTT ones (#1849). An entity name set here becomes the whole state
+  `friendly_name`, without the device name, so such an entity also keeps its
+  full name ("<device> <entity>") in `configuration/customize.yaml`, for the
+  Energy page and the history. Entities without a device are named only
+  there. Do not put an IEEE address, MAC or serial
   here: this repo is public. The script stops, and exits `1`, when an entity
   is not in the registry, has no device to name, or names one device twice
   differently.
