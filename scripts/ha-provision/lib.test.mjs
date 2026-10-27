@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyRows, planExposure, planFullDashboard } from './lib.mjs'
+import { applyRows, fillGrafanaLinks, planExposure, planFullDashboard } from './lib.mjs'
 
 const RELAY = 'switch.relay'
 const desiredRow = {
@@ -121,4 +121,25 @@ test('refuses a full dashboard that is in YAML mode', () => {
 test('refuses a url_path without a hyphen and an entry with both rows and config', () => {
   assert.throws(() => planFullDashboard('ioniq', undefined, null, IONIQ), /hyphen/)
   assert.throws(() => planFullDashboard('dashboard-ioniq', undefined, null, { ...IONIQ, rows: [] }), /both/)
+})
+
+const LINKS = { views: [{ cards: [{ type: 'markdown', content: 'Grafana:\n[Общо](grafana:/d/ioniq-overview) · [Гуми](grafana:/d/ioniq-tires)' }] }] }
+
+test('leaves only the dashboard names when the Grafana base URL is empty or missing', () => {
+  for (const base of ['', '  ', undefined]) {
+    assert.equal(fillGrafanaLinks(LINKS, base).views[0].cards[0].content, 'Grafana:\nОбщо · Гуми')
+  }
+})
+
+test('links the dashboard names to the Grafana base URL when it is set', () => {
+  for (const base of ['https://grafana.example.com', 'https://grafana.example.com/']) {
+    assert.equal(fillGrafanaLinks(LINKS, base).views[0].cards[0].content,
+      'Grafana:\n[Общо](https://grafana.example.com/d/ioniq-overview) · [Гуми](https://grafana.example.com/d/ioniq-tires)')
+  }
+})
+
+test('does not mutate the config it fills in', () => {
+  const config = structuredClone(LINKS)
+  fillGrafanaLinks(config, 'https://grafana.example.com')
+  assert.deepEqual(config, LINKS)
 })

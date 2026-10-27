@@ -46,6 +46,7 @@ secrets=$(realpath "$(sed -n 's/^SECRETS_PATH=//p' .env)")
 docker run --rm --network homy_automation \
   -v "$PWD":/w:ro \
   -v "$secrets/ha_provision_token":/run/secrets/ha_provision_token:ro \
+  -e HA_GRAFANA_BASE_URL="$(sed -n 's/^HA_GRAFANA_BASE_URL=//p' .env)" \
   ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 \
   node /w/scripts/ha-provision/index.mjs --dry-run
 ```
@@ -53,7 +54,13 @@ docker run --rm --network homy_automation \
 Drop `--dry-run` to apply. No container is restarted; HA applies both changes
 live.
 
-Nothing about the run can be configured, on purpose:
+One setting comes from `.env`: `HA_GRAFANA_BASE_URL`, the base of the
+dashboards' Grafana links. In `provision.json` such a link is written
+`[name](grafana:/d/uid)`. With the setting set it becomes
+`[name](<base>/d/uid)`; empty or missing, only the name is shown, with no link
+(#1844). Set it only to an address that opens on a phone away from home.
+
+Nothing else about the run can be configured, on purpose:
 
 - **HA endpoint:** always `ws://ha:8123/api/websocket`, reached over the
   `automation` network.
