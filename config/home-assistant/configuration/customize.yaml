@@ -56,12 +56,41 @@ sensor.grid_import_day:
 sensor.grid_import_night:
   friendly_name: Мрежа нощ
 
-# Bulgarian names for entities whose names come from outside this repo and
-# that have no device in the registry (#1842). Do not rename them at the
-# source: the entity ids would change. Entities with a device, such as the
-# Zigbee2MQTT ones, are named in the registry instead, through
-# `registry_names` in ../provision.json (#1849), so the More-info header shows
-# the names too.
+# Bulgarian names for entities whose names come from outside this repo (#1842).
+# Do not rename them at the source: the entity ids would change.
+#
+# The Zigbee2MQTT devices and their entities are also named in the registry,
+# through `registry_names` in ../provision.json (#1849); the More-info header
+# uses those. A registry entity name replaces the whole state friendly_name,
+# without the device name, so the rows below put the device name back for the
+# Energy page and the history. An entity named only by its device (for
+# example switch.p5_night_ext_lights) needs no row here.
+sensor.living_temp_humid_temperature:
+  friendly_name: Хол Температура
+sensor.living_temp_humid_humidity:
+  friendly_name: Хол Влажност
+sensor.living_temp_humid_battery:
+  friendly_name: Хол Батерия на сензора
+binary_sensor.back_door_open_contact:
+  friendly_name: Задна врата
+binary_sensor.back_door_open_battery_low:
+  friendly_name: Задна врата Слаба батерия
+binary_sensor.back_door_open_tamper:
+  friendly_name: Задна врата Отваряне на сензора
+sensor.back_door_open_battery:
+  friendly_name: Задна врата Батерия
+sensor.floor1_alarm_temperature:
+  friendly_name: Аларма етаж 1 Температура
+sensor.floor1_alarm_humidity:
+  friendly_name: Аларма етаж 1 Влажност
+binary_sensor.floor1_alarm_battery_low:
+  friendly_name: Аларма етаж 1 Слаба батерия
+switch.floor1_alarm_alarm:
+  friendly_name: Аларма етаж 1 Аларма
+switch.floor1_alarm_temperature_alarm:
+  friendly_name: Аларма етаж 1 Аларма за температура
+switch.floor1_alarm_humidity_alarm:
+  friendly_name: Аларма етаж 1 Аларма за влажност
 climate.bedroom:
   friendly_name: Спалня
 climate.living_room:
