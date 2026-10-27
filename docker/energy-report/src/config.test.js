@@ -41,6 +41,7 @@ test('loadConfig reads the secrets and uses the defaults', () => {
       write: { username: 'writer', password: 'write-secret' }
     },
     telegramUrl: 'http://telegram-bridge:3000/webhook',
+    mqtt: { host: 'broker', port: 1883, clientId: 'energy-report' },
     dashboardUrl: undefined,
     firstMonth: '2023-11',
     pricesFrom: '2026-07',
@@ -61,15 +62,17 @@ test('loadConfig takes the settings from the environment', () => {
   assert.equal(config.pricesFrom, '2027-07')
 })
 
-test('loadConfig never takes an InfluxDB or telegram-bridge address from the environment', () => {
+test('loadConfig never takes an InfluxDB, telegram-bridge or broker address from the environment', () => {
   // Fixed on purpose: a request URL from the environment is a request-forgery
   // path for CodeQL, and the service only ever talks to these two containers.
   const config = loadConfig({
     ...env,
     INFLUXDB_URL: 'http://elsewhere:8086',
     INFLUXDB_DATABASE: 'other',
-    TELEGRAM_BRIDGE_URL: 'http://elsewhere/webhook'
+    TELEGRAM_BRIDGE_URL: 'http://elsewhere/webhook',
+    BROKER: 'mqtt://elsewhere'
   }, readFile)
+  assert.equal(config.mqtt.host, 'broker')
   assert.equal(config.influx.url, 'http://influxdb:8086')
   assert.equal(config.influx.database, 'homy')
   assert.equal(config.telegramUrl, 'http://telegram-bridge:3000/webhook')

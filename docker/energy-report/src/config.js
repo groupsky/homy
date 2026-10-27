@@ -55,11 +55,14 @@ export function gridPrices (energyConfig) {
 }
 
 // Fixed on purpose, not configurable, as in scripts/energy-backfill: the
-// service talks only to these two containers on the automation network, and a
-// request URL taken from the environment would be a request-forgery path.
+// service talks only to these containers on the automation network, and a
+// request address taken from the environment would be a request-forgery path.
+// The broker takes anonymous clients on that network, as for the other
+// services.
 const INFLUX_URL = 'http://influxdb:8086'
 const INFLUX_DB = 'homy'
 const TELEGRAM_URL = 'http://telegram-bridge:3000/webhook'
+const MQTT = { host: 'broker', port: 1883, clientId: 'energy-report' }
 
 export function loadConfig (env = process.env, readFile = readFileSync) {
   const firstMonth = month(env, 'ENERGY_REPORT_FIRST_MONTH', FIRST_MONTH)
@@ -75,6 +78,7 @@ export function loadConfig (env = process.env, readFile = readFileSync) {
       write: { username: secret(env, readFile, 'INFLUXDB_USERNAME'), password: secret(env, readFile, 'INFLUXDB_PASSWORD') }
     },
     telegramUrl: TELEGRAM_URL,
+    mqtt: MQTT,
     // No link unless set: there is no Grafana address that is known to open on
     // a phone away from home, and the real one must not be in this repo.
     dashboardUrl: url(env, 'ENERGY_REPORT_DASHBOARD_URL'),

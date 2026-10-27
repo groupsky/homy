@@ -4,8 +4,9 @@
 import { HOUR, monthEnergy } from './hourly.js'
 import { MAIN, LOADS, monthReport, toLineProtocol, monthsToCompute, shouldSendOnStart } from './report.js'
 import { addMonths, lastReadyMonth, monthBounds, monthOf, nextRunAfter } from './time.js'
-import { storedMonths, hourlyReadings, lastYearKwh } from './influx.js'
+import { storedMonths, hourlyReadings, lastYearKwh, CHARGER, chargeSessions, storedCharges, chargerStart, carMinKw } from './influx.js'
 import { telegramText } from './message.js'
+import { CHARGES_TOPIC, chargeRow, chargeSummary, meterEnergy, toChargeLines } from './charges.js'
 
 // The readings of a month are read with a week before and after it, so that a
 // gap of up to a week across the start or the end of the month is spread over
@@ -17,6 +18,8 @@ const MAX_KWH_PER_HOUR = 50
 // setTimeout cannot wait a whole month, so a long wait is cut into days.
 const MAX_SLEEP = 24 * HOUR
 const RETRY_AFTER = 15 * 60 * 1000
+// How often the Ioniq charges are checked and the summary is published.
+const CHARGES_EVERY = 15 * 60 * 1000
 
 // Computes one month from the counters and writes it to energy_monthly. One
 // query per meter, for this month only.
@@ -95,4 +98,47 @@ export async function runScheduled (deps, after) {
 export async function runForever (deps, cycles = Infinity) {
   let { now: after } = await retrying(deps, 'catch-up', () => catchUp(deps))
   for (let i = 0; i < cycles; i++) after = await runScheduled(deps, after)
+}
+
+// One Ioniq charge from the charger meter and the car, in three queries for
+// the time of the charge only.
+export async function computeCharge (deps, session) {
+  const { influx, config } = deps
+  const { first, maxW } = await chargerStart(influx, session.start, session.end)
+  const hourly = first === undefined ? [] : await hourlyReadings(influx, CHARGER, session.start, session.end + 1)
+  const carKw = await carMinKw(influx, session.start, session.end)
+  return chargeRow(session, { meter: meterEnergy(session.start, first, hourly), carMinKw: carKw, meterMaxW: maxW }, config)
+}
+
+// Computes the charges of ioniq_sessions that are not in `known` yet
+// (start -> row), writes each one to ioniq_charges as soon as it is done, and
+// publishes the summary for Home Assistant, retained.
+export async function refreshCharges (deps, known) {
+  const sessions = await chargeSessions(deps.influx)
+  let added = 0
+  for (const session of sessions) {
+    if (known.has(session.start) || !Number.isFinite(session.end)) continue
+    const row = await computeCharge(deps, session)
+    await deps.influx.write(toChargeLines([row]))
+    known.set(session.start, row)
+    added++
+  }
+  if (added > 0) deps.log(`ioniq charges: ${added} new, ${known.size} in all`)
+  await deps.publish(CHARGES_TOPIC, JSON.stringify(chargeSummary([...known.values()], deps.now(), deps.config.pricesFrom)))
+}
+
+// The Ioniq charges: the stored ones are read once, then the new ones are
+// computed and the summary is published every 15 minutes. A failure is
+// logged and the next refresh tries again. `cycles` limits the runs for tests.
+export async function runCharges (deps, cycles = Infinity) {
+  let known = null
+  for (let i = 0; i < cycles; i++) {
+    try {
+      known ??= await storedCharges(deps.influx)
+      await refreshCharges(deps, known)
+    } catch (err) {
+      deps.log(`charges failed: ${err.message}; trying again in ${CHARGES_EVERY / 60000} minutes`)
+    }
+    await deps.sleep(CHARGES_EVERY)
+  }
 }
