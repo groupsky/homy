@@ -582,6 +582,146 @@ describe('SunseekerMessageParser', () => {
   });
 });
 
+describe('rain fields', () => {
+  let parser;
+  let logSpy;
+
+  beforeEach(() => {
+    parser = new SunseekerMessageParser();
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const rainPoints = (result) => (result || []).filter(p => p.measurement === 'sunseeker_rain');
+  const rainLogLines = () => logSpy.mock.calls
+    .map(args => args.join(' '))
+    .filter(line => line.includes('Rain field seen'));
+
+  it('stores and logs a top-level rain_status', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"mode":0,"rain_status":2}');
+
+    const points = rainPoints(result);
+    expect(points).toHaveLength(1);
+    expect(points[0].device_id).toBe(TEST_DEVICE_ID);
+    expect(points[0].tags).toEqual({ field: 'rain_status', cmd: '501' });
+    expect(points[0].fields).toEqual({ value: 2 });
+    expect(points[0].timestamp).toBeInstanceOf(Date);
+    expect(rainLogLines()).toEqual([expect.stringContaining('Rain field seen: cmd=501 rain_status=2')]);
+  });
+
+  it('keeps the existing points of a supported cmd', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"mode":0,"power":90,"station":true,"rain_en":1}');
+
+    expect(result.map(p => p.measurement)).toEqual([
+      'sunseeker_mode', 'sunseeker_power', 'sunseeker_station', 'sunseeker_connection', 'sunseeker_rain'
+    ]);
+  });
+
+  it('finds every field of a nested rain object', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rain":{"rain_flag":true,"delay":25}}');
+
+    const points = rainPoints(result);
+    expect(points.map(p => [p.tags.field, p.fields])).toEqual([
+      ['rain.rain_flag', { value: 1 }],
+      ['rain.delay', { value: 25 }]
+    ]);
+    expect(rainLogLines()).toEqual([
+      expect.stringContaining('Rain field seen: cmd=501 rain.rain_flag=true'),
+      expect.stringContaining('Rain field seen: cmd=501 rain.delay=25')
+    ]);
+  });
+
+  it('finds rain_status inside a data object', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"data":{"rain_status":1,"other":5}}');
+
+    const points = rainPoints(result);
+    expect(points).toHaveLength(1);
+    expect(points[0].tags.field).toBe('data.rain_status');
+    expect(points[0].fields).toEqual({ value: 1 });
+  });
+
+  it('finds rain_status inside data sent as a JSON string', () => {
+    const payload = JSON.stringify({ cmd: 501, data: JSON.stringify({ rain_status: 1, rain_countdown: 30 }) });
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, payload);
+
+    expect(rainPoints(result).map(p => [p.tags.field, p.fields.value])).toEqual([
+      ['data.rain_status', 1],
+      ['data.rain_countdown', 30]
+    ]);
+  });
+
+  it('stores booleans as 1 and 0', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rain_en":false,"rain_flag":true}');
+
+    expect(rainPoints(result).map(p => [p.tags.field, p.fields])).toEqual([
+      ['rain_en', { value: 0 }],
+      ['rain_flag', { value: 1 }]
+    ]);
+  });
+
+  it('stores strings as value_text', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rainState":"wet"}');
+
+    expect(rainPoints(result).map(p => p.fields)).toEqual([{ value_text: 'wet' }]);
+  });
+
+  it('finds a rain field in a message of an unsupported cmd', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":999,"rain_delay_left":40}');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].measurement).toBe('sunseeker_rain');
+    expect(result[0].tags).toEqual({ field: 'rain_delay_left', cmd: '999' });
+    expect(result[0].fields).toEqual({ value: 40 });
+    expect(rainLogLines()).toEqual([expect.stringContaining('Rain field seen: cmd=999 rain_delay_left=40')]);
+  });
+
+  it('uses deviceSn from an app topic', () => {
+    const result = parser.parseMessage(TEST_TOPICS.APP_GET, `{"cmd":501,"deviceSn":"${TEST_DEVICE_ID}","rain_status":0}`);
+
+    expect(rainPoints(result)[0].device_id).toBe(TEST_DEVICE_ID);
+  });
+
+  it('adds no point and no log line when there is no rain field', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, JSON.stringify(TEST_MESSAGES.STATUS_UPDATE));
+
+    expect(rainPoints(result)).toHaveLength(0);
+    expect(rainLogLines()).toHaveLength(0);
+  });
+
+  it('does not match words that only contain "rain" inside', () => {
+    const payload = '{"cmd":501,"train":1,"drain":2,"strain_level":3,"brain":{"x":4}}';
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, payload);
+
+    expect(rainPoints(result)).toHaveLength(0);
+    expect(rainLogLines()).toHaveLength(0);
+  });
+
+  it('matches case-insensitively and after an underscore', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"RAIN":1,"is_rain":2,"rainFlag":3}');
+
+    expect(rainPoints(result).map(p => p.tags.field)).toEqual(['RAIN', 'is_rain', 'rainFlag']);
+  });
+
+  it('does not look deeper than 4 levels', () => {
+    const payload = '{"cmd":501,"a":{"b":{"c":{"rain":1,"d":{"rain":2}}}}}';
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, payload);
+
+    expect(rainPoints(result).map(p => p.tags.field)).toEqual(['a.b.c.rain']);
+  });
+
+  it('logs no device id and no topic', () => {
+    parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rain_status":1}');
+
+    for (const line of rainLogLines()) {
+      expect(line).not.toContain(TEST_DEVICE_ID);
+      expect(line).not.toContain('/device/');
+    }
+  });
+});
+
 describe('InfluxDataPoint', () => {
   it('should create data points with correct structure', () => {
     // This will be tested when we implement the InfluxDataPoint class

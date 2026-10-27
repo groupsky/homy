@@ -154,4 +154,18 @@ describe('SunseekerMqttInfluxService._createInfluxPoint', () => {
       expect(point.toLineProtocol()).toContain(`device_id=${TEST_DEVICE_ID}`);
     });
   });
+  describe('rain points', () => {
+    it('writes the rain value as a float, even when it is round', () => {
+      const point = service._createInfluxPoint({
+        measurement: MEASUREMENTS.RAIN,
+        device_id: TEST_DEVICE_ID,
+        fields: { value: 1 },
+        tags: { field: 'rain.rain_flag', cmd: '501' },
+        timestamp: new Date('2026-07-29T12:00:00Z')
+      });
+
+      expect(fieldsOf(point).value).toBe('1');
+      expect(point.toLineProtocol()).toMatch(/^sunseeker_rain,cmd=501,device_id=[^ ]+,field=rain\.rain_flag /);
+    });
+  });
 });
