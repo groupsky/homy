@@ -557,16 +557,19 @@ trade-off of both firing for one real outage.
 **Source**: any message, any `cmd`, that has a scalar field whose key path has a rain name: a key
 that is `rain` or has `rain` at its start or after an underscore, case-insensitive (`rain_status`,
 `rainFlag`, `is_rain`; not `train` or `drain`), or any field inside such a key
-(`rain.rain_flag`, `rain.delay`). Nested objects are searched up to 4 levels, and `data` sent as a
-JSON string is parsed first (`data.rain_status`). Added for #1841, to learn which field the mower's
+(`rain.rain_flag`, `rain.delay`). Nested objects are searched up to 4 levels, and a string value
+that holds a JSON object (such as `data`) is parsed first (`data.rain_status`). A `null` value is
+only logged, not stored. Added for #1841, to learn which field the mower's
 rain sensor sends; it may stay empty for weeks, since the field likely comes only when the rain
 state changes.
 
 **Extra tags**: `field` (the key path, e.g. `rain_status`, `rain.rain_flag`) and `cmd` (the
-message's `cmd`, as text).
+message's `cmd`, as text; left out when the message has none). `field` is a keyword in InfluxQL,
+so quote it: `WHERE "field" = 'rain_status'`.
 
 **Fields**: `value` is always written as a float (it is in `FLOAT_FIELDS`), so a `1` and a `2.5`
-never conflict; booleans become `1`/`0`. Strings go to `value_text`.
+never conflict; booleans become `1`/`0`. Strings (and a number too big for a float) go to
+`value_text`.
 
 ### Outdoor Weather
 

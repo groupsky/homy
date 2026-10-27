@@ -106,7 +106,7 @@ export function loadSecret(name) {
 - **cmd 511**: State change messages
 - **cmd 512**: Battery info (charge/discharge cycles)
 - **cmd 400**: Command acknowledgments
-- **Any cmd, rain fields** (#1841): every scalar field whose key path has a rain name (`rain`, `rain_*`, `*_rain*`, `rainFlag`; not `train`/`drain`), up to 4 levels deep and inside `data` sent as a JSON string, is logged as `Rain field seen: cmd=<cmd> <path>=<value>` and stored in `sunseeker_rain`. The rule is `RAIN_KEY_PATTERN` in `src/constants.js`. It is there to learn which field the rain sensor uses; it adds nothing to the other measurements.
+- **Any cmd, rain fields** (#1841): every scalar field whose key path has a rain name (`rain`, `rain_*`, `*_rain*`, `rainFlag`; not `train`/`drain`), up to 4 levels deep and inside string values that hold a JSON object (such as `data`), is logged as `Rain field seen: cmd=<cmd> <path>=<value>` and stored in `sunseeker_rain`. The rule is `RAIN_KEY_PATTERN` in `src/constants.js`. It is there to learn which field the rain sensor uses; it adds nothing to the other measurements.
 
 **Log Data Extraction:**
 Use regex patterns to extract structured data from log text:

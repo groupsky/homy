@@ -668,6 +668,38 @@ describe('rain fields', () => {
     expect(rainPoints(result).map(p => p.fields)).toEqual([{ value_text: 'wet' }]);
   });
 
+  it('quotes string values in the log line', () => {
+    parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rain_text":"a\\nb"}');
+
+    expect(rainLogLines()).toEqual([expect.stringContaining('Rain field seen: cmd=501 rain_text="a\\nb"')]);
+  });
+
+  it('logs a null rain field but stores no point for it', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rain_status":null}');
+
+    expect(rainPoints(result)).toHaveLength(0);
+    expect(rainLogLines()).toEqual([expect.stringContaining('Rain field seen: cmd=501 rain_status=null')]);
+  });
+
+  it('stores a number too big for a float as value_text', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rain_x":1e400}');
+
+    expect(rainPoints(result).map(p => p.fields)).toEqual([{ value_text: 'Infinity' }]);
+  });
+
+  it('finds rain fields in an array under a rain key', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":501,"rain":[1,0]}');
+
+    expect(rainPoints(result).map(p => [p.tags.field, p.fields.value])).toEqual([['rain.0', 1], ['rain.1', 0]]);
+  });
+
+  it('leaves out the cmd tag when the message has no cmd', () => {
+    const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"rain_status":1}');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].tags).toEqual({ field: 'rain_status' });
+  });
+
   it('finds a rain field in a message of an unsupported cmd', () => {
     const result = parser.parseMessage(TEST_TOPICS.DEVICE_UPDATE, '{"cmd":999,"rain_delay_left":40}');
 

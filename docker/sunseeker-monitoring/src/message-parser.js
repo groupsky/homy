@@ -28,7 +28,9 @@ export class SunseekerMessageParser {
     // with a rain name is logged, before the device id check and for any cmd.
     const rainFields = this._findRainFields(data);
     rainFields.forEach(({ path, value }) => {
-      logger.info(`Rain field seen: cmd=${data.cmd} ${path}=${value}`);
+      // Strings are quoted so a newline in a value cannot fake another log line
+      const shown = typeof value === 'string' ? JSON.stringify(value) : value;
+      logger.info(`Rain field seen: cmd=${data.cmd} ${path}=${shown}`);
     });
 
     if (!deviceId) {
@@ -44,7 +46,8 @@ export class SunseekerMessageParser {
 
   /**
    * Find scalar fields whose path has a rain name (see RAIN_KEY_PATTERN).
-   * Looks into nested objects and into `data` sent as a JSON string.
+   * Looks into nested objects and into string values that hold a JSON object
+   * (the mower may send `data` that way).
    * @private
    */
   _findRainFields(node, prefix = '', depth = 1, underRain = false) {
@@ -86,9 +89,10 @@ export class SunseekerMessageParser {
   _createRainPoints(rainFields, cmd, deviceId) {
     const timestamp = new Date();
 
-    return rainFields.map(({ path, value }) => {
+    // A null has no value to store; it is only logged
+    return rainFields.filter(({ value }) => value !== null).map(({ path, value }) => {
       let fields;
-      if (typeof value === 'number') {
+      if (Number.isFinite(value)) {
         fields = { value };
       } else if (typeof value === 'boolean') {
         fields = { value: value ? 1 : 0 };
@@ -96,11 +100,14 @@ export class SunseekerMessageParser {
         fields = { value_text: String(value) };
       }
 
+      const tags = { field: path };
+      if (cmd !== undefined && cmd !== null) tags.cmd = String(cmd);
+
       return {
         measurement: MEASUREMENTS.RAIN,
         device_id: deviceId,
         fields,
-        tags: { field: path, cmd: String(cmd) },
+        tags,
         timestamp
       };
     });
