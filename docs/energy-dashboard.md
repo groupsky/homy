@@ -110,6 +110,12 @@ The dashboard lists the counters `sensor.<device>_energy` from
 `utility_meters.yaml`: water pump (the borehole pump), oven, stove, dishwasher,
 laundry, boiler, heat pump, microwave and EV charger.
 
+The names shown in the dashboard are Bulgarian. They are set in
+`config/home-assistant/configuration/customize.yaml` (`friendly_name`), not in
+the `name` of `utility_meters.yaml`. The meters have no `unique_id`, so Home
+Assistant builds the entity id from that `name`: change it and the entity id
+changes, and the history is lost.
+
 Not listed, on purpose:
 
 - The voltage regulator output (`sensor.stabilizator_energy_used`). It feeds the

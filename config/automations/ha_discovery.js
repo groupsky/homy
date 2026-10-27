@@ -33,13 +33,13 @@ const devices = {
     identifiers: 'boiler_eldom_200l',
     manufacturer: 'eldom',
     model: '200l',
-    name: 'boiler',
+    name: 'Бойлер',
     suggested_area: areas.service
   },
 
   solarPanel: {
     identifiers: 'solar_panel',
-    name: 'solar_panel',
+    name: 'Соларен панел',
     suggested_area: areas.roof
   },
 }
@@ -301,7 +301,7 @@ const config = {
       name: 'bath2CeilingLight',
       feature: 'bath2_ceiling_light',
       config: {
-        name: 'Баня 2',
+        name: 'Таван',
         device: devices.bath2,
         object_id: 'bath2_ceiling_light',
         unique_id: 'homy_bath2_ceiling_light',
@@ -311,7 +311,7 @@ const config = {
       name: 'bath3CeilingLight',
       feature: 'bath3_ceiling_light',
       config: {
-        name: 'Баня 3',
+        name: 'Таван',
         device: devices.bath3,
         object_id: 'bath3_ceiling_light',
         unique_id: 'homy_bath3_ceiling_light',
@@ -321,7 +321,7 @@ const config = {
       name: 'bedroomCeilingLight',
       feature: 'bedroom_ceiling_light',
       config: {
-        name: 'Спалня',
+        name: 'Таван',
         device: devices.bedroom,
         object_id: 'bedroom_ceiling_light',
         unique_id: 'homy_bedroom_ceiling_light',
@@ -331,7 +331,7 @@ const config = {
       name: 'martinCeilingLight',
       feature: 'martin_ceiling_light',
       config: {
-        name: 'Мартин',
+        name: 'Таван',
         device: devices.martin,
         object_id: 'martin_ceiling_light',
         unique_id: 'homy_martin_ceiling_light',
@@ -341,7 +341,7 @@ const config = {
       name: 'bath1CeilingLight',
       feature: 'bath1_ceiling_light',
       config: {
-        name: 'Баня 1',
+        name: 'Таван',
         device: devices.bath1,
         object_id: 'bath1_ceiling_light',
         unique_id: 'homy_bath1_ceiling_light',
@@ -351,7 +351,7 @@ const config = {
       name: 'officeCeilingLight',
       feature: 'office_ceiling_light',
       config: {
-        name: 'Кабинет',
+        name: 'Таван',
         device: devices.cabinet,
         object_id: 'office_ceiling_light',
         unique_id: 'homy_office_ceiling_light',
@@ -361,7 +361,7 @@ const config = {
       name: 'gerganaCeilingLight',
       feature: 'gergana_ceiling_light',
       config: {
-        name: 'Гергана',
+        name: 'Таван',
         device: devices.gergana,
         object_id: 'gergana_ceiling_light',
         unique_id: 'homy_gegana_ceiling_light',
@@ -371,7 +371,7 @@ const config = {
       name: 'borisCeilingLight',
       feature: 'boris_ceiling_light',
       config: {
-        name: 'Борис',
+        name: 'Таван',
         device: devices.boris,
         object_id: 'boris_ceiling_light',
         unique_id: 'homy_boris_ceiling_light',
@@ -381,7 +381,7 @@ const config = {
       name: 'laundryCeilingLight',
       feature: 'laundry_ceiling_light',
       config: {
-        name: 'Мокро',
+        name: 'Таван',
         device: devices.laundry,
         object_id: 'laundry_ceiling_light',
         unique_id: 'homy_laundry_ceiling_light',
@@ -391,7 +391,7 @@ const config = {
       name: 'corridor2BothCeilingLights',
       feature: 'corridor2_both_ceiling_lights',
       config: {
-        name: 'Коридор 2',
+        name: 'Таван',
         device: devices.corridor2,
         object_id: 'corridor2_both_ceiling_lights',
         unique_id: 'homy_corridor2_both_ceiling_lights',
@@ -401,7 +401,7 @@ const config = {
       name: 'kitchenAllCeilingLights',
       feature: 'kitchen_all_ceiling_lights',
       config: {
-        name: 'Кухня',
+        name: 'Таван',
         device: devices.kitchen,
         object_id: 'kitchen_all_ceiling_lights',
         unique_id: 'homy_kitchen_all_ceiling_lights',
@@ -411,7 +411,7 @@ const config = {
       name: 'corridor1CeilingLight',
       feature: 'corridor1_ceiling_light',
       config: {
-        name: 'Коридор 1',
+        name: 'Таван',
         device: devices.corridor1,
         object_id: 'corridor1_ceiling_light',
         unique_id: 'homy_corridor1_ceiling_light',
@@ -421,7 +421,7 @@ const config = {
       name: 'livingroomCeilingLight',
       feature: 'livingroom_ceiling_light',
       config: {
-        name: 'Хол',
+        name: 'Таван',
         device: devices.livingroom,
         object_id: 'livingroom_ceiling_light',
         unique_id: 'homy_livingroom_ceiling_light',
@@ -444,7 +444,7 @@ const config = {
       feature: 'front_main_door_open',
       type: 'door',
       config: {
-        name: 'Входна',
+        name: 'Входна врата',
         device: devices.antre,
         object_id: 'front_main_door_open',
         unique_id: 'homy_front_main_door_open',
@@ -456,7 +456,7 @@ const config = {
       feature: 'front_side_door_open',
       type: 'door',
       config: {
-        name: 'Помощна',
+        name: 'Помощна врата',
         device: devices.antre,
         object_id: 'front_side_door_open',
         unique_id: 'homy_front_side_door_open',
@@ -468,7 +468,7 @@ const config = {
       feature: 'laundry_window_open',
       type: 'window',
       config: {
-        name: 'Мокро',
+        name: 'Прозорец',
         device: devices.laundry,
         object_id: 'laundry_window_open',
         unique_id: 'homy_laundry_window_open',
@@ -480,7 +480,7 @@ const config = {
       feature: 'living_window_open',
       type: 'window',
       config: {
-        name: 'Хол запад',
+        name: 'Прозорец запад',
         device: devices.livingroom,
         object_id: 'living_window_open',
         unique_id: 'homy_living_window_open',
@@ -492,7 +492,7 @@ const config = {
       feature: 'cabinet_south_window_open',
       type: 'window',
       config: {
-        name: 'Кабинет запад',
+        name: 'Прозорец запад',
         device: devices.cabinet,
         object_id: 'cabinet_south_window_open',
         unique_id: 'homy_cabinet_south_window_open',
@@ -504,7 +504,7 @@ const config = {
       feature: 'cabinet_west_window_open',
       type: 'window',
       config: {
-        name: 'Кабинет юг',
+        name: 'Прозорец юг',
         device: devices.cabinet,
         object_id: 'cabinet_west_window_open',
         unique_id: 'homy_cabinet_west_window_open',
@@ -516,7 +516,7 @@ const config = {
       feature: 'bath1_door_lock',
       type: 'lock',
       config: {
-        name: 'Баня 1',
+        name: 'Ключ',
         device: devices.bath1,
         object_id: 'bath1_door_lock',
         unique_id: 'homy_bath1_door_lock',
@@ -528,7 +528,7 @@ const config = {
       feature: 'bath1_door_open',
       type: 'door',
       config: {
-        name: 'Баня 1',
+        name: 'Врата',
         device: devices.bath1,
         object_id: 'bath1_door_open',
         unique_id: 'homy_bath1_door_open',
@@ -540,7 +540,7 @@ const config = {
       feature: 'cabinet_door_lock',
       type: 'lock',
       config: {
-        name: 'Кабинет',
+        name: 'Ключ',
         device: devices.cabinet,
         object_id: 'cabinet_door_lock',
         unique_id: 'homy_cabinet_door_lock',
@@ -552,7 +552,7 @@ const config = {
       feature: 'cabinet_door_open',
       type: 'door',
       config: {
-        name: 'Кабинет',
+        name: 'Врата',
         device: devices.cabinet,
         object_id: 'cabinet_door_open',
         unique_id: 'homy_cabinet_door_open',
@@ -564,7 +564,7 @@ const config = {
       feature: 'bath2_door_lock',
       type: 'lock',
       config: {
-        name: 'Баня 2',
+        name: 'Ключ',
         device: devices.bath2,
         object_id: 'bath2_door_lock',
         unique_id: 'homy_bath2_door_lock',
@@ -576,7 +576,7 @@ const config = {
       feature: 'bath2_door_open',
       type: 'door',
       config: {
-        name: 'Баня 2',
+        name: 'Врата',
         device: devices.bath2,
         object_id: 'bath2_door_open',
         unique_id: 'homy_bath2_door_open',
@@ -588,7 +588,7 @@ const config = {
       feature: 'bath3_door_lock',
       type: 'lock',
       config: {
-        name: 'Баня 3',
+        name: 'Ключ',
         device: devices.bath3,
         object_id: 'bath3_door_lock',
         unique_id: 'homy_bath3_door_lock',
@@ -600,7 +600,7 @@ const config = {
       feature: 'bath3_door_open',
       type: 'door',
       config: {
-        name: 'Баня 3',
+        name: 'Врата',
         device: devices.bath3,
         object_id: 'bath3_door_open',
         unique_id: 'homy_bath3_door_open',
@@ -612,7 +612,7 @@ const config = {
       feature: 'gergana_door_lock',
       type: 'lock',
       config: {
-        name: 'Гергана',
+        name: 'Ключ',
         device: devices.gergana,
         object_id: 'gergana_door_lock',
         unique_id: 'homy_gergana_door_lock',
@@ -624,7 +624,7 @@ const config = {
       feature: 'gergana_door_open',
       type: 'door',
       config: {
-        name: 'Гергана',
+        name: 'Врата',
         device: devices.gergana,
         object_id: 'gergana_door_open',
         unique_id: 'homy_gergana_door_open',
@@ -636,7 +636,7 @@ const config = {
       feature: 'bedroom_door_lock',
       type: 'lock',
       config: {
-        name: 'Спалня',
+        name: 'Ключ',
         device: devices.bedroom,
         object_id: 'bedroom_door_lock',
         unique_id: 'homy_bedroom_door_lock',
@@ -648,7 +648,7 @@ const config = {
       feature: 'bedroom_door_open',
       type: 'door',
       config: {
-        name: 'Спалня',
+        name: 'Врата',
         device: devices.bedroom,
         object_id: 'bedroom_door_open',
         unique_id: 'homy_bedroom_door_open',
@@ -660,7 +660,7 @@ const config = {
       feature: 'boris_door_lock',
       type: 'lock',
       config: {
-        name: 'Борис',
+        name: 'Ключ',
         device: devices.boris,
         object_id: 'boris_door_lock',
         unique_id: 'homy_boris_door_lock',
@@ -672,7 +672,7 @@ const config = {
       feature: 'boris_door_open',
       type: 'door',
       config: {
-        name: 'Борис',
+        name: 'Врата',
         device: devices.boris,
         object_id: 'boris_door_open',
         unique_id: 'homy_boris_door_open',
@@ -684,7 +684,7 @@ const config = {
       feature: 'bath1_window_open',
       type: 'window',
       config: {
-        name: 'Баня 1',
+        name: 'Прозорец',
         device: devices.bath1,
         object_id: 'bath1_window_open',
         unique_id: 'homy_bath1_window_open',
@@ -696,7 +696,7 @@ const config = {
       feature: 'martin_door_lock',
       type: 'lock',
       config: {
-        name: 'Мартин',
+        name: 'Ключ',
         device: devices.martin,
         object_id: 'martin_door_lock',
         unique_id: 'homy_martin_door_lock',
@@ -708,7 +708,7 @@ const config = {
       feature: 'martin_door_open',
       type: 'door',
       config: {
-        name: 'Мартин',
+        name: 'Врата',
         device: devices.martin,
         object_id: 'martin_door_open',
         unique_id: 'homy_martin_door_open',
@@ -720,7 +720,7 @@ const config = {
       feature: 'service_internal_door_lock',
       type: 'lock',
       config: {
-        name: 'Вътрешна',
+        name: 'Ключ вътрешна врата',
         device: devices.service,
         object_id: 'service_internal_door_lock',
         unique_id: 'homy_service_internal_door_lock',
@@ -732,7 +732,7 @@ const config = {
       feature: 'service_internal_door_open',
       type: 'door',
       config: {
-        name: 'Вътрешна',
+        name: 'Вътрешна врата',
         device: devices.service,
         object_id: 'service_internal_door_open',
         unique_id: 'homy_service_internal_door_open',
@@ -744,7 +744,7 @@ const config = {
       feature: 'kitchen_window_open',
       type: 'window',
       config: {
-        name: 'Кухня',
+        name: 'Прозорец',
         device: devices.kitchen,
         object_id: 'kitchen_window_open',
         unique_id: 'homy_kitchen_window_open',
@@ -756,7 +756,7 @@ const config = {
       feature: 'bath2_window_open',
       type: 'window',
       config: {
-        name: 'Баня 2',
+        name: 'Прозорец',
         device: devices.bath2,
         object_id: 'bath2_window_open',
         unique_id: 'homy_bath2_window_open',
@@ -768,7 +768,7 @@ const config = {
       feature: 'bath3_window_open',
       type: 'window',
       config: {
-        name: 'Баня 3',
+        name: 'Прозорец',
         device: devices.bath3,
         object_id: 'bath3_window_open',
         unique_id: 'homy_bath3_window_open',
@@ -780,7 +780,7 @@ const config = {
       feature: 'bedroom_external_door_open',
       type: 'door',
       config: {
-        name: 'Спалня тераса',
+        name: 'Врата тераса',
         device: devices.bedroom,
         object_id: 'bedroom_external_door_open',
         unique_id: 'homy_bedroom_external_door_open',
@@ -792,7 +792,7 @@ const config = {
       feature: 'bedroom_window_open',
       type: 'window',
       config: {
-        name: 'Спалня',
+        name: 'Прозорец',
         device: devices.bedroom,
         object_id: 'bedroom_window_open',
         unique_id: 'homy_bedroom_window_open',
@@ -804,7 +804,7 @@ const config = {
       feature: 'martin_west_window_open',
       type: 'window',
       config: {
-        name: 'Мартин запад',
+        name: 'Прозорец запад',
         device: devices.martin,
         object_id: 'martin_west_window_open',
         unique_id: 'homy_martin_west_window_open',
@@ -816,7 +816,7 @@ const config = {
       feature: 'martin_south_window_open',
       type: 'window',
       config: {
-        name: 'Мартин юг',
+        name: 'Прозорец юг',
         device: devices.martin,
         object_id: 'martin_south_window_open',
         unique_id: 'homy_martin_south_window_open',
@@ -828,7 +828,7 @@ const config = {
       feature: 'gergana_external_door_open',
       type: 'door',
       config: {
-        name: 'Гергана тераса',
+        name: 'Врата тераса',
         device: devices.gergana,
         object_id: 'gergana_external_door_open',
         unique_id: 'homy_gergana_external_door_open',
@@ -840,7 +840,7 @@ const config = {
       feature: 'boris_external_door_open',
       type: 'door',
       config: {
-        name: 'Борис тераса',
+        name: 'Врата тераса',
         device: devices.boris,
         object_id: 'boris_external_door_open',
         unique_id: 'homy_boris_external_door_open',
@@ -852,7 +852,7 @@ const config = {
       feature: 'gergana_window_open',
       type: 'window',
       config: {
-        name: 'Гергана',
+        name: 'Прозорец',
         device: devices.gergana,
         object_id: 'gergana_window_open',
         unique_id: 'homy_gergana_window_open',
@@ -864,7 +864,7 @@ const config = {
       feature: 'boris_window_open',
       type: 'window',
       config: {
-        name: 'Борис',
+        name: 'Прозорец',
         device: devices.boris,
         object_id: 'boris_window_open',
         unique_id: 'homy_boris_window_open',
@@ -876,7 +876,7 @@ const config = {
       feature_type: 'relay',
       feature: 'service_boiler_contactor',
       config: {
-        name: 'Бойлер',
+        name: 'Контактор',
         unique_id: 'service_boiler_contactor',
         device: devices.boiler,
         device_class: 'outlet',
@@ -945,7 +945,7 @@ const config = {
       feature: 'temperature_boiler_low',
       type: 'temperature',
       config: {
-        name: 'Температура бойлер долу',
+        name: 'Температура долу',
         device: devices.boiler,
         object_id: 'temperature_boiler_low',
         unique_id: 'homy_temperature_boiler_low',
@@ -957,7 +957,7 @@ const config = {
       feature: 'temperature_boiler_high',
       type: 'temperature',
       config: {
-        name: 'Температура бойлер горе',
+        name: 'Температура горе',
         device: devices.boiler,
         object_id: 'temperature_boiler_high',
         unique_id: 'homy_temperature_boiler_high',
@@ -969,7 +969,7 @@ const config = {
       feature: 'temperature_solar_panel',
       type: 'temperature',
       config: {
-        name: 'Температура соларен панел',
+        name: 'Температура',
         device: devices.solarPanel,
         object_id: 'temperature_solar_panel',
         unique_id: 'homy_temperature_solar_panel',
@@ -981,7 +981,7 @@ const config = {
       feature: 'temperature_room_service',
       type: 'temperature',
       config: {
-        name: 'Температура сервизно',
+        name: 'Температура',
         device: devices.service,
         object_id: 'temperature_room_service',
         unique_id: 'homy_temperature_room_service',
@@ -995,7 +995,7 @@ const config = {
       feature: 'solar_heater_circulation',
       type: 'power',
       config: {
-        name: 'Циркулация соларен панел',
+        name: 'Циркулация',
         device: devices.solarPanel,
         object_id: 'solar_heater_circulation',
         unique_id: 'homy_solar_heater_circulation',
@@ -1020,7 +1020,7 @@ const config = {
       feature: 'boiler_controller',
       options: ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until'],
       config: {
-        name: 'Режим управление бойлер',
+        name: 'Режим на управление',
         unique_id: 'boiler_controller_mode',
         device: devices.boiler,
         icon: 'mdi:water-boiler',
@@ -1032,7 +1032,7 @@ const config = {
       feature: 'boiler_controller_status',
       type: null,
       config: {
-        name: 'Състояние контролер бойлер',
+        name: 'Състояние на контролера',
         device: devices.boiler,
         object_id: 'boiler_controller_status',
         unique_id: 'homy_boiler_controller_status',
@@ -1047,7 +1047,7 @@ const config = {
       name: 'boilerControllerAutomation',
       bot_name: 'boilerController',
       config: {
-        name: 'Автоматизация бойлер',
+        name: 'Автоматизация',
         device: devices.boiler,
         object_id: 'automation_boiler_controller',
         icon: 'mdi:robot',
@@ -1113,7 +1113,7 @@ const config = {
       name: 'tvLivingVolumeUp',
       feature: 'tv_living_volume_up',
       config: {
-        name: 'Living Volume Up',
+        name: 'Усили звука',
         device: devices.livingroom,
         object_id: 'tv_living_volume_up',
         icon: 'mdi:volume-plus',
@@ -1124,7 +1124,7 @@ const config = {
       name: 'tvLivingVolumeDown',
       feature: 'tv_living_volume_down',
       config: {
-        name: 'Living Volume Down',
+        name: 'Намали звука',
         device: devices.livingroom,
         object_id: 'tv_living_volume_down',
         icon: 'mdi:volume-minus',
@@ -1138,7 +1138,7 @@ const config = {
       feature: 'living_volume',
       type: null,
       config: {
-        name: 'Living Volume',
+        name: 'Ниво на звука',
         device: devices.livingroom,
         object_id: 'living_volume',
         unique_id: 'homy_living_volume',
@@ -1154,7 +1154,7 @@ const config = {
       name: 'tvLivingPower',
       feature: 'tv_living_power',
       config: {
-        name: 'TV Power',
+        name: 'Телевизор',
         device: devices.livingroom,
         object_id: 'tv_living_power',
         icon: 'mdi:power',

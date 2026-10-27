@@ -16,7 +16,7 @@
           "tap_action": {
             "action": "toggle",
             "confirmation": {
-              "text": "This switches mains to the server's UPS. Continue?"
+              "text": "Това превключва захранването на сървъра към UPS. Продължаваш ли?"
             }
           },
           "hold_action": {

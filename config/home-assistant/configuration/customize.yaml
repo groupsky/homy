@@ -1,28 +1,128 @@
 sensor.inverter_sun2000_accumulated_yield:
-  friendly_name: Inverter
+  friendly_name: Инвертор
 
 sensor.heat_pump_dds024mr_tot_act:
-  friendly_name: Heat pump (after 2023-10-15)
+  friendly_name: Термопомпа (след 2023-10-15)
 sensor.heat_pump_energy_used:
-  friendly_name: Heat pump (until 2023-10-15)
+  friendly_name: Термопомпа (до 2023-10-15)
 
 sensor.main_energy_sdm630_total_import_kwh:
-  friendly_name: Import (until 2023-11-11)
+  friendly_name: Внос (до 2023-11-11)
 sensor.main_energy_used:
-  friendly_name: Import (until 2023-10-15)
+  friendly_name: Внос (до 2023-10-15)
 sensor.main_energy_sdm630_total_export_kwh:
-  friendly_name: Export (until 2023-11-11)
+  friendly_name: Износ (до 2023-11-11)
 sensor.main_energy_sdm630_a_import_kwh_2023_11_11:
-  friendly_name: Import L1
+  friendly_name: Внос L1
 sensor.main_energy_sdm630_b_import_kwh_2023_11_11:
-  friendly_name: Import L2
+  friendly_name: Внос L2
 sensor.main_energy_sdm630_c_import_kwh_2023_11_11:
-  friendly_name: Import L3
+  friendly_name: Внос L3
 sensor.main_energy_sdm630_a_export_kwh_2023_11_11:
-  friendly_name: Export L1
+  friendly_name: Износ L1
 sensor.main_energy_sdm630_b_export_kwh_2023_11_11:
-  friendly_name: Export L2
+  friendly_name: Износ L2
 sensor.main_energy_sdm630_c_export_kwh_2023_11_11:
-  friendly_name: Export L3
+  friendly_name: Износ L3
 sensor.ev_charger_total:
-  friendly_name: EV charger
+  friendly_name: Зарядна станция общо
+
+# Bulgarian names for the utility meters in utility_meters.yaml (#1842).
+# The meters have no unique_id, so Home Assistant builds their entity_id from
+# the `name` there. Do not change that name: the entity_id would change and
+# the Energy dashboard would lose the history. Set the shown name here.
+sensor.water_pump_energy:
+  friendly_name: Водна помпа
+sensor.oven_energy:
+  friendly_name: Фурна
+sensor.stove_energy:
+  friendly_name: Котлон
+sensor.dishwasher_energy:
+  friendly_name: Съдомиялна
+sensor.laundry_energy:
+  friendly_name: Пералня
+sensor.boiler_energy:
+  friendly_name: Бойлер
+sensor.heat_pump_energy:
+  friendly_name: Термопомпа
+sensor.microwave_energy:
+  friendly_name: Микровълнова
+sensor.ev_charger_energy:
+  friendly_name: Зарядна станция
+select.grid_import:
+  friendly_name: Тарифа на мрежата
+sensor.grid_import_day:
+  friendly_name: Мрежа ден
+sensor.grid_import_night:
+  friendly_name: Мрежа нощ
+
+# Bulgarian names for Zigbee2MQTT and other devices whose names come from
+# outside this repo (#1842). Do not rename the devices in Zigbee2MQTT: the
+# entity ids would change. Link quality, update and diagnostic entities are
+# not renamed.
+sensor.living_temp_humid_temperature:
+  friendly_name: Хол Температура
+sensor.living_temp_humid_humidity:
+  friendly_name: Хол Влажност
+sensor.living_temp_humid_battery:
+  friendly_name: Хол Батерия на сензора
+binary_sensor.back_door_open_contact:
+  friendly_name: Задна врата
+binary_sensor.back_door_open_battery_low:
+  friendly_name: Задна врата Слаба батерия
+binary_sensor.back_door_open_tamper:
+  friendly_name: Задна врата Отваряне на сензора
+sensor.back_door_open_battery:
+  friendly_name: Задна врата Батерия
+sensor.floor1_alarm_temperature:
+  friendly_name: Аларма етаж 1 Температура
+sensor.floor1_alarm_humidity:
+  friendly_name: Аларма етаж 1 Влажност
+binary_sensor.floor1_alarm_battery_low:
+  friendly_name: Аларма етаж 1 Слаба батерия
+switch.floor1_alarm_alarm:
+  friendly_name: Аларма етаж 1 Аларма
+switch.floor1_alarm_temperature_alarm:
+  friendly_name: Аларма етаж 1 Аларма за температура
+switch.floor1_alarm_humidity_alarm:
+  friendly_name: Аларма етаж 1 Аларма за влажност
+switch.p5_night_ext_lights:
+  friendly_name: Нощно външно осветление
+switch.circulation_heatpump:
+  friendly_name: Циркулация термопомпа
+cover.2024_back_window:
+  friendly_name: Заден прозорец
+climate.bedroom:
+  friendly_name: Спалня
+climate.living_room:
+  friendly_name: Хол
+binary_sensor.dishwasher:
+  friendly_name: Съдомиялна работи
+binary_sensor.laundry:
+  friendly_name: Пералня работи
+binary_sensor.oven:
+  friendly_name: Фурна работи
+binary_sensor.stove:
+  friendly_name: Котлон работи
+sensor.ev_charger_power:
+  friendly_name: Зарядна станция мощност
+binary_sensor.ioniq_fault_stored:
+  friendly_name: Ioniq Запазени грешки
+binary_sensor.ioniq_fault_pending:
+  friendly_name: Ioniq Чакащи грешки
+sensor.ioniq_soc:
+  friendly_name: Ioniq Заряд на батерията
+sensor.ioniq_12v:
+  friendly_name: Ioniq 12V батерия
+sensor.ioniq_odometer:
+  friendly_name: Ioniq Километраж
+sensor.ioniq_state:
+  friendly_name: Ioniq Състояние
+sensor.ioniq_tyre_fl:
+  friendly_name: Ioniq Гума пред ляво
+sensor.ioniq_tyre_fr:
+  friendly_name: Ioniq Гума пред дясно
+sensor.ioniq_tyre_rl:
+  friendly_name: Ioniq Гума зад ляво
+sensor.ioniq_tyre_rr:
+  friendly_name: Ioniq Гума зад дясно

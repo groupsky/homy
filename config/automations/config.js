@@ -15,7 +15,7 @@ const devices = {
     identifiers: 'boiler_eldom_200l',
     manufacturer: 'eldom',
     model: '200l',
-    name: 'boiler',
+    name: 'Бойлер',
     suggested_area: 'Сервизно'
   },
 }
@@ -330,7 +330,7 @@ module.exports = {
       // Retained, so HA finds the entity again after a restart (#1712)
       retain: true,
       payload: {
-        name: 'boiler energy meter',
+        name: 'Енергия',
         unique_id: 'boiler_energy_meter',
         device: devices.boiler,
         device_class: 'energy',
@@ -346,7 +346,7 @@ module.exports = {
       topic: 'homeassistant/binary_sensor/boiler-heating/config',
       retain: true,
       payload: {
-        name: 'boiler heating',
+        name: 'Нагряване',
         unique_id: 'boiler_status_heating',
         device: devices.boiler,
 
@@ -367,14 +367,13 @@ module.exports = {
       duration: 2*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_pots/set`,
     },
-    /* disable until the new valve is installed
     irrigationGrassPergolaSchedule: {
       type: 'irrigation',
+      enabled: false,
       schedule: '0 0 7 * * *',
       duration: 20*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/set`,
     },
-    */
     timeoutStopIrrigationGrassPergola: {
       type: 'timeout-emit',
       listenTopic: `${featuresPrefix}/relay/irrigation_grass_pergola/status`,
