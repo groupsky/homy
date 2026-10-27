@@ -673,7 +673,7 @@
               },
               {
                 "id": "unit",
-                "value": "kwatt"
+                "value": "suffix: kW"
               },
               {
                 "id": "decimals",
@@ -693,7 +693,7 @@
               },
               {
                 "id": "unit",
-                "value": "kwatt"
+                "value": "suffix: kW"
               },
               {
                 "id": "decimals",
