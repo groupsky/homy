@@ -130,7 +130,7 @@ Multiple interfaces for monitoring and control:
 - **modbus-serial `ndjson` integration**: every modbus service writes each raw reading to daily NDJSON files too (`<RAW_DATA_PATH>/<stream>/YYYY-MM-DD.<service>.ndjson`); on a bus moved to ya-modbus, its adapter writes them
 - **historian-***: Manual data migration utilities
 - **weather**: Outdoor weather (current, forecast, history) from the Open-Meteo web API to InfluxDB, and the current temperature retained on MQTT `homy/weather/current` for the living-room thermostat (`docker/weather/CLAUDE.md`)
-- **energy-report**: The energy of each month from the meter counters in InfluxDB (day/night, cost, same month of last year) to the `energy_monthly` measurement, and a short Telegram message on the 1st (`docker/energy-report/CLAUDE.md`)
+- **energy-report**: The energy of each month from the meter counters in InfluxDB (day/night, cost, same month of last year) to the `energy_monthly` measurement, and a short Telegram message on the 1st; also the Ioniq charges (home or away, home cost) to `ioniq_charges` and a retained summary on `homy/ioniq/charges` for Home Assistant (`docker/energy-report/CLAUDE.md`)
 
 ## Current State & Architectural Challenges
 

@@ -1,7 +1,7 @@
 {
   "name": "energy-report",
   "version": "1.0.0",
-  "description": "Monthly energy report from the meter counters: InfluxDB energy_monthly and a Telegram message",
+  "description": "Monthly energy report from the meter counters: InfluxDB energy_monthly and a Telegram message; Ioniq charges: ioniq_charges and an MQTT summary",
   "license": "ISC",
   "private": true,
   "type": "module",
