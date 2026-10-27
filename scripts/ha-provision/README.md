@@ -28,8 +28,8 @@ cannot take from YAML:
   is not in the registry, has no device to name, or names one device twice
   differently.
 
-A rebuilt data volume, or a row edited in the UI, reverts the dashboards. Re-run the
-script to restore them. It is idempotent.
+A rebuilt data volume reverts all of these, and an edit in the UI reverts what it
+touches. Re-run the script to restore them. It is idempotent.
 
 ## Safety checks
 
