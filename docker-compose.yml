@@ -945,6 +945,8 @@ services:
     depends_on:
       - influxdb
       - telegram-bridge
+      # The Ioniq charges summary, homy/ioniq/charges (retained, anonymous).
+      - broker
     restart: unless-stopped
     networks:
       - automation
@@ -956,11 +958,12 @@ services:
       - influxdb_write_user
       - influxdb_write_user_password
     environment:
-      # The InfluxDB and telegram-bridge addresses are fixed in the code.
-      # Reads the meter counters and the stored months with the read user.
+      # The InfluxDB, telegram-bridge and broker addresses are fixed in the code.
+      # Reads the meter counters, the Ioniq charges and the stored months with
+      # the read user.
       - INFLUXDB_READ_USERNAME_FILE=/run/secrets/influxdb_read_user
       - INFLUXDB_READ_PASSWORD_FILE=/run/secrets/influxdb_read_user_password
-      # Writes only energy_monthly, with the write user.
+      # Writes only energy_monthly and ioniq_charges, with the write user.
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - ENERGY_REPORT_DASHBOARD_URL=${ENERGY_REPORT_DASHBOARD_URL:-}

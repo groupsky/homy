@@ -51,7 +51,22 @@
               },
               {
                 "type": "markdown",
-                "content": "Подробно в Grafana:\n[Общо](grafana:/d/ioniq-overview) · [Батерия](grafana:/d/ioniq-battery) · [12 V](grafana:/d/ioniq-12v-ldc) · [Пътувания и зареждания](grafana:/d/ioniq-sessions) · [Гуми](grafana:/d/ioniq-tires)"
+                "content": "Подробно в Grafana:\n[Общо](grafana:/d/ioniq-overview) · [Батерия](grafana:/d/ioniq-battery) · [12 V](grafana:/d/ioniq-12v-ldc) · [Пътувания и зареждания](grafana:/d/ioniq-sessions) · [Зареждания](grafana:/d/ioniq-charges) · [Гуми](grafana:/d/ioniq-tires)"
+              }
+            ]
+          },
+          {
+            "title": "Зареждания",
+            "path": "charges",
+            "cards": [
+              {
+                "type": "markdown",
+                "title": "Зареждания",
+                "content": "{%- macro n(v, d=1) -%}{{ ('%.' ~ d ~ 'f') % v if v is number else '—' }}{%- endmacro -%}\n{%- macro hm(m) -%}{% if m is number %}{{ (m // 60) | int }}:{{ '%02d' % ((m % 60) | int) }}{% else %}—{% endif %}{%- endmacro -%}\n{%- set t = state_attr('sensor.ioniq_charges', 'totals') -%}\n{%- set cs = state_attr('sensor.ioniq_charges', 'charges') or [] -%}\n{%- if t is none -%}\nНяма данни.\n{%- else -%}\n| Този месец | |\n|---|---|\n| Зареждания | {{ t.count }}, у дома {{ t.home }} |\n| В батерията | {{ n(t.kwh) }} kWh |\n| От тока у дома | {{ n(t.meter_kwh) }} kWh |\n| Цена у дома | {% if t.cost is number %}**{{ n(t.cost, 2) }} €**: ден {{ n(t.cost_day, 2) }}, нощ {{ n(t.cost_night, 2) }}{% else %}няма цена{% endif %} |\n\n**Последните {{ cs | length }}**\n\n| Кога | Къде | % | kWh | Време | € |\n|---|---|---|---|---|---|\n{%- for c in cs %}\n{%- set s = as_datetime(c.start) | as_local %}\n| {{ s.strftime('%d.%m') }}<br>{{ s.strftime('%H:%M') }} | {{ {'home': '🏠', 'away': '🛣️'}.get(c.place, '?') }}<br>{{ c.type if c.type in ['AC', 'DC'] else '?' }} | {{ n(c.soc_from, 0) }}→<br>{{ n(c.soc_to, 0) }} | {{ n(c.kwh) }}<br>{% if c.meter_kwh is number %}⚡{{ n(c.meter_kwh) }}{% endif %} | {{ hm(c.min) }}<br>{{ n(c.avg_kw) }}/{{ n(c.max_kw) }} | {% if c.cost is number %}{{ n(c.cost, 2) }}<br>д {{ n(c.cost_day, 2) }}<br>н {{ n(c.cost_night, 2) }}{% else %}—{% endif %} |\n{%- endfor %}\n{%- endif %}\n\n🏠 у дома, 🛣️ навън: по тока, който зарядната у дома е взела. kWh: в батерията, ⚡ от тока у дома. Време: ч:мин, после средна/макс. kW. €: цена у дома, д = ден, н = нощ."
+              },
+              {
+                "type": "markdown",
+                "content": "Цялата история в Grafana: [Зареждания](grafana:/d/ioniq-charges)"
               }
             ]
           }
