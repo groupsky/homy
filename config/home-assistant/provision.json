@@ -58,5 +58,68 @@
         ]
       }
     }
+  },
+  "registry_names": {
+    "sensor.living_temp_humid_temperature": {
+      "device": "Хол",
+      "name": "Температура"
+    },
+    "sensor.living_temp_humid_humidity": {
+      "device": "Хол",
+      "name": "Влажност"
+    },
+    "sensor.living_temp_humid_battery": {
+      "device": "Хол",
+      "name": "Батерия на сензора"
+    },
+    "binary_sensor.back_door_open_contact": {
+      "device": "Задна врата",
+      "name": "Състояние"
+    },
+    "binary_sensor.back_door_open_battery_low": {
+      "device": "Задна врата",
+      "name": "Слаба батерия"
+    },
+    "binary_sensor.back_door_open_tamper": {
+      "device": "Задна врата",
+      "name": "Отваряне на сензора"
+    },
+    "sensor.back_door_open_battery": {
+      "device": "Задна врата",
+      "name": "Батерия"
+    },
+    "sensor.floor1_alarm_temperature": {
+      "device": "Аларма етаж 1",
+      "name": "Температура"
+    },
+    "sensor.floor1_alarm_humidity": {
+      "device": "Аларма етаж 1",
+      "name": "Влажност"
+    },
+    "binary_sensor.floor1_alarm_battery_low": {
+      "device": "Аларма етаж 1",
+      "name": "Слаба батерия"
+    },
+    "switch.floor1_alarm_alarm": {
+      "device": "Аларма етаж 1",
+      "name": "Аларма"
+    },
+    "switch.floor1_alarm_temperature_alarm": {
+      "device": "Аларма етаж 1",
+      "name": "Аларма за температура"
+    },
+    "switch.floor1_alarm_humidity_alarm": {
+      "device": "Аларма етаж 1",
+      "name": "Аларма за влажност"
+    },
+    "switch.p5_night_ext_lights": {
+      "device": "Нощно външно осветление"
+    },
+    "switch.circulation_heatpump": {
+      "device": "Циркулация термопомпа"
+    },
+    "cover.2024_back_window": {
+      "device": "Заден прозорец"
+    }
   }
 }

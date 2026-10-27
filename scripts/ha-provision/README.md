@@ -15,8 +15,20 @@ cannot take from YAML:
   is replaced on the next run. The `url_path` needs a hyphen. `title` and
   `icon` are used only when the dashboard is created; change them later in the
   UI (Settings → Dashboards). Today: `dashboard-ioniq` (#1800).
+- **Registry names** (`registry_names`), keyed by entity id:
+  `{ "name": <entity name>, "device": <device name> }`, either optional. The
+  script writes only two fields: the entity registry `name` and the
+  `name_by_user` of the entity's device, found through the entity's
+  `device_id`. It never changes an entity id, and it writes only a value that
+  differs. The More-info header is built from these names, so they are the
+  Bulgarian names of devices that come from outside the repo, such as the
+  Zigbee2MQTT ones (#1849). Entities without a device keep their name in
+  `configuration/customize.yaml`. Do not put an IEEE address, MAC or serial
+  here: this repo is public. The script stops, and exits `1`, when an entity
+  is not in the registry, has no device to name, or names one device twice
+  differently.
 
-A rebuilt data volume, or a row edited in the UI, reverts both. Re-run the
+A rebuilt data volume, or a row edited in the UI, reverts the dashboards. Re-run the
 script to restore them. It is idempotent.
 
 ## Safety checks
@@ -51,7 +63,7 @@ docker run --rm --network homy_automation \
   node /w/scripts/ha-provision/index.mjs --dry-run
 ```
 
-Drop `--dry-run` to apply. No container is restarted; HA applies both changes
+Drop `--dry-run` to apply. No container is restarted; HA applies all changes
 live.
 
 One setting comes from `.env`: `HA_GRAFANA_BASE_URL`, the base of the
