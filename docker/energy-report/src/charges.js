@@ -63,6 +63,8 @@ export function chargeRow (session, { meter, carMinKw, meterMaxW }, { prices, pr
   else if (orNull(carMinKw) !== null && carMinKw < 0) maxKw = -carMinKw
   // Older months had other prices, in BGN: they get no cost, as in the report.
   const priced = home && month >= pricesFrom
+  const costDay = priced ? round(meter.day * prices.day) : null
+  const costNight = priced ? round(meter.night * prices.night) : null
   return {
     start: session.start,
     end: orNull(session.end),
@@ -75,9 +77,10 @@ export function chargeRow (session, { meter, carMinKw, meterMaxW }, { prices, pr
     meter_kwh: home ? round(meter.kwh) : null,
     meter_kwh_day: home ? round(meter.day) : null,
     meter_kwh_night: home ? round(meter.night) : null,
-    cost_eur: priced ? round(meter.day * prices.day + meter.night * prices.night) : null,
-    cost_day_eur: priced ? round(meter.day * prices.day) : null,
-    cost_night_eur: priced ? round(meter.night * prices.night) : null,
+    // the sum of the rounded parts, so day + night is the cost
+    cost_eur: priced ? round(costDay + costNight) : null,
+    cost_day_eur: costDay,
+    cost_night_eur: costNight,
     duration_min: session.duration_is_charge && orNull(session.duration_sec) !== null ? round(session.duration_sec / 60, 1) : null,
     power_avg_kw: maybe(avgKw),
     power_max_kw: maybe(maxKw)

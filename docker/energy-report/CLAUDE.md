@@ -130,8 +130,11 @@ dependencies. The broker takes anonymous clients on the automation network.
 
 ### Compute the charges again
 
-A charge is computed once. To compute them again (after a change of the rules), drop
-them with the write user and restart the service:
+A charge is computed once, so a later change to its session is not picked up: a session
+that the bot sends again with other values, or meter readings that arrive after a charge
+was marked `unknown`. A charge that fails is logged and tried again at the next refresh.
+To compute the charges again (after a change of the rules, or for such a case), drop them
+with the write user and restart the service:
 
 ```bash
 docker exec -i homy-influxdb-1 sh <<'EOF'

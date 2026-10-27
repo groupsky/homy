@@ -70,6 +70,13 @@ test('the peak of a home charge is the meter peak even when the car logged a par
   assert.equal(row.power_max_kw, 1.3)
 })
 
+test('the cost of a charge is the sum of its rounded day and night costs', () => {
+  const row = chargeRow(session(), { meter: { kwh: 2.0045, day: 0.0045, night: 2 }, carMinKw: null, meterMaxW: 1300 }, { prices: { day: 0.3, night: 0.1 }, pricesFrom: '2026-07' })
+  assert.equal(row.cost_day_eur, 0.001)
+  assert.equal(row.cost_night_eur, 0.2)
+  assert.equal(row.cost_eur, row.cost_day_eur + row.cost_night_eur)
+})
+
 test('a charge is away below 0.5 kWh on the house meter, and has no cost', () => {
   const row = chargeRow(session({ power_avg_kw: 45 }), { meter: { kwh: 0.01, day: 0.01, night: 0 }, carMinKw: -62.5, meterMaxW: 0 }, config)
   assert.equal(row.place, 'away')

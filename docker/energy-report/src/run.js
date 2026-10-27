@@ -118,10 +118,16 @@ export async function refreshCharges (deps, known) {
   let added = 0
   for (const session of sessions) {
     if (known.has(session.start) || !Number.isFinite(session.end)) continue
-    const row = await computeCharge(deps, session)
-    await deps.influx.write(toChargeLines([row]))
-    known.set(session.start, row)
-    added++
+    // One charge that fails must not hold back the others or the summary;
+    // it is tried again at the next refresh.
+    try {
+      const row = await computeCharge(deps, session)
+      await deps.influx.write(toChargeLines([row]))
+      known.set(session.start, row)
+      added++
+    } catch (err) {
+      deps.log(`charge at ${session.start} failed: ${err.message}`)
+    }
   }
   if (added > 0) deps.log(`ioniq charges: ${added} new, ${known.size} in all`)
   await deps.publish(CHARGES_TOPIC, JSON.stringify(chargeSummary([...known.values()], deps.now(), deps.config.pricesFrom)))

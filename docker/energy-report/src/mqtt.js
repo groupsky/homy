@@ -47,12 +47,16 @@ function publishPacket (topic, payload) {
 }
 
 // Resolves once the broker has acknowledged the message; rejects on a refused
-// connection, a socket error or no answer within `timeoutMs`.
+// connection, a socket error, a closed connection or no answer within
+// `timeoutMs`.
 export function publishRetained ({ host, port, clientId, timeoutMs = 10000 }, topic, payload) {
   return new Promise((resolve, reject) => {
     const socket = connect({ host, port })
     let buffer = Buffer.alloc(0)
+    let finished = false
     const done = (err) => {
+      if (finished) return
+      finished = true
       clearTimeout(timer)
       if (err) socket.destroy()
       else socket.end(packet(DISCONNECT << 4, Buffer.alloc(0)))
@@ -61,6 +65,7 @@ export function publishRetained ({ host, port, clientId, timeoutMs = 10000 }, to
     }
     const timer = setTimeout(() => done(new Error(`MQTT publish to ${host}:${port} timed out`)), timeoutMs)
     socket.on('error', (err) => done(new Error(`MQTT publish to ${host}:${port}: ${err.message}`)))
+    socket.on('close', () => done(new Error(`MQTT publish to ${host}:${port}: the broker closed the connection`)))
     socket.on('connect', () => socket.write(connectPacket(clientId)))
     // Both answers are 4 bytes: type, length 2, then 2 bytes.
     socket.on('data', (data) => {

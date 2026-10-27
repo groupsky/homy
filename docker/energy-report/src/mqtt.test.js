@@ -89,3 +89,15 @@ test('publishRetained fails when the broker is away', async () => {
   await new Promise((resolve) => server.close(resolve))
   await assert.rejects(publishRetained({ host: '127.0.0.1', port, clientId: 'x' }, 't', '{}'))
 })
+
+test('publishRetained fails at once when the broker closes the connection', async () => {
+  const server = createServer((socket) => socket.end())
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const started = Date.now()
+    await assert.rejects(publishRetained({ host: '127.0.0.1', port: server.address().port, clientId: 'x', timeoutMs: 5000 }, 't', '{}'), /closed/)
+    assert.ok(Date.now() - started < 1000)
+  } finally {
+    server.close()
+  }
+})

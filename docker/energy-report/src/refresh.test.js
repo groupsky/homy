@@ -109,3 +109,21 @@ test('runCharges logs a failed publish and goes on', async () => {
   // the charges are written once, even though the publish failed
   assert.equal(deps.influx.written.length, 2)
 })
+
+test('refreshCharges logs a charge that fails, goes on with the others and still publishes', async () => {
+  const influx = fakeInflux()
+  const query = influx.query
+  influx.query = async (q) => {
+    if (q.includes('min("hv_kw")') && q.includes(`time >= ${HOME.start}ms`)) throw new Error('InfluxDB query: timeout')
+    return query(q)
+  }
+  const deps = fakeDeps({ influx })
+  const known = new Map()
+  await refreshCharges(deps, known)
+  assert.equal(influx.written.length, 1)
+  assert.match(influx.written[0], /place=away/)
+  assert.match(deps.logged[0], /^charge at \d+ failed: InfluxDB query: timeout/)
+  assert.equal(deps.published.length, 1)
+  // the next refresh tries the failed charge again
+  assert.equal(known.has(HOME.start), false)
+})
