@@ -86,7 +86,7 @@ describe('automation switches', () => {
     expect(switches.filter((botName) => !configBots[botName])).toEqual([])
   })
 
-  it('the pergola schedule stays off until the new valve is installed', () => {
+  it('the pergola schedule is off by default, like the other zones', () => {
     const configBots = require(path.join(configDir, 'config.js')).bots
     expect(configBots.irrigationGrassPergolaSchedule).toMatchObject({ type: 'irrigation', enabled: false })
   })

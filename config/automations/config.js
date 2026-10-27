@@ -367,9 +367,6 @@ module.exports = {
       duration: 2*60000,
       valveControlTopic: `${featuresPrefix}/relay/irrigation_flower_pots/set`,
     },
-    // Off until the new valve is installed. The bot must exist: the Home
-    // Assistant switch "automation_irrigation_grass_pergola" reads its retained
-    // status, and without the bot the switch stays "unknown" (#1842).
     irrigationGrassPergolaSchedule: {
       type: 'irrigation',
       enabled: false,
