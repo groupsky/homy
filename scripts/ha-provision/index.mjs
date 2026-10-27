@@ -5,12 +5,14 @@
 // exposure to assistants. Safe to re-run;
 // --dry-run reports what would change and writes nothing. See README.md.
 import { readFileSync } from 'node:fs'
-import { applyRows, planExposure, planFullDashboard } from './lib.mjs'
+import { applyRows, fillGrafanaLinks, planExposure, planFullDashboard } from './lib.mjs'
 import { connect, readToken } from './ha-websocket.mjs'
 
 // Fixed on purpose, not configurable: the script only ever talks to the HA
 // container over the automation network, reads the repo's desired state and
-// takes its admin token from the Docker secret mount.
+// takes its admin token from the Docker secret mount. The one setting is
+// HA_GRAFANA_BASE_URL, the base of the dashboards' Grafana links; empty or
+// missing leaves the names without links.
 const HA_URL = 'ws://ha:8123/api/websocket'
 const TOKEN_FILE = '/run/secrets/ha_provision_token'
 const DESIRED = new URL('../../config/home-assistant/provision.json', import.meta.url)
@@ -93,8 +95,10 @@ async function main () {
     await provisionExposure(ha, desired.exposure ?? {}, dryRun)
     let ok = true
     for (const [urlPath, entry] of Object.entries(desired.dashboards ?? {})) {
-      if (entry.config) await provisionFullDashboard(ha, urlPath, entry, dryRun)
-      else ok = (await provisionDashboard(ha, urlPath, entry.rows, dryRun)) && ok
+      if (entry.config) {
+        const config = fillGrafanaLinks(entry.config, process.env.HA_GRAFANA_BASE_URL)
+        await provisionFullDashboard(ha, urlPath, { ...entry, config }, dryRun)
+      } else ok = (await provisionDashboard(ha, urlPath, entry.rows, dryRun)) && ok
     }
     return ok ? 0 : 1
   } finally {

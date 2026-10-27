@@ -94,3 +94,23 @@ export function planFullDashboard (urlPath, existing, current, desired) {
     : { url_path: urlPath, title: desired.title, icon: desired.icon, show_in_sidebar: true, require_admin: false }
   return { create, save: !isDeepStrictEqual(current, desired.config) }
 }
+
+/**
+ * Resolves, in a copy of a dashboard config, every markdown link written as
+ * `[name](grafana:/path)`. With `baseUrl` set it becomes a link to
+ * `baseUrl/path`; with it empty or missing only the name is left, so a phone
+ * shows no broken link (#1844). The base URL lives in the private .env, so no
+ * host name is in the repo.
+ */
+export function fillGrafanaLinks (config, baseUrl) {
+  const base = (baseUrl ?? '').trim().replace(/\/+$/, '')
+  const fill = (node) => {
+    if (typeof node === 'string') {
+      return node.replace(/\[([^\]]*)\]\(grafana:(\/[^)\s]*)\)/g, (_, name, path) => (base ? `[${name}](${base}${path})` : name))
+    }
+    if (Array.isArray(node)) return node.map(fill)
+    if (isObject(node)) return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, fill(value)]))
+    return node
+  }
+  return fill(config)
+}

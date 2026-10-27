@@ -51,7 +51,7 @@
               },
               {
                 "type": "markdown",
-                "content": "Подробно в Grafana:\n[Общо](http://grafana/d/ioniq-overview) · [Батерия](http://grafana/d/ioniq-battery) · [12 V](http://grafana/d/ioniq-12v-ldc) · [Пътувания и зареждания](http://grafana/d/ioniq-sessions) · [Гуми](http://grafana/d/ioniq-tires)"
+                "content": "Подробно в Grafana:\n[Общо](grafana:/d/ioniq-overview) · [Батерия](grafana:/d/ioniq-battery) · [12 V](grafana:/d/ioniq-12v-ldc) · [Пътувания и зареждания](grafana:/d/ioniq-sessions) · [Гуми](grafana:/d/ioniq-tires)"
               }
             ]
           }
