@@ -145,10 +145,10 @@ test('does not mutate the config it fills in', () => {
 })
 
 const registryDevices = [{ id: 'dev1', name: 'living-temp-humid', name_by_user: null }]
-const registryEntities = {
-  'sensor.room_temperature': { entity_id: 'sensor.room_temperature', device_id: 'dev1', name: null },
-  'sensor.room_humidity': { entity_id: 'sensor.room_humidity', device_id: 'dev1', name: null }
-}
+const registryEntities = new Map([
+  ['sensor.room_temperature', { entity_id: 'sensor.room_temperature', device_id: 'dev1', name: null }],
+  ['sensor.room_humidity', { entity_id: 'sensor.room_humidity', device_id: 'dev1', name: null }]
+])
 
 test('plans the device and entity names that differ, and prints them old -> new in a dry run', () => {
   const plan = planRegistryNames({
@@ -166,7 +166,7 @@ test('plans the device and entity names that differ, and prints them old -> new 
 })
 
 test('plans no write when the registry names are already set', () => {
-  const entities = { 'sensor.room_temperature': { ...registryEntities['sensor.room_temperature'], name: 'Температура' } }
+  const entities = new Map([['sensor.room_temperature', { ...registryEntities.get('sensor.room_temperature'), name: 'Температура' }]])
   const devices = [{ ...registryDevices[0], name_by_user: 'Хол' }]
 
   const plan = planRegistryNames({ 'sensor.room_temperature': { device: 'Хол', name: 'Температура' } }, entities, devices)
@@ -183,7 +183,7 @@ test('names only the device when the entity has no name of its own', () => {
 })
 
 test('reports an entity not in the registry, without a device, or a device with two names', () => {
-  const entities = { ...registryEntities, 'sensor.template': { entity_id: 'sensor.template', device_id: null, name: null } }
+  const entities = new Map([...registryEntities, ['sensor.template', { entity_id: 'sensor.template', device_id: null, name: null }]])
 
   const plan = planRegistryNames({
     'sensor.gone': { name: 'X' },

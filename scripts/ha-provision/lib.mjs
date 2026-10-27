@@ -121,8 +121,8 @@ export function fillGrafanaLinks (config, baseUrl) {
  * and `device` the `name_by_user` of the entity's device. Either may be left
  * out. Only values that differ are planned; entity ids are never changed.
  *
- * - `entities`: `{ entity_id: entry }` from `config/entity_registry/get`,
- *   with no key for an entity that is not in the registry
+ * - `entities`: a Map of entity_id to the entry from
+ *   `config/entity_registry/get`, with no key for an entity not in the registry
  * - `devices`: the list from `config/device_registry/list`
  *
  * `errors` lists entities that cannot be named: not in the registry, without
@@ -135,7 +135,7 @@ export function planRegistryNames (desired, entities, devices) {
   const errors = []
   const deviceNames = new Map()
   for (const [entityId, want] of Object.entries(desired)) {
-    const entry = entities[entityId]
+    const entry = entities.get(entityId)
     if (!entry) {
       errors.push(`${entityId}: not in the entity registry`)
       continue

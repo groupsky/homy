@@ -32,10 +32,10 @@ async function provisionExposure (ha, desired, dryRun) {
 // Sets the device name_by_user and the entity registry name, never the entity
 // id (#1849). Returns false when an entity cannot be named.
 async function provisionRegistryNames (ha, desired, dryRun) {
-  const entities = {}
+  const entities = new Map()
   for (const entityId of Object.keys(desired)) {
     try {
-      entities[entityId] = await ha.call({ type: 'config/entity_registry/get', entity_id: entityId })
+      entities.set(entityId, await ha.call({ type: 'config/entity_registry/get', entity_id: entityId }))
     } catch (err) {
       if (!/not_found/.test(err.message)) throw err
     }
