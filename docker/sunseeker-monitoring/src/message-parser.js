@@ -3,7 +3,7 @@
  * Converts MQTT messages to InfluxDB data points
  */
 
-import { SUNSEEKER_MODES, TEMPERATURE, MEASUREMENTS, COMMAND_TYPES } from './constants.js';
+import { SUNSEEKER_MODES, TEMPERATURE, MEASUREMENTS, COMMAND_TYPES, RAIN_KEY_PATTERN, RAIN_MAX_DEPTH } from './constants.js';
 import { safeJsonParse, extractDeviceIdFromTopic } from './utils.js';
 import { logger } from './logger.js';
 
@@ -23,13 +23,94 @@ export class SunseekerMessageParser {
     if (!data) return null;
 
     const deviceId = extractDeviceIdFromTopic(topic) || data.deviceSn;
-    
+
+    // The rain sensor's field name is not known yet (#1841), so every field
+    // with a rain name is logged, before the device id check and for any cmd.
+    const rainFields = this._findRainFields(data);
+    rainFields.forEach(({ path, value }) => {
+      // Strings are quoted so a newline in a value cannot fake another log line
+      const shown = typeof value === 'string' ? JSON.stringify(value) : value;
+      logger.info(`Rain field seen: cmd=${data.cmd} ${path}=${shown}`);
+    });
+
     if (!deviceId) {
       logger.warn('No device ID found in topic or payload');
       return null;
     }
 
-    return this._parseByCommand(data, deviceId);
+    const points = this._parseByCommand(data, deviceId);
+    if (rainFields.length === 0) return points;
+
+    return [...(points || []), ...this._createRainPoints(rainFields, data.cmd, deviceId)];
+  }
+
+  /**
+   * Find scalar fields whose path has a rain name (see RAIN_KEY_PATTERN).
+   * Looks into nested objects and into string values that hold a JSON object
+   * (the mower may send `data` that way).
+   * @private
+   */
+  _findRainFields(node, prefix = '', depth = 1, underRain = false) {
+    const found = [];
+    if (depth > RAIN_MAX_DEPTH) return found;
+
+    for (const [key, raw] of Object.entries(node)) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      const isRain = underRain || RAIN_KEY_PATTERN.test(key);
+      const value = this._parseJsonObjectString(raw);
+
+      if (value !== null && typeof value === 'object') {
+        found.push(...this._findRainFields(value, path, depth + 1, isRain));
+      } else if (isRain) {
+        found.push({ path, value });
+      }
+    }
+
+    return found;
+  }
+
+  /**
+   * Return the parsed object if the value is a JSON object string, else the value
+   * @private
+   */
+  _parseJsonObjectString(value) {
+    if (typeof value !== 'string' || !value.trim().startsWith('{')) return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+
+  /**
+   * Create one sunseeker_rain point per rain field
+   * @private
+   */
+  _createRainPoints(rainFields, cmd, deviceId) {
+    const timestamp = new Date();
+
+    // A null has no value to store; it is only logged
+    return rainFields.filter(({ value }) => value !== null).map(({ path, value }) => {
+      let fields;
+      if (Number.isFinite(value)) {
+        fields = { value };
+      } else if (typeof value === 'boolean') {
+        fields = { value: value ? 1 : 0 };
+      } else {
+        fields = { value_text: String(value) };
+      }
+
+      const tags = { field: path };
+      if (cmd !== undefined && cmd !== null) tags.cmd = String(cmd);
+
+      return {
+        measurement: MEASUREMENTS.RAIN,
+        device_id: deviceId,
+        fields,
+        tags,
+        timestamp
+      };
+    });
   }
 
   /**

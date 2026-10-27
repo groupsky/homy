@@ -476,6 +476,7 @@ field (`src/message-parser.js`).
 | `sunseeker_state_change` | 511 | `message_code` (int), `timestamp` (int) | Device-reported state transitions |
 | `sunseeker_commands` | 400 | `command` (int), `result` (bool) | Acknowledgements for commands sent to the mower |
 | `sunseeker_connection` | any | `connected` (bool, always `true`) | Heartbeat written on every received message — see below |
+| `sunseeker_rain` | any | `value` (float; booleans as 1/0) or `value_text` (string) | One point per rain field in a message — see below |
 
 #### `sunseeker_battery_detail` Measurement
 **Source**: `cmd` 509 log messages, whose free-text body is scraped with regexes
@@ -551,6 +552,24 @@ does, so the connectivity alert (`sunseeker-connection-lost`, ~30-35 min to page
 genuinely unreachable mower before the battery-telemetry staleness alert does (~90-95 min); see
 `config/grafana/CLAUDE.md` ("Staleness / Absence Alerts") for the alert design and the accepted
 trade-off of both firing for one real outage.
+
+#### `sunseeker_rain` Measurement
+**Source**: any message, any `cmd`, that has a scalar field whose key path has a rain name: a key
+that is `rain` or has `rain` at its start or after an underscore, case-insensitive (`rain_status`,
+`rainFlag`, `is_rain`; not `train` or `drain`), or any field inside such a key
+(`rain.rain_flag`, `rain.delay`). Nested objects are searched up to 4 levels, and a string value
+that holds a JSON object (such as `data`) is parsed first (`data.rain_status`). A `null` value is
+only logged, not stored. Added for #1841, to learn which field the mower's
+rain sensor sends; it may stay empty for weeks, since the field likely comes only when the rain
+state changes.
+
+**Extra tags**: `field` (the key path, e.g. `rain_status`, `rain.rain_flag`) and `cmd` (the
+message's `cmd`, as text; left out when the message has none). `field` is a keyword in InfluxQL,
+so quote it: `WHERE "field" = 'rain_status'`.
+
+**Fields**: `value` is always written as a float (it is in `FLOAT_FIELDS`), so a `1` and a `2.5`
+never conflict; booleans become `1`/`0`. Strings (and a number too big for a float) go to
+`value_text`.
 
 ### Outdoor Weather
 

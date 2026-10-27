@@ -62,7 +62,8 @@ export const MEASUREMENTS = {
   BATTERY_DETAIL: 'sunseeker_battery_detail',
   BATTERY_INFO: 'sunseeker_battery_info',
   STATE_CHANGE: 'sunseeker_state_change',
-  COMMANDS: 'sunseeker_commands'
+  COMMANDS: 'sunseeker_commands',
+  RAIN: 'sunseeker_rain'
 };
 
 // Fields that must always be written to InfluxDB as floats.
@@ -78,8 +79,18 @@ export const FLOAT_FIELDS = new Set([
   'voltage',
   'min_cell_voltage',
   'max_cell_voltage',
-  'current'
+  'current',
+  // sunseeker_rain: one field for every rain value, so a 1 and a 2.5 never conflict
+  'value'
 ]);
+
+// Rain fields: any key that is "rain" or starts with "rain" after the start or
+// an underscore (rain_status, rainFlag, is_rain), case-insensitive. Words that
+// only contain "rain" inside (train, drain, strain_level) do not match.
+export const RAIN_KEY_PATTERN = /(^|_)rain/i;
+
+// How deep to look for rain fields in a message (top level is 1)
+export const RAIN_MAX_DEPTH = 4;
 
 // Message command types
 export const COMMAND_TYPES = {
