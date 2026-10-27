@@ -10,6 +10,7 @@ on:
       - 'scripts/energy-backfill/**'
       - 'config/home-assistant/energy.json'
       - 'config/grafana/dashboards/energy-monthly.json'
+      - 'config/grafana/dashboards/Ioniq EV/ioniq-charges.json'
       - '.github/workflows/test-energy-report.yml'
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - 'scripts/energy-backfill/**'
       - 'config/home-assistant/energy.json'
       - 'config/grafana/dashboards/energy-monthly.json'
+      - 'config/grafana/dashboards/Ioniq EV/ioniq-charges.json'
       - '.github/workflows/test-energy-report.yml'
   workflow_dispatch:
 

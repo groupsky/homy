@@ -88,6 +88,7 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 - **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
 - **mqtt-influx-ioniq**: `ioniq/parsed/#` → InfluxDB (`ioniq` measurement; decoded Hyundai Ioniq OBD telemetry, tags `group`/`state`)
 - **mqtt-influx-ioniq-sessions**: `ioniq/derived/#` → InfluxDB (`ioniq_sessions` measurement; one record per closed trip/charge/park session from the `ioniq-sessions` bot, tag `kind`)
+- **energy-report**: `ioniq_charges`, one point per Ioniq charge with home/away and the home cost (below)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Specialized Monitoring
@@ -454,6 +455,42 @@ append-only, so downstream consumers there must de-dup on `(kind, start_ts, end_
 analysis, and the "Trips & charging" Grafana dashboard (`docs/ioniq-monitoring-alerting-spec.md` §7) — this
 measurement is its data source, unblocking the dashboard that was previously deferred for lack of session
 boundaries.
+
+#### `ioniq_charges` Measurement
+**Source**: the `energy-report` service (#1854), every 15 minutes, from the charges of `ioniq_sessions`
+and the house charger meter (`xymd1`, `device.name = charger`: `tot_act` and `ap`). Each charge is
+computed once, when it first shows in `ioniq_sessions`, and written with the write user. How it is
+made: [energy-report, Ioniq charges](../docker/energy-report/CLAUDE.md#ioniq-charges). Dashboard:
+**Ioniq EV – Зареждания** (`ioniq-charges`). No location is read or written.
+**Timestamp**: the start of the charge (`start_ts` of `ioniq_sessions`), at `ms` precision. The same
+charge written again replaces its point.
+**Tags**:
+- `place`: `home` (the house charger meter took 0.5 kWh or more during the charge), `away` (less),
+  or `unknown` (no meter reading during the charge)
+- `type`: `AC`, `DC` or `unknown`. Home is AC; away it is DC when the average or the car's peak power
+  is above 8 kW, AC below, and `unknown` without any power. (`charge_type` of `ioniq_sessions` is
+  always `unknown`.)
+- `month`: `YYYY-MM`, the local month (Europe/Sofia) of the start
+
+**Fields** (floats; an empty value is left out):
+| Field | Unit | Note |
+|---|---|---|
+| `end_ts` | epoch ms | the end of the charge session |
+| `soc_start`, `soc_end` | % | from `ioniq_sessions` |
+| `battery_kwh` | kWh | into the pack, `energy_in_kwh` of `ioniq_sessions` |
+| `meter_kwh`, `meter_kwh_day`, `meter_kwh_night` | kWh | home only: what the house charger meter took, by the EVN day/night zone |
+| `cost_eur`, `cost_day_eur`, `cost_night_eur` | EUR | home only: meter kWh × the zone price of `energy.json`, only from `ENERGY_REPORT_PRICES_FROM` on |
+| `duration_min` | min | only when the session had a real charge start and end (`duration_is_charge`) |
+| `power_avg_kw` | kW | the same condition, `power_avg_kw` of `ioniq_sessions` |
+| `power_max_kw` | kW | home: the peak of the charger meter (`ap`, AC side); away: the car's own peak (`-min(hv_kw)`) when it was awake while charging |
+
+**Queries**:
+```sql
+-- The charges of a range, newest first
+SELECT "place", "type", "battery_kwh", "meter_kwh", "cost_eur" FROM "ioniq_charges" WHERE time > now() - 30d ORDER BY time DESC
+-- kWh into the battery per month, home and away
+SELECT sum("battery_kwh") FROM "ioniq_charges" WHERE time > now() - 365d GROUP BY "month", "place"
+```
 
 ### Lawn Mower Telemetry
 

@@ -54,7 +54,7 @@ This directory contains technical documentation for the home automation system.
 
 ### Home Assistant Energy Dashboard
 - **[Energy dashboard](energy-dashboard.md)** - Grid import split into the day/night tariff, the device counters, where the prices live and how to change them each July
-- **[energy-report](../docker/energy-report/CLAUDE.md)** - The monthly energy report from the meter counters: the Grafana dashboard "Energy by month", the `energy_monthly` measurement and the Telegram message on the 1st
+- **[energy-report](../docker/energy-report/CLAUDE.md)** - The monthly energy report from the meter counters: the Grafana dashboard "Energy by month", the `energy_monthly` measurement and the Telegram message on the 1st; the Ioniq charges: `ioniq_charges`, the MQTT summary `homy/ioniq/charges` and the Grafana dashboard "Ioniq EV – Зареждания"
 
 ## Quick Reference
 

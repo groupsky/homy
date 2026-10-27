@@ -338,6 +338,7 @@ describe('runDashboardUnits', () => {
     expect(result.out.join('\n')).toContain('Ioniq EV/ioniq-overview.json');
     expect(result.out.join('\n')).toContain('batteries.json');
     expect(result.out.join('\n')).toContain('energy-monthly.json');
-    expect(result.out.join('\n')).toContain('Checking units in 15 dashboard(s)');
+    expect(result.out.join('\n')).toContain('Ioniq EV/ioniq-charges.json');
+    expect(result.out.join('\n')).toContain('Checking units in 16 dashboard(s)');
   });
 });

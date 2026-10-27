@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createInflux, storedMonths, hourlyReadings, lastYearKwh } from './influx.js'
+import { createInflux, storedMonths, hourlyReadings, lastYearKwh, chargeSessions, storedCharges, chargerStart, carMinKw } from './influx.js'
 
 const options = {
   url: 'http://influxdb:8086',
@@ -97,4 +97,49 @@ test('lastYearKwh gives the kWh of the newest point of each meter in a month', a
   })
   assert.deepEqual(await lastYearKwh(createInflux(options, fetch), '2024-11'), { main: 1257.1, charger: 0 })
   assert.equal(calls[0].url.searchParams.get('q'), 'SELECT "kwh" FROM "energy_monthly" WHERE "month" = \'2024-11\' GROUP BY "meter" ORDER BY time DESC LIMIT 1')
+})
+
+test('chargeSessions reads the charges of ioniq_sessions as rows', async () => {
+  const series = [{
+    name: 'ioniq_sessions',
+    columns: ['time', 'end_ts', 'duration_sec', 'duration_is_charge', 'energy_in_kwh', 'soc_start', 'soc_end', 'power_avg_kw'],
+    values: [[1000, 9000, 8, true, 5, 40, 60, 2.25], [20000, 30000, 10, false, 1, 50, 52, null]]
+  }]
+  const { fetch, calls } = fakeFetch({ results: [{ series }] })
+  const sessions = await chargeSessions(createInflux(options, fetch))
+  assert.match(calls[0].url.searchParams.get('q'), /FROM "ioniq_sessions" WHERE "kind" = 'charge'$/)
+  assert.deepEqual(sessions[0], { start: 1000, end: 9000, duration_sec: 8, duration_is_charge: true, energy_in_kwh: 5, soc_start: 40, soc_end: 60, power_avg_kw: 2.25 })
+  assert.equal(sessions[1].power_avg_kw, null)
+})
+
+test('storedCharges gives the stored charges by their start', async () => {
+  const series = [{
+    name: 'ioniq_charges',
+    columns: ['time', 'battery_kwh', 'cost_eur', 'end_ts', 'month', 'place', 'type'],
+    values: [[1000, 5, 1.5, 9000, '2026-11', 'home', 'AC']]
+  }]
+  const { fetch, calls } = fakeFetch({ results: [{ series }] })
+  const stored = await storedCharges(createInflux(options, fetch))
+  assert.equal(calls[0].url.searchParams.get('q'), 'SELECT * FROM "ioniq_charges"')
+  const row = stored.get(1000)
+  assert.equal(row.place, 'home')
+  assert.equal(row.end, 9000)
+  assert.equal(row.cost_eur, 1.5)
+  assert.equal(row.meter_kwh, null)
+})
+
+test('chargerStart and carMinKw read the meter and the car within the charge', async () => {
+  const { fetch, calls } = fakeFetch(
+    { results: [{ series: [{ columns: ['time', 'first', 'max'], values: [[0, 7000.5, 1250]] }] }] },
+    { results: [{}] },
+    { results: [{ series: [{ columns: ['time', 'min'], values: [[0, -45.5]] }] }] }
+  )
+  const influx = createInflux(options, fetch)
+  assert.deepEqual(await chargerStart(influx, 1000, 9000), { first: 7000.5, maxW: 1250 })
+  assert.deepEqual(await chargerStart(influx, 1000, 9000), { first: undefined, maxW: undefined })
+  assert.equal(await carMinKw(influx, 1000, 9000), -45.5)
+  const [meter, , car] = calls.map((c) => c.url.searchParams.get('q'))
+  assert.equal(meter, 'SELECT first("tot_act"), max("ap") FROM "xymd1" WHERE "bus" = \'monitoring\' AND "device.name" = \'charger\' ' +
+    'AND "device.type" = \'or-we-526\' AND "tot_act" > 0 AND time >= 1000ms AND time <= 9000ms')
+  assert.equal(car, 'SELECT min("hv_kw") FROM "ioniq" WHERE "group" = \'bms/2101\' AND time >= 1000ms AND time <= 9000ms')
 })

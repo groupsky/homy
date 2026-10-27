@@ -7,6 +7,10 @@ split, the cost and the same month of last year, into the InfluxDB measurement
 totals. It names the Grafana dashboard **Energy by month** (`energy-monthly`), with a
 link only when `ENERGY_REPORT_DASHBOARD_URL` is set.
 
+It also prices the **Ioniq charges** (#1854): home or away, and the cost of each home
+charge, into `ioniq_charges`, and a retained MQTT summary for Home Assistant. See
+[Ioniq charges](#ioniq-charges) below.
+
 Tags and fields: [`energy_monthly` in the InfluxDB schema](../../docs/influxdb-schema.md#energy_monthly-measurement).
 The tariff zones and the prices: [Energy dashboard](../../docs/energy-dashboard.md).
 
@@ -62,17 +66,97 @@ from 2023-11: `MAIN` and `LOADS` in `src/report.js`. Left out on purpose:
 - The voltage stabiliser meter. It feeds the car charger, the borehole pump and the
   microwave, so it would count them twice.
 
+## Ioniq charges
+
+Every 15 minutes, side by side with the monthly report, the service reads the charges of
+`ioniq_sessions` (from the `ioniq-sessions` bot). Each charge it has not seen yet is
+computed once, in three queries for the time of the charge only, and written to
+`ioniq_charges` with the write user. At start it reads the charges already stored, so the
+first start computes all charges since the bot began (about 100, a few seconds). Then it
+publishes the summary. Tags and fields:
+[`ioniq_charges` in the InfluxDB schema](../../docs/influxdb-schema.md#ioniq_charges-measurement).
+Dashboard: **Ioniq EV – Зареждания** (`ioniq-charges`).
+
+- **Home or away.** A charge is **home** when the house charger meter (`xymd1`, device
+  `charger`, counter `tot_act`) took **0.5 kWh or more** between the start and the end
+  of the charge session. Less is **away**. Without any meter reading in that time it is
+  `unknown`. Away charges show 0.00 kWh on the meter and the smallest home charge so far
+  took 1.1 kWh, so the line is far from both. No position is read, ever.
+- **Meter kWh by zone.** The first counter reading of the charge and the last reading of
+  each hour, with the rules of the monthly report (`hourlyIncreases` and `zoneAt` in
+  `src/hourly.js`): a step back counts as nothing, a gap is spread over its hours, and an
+  hour is day or night by its local start hour.
+- **Cost** of a home charge = day kWh × day price + night kWh × night price, with the
+  same prices as the report (`energy.json`), and only for charges that start in a month
+  from `ENERGY_REPORT_PRICES_FROM` on. An away charge has no cost here.
+- **AC or DC.** Home is AC. Away it is DC when the average power or the car's own peak is
+  above 8 kW (the car's on-board AC charger takes at most 7.2 kW), else AC; `unknown`
+  without any power.
+- **Max kW.** Home: the peak of the meter's active power `ap` (AC side; the car logs only
+  while it is awake). Away: the car's peak, `-min(hv_kw)` of `ioniq` while it was awake.
+- **Duration and average kW** come from `ioniq_sessions`, only when the session had a
+  real start and end of the charge (`duration_is_charge`).
+- A charge belongs to the local month of its start. So the home cost of a month can
+  differ a little from the `charger` cost in `energy_monthly`: that one also counts the
+  charger's standby, and splits a charge across the month end by hour.
+
+### The MQTT summary
+
+Topic **`homy/ioniq/charges`**, retained, QoS 1, every 15 minutes (so also within 15
+minutes after a charge ends). Home Assistant reads it as `sensor.ioniq_charges`
+(`config/home-assistant/configuration/mqtt/sensors.yaml`): the state is the number of
+charges this month, and the attributes hold the rest. The Ioniq dashboard shows it in the
+"Зареждания" view (`dashboard-ioniq` in `config/home-assistant/provision.json`).
+
+```json
+{
+  "updated": "2026-11-05T20:00:00.000Z",
+  "month": "2026-11",
+  "totals": { "count": 5, "home": 2, "kwh": 50, "meter_kwh": 24, "cost": 2.8, "cost_day": 0.8, "cost_night": 2 },
+  "charges": [
+    { "start": "2026-11-05T18:00:00.000Z", "place": "home", "type": "AC", "soc_from": 30, "soc_to": 70,
+      "kwh": 10, "meter_kwh": 12, "min": 600, "avg_kw": 1, "max_kw": 1.3, "cost": 1.4, "cost_day": 0.4, "cost_night": 1 }
+  ]
+}
+```
+
+`charges` are the last 10, newest first. `kwh` is into the battery, `meter_kwh` from the
+house meter (home only), `min` the duration. A cost is `null` for an away charge and
+before the month of the current prices; the month totals have no cost then either.
+
+The client in `src/mqtt.js` is a small MQTT 3.1.1 publisher on `node:net` (connect,
+publish, wait for the acknowledgement, disconnect), so the service still has no npm
+dependencies. The broker takes anonymous clients on the automation network.
+
+### Compute the charges again
+
+A charge is computed once, so a later change to its session is not picked up: a session
+that the bot sends again with other values, or meter readings that arrive after a charge
+was marked `unknown`. A charge that fails is logged and tried again at the next refresh.
+To compute the charges again (after a change of the rules, or for such a case), drop them
+with the write user and restart the service:
+
+```bash
+docker exec -i homy-influxdb-1 sh <<'EOF'
+export INFLUX_USERNAME=$(cat /run/secrets/influxdb_write_user)
+export INFLUX_PASSWORD=$(cat /run/secrets/influxdb_write_user_password)
+influx -database homy -execute "DROP SERIES FROM ioniq_charges"
+EOF
+docker compose restart energy-report
+```
+
 ## Configuration
 
-The service talks only to `http://influxdb:8086` (database `homy`) and
-`http://telegram-bridge:3000/webhook`, on the automation network. These are fixed in
-`src/config.js` on purpose, as in `scripts/energy-backfill`: a request address taken from
-the environment would be a request-forgery path (CodeQL).
+The service talks only to `http://influxdb:8086` (database `homy`),
+`http://telegram-bridge:3000/webhook` and the broker `broker:1883`, on the automation
+network. These are fixed in `src/config.js` on purpose, as in `scripts/energy-backfill`: a
+request address taken from the environment would be a request-forgery path (CodeQL). The
+charges need no setting of their own.
 
 | Variable | Meaning |
 |---|---|
-| `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | The read user, for the counters and the stored months. |
-| `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | The write user. The service writes only `energy_monthly`. |
+| `INFLUXDB_READ_USERNAME_FILE`, `INFLUXDB_READ_PASSWORD_FILE` | The read user, for the counters, the Ioniq charges and the stored months. |
+| `INFLUXDB_USERNAME_FILE`, `INFLUXDB_PASSWORD_FILE` | The write user. The service writes only `energy_monthly` and `ioniq_charges`. |
 | `ENERGY_REPORT_DASHBOARD_URL` | Optional: a full link to the dashboard for the message, set only in the real `.env` (never a real domain in this repo). Not set: the message names the dashboard, with no link. Grafana has no public address, and the short name `grafana` does not open away from home. |
 | `ENERGY_REPORT_PRICES_FROM` | The first month of the current prices. Default `2026-07`. Change it every July (below). |
 | `ENERGY_REPORT_FIRST_MONTH` | The first month of the report. Default `2023-11`, and it cannot be earlier. |
@@ -125,5 +209,5 @@ npm test               # node:test, no dependencies to install
 npm run test:coverage  # also writes coverage/lcov.info
 ```
 
-The tests read `scripts/energy-backfill/` and `config/home-assistant/energy.json`, so run
-them in a full checkout of the repository. CI: `.github/workflows/test-energy-report.yml`.
+The tests read `scripts/energy-backfill/`, `config/home-assistant/energy.json` and the two
+Grafana dashboards, so run them in a full checkout of the repository. CI: `.github/workflows/test-energy-report.yml`.

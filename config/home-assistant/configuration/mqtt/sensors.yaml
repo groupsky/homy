@@ -277,3 +277,14 @@
   state_topic: "ioniq/parsed/derived/tire_rr_bar_coldstart"
   value_template: *ioniq_ts
   <<: *ioniq_tyre_time
+
+# The Ioniq charges (#1854), from energy-report, retained: the number of
+# charges this month; the attributes hold the month totals and the last 10
+# charges. Home or away comes from the house charger meter, never from a
+# position. The message's `updated` time is left out of the attributes, so
+# the recorder keeps a new state only when a charge or the month changes.
+- name: ioniq_charges
+  state_topic: "homy/ioniq/charges"
+  value_template: "{{ value_json.totals.count }}"
+  json_attributes_topic: "homy/ioniq/charges"
+  json_attributes_template: "{{ {'month': value_json.month, 'totals': value_json.totals, 'charges': value_json.charges} | tojson }}"

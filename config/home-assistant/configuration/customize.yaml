@@ -117,6 +117,8 @@ sensor.ioniq_odometer:
   friendly_name: Ioniq Километраж
 sensor.ioniq_state:
   friendly_name: Ioniq Състояние
+sensor.ioniq_charges:
+  friendly_name: Ioniq Зареждания този месец
 sensor.ioniq_tyre_fl:
   friendly_name: Ioniq Гума пред ляво
 sensor.ioniq_tyre_fr:
