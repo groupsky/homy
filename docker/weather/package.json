@@ -13,7 +13,7 @@
   "dependencies": {
     "@influxdata/influxdb-client": "^1.35.0",
     "mqtt": "^5.16.1",
-    "suncalc": "^2.0.2"
+    "suncalc": "^2.1.1"
   },
   "devDependencies": {
     "jest": "^30.5.1"
