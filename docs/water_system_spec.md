@@ -50,6 +50,8 @@ water_system:
         - type: "pressure_tank"
           purpose: "pump controller stabilization"
           location: "Sonda_shahta_manhole"
+          connection: "parallel (tee) before the filters, not in series"
+          size: "~8L (owner's memory), part of the pump kit; exact model open in #1005"
         - type: "mechanical_filter"
           mesh: "50 micron"
           location: "Sonda_shahta_manhole"
@@ -129,6 +131,14 @@ water_system:
           year: "~2016 (potentially older/discontinued model)"
           refrigerant: "R22"
       location: {floor: 1, room: "service"}
+      source_side_flow_indicator:
+        model: "BRV BR04654DN20-42, DN20"
+        position: "outlet of the groundwater (source) line"
+        scale: "5-42 L/min (from the code; no maker page found)"
+        setting: "~30 L/min (~1.8 m3/h), set by owner 2026-10-29"
+        output: "most likely visual only (float and scale); not confirmed by maker"
+        note: "at 1.8 m3/h each kW taken from the groundwater cools it only ~0.48 K"
+      building_side_loop: "PPR 40mm (separate circuit)"
       controller:
         type: "modbus_controller"
         status: "non_responsive_since_2024"
@@ -188,7 +198,8 @@ water_system:
     # Cold Water Main Circuit
     cold_water_main:
       source: "ground_water_source"
-      path: "borehole → pump → pressure_tank → 50μm_filter → 5μm_filter → main_split"
+      path: "borehole → pump → (tee: pressure_tank) → 50μm_filter → 5μm_filter → main_split"
+      feeds: "heat pump, fan coils and irrigation only from the borehole; house taps from city water and borehole, whichever has the higher pressure"
       pipe_material: "HDPE"
       splits:
         irrigation: "50mm HDPE"
@@ -295,6 +306,16 @@ water_system:
         inclination: "sloped"
         destination: "irrigation_channel_off_plot"
         
+    # Fan-coil cooling (summer only)
+    fan_coils:
+      units: "4 x SILP Klimafan IO 030, see docs/air-conditioning/README.md"
+      source: "borehole water directly, not from the heat pump"
+      feed: "branch of the heat-pump source line: HDPE 32 → PPR DN50, one size smaller after each branch"
+      flow_limit: "manual valve on each unit"
+      return: "joins an HDPE 25 outside the house"
+      drainage: "agricultural irrigation channel outside the plot (same as the heat pump)"
+      shared_with_heat_pump: "only the borehole source"
+
     # Underfloor Heating Circuit  
     underfloor_heating:
       source: "heat_pump"
@@ -361,7 +382,7 @@ water_system:
 
 **Medium Priority:**
 3. Hot water circulation pump specifications → [Issue #1003](https://github.com/groupsky/homy/issues/1003)
-4. Pressure tank size and location details → [Issue #1005](https://github.com/groupsky/homy/issues/1005)
+4. Pressure tank exact model (~8L, tee before the filters is known) → [Issue #1005](https://github.com/groupsky/homy/issues/1005)
 5. Physical pipe routing maps
 6. Valve numbering/identification system → [Issue #1006](https://github.com/groupsky/homy/issues/1006)
 
