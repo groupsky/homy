@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/grafana:9.5.21
+FROM ghcr.io/groupsky/homy/grafana:13.2.4
 
 ARG GF_INSTALL_IMAGE_RENDERER_PLUGIN="false"
 
