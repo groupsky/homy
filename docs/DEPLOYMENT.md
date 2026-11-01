@@ -209,8 +209,9 @@ The script:
 6. Refuses (before restarting anything) when a service has more than one container, for example a leftover `<id>_<name>` container from an interrupted recreate: neither the change detection nor the gate could tell which one counts. Remove the leftover by hand.
 7. Works out which services to recreate: those whose config hash (`docker compose config --hash`) differs from the `com.docker.compose.config-hash` label of their container, those with no container, and those whose container is stopped. It logs them and runs `docker compose up -d --no-build --pull never --no-deps` for **only those services**, under a time limit (`COMPOSE_TIMEOUT`, 600 s; a timeout is a failed `up`). If nothing changed, `up` is not run at all. Nothing is stopped first.
 8. Runs the [health gate](#the-health-gate) on the services that were actually recreated, or started because they were not running. A container that restarted by itself (already running or `restarting` before) is not counted.
-9. On success, saves the old version to `.previous-version` and the new one to `.deployed-version`, and sends the success message (with the recreated services and the snapshot name).
-10. On failure, [rolls back](#automatic-rollback) code, config and images.
+9. On success, saves the old version to `.previous-version` and the new one to `.deployed-version`. Then it brings HA's `.storage` state to [`provision.json`](../scripts/ha-provision/README.md) (#1878). When `config/home-assistant/provision.json` or `scripts/ha-provision/` changed since the running version, it runs `ha-provision`. In every case it then runs `ha-provision --dry-run`. A difference the dry run finds after an unchanged file (an edit in the HA UI) is logged, not overwritten. The output is in the deploy log. A failed run, or a missing `ha_provision_token` secret, does not fail or roll back the deploy: HA itself is fine. The success message ends with one line on the result, and on a failure the log has the command to run by hand.
+10. Sends the success message (with the recreated services, the snapshot name and the HA provision result).
+11. On failure, [rolls back](#automatic-rollback) code, config and images.
 
 A deploy that changes nothing restarts nothing. The first deploy after this change is a special case: it moves every service from a tag to a digest, so it recreates all of them once.
 
@@ -285,6 +286,7 @@ Healthchecks with a start period:
 
 When the gate fails, or `docker compose up` fails:
 
+- **HA dashboards**: `ha-provision` runs only after the gate passed, so a failed deploy never applied its `provision.json`. HA still has the old version's state after the rollback. A deploy back to an older commit (`deploy.sh --tag <sha> --force`) applies the older file, as its `provision.json` changed.
 - **Stateless services**: `deploy.sh` checks out the previous commit (compose file and config files), pulls the previous version's images, writes a new override pinned to them, and runs `up` again. The recreated services go through the gate again. **No data is restored**: that would throw away everything written since the deploy.
 - **A stateful service whose image changed** (labelled `homy.stateful: "true"`: `ha`, `z2m-home1`, `mongo`, `grafana`, `influxdb`): its data may already be migrated (HA recorder schema, zigbee2mqtt database, Mongo feature compatibility version, Grafana migrations), and the old image may not read it. The deploy **does not roll back at all**: it stops, sends a CRITICAL message with the snapshot name, and prints the recovery steps. The containers are left as they are, so a slow migration is not cut short.
 - A stateful service recreated only for a configuration change is rolled back with the rest.

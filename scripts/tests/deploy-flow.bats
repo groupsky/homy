@@ -45,6 +45,8 @@ case "\$*" in
         case "\$*" in *$OLD*|*$NEW*) echo "$NEW" ;; *) exit 1 ;; esac ;;
     *rev-parse*) echo "$NEW" ;;
     show\ *) cat "\$MOCK_DIR/compose-at-commit" 2>/dev/null || exit 128 ;;
+    # provision.json differs between the two commits when the file is there
+    diff\ *) [ -e "\$MOCK_DIR/provision-changed" ] && exit 1 ;;
 esac
 exit 0
 EOF
@@ -58,6 +60,7 @@ EOF
     chmod +x "$MOCK_BIN/git" "$MOCK_BIN/curl" "$MOCK_BIN/systemd-cat"
     echo "token" > "$PROJECT_DIR/secrets/telegram_bot_token"
     echo "chat" > "$PROJECT_DIR/secrets/telegram_chat_id"
+    echo "ha-token" > "$PROJECT_DIR/secrets/ha_provision_token"
     : > "$MOCK_DIR/notify.log"
 
     DATA="$TEST_DIR/tank/homy"
@@ -640,4 +643,117 @@ registry_misses() {
     refute_output --partial "the rollback did not recreate"
     assert_output --partial "Rollback to $OLD complete"
     [ ! -e "$PROJECT_DIR/.deploy-blocked" ]
+}
+
+# --- HA provision after the gate (#1878) --------------------------------------
+
+provision_runs() { grep -c "docker run .*ha-provision/index.mjs\$" "$MOCK_DIR/calls.log" || true; }
+dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/calls.log" || true; }
+
+@test "deploy.sh: a changed provision.json is applied after the gate, then checked with a dry run" {
+    touch "$MOCK_DIR/provision-changed"
+    recreate_on_up 1 automations img-a2
+    echo "dashboard dashboard-x: save the config from provision.json" > "$MOCK_DIR/provision.out"
+    echo "dashboard dashboard-x: up to date" > "$MOCK_DIR/provision-dry.out"
+
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 1
+    assert_equal "$(dry_runs)" 1
+    # apply comes after up, the dry run after the apply
+    up_line=$(grep -n "compose up" "$MOCK_DIR/calls.log" | tail -n1 | cut -d: -f1)
+    run_line=$(grep -n "docker run" "$MOCK_DIR/calls.log" | head -n1 | cut -d: -f1)
+    [ "$run_line" -gt "$up_line" ]
+    run grep -h "" "$PROJECT_DIR"/logs/deploy-*.log
+    assert_output --partial "save the config from provision.json"
+    assert_output --partial "HA provision: provision.json applied, HA up to date"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "provision.json applied, HA up to date"
+    assert_equal "$(cat "$VERSION_FILE")" "$NEW"
+}
+
+@test "deploy.sh: an unchanged provision.json gets only the dry run" {
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 0
+    assert_equal "$(dry_runs)" 1
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "HA up to date with provision.json"
+}
+
+@test "deploy.sh: a UI edit found by the dry run is reported, not overwritten" {
+    printf '%s\n' "dashboard dashboard-x: would save the config from provision.json" '  before: {}' > "$MOCK_DIR/provision-dry.out"
+
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 0
+    assert_output --partial "HA differs from provision.json"
+    run grep -h "" "$PROJECT_DIR"/logs/deploy-*.log
+    assert_output --partial "would save the config from provision.json"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "not overwritten"
+}
+
+@test "deploy.sh: a failed ha-provision does not fail or roll back the deploy, and says how to run it" {
+    touch "$MOCK_DIR/provision-changed" "$MOCK_DIR/provision.fail"
+    recreate_on_up 1 automations img-a2
+    echo "Error: connection refused" > "$MOCK_DIR/provision.out"
+
+    run deploy
+    assert_success
+    assert_equal "$(up_count)" 1
+    assert_output --partial "ha-provision failed. HA is running; run it by hand: docker run"
+    assert_equal "$(cat "$VERSION_FILE")" "$NEW"
+    [ ! -e "$PROJECT_DIR/.deploy-blocked" ]
+    run grep -h "" "$PROJECT_DIR"/logs/deploy-*.log
+    assert_output --partial "Error: connection refused"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "Deployment successful"
+    assert_output --partial "ha-provision FAILED, run it by hand"
+}
+
+@test "deploy.sh: a failed dry run does not fail the deploy" {
+    touch "$MOCK_DIR/provision-dry.fail"
+
+    run deploy
+    assert_success
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "ha-provision dry run FAILED"
+}
+
+@test "deploy.sh: a missing ha_provision_token is a warning, not a failure" {
+    rm "$PROJECT_DIR/secrets/ha_provision_token"
+    touch "$MOCK_DIR/provision-changed"
+
+    run deploy
+    assert_success
+    assert_output --partial "WARNING: No ha_provision_token secret"
+    assert_equal "$(provision_runs)" 0
+    assert_equal "$(dry_runs)" 0
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "ha-provision skipped: no ha_provision_token secret"
+}
+
+@test "deploy.sh: a failed gate never applies the new provision.json, so the rollback leaves HA on the old one" {
+    touch "$MOCK_DIR/provision-changed"
+    recreate_on_up 1 automations img-a2 exited
+    recreate_on_up 2 automations img-a1
+
+    run deploy
+    assert_failure
+    assert_output --partial "Rollback to $OLD complete"
+    run grep -c "docker run" "$MOCK_DIR/calls.log"
+    assert_output "0"
+}
+
+@test "deploy.sh: a deploy back to an older provision.json applies it" {
+    # e.g. the manual recovery: deploy.sh --tag <previous> --force
+    touch "$MOCK_DIR/provision-changed"
+
+    run deploy --tag "$OLD" --force
+    assert_success
+    assert_equal "$(provision_runs)" 1
+    run grep "docker run" "$MOCK_DIR/calls.log"
+    assert_output --partial "--network homy_automation"
+    assert_output --partial "ha_provision_token:/run/secrets/ha_provision_token:ro"
 }
