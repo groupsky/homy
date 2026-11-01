@@ -51,7 +51,7 @@
               },
               {
                 "type": "markdown",
-                "content": "Подробно в Grafana:\n[Общо](grafana:/d/ioniq-overview) · [Батерия](grafana:/d/ioniq-battery) · [12 V](grafana:/d/ioniq-12v-ldc) · [Пътувания и зареждания](grafana:/d/ioniq-sessions) · [Зареждания](grafana:/d/ioniq-charges) · [Гуми](grafana:/d/ioniq-tires)"
+                "content": "Подробно в Grafana:\n[Общо](grafana:/d/ioniq-overview) · [Батерия](grafana:/d/ioniq-battery) · [12 V](grafana:/d/ioniq-12v-ldc) · [Пътувания](grafana:/d/ioniq-journeys) · [Зареждане и паркиране](grafana:/d/ioniq-sessions) · [Зареждания](grafana:/d/ioniq-charges) · [Гуми](grafana:/d/ioniq-tires)"
               }
             ]
           },
@@ -61,12 +61,37 @@
             "cards": [
               {
                 "type": "markdown",
+                "title": "Този месец",
+                "content": "{%- macro n(v, d=1) -%}{{ ('%.' ~ d ~ 'f') % v if v is number else '—' }}{%- endmacro -%}\n{%- set m = state_attr('sensor.ioniq_journeys', 'month') -%}\n{%- if m is none -%}\nНяма данни.\n{%- else -%}\n| {{ m.month }} | |\n|---|---|\n| Пробег | {{ n(m.km, 0) }} km |\n| Пътувания | {{ m.journeys }} |\n| До работа | {{ n(m.commute_km, 0) }} km |\n| Изразходвани | {{ n(m.kwh_used) }} kWh<br>{{ n(m.kwh_per_100km) }} kWh/100 km |\n| Платено за ток | {{ n(m.spent_eur, 2) }} € |\n| Цена на карането | {{ n(m.driving_cost_eur, 2) }} €<br>{{ n(m.eur_per_100km, 2) }} €/100 km |\n{%- endif %}\n\nПлатено: зарежданията с цена. Цена на карането: токът, който пътуванията с цена са изразходвали."
+              },
+              {
+                "type": "markdown",
                 "title": "Зареждания",
                 "content": "{%- macro n(v, d=1) -%}{{ ('%.' ~ d ~ 'f') % v if v is number else '—' }}{%- endmacro -%}\n{%- macro hm(m) -%}{% if m is number %}{{ (m // 60) | int }}:{{ '%02d' % ((m % 60) | int) }}{% else %}—{% endif %}{%- endmacro -%}\n{%- set t = state_attr('sensor.ioniq_charges', 'totals') -%}\n{%- set cs = state_attr('sensor.ioniq_charges', 'charges') or [] -%}\n{%- if t is none -%}\nНяма данни.\n{%- else -%}\n| Този месец | |\n|---|---|\n| Зареждания | {{ t.count }}, у дома {{ t.home }} |\n| В батерията | {{ n(t.kwh) }} kWh |\n| От тока у дома | {{ n(t.meter_kwh) }} kWh |\n| Цена у дома | {% if t.cost is number %}**{{ n(t.cost, 2) }} €**: ден {{ n(t.cost_day, 2) }}, нощ {{ n(t.cost_night, 2) }}{% else %}няма цена{% endif %} |\n\n**Последните {{ cs | length }}**\n\n| Кога | Къде | % | kWh | Време | € |\n|---|---|---|---|---|---|\n{%- for c in cs %}\n{%- set s = as_datetime(c.start) | as_local %}\n| {{ s.strftime('%d.%m') }}<br>{{ s.strftime('%H:%M') }} | {{ {'home': '🏠', 'away': '🛣️'}.get(c.place, '?') }}<br>{{ c.type if c.type in ['AC', 'DC'] else '?' }} | {{ n(c.soc_from, 0) }}→<br>{{ n(c.soc_to, 0) }} | {{ n(c.kwh) }}<br>{% if c.meter_kwh is number %}⚡{{ n(c.meter_kwh) }}{% endif %} | {{ hm(c.min) }}<br>{{ n(c.avg_kw) }}/{{ n(c.max_kw) }} | {% if c.cost is number %}{{ n(c.cost, 2) }}<br>д {{ n(c.cost_day, 2) }}<br>н {{ n(c.cost_night, 2) }}{% else %}—{% endif %} |\n{%- endfor %}\n{%- endif %}\n\n🏠 у дома, 🛣️ навън: по тока, който зарядната у дома е взела. kWh: в батерията, ⚡ от тока у дома. Време: ч:мин, после средна/макс. kW. €: цена у дома, д = ден, н = нощ."
               },
               {
                 "type": "markdown",
                 "content": "Цялата история в Grafana: [Зареждания](grafana:/d/ioniq-charges)"
+              }
+            ]
+          },
+          {
+            "title": "Пътувания",
+            "path": "journeys",
+            "cards": [
+              {
+                "type": "markdown",
+                "title": "Този месец",
+                "content": "{%- macro n(v, d=1) -%}{{ ('%.' ~ d ~ 'f') % v if v is number else '—' }}{%- endmacro -%}\n{%- set m = state_attr('sensor.ioniq_journeys', 'month') -%}\n{%- if m is none -%}\nНяма данни.\n{%- else -%}\n| {{ m.month }} | |\n|---|---|\n| Пробег | {{ n(m.km, 0) }} km |\n| Пътувания | {{ m.journeys }} |\n| До работа | {{ n(m.commute_km, 0) }} km |\n| Изразходвани | {{ n(m.kwh_used) }} kWh<br>{{ n(m.kwh_per_100km) }} kWh/100 km |\n| Платено за ток | {{ n(m.spent_eur, 2) }} € |\n| Цена на карането | {{ n(m.driving_cost_eur, 2) }} €<br>{{ n(m.eur_per_100km, 2) }} €/100 km |\n{%- endif %}\n\nПлатено: зарежданията с цена. Цена на карането: токът, който пътуванията с цена са изразходвали."
+              },
+              {
+                "type": "markdown",
+                "title": "Последните пътувания",
+                "content": "{%- macro n(v, d=1) -%}{{ ('%.' ~ d ~ 'f') % v if v is number else '—' }}{%- endmacro -%}\n{%- macro hm(m) -%}{% if m is number %}{{ (m // 60) | int }}:{{ '%02d' % ((m % 60) | int) }}{% else %}—{% endif %}{%- endmacro -%}\n{%- macro p(v) -%}{{ v | truncate(16, true, '…', 0) if v else '?' }}{%- endmacro -%}\n{%- set js = state_attr('sensor.ioniq_journeys', 'journeys') or [] -%}\n{%- if not js -%}\nНяма данни.\n{%- else -%}\n| Кога | Откъде →<br>докъде | km<br>време | kWh | € |\n|---|---|---|---|---|\n{%- for j in js %}\n{%- set s = as_datetime(j.start) | as_local %}\n{%- set e = as_datetime(j.end) | as_local %}\n| {{ s.strftime('%d.%m') }}<br>{{ s.strftime('%H:%M') }} | {{ p(j['from']) }} →<br>{{ p(j.to) }} | {{ n(j.km) }}<br>{{ hm((e - s).total_seconds() / 60) }} | {{ n(j.kwh_used) }}{% if j.charges %}<br>⚡{{ j.charges | int }}: +{{ n(j.kwh_charged) }}{% endif %} | {{ n(j.cost_eur, 2) }} |\n{%- endfor %}\n{%- endif %}\n\nВреме: ч:мин от тръгване до пристигане. kWh: изразходвани; ⚡ зареждания по пътя: брой и kWh в батерията. €: цената на изразходвания ток."
+              },
+              {
+                "type": "markdown",
+                "content": "Цялата история в Grafana: [Пътувания](grafana:/d/ioniq-journeys)"
               }
             ]
           }

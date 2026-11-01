@@ -1,0 +1,1188 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Hyundai Ioniq Electric - journeys, km and kWh per month, consumption against the outside temperature, and the map of one journey. Built on ev_journeys, ev_trips, ev_month and ev_track, written by ev-journal.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "ioniq"
+      ],
+      "targetBlank": false,
+      "title": "Ioniq EV",
+      "tooltip": "Other Ioniq EV dashboards",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "The number of journeys that started in the range, with the chosen labels.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT count(\"km\") AS \"Journeys\" FROM \"ev_journeys\" WHERE \"label\" =~ /^$label$/ AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Journeys",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "The km of the journeys in the range, from the GPS track; homy km when a trip has too few GPS points.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix: km"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT sum(\"km\") AS \"km\" FROM \"ev_journeys\" WHERE \"label\" =~ /^$label$/ AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Distance",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "The net battery kWh the journeys used.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix: kWh"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT sum(\"kwh_used\") AS \"kWh\" FROM \"ev_journeys\" WHERE \"label\" =~ /^$label$/ AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Used",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "The kWh the journeys used per km, in Wh/km.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix: Wh/km"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT sum(\"kwh_used\") / sum(\"km\") * 1000 AS \"Wh/km\" FROM \"ev_journeys\" WHERE \"label\" =~ /^$label$/ AND $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Consumption",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "km and kWh used per local month, from ev_month. The label filter does not apply here.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "km"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "km"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: km"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kwh_used"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "kWh used"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: kWh"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "orientation": "vertical",
+        "stacking": "none",
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "xField": "month",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"month\", \"km\", \"kwh_used\" FROM \"ev_month\" WHERE $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        }
+      ],
+      "title": "km and kWh per month",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "One point per day with trips: the Wh/km of that day's trips (ev_trips) against the mean outside temperature of the day (Open-Meteo history, model ecmwf_ifs, at the house). Days are local days. The y axis stops at 400 Wh/km: a day with only a few hundred metres reads far higher. The label filter does not apply here.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "custom": {
+            "show": "points",
+            "pointSize": {
+              "fixed": 6
+            },
+            "pointColor": {},
+            "lineWidth": 1,
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "temp"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Outside"
+              },
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "whkm"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wh/km"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: Wh/km"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 400
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "dims": {
+          "frame": 0,
+          "x": "temp"
+        },
+        "series": [],
+        "seriesMapping": "auto",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT sum(\"kwh\") / sum(\"km\") * 1000 AS \"whkm\" FROM \"ev_trips\" WHERE \"km\" > 0 AND $timeFilter GROUP BY time(1d) fill(none) tz('Europe/Sofia')",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT mean(\"temperature\") AS \"temp\" FROM \"weather\".\"weather\" WHERE \"kind\" = 'history' AND \"model\" = 'ecmwf_ifs' AND $timeFilter GROUP BY time(1d) fill(none) tz('Europe/Sofia')",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "Time",
+            "mode": "inner"
+          }
+        }
+      ],
+      "title": "Wh/km against outside temperature",
+      "type": "xychart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "One row per journey, newest first. A journey ends at a stop of more than 30 min without a charge, or at home with a charge. Places are the ids of ev-journal; empty when the place is not known. Use the filter in a column header to pick a place. Click the start time to show the journey on the map below. Times are minutes: driving, waiting and charging on the way. Charged: kWh into the battery on the way. Cost: the price of the kWh used, when known.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Started"
+              },
+              {
+                "id": "unit",
+                "value": "time: YYYY-MM-DD HH:mm"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show this journey on the map",
+                    "url": "/d/ioniq-journeys/?${__url_time_range}&${label:queryparam}&var-journey=${__value.raw}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "end_ts"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Arrived"
+              },
+              {
+                "id": "unit",
+                "value": "time: YYYY-MM-DD HH:mm"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "start_place"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "From"
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "end_place"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "To"
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "label"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Label"
+              },
+              {
+                "id": "custom.filterable",
+                "value": true
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "km"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "km"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: km"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "drive_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Driving"
+              },
+              {
+                "id": "unit",
+                "value": "m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "waiting_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Waiting"
+              },
+              {
+                "id": "unit",
+                "value": "m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "charge_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Charging"
+              },
+              {
+                "id": "unit",
+                "value": "m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "charges"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Charges"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kwh_charged"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Charged"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: kWh"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kwh_used"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Used"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: kWh"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "whkm"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wh/km"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: Wh/km"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "—"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cost_eur"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Cost"
+              },
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "trips"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Trips"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "not_me"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Not me"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "true": {
+                        "index": 0,
+                        "text": "not me"
+                      },
+                      "false": {
+                        "index": 1,
+                        "text": " "
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"end_ts\", \"start_place\", \"end_place\", \"label\", \"km\", \"drive_min\", \"waiting_min\", \"charge_min\", \"charges\", \"kwh_charged\", \"kwh_used\", \"kwh_used\" / \"km\" * 1000 AS \"whkm\", \"cost_eur\", \"trips\", \"not_me\" FROM \"ev_journeys\" WHERE \"label\" =~ /^$label$/ AND $timeFilter ORDER BY time DESC",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Journeys",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P3C6603E967DC8568"
+      },
+      "description": "The GPS track of the journey chosen at the top (or clicked in the table), one point per 50 m. The id of a journey is its start time in ms. The map does not follow the time range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 8,
+      "options": {
+        "view": {
+          "id": "fit",
+          "lat": 0,
+          "lon": 0,
+          "zoom": 15,
+          "allLayers": true
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showScale": false,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "osm-standard",
+          "name": "Basemap",
+          "config": {}
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Track",
+            "config": {
+              "style": {
+                "size": {
+                  "fixed": 3
+                },
+                "color": {
+                  "fixed": "blue"
+                },
+                "opacity": 0.8,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                }
+              },
+              "showLegend": false
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "tooltip": false
+          }
+        ],
+        "tooltip": {
+          "mode": "none"
+        }
+      },
+      "pluginVersion": "9.5.21",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P3C6603E967DC8568"
+          },
+          "query": "SELECT \"lat\", \"lon\" FROM \"ev_track\" WHERE \"journey\" = '$journey'",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Map of the chosen journey",
+      "type": "geomap"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": [
+    "ioniq",
+    "ev",
+    "vehicle"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Label",
+        "multi": true,
+        "name": "label",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "commute",
+            "value": "commute"
+          },
+          {
+            "selected": false,
+            "text": "other",
+            "value": "other"
+          }
+        ],
+        "query": "commute,other",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "influxdb",
+          "uid": "P3C6603E967DC8568"
+        },
+        "definition": "SHOW TAG VALUES FROM \"ev_track\" WITH KEY = \"journey\"",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Journey (start, ms)",
+        "multi": false,
+        "name": "journey",
+        "options": [],
+        "query": "SHOW TAG VALUES FROM \"ev_track\" WITH KEY = \"journey\"",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 4,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1y",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "🚗 Ioniq EV – Пътувания",
+  "uid": "ioniq-journeys",
+  "version": 1,
+  "weekStart": ""
+}

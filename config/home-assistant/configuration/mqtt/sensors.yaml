@@ -295,3 +295,14 @@
   value_template: "{{ value_json.totals.count }}"
   json_attributes_topic: "homy/ioniq/charges"
   json_attributes_template: "{{ {'month': value_json.month, 'totals': value_json.totals, 'charges': value_json.charges} | tojson }}"
+
+# The Ioniq journeys (#1874), from ev-journal, retained: the number of
+# journeys this month; the attributes hold the month totals and the last 10
+# journeys. `updated`, `home_charge` and `advice` are left out: they change
+# between journeys, and each change of an attribute is a new state in the
+# recorder.
+- name: ioniq_journeys
+  state_topic: "homy/ioniq/journeys"
+  value_template: "{{ value_json.month.journeys | default(0) }}"
+  json_attributes_topic: "homy/ioniq/journeys"
+  json_attributes_template: "{{ {'month': value_json.month, 'journeys': value_json.journeys} | tojson }}"
