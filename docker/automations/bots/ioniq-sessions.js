@@ -444,7 +444,9 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         const post = trip.startPost || {}
         const startFix = trip.startFix || null
         const endFix = nearestFix(endTs, [...recentFixes, persistedCache.lastGoodFix])
-        const check = startCheck(trip.startPre, post)
+        // The post position is the fix nearest to the trip start by its own
+        // fix time, so a re-sent old fix at wake-up cannot pass for a new one.
+        const check = startCheck(trip.startPre, { ...post, fix: startFix })
 
         return {
           kind: 'trip',
@@ -757,19 +759,23 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
             persistedCache.open = open
           }
         } else if (open.kind === 'trip') {
-          if (st === 'moving') {
+          // Power off with the car not rolling. Checked before motion, because
+          // the gear in the merged view can still read D when no vmcu frame
+          // came after the driver selected P. sawIgnitionOn guards against a
+          // stale 0 left in the merged view from before the trip.
+          const poweredOff = merged.ignition === 0 && open.sawIgnitionOn &&
+            !(isFiniteNum(merged.speed) && merged.speed > config.speedMovingKph)
+          if (poweredOff) {
+            accumulate(open, ts, rxTs, false, st)
+            advanceMotion(open, ts, rxTs)
+            open = closeTripOpenRest(open, closedByFor('ignition_off', open), open.lastMotionTs, gearAtClose, rxTs)
+          } else if (st === 'moving') {
             // Cannot sleep mid-motion: continue the trip regardless of gap length
             // (a highway reboot / tunnel is moving on both sides). A trip that
             // resumes moving after a restart is a LIVE trip, not a lazy-close.
             if (open === restartSession) { restarted = false; restartSession = null }
             accumulate(open, ts, rxTs, gap == null || gap < config.rebootMaxGapMs, st)
             advanceMotion(open, ts, rxTs)
-          } else if (merged.ignition === 0 && open.sawIgnitionOn) {
-            // Power off: the trip ends at this sample. sawIgnitionOn guards
-            // against a stale 0 left in the merged view from before the trip.
-            accumulate(open, ts, rxTs, false, st)
-            advanceMotion(open, ts, rxTs)
-            open = closeTripOpenRest(open, closedByFor('ignition_off', open), open.lastMotionTs, gearAtClose, rxTs)
           } else if (gap != null && gap >= config.restGapMs) {
             // Long gap with a stationary far side = a genuine rest boundary. Close
             // the trip at its last-motion sample; this stationary sample opens the
@@ -782,7 +788,9 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
             open = rest
           } else if (gearP) {
             // In P with the power on: waiting, still the same trip. A later
-            // silence close ends the trip at the last P sample.
+            // silence close ends the trip at the last P sample. A live P sample
+            // after a restart also makes the restored trip live again.
+            if (open === restartSession && gap != null && gap < config.rebootMaxGapMs) { restarted = false; restartSession = null }
             accumulate(open, ts, rxTs, true, st)
             advanceMotion(open, ts, rxTs)
           } else if (st === 'ambiguous') {
@@ -884,14 +892,15 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         if (!isFiniteNum(payload.acc_m) || payload.acc_m > config.gpsMaxAccuracyM) return
         const ts = isFiniteNum(payload.fix_ts) ? payload.fix_ts : (isFiniteNum(payload.ts) ? payload.ts : Date.now())
         const fix = { lat: payload.lat, lon: payload.lon, ts }
-        persistedCache.lastGoodFix = fix
+        // The logger may re-send an old fix; never let it replace a newer one.
+        const last = persistedCache.lastGoodFix
+        if (!last || !isFiniteNum(last.ts) || ts >= last.ts) persistedCache.lastGoodFix = fix
         recentFixes = recentFixes.filter((f) => f.ts >= ts - 5 * config.gpsMatchMs)
         recentFixes.push(fix)
         const trip = persistedCache.open
         if (trip && trip.kind === 'trip') {
           const best = nearestFix(trip.start_ts, [trip.startFix, fix])
           if (best) trip.startFix = best
-          notePost({ fix })
         }
       }
 

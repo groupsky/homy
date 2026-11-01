@@ -333,6 +333,35 @@ describe('ioniq-sessions bot', () => {
       expect(t.start_truncated).toBe(true)
     })
 
+    it('does not take a re-sent old fix at wake-up as the first position', () => {
+      firstTripEndingAt(A)
+      const W = 3600000
+      bms(W, { ignition: 1, speed_kph: 50, soc: 59, cum_out_kwh: 101, cum_in_kwh: 10 })
+      // The logger re-sends the fix from before the sleep, with its old fix time.
+      gps(W + 2000, { ...A, fix_ts: BASE + 110000 })
+      gps(W + 17000, B) // the first new fix: the car already moved
+      off(W + 70000)
+
+      const t = published(TRIP)[1]
+      expect(t.start_check).toBe('filled')
+      expect(t.gap_m).toBeGreaterThan(1000)
+      expect(t.start_lat).toBe(B.lat)
+      expect(t.gap_kwh).toBe(0) // the counters matched; only the position differs
+    })
+
+    it('ends a trip on power off even when the last gear frame said D', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
+      vmcu(30000, { gear: 'D', speed_kph: 40 })
+      bms(60000, { ignition: 1, speed_kph: 30, soc: 59 })
+      bms(70000, { ignition: 0, speed_kph: 0, soc: 59 }) // no vmcu P frame came first
+      bms(80000, { ignition: 0, speed_kph: 0, soc: 59 })
+
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(1)
+      expect(trips[0].closed_by).toBe('ignition_off')
+      expect(trips[0].end_ts).toBe(BASE + 70000)
+    })
+
     it('leaves the start unknown without a reading before the trip', () => {
       bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
       bms(60000, { ignition: 1, speed_kph: 40, soc: 59 })
@@ -733,6 +762,46 @@ describe('ioniq-sessions bot', () => {
       const trips = published(TRIP)
       expect(trips).toHaveLength(1)
       expect(trips[0].closed_by).toBe('ignition_off')
+    })
+
+    it('a trip restored while waiting in P goes live on P samples (old cache shape)', async () => {
+      // A deploy restarts the bot while the car waits in P. The cache holds a
+      // trip written by the schema 1 code, without the new fields.
+      const snap = { soc: 60, cum_out_kwh: 100, cum_in_kwh: 10, cum_chg_ah: 5, odometer: 1000, aux_12v: 13, connector: null, ambient: null, ts: BASE + 0 }
+      const cache = makeCache()
+      cache.open = {
+        kind: 'trip',
+        start_ts: BASE + 0,
+        startSnapshot: snap,
+        motionSnapshot: snap,
+        lastMotionTs: BASE + 0,
+        lastSnapshot: snap,
+        lastRxTs: BASE + 0,
+        sampleCount: 5,
+        maxGapMs: 0,
+        speedSum: 40,
+        speedCount: 1,
+        speedMax: 40,
+        powerMax: 20,
+        odometerReadings: [],
+        regenCumIn: 0,
+        prevCumIn: 10,
+        prevConnector: null,
+        containedPlugged: false,
+        stationarySince: null,
+        emitted: false
+      }
+      mqtt = makeMqtt()
+      await start(cache)
+      vmcu(30000, { gear: 'P', speed_kph: 0 })
+      bms(60000, { ignition: 1, speed_kph: 0, soc: 60, cum_out_kwh: 100.1 })
+      off(90000)
+
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(1)
+      expect(trips[0].closed_by).toBe('ignition_off')
+      expect(trips[0].start_check).toBe('unknown')
+      expect(trips[0].waiting_sec).toBe(60)
     })
 
     it('degrades gracefully to bounds:unbounded when the on-edge is absent, energy still valid', async () => {
