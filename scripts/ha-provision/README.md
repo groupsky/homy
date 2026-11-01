@@ -66,7 +66,9 @@ docker run --rm --network homy_automation \
   node /w/scripts/ha-provision/index.mjs --dry-run
 ```
 
-Drop `--dry-run` to apply. No container is restarted; HA applies all changes
+Drop `--dry-run` to apply. `scripts/deploy.sh` runs the same command after a
+successful deploy (see `docs/DEPLOYMENT.md`), so a hand run is needed only
+when the deploy reports that it failed or was skipped. No container is restarted; HA applies all changes
 live.
 
 One setting comes from `.env`: `HA_GRAFANA_BASE_URL`, the base of the

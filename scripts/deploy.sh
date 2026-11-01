@@ -215,6 +215,7 @@ echo "    2. Update the code and pull the new images from GHCR"
 echo "    3. Recreate only the services whose image or configuration changed"
 echo "    4. Health-check the recreated services; on failure roll code and"
 echo "       images back (data is never rolled back automatically)"
+echo "    5. On success, bring HA's dashboards to provision.json (ha-provision)"
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 
@@ -459,6 +460,91 @@ block_deploys() {
     log "Further deploys are blocked until $DEPLOY_BLOCK_FILE is removed"
 }
 
+# scripts/ha-provision as its README runs it. ha_provision adds the arguments
+# (--dry-run or none) and prints the output of its last try; HA_PROVISION_TEXT
+# is the command for a human to run. HA has no healthcheck, so the gate may
+# pass while it is still starting: a failed try is repeated a few times.
+HA_PROVISION_IMAGE=ghcr.io/groupsky/homy/node:22.22.0-alpine3.23
+HA_PROVISION_ATTEMPTS="${HA_PROVISION_ATTEMPTS:-5}"
+HA_PROVISION_RETRY_SECONDS="${HA_PROVISION_RETRY_SECONDS:-30}"
+# --init: a timeout stops node too, not only the docker client
+HA_PROVISION_CMD=(docker run --rm --init --network homy_automation
+    -v "$PROJECT_DIR":/w:ro
+    -v "$(resolve_secrets_dir)/ha_provision_token":/run/secrets/ha_provision_token:ro
+    -e HA_GRAFANA_BASE_URL="$(dotenv_value HA_GRAFANA_BASE_URL)"
+    "$HA_PROVISION_IMAGE"
+    node /w/scripts/ha-provision/index.mjs)
+HA_PROVISION_TEXT=$(printf '%q ' "${HA_PROVISION_CMD[@]}")
+ha_provision() {
+    local out attempt=1
+    while ! out=$(timeout -k 5 120 "${HA_PROVISION_CMD[@]}" "$@" 2>&1); do
+        if [ "$attempt" -ge "$HA_PROVISION_ATTEMPTS" ]; then
+            printf '%s\n' "$out"
+            return 1
+        fi
+        warn "ha-provision try $attempt failed (HA may still be starting), trying again in ${HA_PROVISION_RETRY_SECONDS} s: $(tail -n 1 <<<"$out")"
+        attempt=$((attempt + 1))
+        sleep "$HA_PROVISION_RETRY_SECONDS"
+    done
+    printf '%s\n' "$out"
+}
+
+# Brings HA's .storage state (dashboards, exposure, registry names) to
+# provision.json (#1878). It runs only after the gate passed, so a failed
+# deploy never applies the new file and its rollback leaves HA as it was. A
+# failure here does not fail the deploy: HA itself is fine. Sets
+# HA_PROVISION_NOTE, one line for the notice.
+provision_ha() {
+    local changed=1 out
+    if [ ! -f "$(resolve_secrets_dir)/ha_provision_token" ]; then
+        warn "No ha_provision_token secret: provision.json was not applied or checked"
+        HA_PROVISION_NOTE="ha-provision skipped: no ha_provision_token secret"
+        return 0
+    fi
+    # Pulled first, so docker's pull messages are not read as a difference
+    if ! docker image inspect "$HA_PROVISION_IMAGE" > /dev/null 2>&1 && \
+       ! timeout -k 5 300 docker pull -q "$HA_PROVISION_IMAGE" > /dev/null 2>&1; then
+        warn "Could not pull $HA_PROVISION_IMAGE for ha-provision"
+    fi
+    # The file and the script that applies it, between the running and the new
+    # commit. Unknown (no commit to compare) counts as changed.
+    if [[ "$CURRENT_VERSION" =~ ^[0-9a-f]{40}$ ]] && \
+       git diff --quiet "$CURRENT_VERSION" "$NEW_VERSION" -- config/home-assistant/provision.json scripts/ha-provision 2>/dev/null; then
+        changed=0
+    fi
+    if [ "$changed" -eq 1 ]; then
+        log "provision.json changed: applying it to HA (scripts/ha-provision)..."
+        if ! ha_provision | tee -a "$LOG_FILE"; then
+            error "ha-provision failed. HA is running; run it by hand: $HA_PROVISION_TEXT"
+            HA_PROVISION_NOTE="ha-provision FAILED, run it by hand (scripts/ha-provision/README.md)"
+            return 0
+        fi
+    fi
+    log "Checking HA against provision.json (ha-provision --dry-run)..."
+    if ! out=$(ha_provision --dry-run); then
+        printf '%s\n' "$out" | tee -a "$LOG_FILE"
+        error "The ha-provision dry run failed. HA is running; check it by hand: $HA_PROVISION_TEXT"
+        HA_PROVISION_NOTE="ha-provision dry run FAILED, check it by hand (scripts/ha-provision/README.md)"
+        return 0
+    fi
+    printf '%s\n' "$out" | tee -a "$LOG_FILE"
+    if grep -qv ': up to date$' <<<"$out"; then
+        if [ "$changed" -eq 1 ]; then
+            warn "HA still differs from provision.json after ha-provision"
+            HA_PROVISION_NOTE="ha-provision applied, but the dry run still shows changes; see the deploy log"
+        else
+            warn "HA differs from provision.json (an edit in the HA UI?). Not overwritten; to apply the file: $HA_PROVISION_TEXT"
+            HA_PROVISION_NOTE="HA differs from provision.json (edited in the UI?); not overwritten, see the deploy log"
+        fi
+        return 0
+    fi
+    if [ "$changed" -eq 1 ]; then
+        HA_PROVISION_NOTE="provision.json applied, HA up to date"
+    else
+        HA_PROVISION_NOTE="HA up to date with provision.json"
+    fi
+}
+
 if [ "$GATE_RC" -eq 0 ]; then
     log "Deployment successful!"
 
@@ -469,7 +555,10 @@ if [ "$GATE_RC" -eq 0 ]; then
     fi
 
     save_deployed_version "$NEW_VERSION"
-    notify "Deployment successful: $SHORT_NEW (recreated: ${CHANGED[*]:-none}; snapshot: $SNAPSHOT_NOTE)"
+    HA_PROVISION_NOTE=""
+    provision_ha
+    log "HA provision: $HA_PROVISION_NOTE"
+    notify "Deployment successful: $SHORT_NEW (recreated: ${CHANGED[*]:-none}; snapshot: $SNAPSHOT_NOTE; $HA_PROVISION_NOTE)"
     cleanup_old_logs "$DEPLOY_LOG_DIR" "deploy-*.log" 30
     log "Deployment complete."
     exit 0
