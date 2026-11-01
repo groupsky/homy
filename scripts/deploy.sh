@@ -477,7 +477,7 @@ HA_PROVISION_CMD=(docker run --rm --init --network homy_automation
 HA_PROVISION_TEXT=$(printf '%q ' "${HA_PROVISION_CMD[@]}")
 ha_provision() {
     local out attempt=1
-    while ! out=$(timeout -k 5 300 "${HA_PROVISION_CMD[@]}" "$@" 2>&1); do
+    while ! out=$(timeout -k 5 120 "${HA_PROVISION_CMD[@]}" "$@" 2>&1); do
         if [ "$attempt" -ge "$HA_PROVISION_ATTEMPTS" ]; then
             printf '%s\n' "$out"
             return 1
