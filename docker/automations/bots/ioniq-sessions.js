@@ -15,6 +15,11 @@
 // pack-counter / SoC deltas (charge detection), with the always-on household
 // charger energy meter bounding home charges.
 //
+// A trip ends when the car is powered off (ignition 1 -> 0) or a charge
+// starts, or, if ignition never reads 0, when the logger goes quiet. Gear P
+// with the power on does NOT end a trip: that time is "waiting" (waiting_sec /
+// waiting_kwh) inside the trip.
+//
 // Correctness principles that most edge-cases follow from:
 //   * A rest boundary requires the car to actually be AT REST on the far side
 //     of a gap — you cannot fall asleep and wake up mid-motion.
@@ -26,7 +31,7 @@
 // State is kept as small snapshots + reducers + meter edges (NOT a raw sample
 // window) so the cache stays tiny and a mid-session restart is cheap.
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 // Hard cap on the persisted charger-meter edge record so it can never grow
 // unbounded (edges are also pruned per rest close / trip start).
 const MAX_METER_EDGES = 64
@@ -43,6 +48,7 @@ const DEFAULTS = {
   odometerTopic: 'ioniq/parsed/odometer',
   connectorTopic: 'ioniq/parsed/bcm_b00e',
   ambientTopic: 'ioniq/parsed/ambient',
+  gpsTopic: 'ioniq/parsed/gps',
   chargerMeterTopic: '/modbus/monitoring/charger/reading',
   tripTopic: 'ioniq/derived/trip',
   chargeTopic: 'ioniq/derived/charge',
@@ -65,10 +71,30 @@ const DEFAULTS = {
   maxPlausibleStepKm: 400,
   maxPlausibleStepAh: 150,
   socField: 'soc',
+  // A "real" GPS fix: provider gps and accuracy <= gpsMaxAccuracyM. A trip's
+  // start/end position is the nearest real fix within gpsMatchMs of the time.
+  gpsMaxAccuracyM: 50,
+  gpsMatchMs: 60000,
+  // Start check: the trip's first readings are those received within
+  // startCheckWindowMs of the trip opening. They are compared with the last
+  // readings before the trip using these tolerances.
+  startCheckWindowMs: 60000,
+  startCheckSocPct: 0.5,
+  startCheckKwh: 0.1,
+  startCheckM: 100,
   // How far a meter power-on/off edge may sit outside the rest window and still
   // bound it. The meter and car share the same server clock but the handshake /
   // end-taper misaligns edges by a few minutes (spec §0.1: aligned within ~5-9 min).
   meterMatchToleranceMs: 900000
+}
+
+// Straight-line distance in metres between two {lat, lon} points.
+function distanceM (a, b) {
+  const rad = (d) => d * Math.PI / 180
+  const dLat = rad(b.lat - a.lat)
+  const dLon = rad(b.lon - a.lon)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2
+  return 2 * 6371000 * Math.asin(Math.sqrt(h))
 }
 
 module.exports = function createIoniqSessions (name, userConfig = {}) {
@@ -104,6 +130,7 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         lastSampleRxTs: null,
         lastSampleTs: null,
         lastIgnition: null,
+        lastGoodFix: null,
         lastEmitted: null,
         seq: 0
       },
@@ -123,6 +150,9 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
       // ambient refresh their own fields. Rebuilt from incoming samples after a
       // restart (the open session's snapshots carry what the metrics need).
       const merged = {}
+      // Recent real GPS fixes (in memory only), to find the fix nearest to a
+      // trip end that is closed after it happened (silence close).
+      let recentFixes = []
       let silenceTimer = null
       // The session that was already open when the bot resumed. Only the close of
       // THAT specific session counts as a restart lazy-close (spec §5.4). A trip
@@ -152,8 +182,20 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         aux_12v: isFiniteNum(merged.aux_12v) ? merged.aux_12v : null,
         connector: isFiniteNum(merged.connector) ? merged.connector : null,
         ambient: isFiniteNum(merged.ambient) ? merged.ambient : null,
+        fix: persistedCache.lastGoodFix || null,
         ts: isFiniteNum(ts) ? ts : null
       })
+
+      // The real fix nearest to ts, within gpsMatchMs, or null.
+      const nearestFix = (ts, candidates) => {
+        let best = null
+        for (const f of candidates) {
+          if (!f || !isFiniteNum(f.ts)) continue
+          const d = Math.abs(f.ts - ts)
+          if (d <= config.gpsMatchMs && (!best || d < Math.abs(best.ts - ts))) best = f
+        }
+        return best
+      }
 
       // Classify the current merged view. Motion is detected first: gear D/R OR
       // speed above the moving floor. Speed above the floor wins even over a
@@ -176,13 +218,16 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
 
       // --- session open helpers ------------------------------------------------
 
-      const newTrip = (ts, rxTs) => {
+      // `pre` is the last snapshot before the trip (the previous rest's end),
+      // or null on a cold start; the start check compares it with the trip's
+      // first readings.
+      const newTrip = (ts, rxTs, pre) => {
         const snap = snapshot(ts, rxTs)
         return {
           kind: 'trip',
           start_ts: ts,
           startSnapshot: snap,
-          motionSnapshot: snap, // last IN-MOTION snapshot -> distance/energy end
+          motionSnapshot: snap, // last moving or P snapshot -> the trip end
           lastMotionTs: ts,
           lastSnapshot: snap,
           lastRxTs: rxTs,
@@ -201,7 +246,29 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
           prevConnector: isFiniteNum(merged.connector) ? merged.connector : null,
           containedPlugged: merged.connector === 1,
           stationarySince: null,
+          // Waiting = time in gear P with the power on, and the battery energy
+          // (cum_out) used meanwhile.
+          prevState: 'moving',
+          prevCumOut: isFiniteNum(merged.cum_out_kwh) ? merged.cum_out_kwh : null,
+          waitingMs: 0,
+          waitingKwh: 0,
+          sawIgnitionOn: merged.ignition === 1,
+          startPre: pre || null,
+          startPost: {},
+          openRxTs: rxTs,
+          startFix: nearestFix(ts, recentFixes),
           emitted: false
+        }
+      }
+
+      // Record the trip's first readings (within startCheckWindowMs of the
+      // opening) for the start check and the start_* fields.
+      const notePost = (fields) => {
+        const trip = persistedCache.open
+        if (!trip || trip.kind !== 'trip' || !trip.startPost) return
+        if (Date.now() - trip.openRxTs > config.startCheckWindowMs) return
+        for (const [k, v] of Object.entries(fields)) {
+          if (v != null && trip.startPost[k] == null) trip.startPost[k] = v
         }
       }
 
@@ -242,7 +309,7 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
 
       // --- reducers ------------------------------------------------------------
 
-      const accumulate = (open, ts, rxTs, isAwakeSample) => {
+      const accumulate = (open, ts, rxTs, isAwakeSample, st) => {
         const gap = (open.lastRxTs != null && isFiniteNum(rxTs)) ? rxTs - open.lastRxTs : null
         if (gap != null && gap > open.maxGapMs) open.maxGapMs = gap
         open.lastRxTs = rxTs
@@ -250,7 +317,20 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         open.end_ts = isFiniteNum(ts) ? ts : open.end_ts
         if (open.kind === 'trip') {
           if (isAwakeSample) open.sampleCount++
-          if (isFiniteNum(merged.speed)) {
+          // The interval since the previous sample is waiting when that sample
+          // was in P (and the gap is not a logger reboot).
+          const cumOut = isFiniteNum(merged.cum_out_kwh) ? merged.cum_out_kwh : null
+          if (open.prevState === 'park') {
+            if (gap != null && gap < config.rebootMaxGapMs) open.waitingMs = (open.waitingMs || 0) + gap
+            if (isFiniteNum(cumOut) && isFiniteNum(open.prevCumOut) && cumOut >= open.prevCumOut) {
+              open.waitingKwh = (open.waitingKwh || 0) + (cumOut - open.prevCumOut)
+            }
+          }
+          if (isFiniteNum(cumOut)) open.prevCumOut = cumOut
+          if (st) open.prevState = st
+          if (merged.ignition === 1) open.sawIgnitionOn = true
+          // Speed stats describe driving, so samples in P are left out.
+          if (isFiniteNum(merged.speed) && st !== 'park') {
             open.speedSum += merged.speed
             open.speedCount++
             open.speedMax = open.speedMax == null ? merged.speed : Math.max(open.speedMax, merged.speed)
@@ -361,6 +441,11 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         const socDelta = (isFiniteNum(socStart) && isFiniteNum(socEnd)) ? socEnd - socStart : null
         if (!isFiniteNum(socStart) || !isFiniteNum(socEnd)) complete = false
 
+        const post = trip.startPost || {}
+        const startFix = trip.startFix || null
+        const endFix = nearestFix(endTs, [...recentFixes, persistedCache.lastGoodFix])
+        const check = startCheck(trip.startPre, post)
+
         return {
           kind: 'trip',
           start_ts: trip.start_ts,
@@ -380,7 +465,25 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
           power_max_kw: trip.powerMax,
           ambient_c: isFiniteNum(end.ambient) ? end.ambient : (isFiniteNum(start.ambient) ? start.ambient : null),
           contained_plugged: !!trip.containedPlugged,
-          start_truncated: true, // logger powers on ~1-2 min after ignition (spec §0.1)
+          waiting_sec: (trip.waitingMs || 0) / 1000,
+          waiting_kwh: trip.waitingKwh || 0,
+          // First readings of the trip; null when none arrived in the window.
+          start_odometer: isFiniteNum(post.odometer) ? post.odometer : null,
+          start_cum_out_kwh: isFiniteNum(post.cum_out_kwh) ? post.cum_out_kwh : null,
+          start_cum_in_kwh: isFiniteNum(post.cum_in_kwh) ? post.cum_in_kwh : null,
+          start_lat: startFix ? startFix.lat : null,
+          start_lon: startFix ? startFix.lon : null,
+          end_odometer: isFiniteNum(end.odometer) ? end.odometer : null,
+          end_cum_out_kwh: isFiniteNum(end.cum_out_kwh) ? end.cum_out_kwh : null,
+          end_cum_in_kwh: isFiniteNum(end.cum_in_kwh) ? end.cum_in_kwh : null,
+          end_lat: endFix ? endFix.lat : null,
+          end_lon: endFix ? endFix.lon : null,
+          start_check: check.start_check,
+          gap_km: check.gap_km,
+          gap_kwh: check.gap_kwh,
+          gap_m: check.gap_m,
+          // Kept until its readers move to start_check.
+          start_truncated: true,
           complete,
           sample_count: trip.sampleCount,
           max_gap_sec: trip.maxGapMs / 1000,
@@ -388,6 +491,39 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
           gear_at_close: gearAtClose == null ? null : gearAtClose,
           schema_version: SCHEMA_VERSION
         }
+      }
+
+      // Compare the last readings before the trip with its first readings.
+      // checked = every reading present on both sides agrees; filled = at least
+      // one differs (gap_* carry the differences); unknown = nothing to compare.
+      const startCheck = (pre, post) => {
+        const out = { start_check: 'unknown', gap_km: null, gap_kwh: null, gap_m: null }
+        if (!pre) return out
+        let compared = 0
+        let same = true
+        if (isFiniteNum(pre.soc) && isFiniteNum(post.soc)) {
+          compared++
+          if (Math.abs(post.soc - pre.soc) > config.startCheckSocPct) same = false
+        }
+        if (isFiniteNum(pre.cum_out_kwh) && isFiniteNum(post.cum_out_kwh)) {
+          compared++
+          out.gap_kwh = post.cum_out_kwh - pre.cum_out_kwh
+          if (Math.abs(out.gap_kwh) > config.startCheckKwh) same = false
+        }
+        if (isFiniteNum(pre.odometer) && isFiniteNum(post.odometer)) {
+          compared++
+          out.gap_km = post.odometer - pre.odometer
+          if (out.gap_km !== 0) same = false
+        }
+        if (pre.fix && post.fix) {
+          compared++
+          out.gap_m = distanceM(pre.fix, post.fix)
+          if (out.gap_m > config.startCheckM) same = false
+        }
+        if (compared === 0) return out
+        if (same) return { start_check: 'checked', gap_km: null, gap_kwh: null, gap_m: null }
+        out.start_check = 'filled'
+        return out
       }
 
       const isDegenerateTrip = (trip, endTs) => {
@@ -571,16 +707,16 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         persistedCache.meterEdges = persistedCache.meterEdges.filter((e) => e.ts > rest.end_ts)
       }
 
-      const closeRestOpenTrip = (rest, ts, rxTs, closedBy) => {
+      const closeRestOpenTrip = (rest, ts, rxTs, closedBy, pre) => {
         finalizeRest(rest, closedBy || 'motion_resume')
-        persistedCache.open = newTrip(ts, rxTs)
+        persistedCache.open = newTrip(ts, rxTs, pre)
         recordOdometer(persistedCache.open)
       }
 
       // --- silence timer -------------------------------------------------------
 
       // Fires silenceTimeoutMs after the last sample. Closes a trailing trip at
-      // its LAST-MOTION time (never "now") and opens a pending rest; if a rest is
+      // its last moving or P sample (never "now") and opens a pending rest; if a rest is
       // already open it is left as-is (idempotent — never a second rest).
       function onSilence () {
         silenceTimer = null
@@ -600,11 +736,9 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
 
       const evaluate = (ts, rxTs) => {
         const prevRxTs = persistedCache.lastSampleRxTs
-        const prevIgnition = persistedCache.lastIgnition
         const gap = prevRxTs != null && isFiniteNum(rxTs) ? rxTs - prevRxTs : null
         const st = motionState()
         const gearP = st === 'park'
-        const ignitionEdge = prevIgnition === 1 && merged.ignition === 0
         const gearAtClose = merged.gear === config.gearParkValue ? config.gearParkValue : null
         let open = persistedCache.open
 
@@ -628,14 +762,14 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
             // (a highway reboot / tunnel is moving on both sides). A trip that
             // resumes moving after a restart is a LIVE trip, not a lazy-close.
             if (open === restartSession) { restarted = false; restartSession = null }
-            accumulate(open, ts, rxTs, gap == null || gap < config.rebootMaxGapMs)
+            accumulate(open, ts, rxTs, gap == null || gap < config.rebootMaxGapMs, st)
             advanceMotion(open, ts, rxTs)
-          } else if (gearP) {
-            accumulate(open, ts, rxTs, false)
-            open = closeTripOpenRest(open, closedByFor('gear_park', open), open.lastMotionTs, gearAtClose, rxTs)
-          } else if (ignitionEdge) {
-            accumulate(open, ts, rxTs, false)
-            open = closeTripOpenRest(open, closedByFor('ignition_edge', open), open.lastMotionTs, gearAtClose, rxTs)
+          } else if (merged.ignition === 0 && open.sawIgnitionOn) {
+            // Power off: the trip ends at this sample. sawIgnitionOn guards
+            // against a stale 0 left in the merged view from before the trip.
+            accumulate(open, ts, rxTs, false, st)
+            advanceMotion(open, ts, rxTs)
+            open = closeTripOpenRest(open, closedByFor('ignition_off', open), open.lastMotionTs, gearAtClose, rxTs)
           } else if (gap != null && gap >= config.restGapMs) {
             // Long gap with a stationary far side = a genuine rest boundary. Close
             // the trip at its last-motion sample; this stationary sample opens the
@@ -646,13 +780,18 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
             const rest = closeTripOpenRest(open, closedByFor('gap_stationary', open), open.lastMotionTs, gearAtClose, open.lastRxTs)
             accumulate(rest, ts, rxTs, true)
             open = rest
+          } else if (gearP) {
+            // In P with the power on: waiting, still the same trip. A later
+            // silence close ends the trip at the last P sample.
+            accumulate(open, ts, rxTs, true, st)
+            advanceMotion(open, ts, rxTs)
           } else if (st === 'ambiguous') {
             // gear=N (neutral at a light / rolling) is never a split on its own.
-            accumulate(open, ts, rxTs, true)
+            accumulate(open, ts, rxTs, true, st)
           } else {
             // Stationary (gear absent, low speed), short gap: still the same trip
             // until the OBSERVED stationary stretch exceeds minRestSplitMs.
-            accumulate(open, ts, rxTs, true)
+            accumulate(open, ts, rxTs, true, st)
             if (open.stationarySince == null) open.stationarySince = rxTs
             if (isFiniteNum(rxTs) && rxTs - open.stationarySince > config.minRestSplitMs) {
               // Seed the rest's lastRxTs from the trip's pre-close receipt time so
@@ -667,8 +806,11 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
             // Motion resumes -> the rest ends at THIS sample and is classified.
             // The resuming sample is a boundary, NOT an intermediate awake sample,
             // so it does not count toward sample_count / bounds classification.
+            // The rest's snapshot before this sample is the start check's
+            // "last reading before the trip".
+            const pre = open.lastSnapshot
             accumulate(open, ts, rxTs, false)
-            closeRestOpenTrip(open, ts, rxTs, closedByFor('motion_resume', open))
+            closeRestOpenTrip(open, ts, rxTs, closedByFor('motion_resume', open), pre)
             open = persistedCache.open
           } else {
             // Still at rest (awake-idle or asleep): extend the rest, refresh its
@@ -703,6 +845,11 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         const ts = isFiniteNum(payload.ts) ? payload.ts : Date.now()
         merged.ts = ts
         evaluate(ts, Date.now())
+        notePost({
+          soc: isFiniteNum(soc) ? soc : null,
+          cum_out_kwh: isFiniteNum(payload.cum_out_kwh) ? payload.cum_out_kwh : null,
+          cum_in_kwh: isFiniteNum(payload.cum_in_kwh) ? payload.cum_in_kwh : null
+        })
       }
 
       const onVmcu = (payload) => {
@@ -725,13 +872,40 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         merged.odometer = km
         if (isFiniteNum(payload.ts)) merged.ts = payload.ts
         recordOdometer(persistedCache.open)
+        notePost({ odometer: km })
+      }
+
+      // GPS refreshes the last real fix and the open trip's start fix. It does
+      // not trigger a state evaluation.
+      const onGps = (payload) => {
+        if (!payload || typeof payload !== 'object') return
+        if (payload.provider !== 'gps') return
+        if (!isFiniteNum(payload.lat) || !isFiniteNum(payload.lon)) return
+        if (!isFiniteNum(payload.acc_m) || payload.acc_m > config.gpsMaxAccuracyM) return
+        const ts = isFiniteNum(payload.fix_ts) ? payload.fix_ts : (isFiniteNum(payload.ts) ? payload.ts : Date.now())
+        const fix = { lat: payload.lat, lon: payload.lon, ts }
+        persistedCache.lastGoodFix = fix
+        recentFixes = recentFixes.filter((f) => f.ts >= ts - 5 * config.gpsMatchMs)
+        recentFixes.push(fix)
+        const trip = persistedCache.open
+        if (trip && trip.kind === 'trip') {
+          const best = nearestFix(trip.start_ts, [trip.startFix, fix])
+          if (best) trip.startFix = best
+          notePost({ fix })
+        }
       }
 
       const onConnector = (payload) => {
         if (!payload || typeof payload !== 'object') return
         if (!isFiniteNum(payload.charge_connector)) return
+        let open = persistedCache.open
+        // Plugged in while the car stands: a charge starts, so the trip ends at
+        // its last moving or P sample and the rest below records the plug edge.
+        if (open && open.kind === 'trip' && payload.charge_connector === 1 && motionState() !== 'moving') {
+          open = closeTripOpenRest(open, closedByFor('charge_start', open), open.lastMotionTs,
+            merged.gear === config.gearParkValue ? config.gearParkValue : null, open.lastRxTs)
+        }
         merged.connector = payload.charge_connector
-        const open = persistedCache.open
         if (open && open.kind === 'rest') {
           if (!Array.isArray(open.connectorEdges)) open.connectorEdges = []
           const ts = isFiniteNum(payload.ts) ? payload.ts : Date.now()
@@ -808,6 +982,7 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         mqtt.subscribe(config.odometerTopic, onOdometer),
         mqtt.subscribe(config.connectorTopic, onConnector),
         mqtt.subscribe(config.ambientTopic, onAmbient),
+        mqtt.subscribe(config.gpsTopic, onGps),
         mqtt.subscribe(config.chargerMeterTopic, onChargerMeter)
       ])
     }

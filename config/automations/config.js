@@ -708,6 +708,7 @@ module.exports = {
       odometerTopic: 'ioniq/parsed/odometer',   // km (sparse ~1/82min)
       connectorTopic: 'ioniq/parsed/bcm_b00e',  // charge_connector (sparse corroborator / awake-charge bound)
       ambientTopic: 'ioniq/parsed/ambient',     // optional; ambient_c best-effort
+      gpsTopic: 'ioniq/parsed/gps',             // lat, lon, acc_m, provider, fix_ts; trip start/end position + start check
       chargerMeterTopic: '/modbus/monitoring/charger/reading', // charger or-we-526; fields ap(W), act(kWh); home-charge bound + AC kWh
       tripTopic: 'ioniq/derived/trip',
       chargeTopic: 'ioniq/derived/charge',
