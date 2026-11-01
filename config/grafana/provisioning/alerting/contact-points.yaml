@@ -26,3 +26,16 @@ contactPoints:
           httpMethod: POST
           maxAlerts: 0
           title: "Home Automation Alert"
+  # Sends nothing. The side-by-side run of the car app's alerts (#1881) goes
+  # here: the route is muted all the time (mute timing `always` in
+  # notification-policies.yaml), and the URL goes nowhere in case the mute is
+  # ever lost.
+  - orgId: 1
+    name: silent
+    receivers:
+      - uid: silent
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: http://127.0.0.1:9/silent
+          httpMethod: POST

@@ -1,0 +1,50 @@
+name: Test Ioniq App Alerts
+
+# Integration test for the car app's alerts (#1881) with real services:
+# mosquitto, InfluxDB, mqtt-influx (built here) and Grafana. A firing message
+# fires the thin rule and reaches the silent receiver; a firing and a resolved
+# message sent together are stored and fire nothing; no webhook is called.
+# See .github/scripts/test-ioniq-app-alerts/run.sh.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'config/grafana/provisioning/alerting/ioniq-app-alerts.yaml'
+      - 'config/grafana/provisioning/alerting/contact-points.yaml'
+      - 'config/grafana/provisioning/alerting/notification-policies.yaml'
+      - 'docker/mqtt-influx/**'
+      # The images run.sh must use (it checks compose.yml against them).
+      - 'docker/grafana/Dockerfile'
+      - 'docker/influxdb/Dockerfile'
+      - 'docker/mosquitto/Dockerfile'
+      - '.github/scripts/test-ioniq-app-alerts/**'
+      - '.github/workflows/test-ioniq-app-alerts.yml'
+  pull_request:
+    paths:
+      - 'config/grafana/provisioning/alerting/ioniq-app-alerts.yaml'
+      - 'config/grafana/provisioning/alerting/contact-points.yaml'
+      - 'config/grafana/provisioning/alerting/notification-policies.yaml'
+      - 'docker/mqtt-influx/**'
+      # The images run.sh must use (it checks compose.yml against them).
+      - 'docker/grafana/Dockerfile'
+      - 'docker/influxdb/Dockerfile'
+      - 'docker/mosquitto/Dockerfile'
+      - '.github/scripts/test-ioniq-app-alerts/**'
+      - '.github/workflows/test-ioniq-app-alerts.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Ioniq app alerts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run integration test
+        run: .github/scripts/test-ioniq-app-alerts/run.sh

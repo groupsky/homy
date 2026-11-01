@@ -1,0 +1,10 @@
+apiVersion: 1
+
+# The uid the alert rules use (datasourceUid: P3C6603E967DC8568).
+datasources:
+  - name: InfluxDB
+    uid: P3C6603E967DC8568
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    database: test
