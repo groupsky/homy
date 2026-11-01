@@ -9,8 +9,12 @@ describe('ioniq-session converter', () => {
         efficiency_wh_per_km: 105, soc_start: 73, soc_end: 61, soc_delta_pct: -12,
         speed_avg_kph: 45.2, speed_max_kph: 98.1, power_max_kw: 62.3, ambient_c: 21.5,
         complete: true, sample_count: 812, max_gap_sec: 45,
-        closed_by: 'gear_park', gear_at_close: 'P', seq: 17, schema_version: 1,
+        closed_by: 'ignition_off', gear_at_close: 'P', seq: 17, schema_version: 2,
         start_truncated: true, contained_plugged: false,
+        waiting_sec: 95, waiting_kwh: 0.2, start_odometer: 1000, end_odometer: 1040,
+        start_cum_out_kwh: 100, end_cum_out_kwh: 104.7, start_cum_in_kwh: 10, end_cum_in_kwh: 10.5,
+        start_lat: 10.5, start_lon: 20.25, end_lat: 10.75, end_lon: 20.5,
+        start_check: 'filled', gap_km: 2, gap_kwh: 0.4, gap_m: 1500,
         _bot: 'ioniq-sessions', _tz: 'Europe/Sofia',
     }
 
@@ -41,6 +45,9 @@ describe('ioniq-session converter', () => {
         expect(lp).toContain('distance_km=40')
         expect(lp).toContain('soc_delta_pct=-12')
         expect(lp).not.toContain('duration_sec=2496i')
+        expect(lp).toContain('waiting_sec=95')
+        expect(lp).toContain('start_lat=10.5')
+        expect(lp).toContain('gap_km=2')
     })
 
     it('types booleans as boolean fields', () => {
@@ -52,7 +59,8 @@ describe('ioniq-session converter', () => {
 
     it('types strings as quoted string fields', () => {
         const lp = ioniqSession(trip)[0].toLineProtocol()
-        expect(lp).toContain('closed_by="gear_park"')
+        expect(lp).toContain('closed_by="ignition_off"')
+        expect(lp).toContain('start_check="filled"')
         expect(lp).toContain('gear_at_close="P"')
     })
 

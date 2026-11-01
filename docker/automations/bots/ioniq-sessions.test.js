@@ -9,6 +9,7 @@ const VMCU = 'ioniq/parsed/vmcu'
 const ODO = 'ioniq/parsed/odometer'
 const CONN = 'ioniq/parsed/bcm_b00e'
 const AMBIENT = 'ioniq/parsed/ambient'
+const GPS = 'ioniq/parsed/gps'
 const METER = '/modbus/monitoring/charger/reading'
 const TRIP = 'ioniq/derived/trip'
 const CHARGE = 'ioniq/derived/charge'
@@ -64,6 +65,8 @@ describe('ioniq-sessions bot', () => {
   const odo = (offset, km) => { at(offset); return mqtt._emit(ODO, { ts: BASE + offset, odometer: km }) }
   const conn = (offset, v) => { at(offset); return mqtt._emit(CONN, { ts: BASE + offset, charge_connector: v }) }
   const ambient = (offset, c) => { at(offset); return mqtt._emit(AMBIENT, { ts: BASE + offset, ambient_c: c }) }
+  const off = (offset) => bms(offset, { ignition: 0, speed_kph: 0 })
+  const gps = (offset, fields) => { at(offset); return mqtt._emit(GPS, { ts: BASE + offset, fix_ts: BASE + offset, provider: 'gps', acc_m: 5, ...fields }) }
   const meter = (offset, ap, act) => { at(offset); return mqtt._emit(METER, { ts: BASE + offset, ap, act }) }
 
   const published = (topic) => mqtt._published.filter((p) => p.topic === topic).map((p) => p.payload)
@@ -103,8 +106,9 @@ describe('ioniq-sessions bot', () => {
       expect(t._type).toBe('ioniq-session')
       expect(t.kind).toBe('trip')
       expect(t.start_ts).toBe(BASE + 0)
-      expect(t.end_ts).toBe(BASE + 120000)
-      expect(t.duration_sec).toBe(120)
+      // The trip ends at the power-off sample.
+      expect(t.end_ts).toBe(BASE + 130000)
+      expect(t.duration_sec).toBe(130)
       expect(t.distance_km).toBeCloseTo(40, 5)
       expect(t.energy_out_kwh).toBeCloseTo(4.7, 5)
       expect(t.soc_start).toBe(73)
@@ -114,23 +118,83 @@ describe('ioniq-sessions bot', () => {
       expect(t.speed_max_kph).toBe(45)
       expect(t.power_max_kw).toBe(30)
       expect(t.ambient_c).toBe(21)
-      expect(t.closed_by).toBe('ignition_edge')
+      expect(t.closed_by).toBe('ignition_off')
       expect(t.complete).toBe(true)
       expect(t.start_truncated).toBe(true)
-      expect(t.schema_version).toBe(1)
+      expect(t.schema_version).toBe(2)
     })
 
-    it('closes a trip immediately on gear=P before minRestSplit elapses', () => {
-      bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
-      bms(60000, { ignition: 1, speed_kph: 40, soc: 58 })
-      bms(120000, { ignition: 1, speed_kph: 40, soc: 56 })
-      vmcu(125000, { gear: 'P', speed_kph: 0 })
+    it('keeps one trip across a P stop with the power on and counts the waiting', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60, cum_out_kwh: 100 })
+      bms(60000, { ignition: 1, speed_kph: 40, soc: 58, cum_out_kwh: 101 })
+      vmcu(120000, { gear: 'P', speed_kph: 0 })
+      bms(180000, { ignition: 1, speed_kph: 0, soc: 58, cum_out_kwh: 101.1 })
+      bms(300000, { ignition: 1, speed_kph: 0, soc: 58, cum_out_kwh: 101.3 }) // 3 min in P, power on
+      vmcu(310000, { gear: 'D', speed_kph: 20 })
+      bms(400000, { ignition: 1, speed_kph: 40, soc: 56, cum_out_kwh: 102 })
+      vmcu(410000, { gear: 'P', speed_kph: 0 })
+      bms(420000, { ignition: 0, speed_kph: 0, soc: 56, cum_out_kwh: 102 }) // power off
 
       const trips = published(TRIP)
       expect(trips).toHaveLength(1)
-      expect(trips[0].closed_by).toBe('gear_park')
+      expect(published(PARK)).toHaveLength(0)
+      const t = trips[0]
+      expect(t.closed_by).toBe('ignition_off')
+      expect(t.gear_at_close).toBe('P')
+      expect(t.end_ts).toBe(BASE + 420000)
+      // 120 s -> 310 s in P, plus 410 s -> 420 s in P before power off.
+      expect(t.waiting_sec).toBe(200)
+      // cum_out 101 -> 101.3 in the first stop (the second used nothing).
+      expect(t.waiting_kwh).toBeCloseTo(0.3, 5)
+      expect(t.energy_out_kwh).toBeCloseTo(2, 5)
+      // P samples are not driving: they stay out of the speed average.
+      expect(t.speed_avg_kph).toBeCloseTo((40 + 40 + 20 + 40) / 4, 5)
+    })
+
+    it('ends a trip when the power goes off in P', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
+      bms(60000, { ignition: 1, speed_kph: 40, soc: 58 })
+      vmcu(120000, { gear: 'P', speed_kph: 0 })
+      bms(135000, { ignition: 0, speed_kph: 0, soc: 58 })
+
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(1)
+      expect(trips[0].closed_by).toBe('ignition_off')
+      expect(trips[0].end_ts).toBe(BASE + 135000)
+      expect(trips[0].waiting_sec).toBe(15)
+      expect(persistedCache.open.kind).toBe('rest')
+    })
+
+    it('ends a trip on silence at the last P sample when ignition never reads 0', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
+      bms(60000, { ignition: 1, speed_kph: 40, soc: 58 })
+      vmcu(120000, { gear: 'P', speed_kph: 0 })
+      vmcu(150000, { gear: 'P', speed_kph: 0 })
+      bms(160000, { ignition: 1, speed_kph: 0, soc: 58 }) // no gear in this frame: still P
+      expect(published(TRIP)).toHaveLength(0)
+
+      jest.advanceTimersByTime(300000)
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(1)
+      expect(trips[0].closed_by).toBe('silence_timeout')
+      expect(trips[0].end_ts).toBe(BASE + 160000)
       expect(trips[0].gear_at_close).toBe('P')
+    })
+
+    it('ends a trip when a charge starts', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60, cum_in_kwh: 10 })
+      bms(60000, { ignition: 1, speed_kph: 40, soc: 58, cum_in_kwh: 10 })
+      vmcu(120000, { gear: 'P', speed_kph: 0 })
+      conn(130000, 1) // plugged in with the power on
+      bms(140000, { ignition: 1, speed_kph: 0, soc: 58, cum_in_kwh: 10 })
+
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(1)
+      expect(trips[0].closed_by).toBe('charge_start')
       expect(trips[0].end_ts).toBe(BASE + 120000)
+      const rest = persistedCache.open
+      expect(rest.kind).toBe('rest')
+      expect(rest.connectorEdges).toEqual([{ type: 'on', ts: BASE + 130000 }])
     })
 
     it('does not split a trip when stopped in gear D past minRestSplit (red light)', () => {
@@ -139,6 +203,7 @@ describe('ioniq-sessions bot', () => {
       vmcu(200000, { gear: 'D', speed_kph: 0 })
       vmcu(400000, { gear: 'D', speed_kph: 0 }) // well past minRestSplit, still in D
       vmcu(410000, { gear: 'P', speed_kph: 0 })
+      off(410000) // power off ends the trip
 
       expect(published(TRIP)).toHaveLength(1)
       expect(published(PARK)).toHaveLength(0)
@@ -150,6 +215,7 @@ describe('ioniq-sessions bot', () => {
       vmcu(120000, { gear: 'N', speed_kph: 0 })
       vmcu(320000, { gear: 'N', speed_kph: 0 }) // past minRestSplit
       vmcu(330000, { gear: 'P', speed_kph: 0 })
+      off(330000) // power off ends the trip
 
       expect(published(TRIP)).toHaveLength(1)
     })
@@ -176,10 +242,11 @@ describe('ioniq-sessions bot', () => {
       bms(460000, { ignition: 1, speed_kph: 50, soc: 55 })
       bms(520000, { ignition: 1, speed_kph: 40, soc: 54 })
       vmcu(525000, { gear: 'P', speed_kph: 0 })
+      off(525000) // power off ends the trip
 
       const trips = published(TRIP)
       expect(trips).toHaveLength(1)
-      expect(trips[0].end_ts).toBe(BASE + 520000)
+      expect(trips[0].end_ts).toBe(BASE + 525000)
       expect(published(PARK)).toHaveLength(0)
     })
 
@@ -190,6 +257,7 @@ describe('ioniq-sessions bot', () => {
       bms(180000, { ignition: 1, speed_kph: 0, soc: 58 })
       bms(185000, { ignition: 1, speed_kph: 45, soc: 58 })
       vmcu(200000, { gear: 'P', speed_kph: 0 })
+      off(200000) // power off ends the trip
 
       expect(published(TRIP)).toHaveLength(1)
       expect(published(PARK)).toHaveLength(0)
@@ -201,6 +269,118 @@ describe('ioniq-sessions bot', () => {
       bms(65000, { ignition: 0, speed_kph: 0, soc: 60 }) // ignition edge closes the 1-sample trip
 
       expect(published(TRIP)).toHaveLength(0)
+    })
+  })
+
+  describe('start check and trip ends', () => {
+    // Made-up coordinates for the tests only.
+    const A = { lat: 10, lon: 20 }
+    const B = { lat: 10.01, lon: 20 } // about 1.1 km north of A
+
+    // A first trip that ends with power off at A, then the logger sleeps.
+    const firstTripEndingAt = (pos) => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60, cum_out_kwh: 100, cum_in_kwh: 10 })
+      odo(0, 1000)
+      bms(60000, { ignition: 1, speed_kph: 40, soc: 59, cum_out_kwh: 101, cum_in_kwh: 10 })
+      odo(60000, 1002)
+      gps(110000, pos)
+      vmcu(120000, { gear: 'P', speed_kph: 0 })
+      bms(130000, { ignition: 0, speed_kph: 0, soc: 59, cum_out_kwh: 101, cum_in_kwh: 10 })
+      jest.advanceTimersByTime(300000) // the logger goes quiet
+    }
+
+    it('marks a start checked when the first readings match the last ones', () => {
+      firstTripEndingAt(A)
+      const W = 3600000 // wakes an hour later, already moving
+      bms(W, { ignition: 1, speed_kph: 20, soc: 59, cum_out_kwh: 101.05, cum_in_kwh: 10 })
+      gps(W + 5000, { lat: A.lat + 0.0002, lon: A.lon }) // about 22 m
+      odo(W + 10000, 1002)
+      bms(W + 60000, { ignition: 1, speed_kph: 40, soc: 58, cum_out_kwh: 102, cum_in_kwh: 10 })
+      off(W + 70000)
+
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(2)
+      const t = trips[1]
+      expect(t.start_check).toBe('checked')
+      expect(t.gap_km).toBeNull()
+      expect(t.gap_kwh).toBeNull()
+      expect(t.gap_m).toBeNull()
+      expect(t.start_odometer).toBe(1002)
+      expect(t.start_cum_out_kwh).toBe(101.05)
+      expect(t.start_cum_in_kwh).toBe(10)
+      expect(t.start_lat).toBeCloseTo(A.lat + 0.0002, 6)
+      expect(t.end_odometer).toBe(1002)
+      expect(t.end_cum_out_kwh).toBe(102)
+      // The first trip: its end position is the fix 20 s before the end.
+      expect(trips[0].end_lat).toBe(A.lat)
+      expect(trips[0].end_lon).toBe(A.lon)
+    })
+
+    it('marks a start filled with the gaps when the car moved before the logger woke', () => {
+      firstTripEndingAt(A)
+      const W = 3600000
+      bms(W, { ignition: 1, speed_kph: 50, soc: 57, cum_out_kwh: 102.5, cum_in_kwh: 10.2 })
+      gps(W + 5000, B)
+      odo(W + 10000, 1009)
+      off(W + 70000)
+
+      const t = published(TRIP)[1]
+      expect(t.start_check).toBe('filled')
+      expect(t.gap_km).toBe(7)
+      expect(t.gap_kwh).toBeCloseTo(1.5, 5)
+      expect(t.gap_m).toBeGreaterThan(1000)
+      expect(t.gap_m).toBeLessThan(1200)
+      expect(t.start_truncated).toBe(true)
+    })
+
+    it('does not take a re-sent old fix at wake-up as the first position', () => {
+      firstTripEndingAt(A)
+      const W = 3600000
+      bms(W, { ignition: 1, speed_kph: 50, soc: 59, cum_out_kwh: 101, cum_in_kwh: 10 })
+      // The logger re-sends the fix from before the sleep, with its old fix time.
+      gps(W + 2000, { ...A, fix_ts: BASE + 110000 })
+      gps(W + 17000, B) // the first new fix: the car already moved
+      off(W + 70000)
+
+      const t = published(TRIP)[1]
+      expect(t.start_check).toBe('filled')
+      expect(t.gap_m).toBeGreaterThan(1000)
+      expect(t.start_lat).toBe(B.lat)
+      expect(t.gap_kwh).toBe(0) // the counters matched; only the position differs
+    })
+
+    it('ends a trip on power off even when the last gear frame said D', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
+      vmcu(30000, { gear: 'D', speed_kph: 40 })
+      bms(60000, { ignition: 1, speed_kph: 30, soc: 59 })
+      bms(70000, { ignition: 0, speed_kph: 0, soc: 59 }) // no vmcu P frame came first
+      bms(80000, { ignition: 0, speed_kph: 0, soc: 59 })
+
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(1)
+      expect(trips[0].closed_by).toBe('ignition_off')
+      expect(trips[0].end_ts).toBe(BASE + 70000)
+    })
+
+    it('leaves the start unknown without a reading before the trip', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
+      bms(60000, { ignition: 1, speed_kph: 40, soc: 59 })
+      off(70000)
+      const t = published(TRIP)[0]
+      expect(t.start_check).toBe('unknown')
+      expect(t.start_lat).toBeNull()
+      expect(t.end_lat).toBeNull()
+    })
+
+    it('ignores GPS fixes that are not real or not accurate', () => {
+      bms(0, { ignition: 1, speed_kph: 40, soc: 60 })
+      gps(1000, { ...A, provider: 'network' })
+      gps(2000, { ...A, acc_m: 80 })
+      bms(60000, { ignition: 1, speed_kph: 40, soc: 59 })
+      off(70000)
+      const t = published(TRIP)[0]
+      expect(t.start_lat).toBeNull()
+      expect(t.end_lat).toBeNull()
     })
   })
 
@@ -238,6 +418,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 52, cum_out_kwh: 102, cum_in_kwh: 20, cum_chg_ah: 100 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 52, cum_out_kwh: 104, cum_in_kwh: 20, cum_chg_ah: 100 })
       vmcu(122000, { gear: 'P', speed_kph: 0 }) // park closes trip, opens rest
+      off(122000) // power off ends the trip
       conn(123000, 1)
       // charger meter: power on 200s..300s (debounced), then off.
       meter(200000, 1200, 1000)
@@ -288,6 +469,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 52, cum_in_kwh: 20, cum_chg_ah: 100 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 52, cum_in_kwh: 20, cum_chg_ah: 100 })
       vmcu(122000, { gear: 'P', speed_kph: 0 }) // close trip, open rest
+      off(122000) // power off ends the trip
       conn(150000, 0)
       conn(180000, 1) // 0->1 ON edge at 180000
       bms(200000, { ignition: 1, speed_kph: 0, soc: 70, cum_in_kwh: 25, cum_chg_ah: 115 })
@@ -308,6 +490,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 52, cum_in_kwh: 20 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 52, cum_in_kwh: 20 })
       vmcu(122000, { gear: 'P', speed_kph: 0 })
+      off(122000) // power off ends the trip
       // continuous awake coverage (no sleep gap), NO connector edges, NO meter
       bms(180000, { ignition: 1, speed_kph: 0, soc: 60, cum_in_kwh: 22 })
       bms(240000, { ignition: 1, speed_kph: 0, soc: 66, cum_in_kwh: 24 })
@@ -350,6 +533,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 60 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 60 })
       vmcu(122000, { gear: 'P', speed_kph: 0, aux_12v: 12.8 })
+      off(122000) // power off ends the trip
       bms(123000, { ignition: 1, speed_kph: 0, soc: 60, aux_12v: 12.8 })
       // resume 2h later, SoC drained 5% -> park, negative delta.
       bms(120000 + 7200000, { ignition: 1, speed_kph: 5, soc: 55, aux_12v: 12.4 })
@@ -368,6 +552,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 60 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 60 })
       vmcu(122000, { gear: 'P', speed_kph: 0 })
+      off(122000) // power off ends the trip
       // resume only 30 min later (< 1 h floor).
       bms(120000 + 1800000, { ignition: 1, speed_kph: 5, soc: 59 })
 
@@ -403,6 +588,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 58, cum_out_kwh: 102, cum_in_kwh: 10 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 56, cum_out_kwh: 104, cum_in_kwh: 10 })
       vmcu(125000, { gear: 'P', speed_kph: 0 })
+      off(125000) // power off ends the trip
 
       const t = published(TRIP)[0]
       expect(t.distance_km).toBeNull() // never last-first = 0
@@ -416,6 +602,7 @@ describe('ioniq-sessions bot', () => {
       odo(90000, 1040)
       bms(120000, { ignition: 1, speed_kph: 40, soc: 56, cum_out_kwh: 104, cum_in_kwh: 10 })
       vmcu(125000, { gear: 'P', speed_kph: 0 })
+      off(125000) // power off ends the trip
 
       const t = published(TRIP)[0]
       expect(t.distance_km).toBeCloseTo(40, 5)
@@ -427,6 +614,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 58, cum_out_kwh: 98 }) // counter went DOWN
       bms(120000, { ignition: 1, speed_kph: 40, soc: 56, cum_out_kwh: 95 })
       vmcu(125000, { gear: 'P', speed_kph: 0 })
+      off(125000) // power off ends the trip
 
       const t = published(TRIP)[0]
       expect(t.energy_out_kwh).toBeNull()
@@ -439,6 +627,7 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 90, soc: 70, cum_out_kwh: 110, cum_in_kwh: 20 })
       odo(60000, 1060) // +60 km, legitimate
       vmcu(65000, { gear: 'P', speed_kph: 0 })
+      off(65000) // power off ends the trip
 
       const t = published(TRIP)[0]
       expect(t.distance_km).toBeCloseTo(60, 5) // 60 < maxPlausibleStepKm (400)
@@ -544,9 +733,9 @@ describe('ioniq-sessions bot', () => {
       expect(charges[0].ac_energy_kwh).toBeCloseTo(12.46, 5)
     })
 
-    it('does not mislabel a normal close long after a restart (live trip -> gear_park)', async () => {
+    it('does not mislabel a normal close long after a restart (live trip -> ignition_off)', async () => {
       // Restart with an OPEN trip; the car keeps driving (goes live), then parks
-      // normally much later. That close is gear_park, not restart_lazy_close.
+      // normally much later. That close is ignition_off, not restart_lazy_close.
       const cache = makeCache()
       cache.open = {
         kind: 'trip',
@@ -568,10 +757,51 @@ describe('ioniq-sessions bot', () => {
       bms(30000, { ignition: 1, speed_kph: 45, soc: 58 }) // resumes moving -> live trip
       bms(90000, { ignition: 1, speed_kph: 45, soc: 56 })
       vmcu(95000, { gear: 'P', speed_kph: 0 }) // normal park close
+      off(95000) // power off ends the trip
 
       const trips = published(TRIP)
       expect(trips).toHaveLength(1)
-      expect(trips[0].closed_by).toBe('gear_park')
+      expect(trips[0].closed_by).toBe('ignition_off')
+    })
+
+    it('a trip restored while waiting in P goes live on P samples (old cache shape)', async () => {
+      // A deploy restarts the bot while the car waits in P. The cache holds a
+      // trip written by the schema 1 code, without the new fields.
+      const snap = { soc: 60, cum_out_kwh: 100, cum_in_kwh: 10, cum_chg_ah: 5, odometer: 1000, aux_12v: 13, connector: null, ambient: null, ts: BASE + 0 }
+      const cache = makeCache()
+      cache.open = {
+        kind: 'trip',
+        start_ts: BASE + 0,
+        startSnapshot: snap,
+        motionSnapshot: snap,
+        lastMotionTs: BASE + 0,
+        lastSnapshot: snap,
+        lastRxTs: BASE + 0,
+        sampleCount: 5,
+        maxGapMs: 0,
+        speedSum: 40,
+        speedCount: 1,
+        speedMax: 40,
+        powerMax: 20,
+        odometerReadings: [],
+        regenCumIn: 0,
+        prevCumIn: 10,
+        prevConnector: null,
+        containedPlugged: false,
+        stationarySince: null,
+        emitted: false
+      }
+      mqtt = makeMqtt()
+      await start(cache)
+      vmcu(30000, { gear: 'P', speed_kph: 0 })
+      bms(60000, { ignition: 1, speed_kph: 0, soc: 60, cum_out_kwh: 100.1 })
+      off(90000)
+
+      const trips = published(TRIP)
+      expect(trips).toHaveLength(1)
+      expect(trips[0].closed_by).toBe('ignition_off')
+      expect(trips[0].start_check).toBe('unknown')
+      expect(trips[0].waiting_sec).toBe(60)
     })
 
     it('degrades gracefully to bounds:unbounded when the on-edge is absent, energy still valid', async () => {
@@ -594,9 +824,10 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 58 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 56 })
       vmcu(125000, { gear: 'P', speed_kph: 0 })
+      off(125000) // power off ends the trip
 
       const rec = mqtt._published.find((p) => p.topic === TRIP)
-      expect(rec.lastEmittedAtPublish).toEqual({ kind: 'trip', start_ts: BASE + 0, end_ts: BASE + 120000, seq: 1 })
+      expect(rec.lastEmittedAtPublish).toEqual({ kind: 'trip', start_ts: BASE + 0, end_ts: BASE + 125000, seq: 1 })
     })
 
     it('does not drop a rest whose start_ts equals the prior trip end_ts', () => {
@@ -604,14 +835,15 @@ describe('ioniq-sessions bot', () => {
       bms(60000, { ignition: 1, speed_kph: 40, soc: 60 })
       bms(120000, { ignition: 1, speed_kph: 40, soc: 60 })
       vmcu(122000, { gear: 'P', speed_kph: 0 }) // trip end_ts = 120000, rest start_ts = 120000
+      off(122000) // power off ends the trip
       bms(500000, { ignition: 1, speed_kph: 5, soc: 60 }) // resume -> park
 
       const trips = published(TRIP)
       const parks = published(PARK)
       expect(trips).toHaveLength(1)
       expect(parks).toHaveLength(1)
-      expect(trips[0].end_ts).toBe(BASE + 120000)
-      expect(parks[0].start_ts).toBe(BASE + 120000)
+      expect(trips[0].end_ts).toBe(BASE + 122000)
+      expect(parks[0].start_ts).toBe(BASE + 122000)
     })
   })
 

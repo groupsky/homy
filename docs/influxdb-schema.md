@@ -432,14 +432,29 @@ are **omitted** (no sentinel — a session with an unmeasurable metric simply ha
 fabricated `0`). `_type`, `group`, `state`, `ts`, `kind`, `_bot`, `_tz` are excluded from fields (identity/tag/
 envelope metadata, not measurement data).
 - **Common fields** (all `kind`s): `end_ts` (epoch ms), `duration_sec` (s), `complete` (bool — both boundary
-  samples present), `sample_count`, `max_gap_sec` (s), `closed_by` (`gear_park` \| `ignition_edge` \|
-  `idle_split` \| `gap_stationary` \| `motion_resume` \| `silence_timeout` \| `restart_lazy_close`), `gear_at_close`, `seq`
-  (monotonic per-emit counter), `schema_version`.
+  samples present), `sample_count`, `max_gap_sec` (s), `closed_by` (trips: `ignition_off` \| `charge_start` \|
+  `silence_timeout` \| `gap_stationary` \| `idle_split` \| `restart_lazy_close`; rests: `motion_resume`; before
+  schema 2 trips also had `gear_park` \| `ignition_edge`), `gear_at_close`, `seq`
+  (monotonic per-emit counter), `schema_version` (2 since homy#1873).
 - **`trip` fields**: `distance_km` (km; null unless ≥2 distinct odometer readings), `odometer_coverage`
   (0–1), `energy_out_kwh` / `energy_regen_kwh` / `energy_net_kwh` (kWh), `efficiency_wh_per_km` (Wh/km; null
   if `distance_km` null), `soc_start` / `soc_end` / `soc_delta_pct` (%), `speed_avg_kph` / `speed_max_kph`
-  (km/h), `power_max_kw` (kW), `ambient_c` (°C, best-effort), `start_truncated` (bool), `contained_plugged`
-  (bool).
+  (km/h, P samples left out), `power_max_kw` (kW), `ambient_c` (°C, best-effort), `start_truncated` (bool,
+  always true; kept until its readers move to `start_check`), `contained_plugged` (bool).
+  Since schema 2 (homy#1873) a trip ends when the car is powered off (`ignition` 1 → 0), when a charge starts,
+  or, if `ignition` never reads 0, when the logger goes quiet (at the last moving or P sample). Gear P with the
+  power on does not end a trip. Schema 2 adds:
+  `waiting_sec` (s in P with the power on) and `waiting_kwh` (kWh of `cum_out` used meanwhile; part of
+  `energy_out_kwh`);
+  `start_odometer` / `start_cum_out_kwh` / `start_cum_in_kwh` (the trip's first readings, received within 60 s of
+  the trip opening; omitted if none arrived) and `end_odometer` / `end_cum_out_kwh` / `end_cum_in_kwh`;
+  `start_lat` / `start_lon` / `end_lat` / `end_lon` (the nearest fix from `ioniq/parsed/gps` with
+  `provider = gps` and `acc_m` ≤ 50 within 60 s; omitted if none);
+  `start_check` (`checked` \| `filled` \| `unknown`): the last readings before the trip (the end of the
+  previous rest) against the trip's first readings — SoC within 0.5 %, `cum_out_kwh` within 0.1 kWh, position
+  within 100 m, the same odometer km. `checked` = every reading present on both sides agrees; `filled` = at
+  least one differs; `unknown` = nothing to compare. On `filled`, `gap_km` (odometer), `gap_kwh` (`cum_out`)
+  and `gap_m` (straight line) carry the differences that could be computed.
 - **`charge` fields**: `energy_in_kwh` (kWh into pack; always valid), `charge_ah` (Ah; always valid),
   `soc_start` / `soc_delta_pct` / `soc_end` (%), `bounds` (`meter` \| `connector` \| `awake` \| `unbounded`),
   `duration_is_charge` (bool), `power_avg_kw` (kW; null when unbounded), `connector_confirmed` (bool),
