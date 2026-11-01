@@ -89,6 +89,7 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 - **mqtt-influx-ioniq**: `ioniq/parsed/#` → InfluxDB (`ioniq` measurement; decoded Hyundai Ioniq OBD telemetry, tags `group`/`state`)
 - **mqtt-influx-ioniq-sessions**: `ioniq/derived/#` → InfluxDB (`ioniq_sessions` measurement; one record per closed trip/charge/park session from the `ioniq-sessions` bot, tag `kind`)
 - **energy-report**: `ioniq_charges`, one point per Ioniq charge with home/away and the home cost (below)
+- **ev-journal** (its own repo, not in this compose file): `ev_trips`, `ev_journeys`, `ev_outings`, `ev_month` and `ev_track`, the Ioniq trips merged into journeys, with GPS km, places and the price. Fields: [ev-journal outputs](https://github.com/groupsky/ev-journal/blob/main/docs/outputs.md). Dashboard: **Ioniq EV – Пътувания** (`ioniq-journeys`)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
 
 ### Specialized Monitoring
@@ -452,7 +453,7 @@ envelope metadata, not measurement data).
 `ioniq/#` subscriptions of `mqtt-ndjson-ioniq` and, until MongoDB is retired, `mqtt-mongo-ioniq` — both
 append-only, so downstream consumers there must de-dup on `(kind, start_ts, end_ts)`.
 **Use Cases**: per-trip distance/energy/efficiency, charge-session energy/power/efficiency, parasitic-drain
-analysis, and the "Trips & charging" Grafana dashboard (`docs/ioniq-monitoring-alerting-spec.md` §7) — this
+analysis, and the "Charging & parking" Grafana dashboard (`ioniq-sessions`; it was "Trips & charging" until the trips moved to `ioniq-journeys`, #1874) (`docs/ioniq-monitoring-alerting-spec.md` §7) — this
 measurement is its data source, unblocking the dashboard that was previously deferred for lack of session
 boundaries.
 

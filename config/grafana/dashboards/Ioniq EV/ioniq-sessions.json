@@ -21,7 +21,7 @@
       }
     ]
   },
-  "description": "Hyundai Ioniq Electric - what each trip, charge and park actually did. Built on the ioniq_sessions measurement written by the ioniq-sessions bot: one record per closed session, back-dated to the session start.",
+  "description": "Hyundai Ioniq Electric - what each charge and park actually did. Built on the ioniq_sessions measurement written by the ioniq-sessions bot: one record per closed session, back-dated to the session start. The trips are on the dashboard Ioniq EV – Пътувания (ioniq-journeys).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -44,134 +44,6 @@
   ],
   "liveNow": false,
   "panels": [
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P3C6603E967DC8568"
-      },
-      "description": "Sum of trip distances over the selected range, from odometer deltas. Trips with fewer than two distinct odometer readings contribute nothing, so this is a slight under-count on very short hops.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "suffix: km",
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "9.5.2",
-      "targets": [
-        {
-          "refId": "A",
-          "alias": "distance",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P3C6603E967DC8568"
-          },
-          "query": "SELECT sum(\"distance_km\") AS \"km\" FROM \"ioniq_sessions\"\nWHERE \"kind\"='trip' AND $timeFilter",
-          "rawQuery": true,
-          "resultFormat": "time_series"
-        }
-      ],
-      "title": "Distance (window)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P3C6603E967DC8568"
-      },
-      "description": "Net energy at the PACK terminals divided by distance, over all trips longer than 5 km in the range. Net means discharge minus regen, so it is what the battery actually gave up.\n\nThis is a pack-side figure and is not comparable with a wall-to-wheel number: it excludes charger and cable losses entirely. Reference for the 7.5 weeks to 2026-09-05: about 124 Wh/km net across all trips, and 158 Wh/km measured the other way, from the BMS cumulative counters over 2863 km.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "suffix: Wh/km",
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "9.5.2",
-      "targets": [
-        {
-          "refId": "A",
-          "alias": "Wh/km",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P3C6603E967DC8568"
-          },
-          "query": "SELECT (sum(\"energy_net_kwh\") / sum(\"distance_km\")) * 1000 AS \"whkm\" FROM \"ioniq_sessions\"\nWHERE \"kind\"='trip' AND \"distance_km\" > 5 AND $timeFilter",
-          "rawQuery": true,
-          "resultFormat": "time_series"
-        }
-      ],
-      "title": "Consumption (window)",
-      "type": "stat"
-    },
     {
       "datasource": {
         "type": "influxdb",
@@ -200,8 +72,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 12,
+        "x": 0,
         "y": 0
       },
       "id": 3,
@@ -264,8 +136,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 12,
+        "x": 12,
         "y": 0
       },
       "id": 4,
@@ -299,102 +171,6 @@
       ],
       "title": "Energy from the wall (window)",
       "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P3C6603E967DC8568"
-      },
-      "description": "One point per trip over 5 km. Expect wide scatter: a short cold trip at low average speed can read three times a steady motorway run, and both are normal. Observed range over the 7.5 weeks to 2026-09-05 was roughly 85 to 355 Wh/km per trip, against about 124 Wh/km net overall.\n\nReading it: a sustained upward shift at similar speeds and temperatures is the interesting signal -- dragging brakes, low tyres, or a genuinely weakening pack.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "points",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 7,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "suffix: Wh/km"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 4
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "9.5.2",
-      "targets": [
-        {
-          "refId": "A",
-          "alias": "Wh/km",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P3C6603E967DC8568"
-          },
-          "query": "SELECT \"efficiency_wh_per_km\" AS \"whkm\" FROM \"ioniq_sessions\"\nWHERE \"kind\"='trip' AND \"distance_km\" > 5 AND $timeFilter",
-          "rawQuery": true,
-          "resultFormat": "time_series"
-        }
-      ],
-      "title": "Consumption per trip",
-      "type": "timeseries"
     },
     {
       "datasource": {
@@ -456,7 +232,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 4
       },
       "id": 6,
@@ -552,8 +328,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 12
+        "x": 12,
+        "y": 4
       },
       "id": 7,
       "options": {
@@ -647,8 +423,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 24,
+        "x": 0,
         "y": 12
       },
       "id": 8,
@@ -914,7 +690,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "🚗 Ioniq EV – Trips & charging",
+  "title": "🚗 Ioniq EV – Charging & parking",
   "uid": "ioniq-sessions",
   "version": 1,
   "weekStart": ""
