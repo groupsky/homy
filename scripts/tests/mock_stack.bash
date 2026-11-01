@@ -20,8 +20,9 @@
 #   stop-noop           `docker compose stop` leaves the containers running
 #   provision.out       output of `docker run` (ha-provision; default: up to date)
 #   provision-dry.out   the same for a run with --dry-run (default: provision.out)
-#   provision.fail      `docker run` without --dry-run exits 1
-#   provision-dry.fail  `docker run --dry-run` exits 1
+#   provision.fail      `docker run` without --dry-run exits 1 (always when
+#                       empty, else the next N times)
+#   provision-dry.fail  the same for `docker run --dry-run`
 #   calls.log           every docker call, prefixed with COMPOSE_FILE and IMAGE_TAG
 #   zfs/...             see install_mock_zfs
 #
@@ -117,7 +118,13 @@ case "$1" in
         out="$MOCK_DIR/$kind.out"
         [ -f "$out" ] || out="$MOCK_DIR/provision.out"
         if [ -f "$out" ]; then cat "$out"; else echo "dashboard dashboard-x: up to date"; fi
-        [ -e "$MOCK_DIR/$kind.fail" ] && exit 1
+        # an empty .fail file fails every run; one holding N fails the next N
+        f="$MOCK_DIR/$kind.fail"
+        if [ -e "$f" ]; then
+            left=$(cat "$f")
+            [ -z "$left" ] && { echo "mock: ha-provision failed" >&2; exit 1; }
+            if [ "$left" -gt 0 ]; then echo $((left - 1)) > "$f"; echo "mock: ha-provision failed" >&2; exit 1; fi
+        fi
         ;;
     manifest)
         # Stand-in registry: $MOCK_DIR/registry-miss/<image, / and : as _>

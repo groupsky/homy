@@ -461,17 +461,32 @@ block_deploys() {
 }
 
 # scripts/ha-provision as its README runs it. ha_provision adds the arguments
-# (--dry-run or none) and prints the output; HA_PROVISION_TEXT is the command
-# for a human to run.
-HA_PROVISION_CMD=(docker run --rm --network homy_automation
+# (--dry-run or none) and prints the output of its last try; HA_PROVISION_TEXT
+# is the command for a human to run. HA has no healthcheck, so the gate may
+# pass while it is still starting: a failed try is repeated a few times.
+HA_PROVISION_IMAGE=ghcr.io/groupsky/homy/node:22.22.0-alpine3.23
+HA_PROVISION_ATTEMPTS="${HA_PROVISION_ATTEMPTS:-5}"
+HA_PROVISION_RETRY_SECONDS="${HA_PROVISION_RETRY_SECONDS:-30}"
+# --init: a timeout stops node too, not only the docker client
+HA_PROVISION_CMD=(docker run --rm --init --network homy_automation
     -v "$PROJECT_DIR":/w:ro
     -v "$(resolve_secrets_dir)/ha_provision_token":/run/secrets/ha_provision_token:ro
     -e HA_GRAFANA_BASE_URL="$(dotenv_value HA_GRAFANA_BASE_URL)"
-    ghcr.io/groupsky/homy/node:22.22.0-alpine3.23
+    "$HA_PROVISION_IMAGE"
     node /w/scripts/ha-provision/index.mjs)
 HA_PROVISION_TEXT=$(printf '%q ' "${HA_PROVISION_CMD[@]}")
 ha_provision() {
-    timeout -k 5 300 "${HA_PROVISION_CMD[@]}" "$@" 2>&1
+    local out attempt=1
+    while ! out=$(timeout -k 5 300 "${HA_PROVISION_CMD[@]}" "$@" 2>&1); do
+        if [ "$attempt" -ge "$HA_PROVISION_ATTEMPTS" ]; then
+            printf '%s\n' "$out"
+            return 1
+        fi
+        warn "ha-provision try $attempt failed (HA may still be starting), trying again in ${HA_PROVISION_RETRY_SECONDS} s: $(tail -n 1 <<<"$out")"
+        attempt=$((attempt + 1))
+        sleep "$HA_PROVISION_RETRY_SECONDS"
+    done
+    printf '%s\n' "$out"
 }
 
 # Brings HA's .storage state (dashboards, exposure, registry names) to
@@ -485,6 +500,11 @@ provision_ha() {
         warn "No ha_provision_token secret: provision.json was not applied or checked"
         HA_PROVISION_NOTE="ha-provision skipped: no ha_provision_token secret"
         return 0
+    fi
+    # Pulled first, so docker's pull messages are not read as a difference
+    if ! docker image inspect "$HA_PROVISION_IMAGE" > /dev/null 2>&1 && \
+       ! timeout -k 5 300 docker pull -q "$HA_PROVISION_IMAGE" > /dev/null 2>&1; then
+        warn "Could not pull $HA_PROVISION_IMAGE for ha-provision"
     fi
     # The file and the script that applies it, between the running and the new
     # commit. Unknown (no commit to compare) counts as changed.

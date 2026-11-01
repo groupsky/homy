@@ -91,6 +91,7 @@ EOF
     echo "$OLD" > "$VERSION_FILE"
     export QUIET=0 YES_FLAG=0
     export HEALTH_STABLE_SECONDS=0 HEALTH_POLL_INTERVAL=0 HEALTH_GATE_MARGIN=0
+    export HA_PROVISION_RETRY_SECONDS=0
 }
 
 teardown() {
@@ -669,6 +670,9 @@ dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/
     assert_output --partial "HA provision: provision.json applied, HA up to date"
     run cat "$MOCK_DIR/notify.log"
     assert_output --partial "provision.json applied, HA up to date"
+    # compared the running commit with the new one, on the file and the script
+    run grep "^diff" "$GIT_CALLS"
+    assert_output --partial "$OLD $NEW -- config/home-assistant/provision.json scripts/ha-provision"
     assert_equal "$(cat "$VERSION_FILE")" "$NEW"
 }
 
@@ -747,13 +751,49 @@ dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/
 }
 
 @test "deploy.sh: a deploy back to an older provision.json applies it" {
-    # e.g. the manual recovery: deploy.sh --tag <previous> --force
+    # the manual recovery after a deploy of NEW: deploy.sh --tag <OLD>
+    echo "$NEW" > "$VERSION_FILE"
     touch "$MOCK_DIR/provision-changed"
 
-    run deploy --tag "$OLD" --force
+    run deploy --tag "$OLD"
     assert_success
     assert_equal "$(provision_runs)" 1
+    run grep "^diff" "$GIT_CALLS"
+    assert_output --partial "$NEW $OLD -- config/home-assistant/provision.json"
     run grep "docker run" "$MOCK_DIR/calls.log"
-    assert_output --partial "--network homy_automation"
+    assert_output --partial "--init --network homy_automation"
     assert_output --partial "ha_provision_token:/run/secrets/ha_provision_token:ro"
+}
+
+@test "deploy.sh: a dry run that still differs after the apply is reported" {
+    touch "$MOCK_DIR/provision-changed"
+    echo "dashboard dashboard-x: save the config from provision.json" > "$MOCK_DIR/provision.out"
+    echo "dashboard dashboard-x: would save the config from provision.json" > "$MOCK_DIR/provision-dry.out"
+
+    run deploy
+    assert_success
+    assert_output --partial "HA still differs from provision.json after ha-provision"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "the dry run still shows changes"
+}
+
+@test "deploy.sh: ha-provision is tried again while HA is still starting" {
+    touch "$MOCK_DIR/provision-changed"
+    echo 2 > "$MOCK_DIR/provision.fail"
+
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 3
+    assert_output --partial "ha-provision try 1 failed (HA may still be starting)"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "provision.json applied, HA up to date"
+}
+
+@test "deploy.sh: a dry run that fails and then works counts only its last output" {
+    echo 1 > "$MOCK_DIR/provision-dry.fail"
+
+    run deploy
+    assert_success
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "HA up to date with provision.json"
 }
