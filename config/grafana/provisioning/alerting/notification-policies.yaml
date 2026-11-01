@@ -1,5 +1,13 @@
 apiVersion: 1
 
+# Covers every day, all day. Mutes the silent route below. Sunday is day 0
+# here, so 'monday:sunday' is a backwards range that Grafana rejects.
+muteTimes:
+  - orgId: 1
+    name: always
+    time_intervals:
+      - weekdays: ['sunday:saturday']
+
 policies:
   - orgId: 1
     receiver: telegram-webhook
@@ -10,6 +18,13 @@ policies:
     group_interval: 5m
     repeat_interval: 4h
     routes:
+      # Side-by-side run of the car app's alerts (#1881, ioniq-app-alerts.yaml).
+      # First, so the ioniq routes below never see them. Nothing is sent.
+      - receiver: silent
+        matchers:
+          - side_by_side = true
+        mute_time_intervals:
+          - always
       - receiver: telegram-webhook-no-resolve
         matchers:
           - notify_resolved = false

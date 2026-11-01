@@ -1,0 +1,46 @@
+# Real services for run.sh: broker, InfluxDB, mqtt-influx (built from this
+# repository) and Grafana with only the alerting files under test. `sink`
+# stands in for every webhook and logs each request it gets.
+services:
+  broker:
+    image: ghcr.io/groupsky/homy/mosquitto:2.0.22
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  influxdb:
+    image: ghcr.io/groupsky/homy/influxdb:1.13.1-alpine
+    environment:
+      - INFLUXDB_HTTP_AUTH_ENABLED=false
+
+  mqtt-influx:
+    build: ../../../docker/mqtt-influx
+    depends_on: [broker, influxdb]
+    restart: on-failure
+    environment:
+      - BROKER=mqtt://broker
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME=test
+      - INFLUXDB_PASSWORD=test
+      - INFLUXDB_DATABASE=test
+      # The one bridge from docker-compose.yml that carries the app's alerts.
+      - 'INSTANCES=[{"clientId": "mqtt-influx-ioniq", "topic": "ioniq/parsed/#"}]'
+
+  sink:
+    image: ghcr.io/groupsky/homy/node:18.20.8-alpine
+    command:
+      - node
+      - -e
+      - "require('http').createServer((q, s) => { console.log('REQUEST', q.method, q.url); s.end('ok') }).listen(8080)"
+
+  grafana:
+    image: ghcr.io/groupsky/homy/grafana:9.5.21
+    depends_on: [influxdb, sink]
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_ALERTING_ENABLED=false
+    volumes:
+      - ./datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ${ALERTING_DIR:?run run.sh}:/etc/grafana/provisioning/alerting:ro
+    ports:
+      - 127.0.0.1::3000

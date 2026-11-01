@@ -131,3 +131,36 @@ describe('ioniq converter', () => {
         expect(ioniq(frame)).toHaveLength(1)
     })
 })
+
+// App alert messages (#1881): topic ioniq/parsed/alerts/<uid>, read by the thin
+// Grafana rules in config/grafana/provisioning/alerting/ioniq-app-alerts.yaml.
+describe('ioniq converter: app alert messages', () => {
+    // The contract example from issue #1881.
+    const firing = {
+        _type: 'ioniq',
+        group: 'alerts/ioniq-tpms-fl-temp-excess',
+        ts: 1767261600000,
+        uid: 'ioniq-tpms-fl-temp-excess',
+        title: '🚗 Ioniq Tyre Hot — FL',
+        summary: '🚗 FL (front-left) tyre running hot vs the other wheels',
+        severity: 'warning',
+        firing: 1,
+        starts_at: 1767261000000,
+        value: 9.4,
+    }
+
+    it('stores one point: tag group=alerts/<uid>, firing a float, strings kept, time = ts', () => {
+        const points = ioniq(firing)
+        expect(points).toHaveLength(1)
+        const lp = points[0].toLineProtocol()
+        expect(lp).toMatch(/^ioniq,group=alerts\/ioniq-tpms-fl-temp-excess /)
+        expect(lp).toMatch(/[ ,]firing=1[ ,]/) // float: no integer i-suffix
+        expect(lp).toContain('uid="ioniq-tpms-fl-temp-excess"')
+        expect(lp).toContain('title="🚗 Ioniq Tyre Hot — FL"')
+        expect(lp).toContain('summary="🚗 FL (front-left) tyre running hot vs the other wheels"')
+        expect(lp).toContain('severity="warning"')
+        expect(lp).toContain('starts_at=1767261000000')
+        expect(lp).toContain('value=9.4')
+        expect(lp.endsWith(' 1767261600000')).toBe(true)
+    })
+})
