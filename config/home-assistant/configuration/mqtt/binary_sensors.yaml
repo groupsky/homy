@@ -16,16 +16,22 @@
 
 # The Ioniq has a fault code (#1800). Retained logger topics; the codes are in
 # the attributes. Stored codes stay until cleared; pending ones may not repeat.
+# A failed read (NO DATA, error reply) has no `codes` field. It must not turn
+# the flag OFF (#1866): the state template renders '' (ignored) and the
+# attributes template renders the current attributes again.
 - name: ioniq_fault_stored
   state_topic: "ioniq/parsed/dtc/stored"
-  value_template: "{{ 'ON' if value_json.codes | length > 0 else 'OFF' }}"
+  value_template: &ioniq_fault_state "{{ ('ON' if value_json.codes | length > 0 else 'OFF') if value_json.codes is defined else '' }}"
   json_attributes_topic: "ioniq/parsed/dtc/stored"
-  json_attributes_template: "{{ {'codes': value_json.codes, 'ts': value_json.ts} | tojson }}"
+  json_attributes_template: &ioniq_fault_attrs >-
+    {{ ({'codes': value_json.codes, 'ts': value_json.ts} if value_json.codes is defined
+    else {'codes': this.attributes.codes, 'ts': this.attributes.ts | default(none)} if this.attributes.codes is defined
+    else {}) | tojson }}
   device_class: problem
 
 - name: ioniq_fault_pending
   state_topic: "ioniq/parsed/dtc/pending"
-  value_template: "{{ 'ON' if value_json.codes | length > 0 else 'OFF' }}"
+  value_template: *ioniq_fault_state
   json_attributes_topic: "ioniq/parsed/dtc/pending"
-  json_attributes_template: "{{ {'codes': value_json.codes, 'ts': value_json.ts} | tojson }}"
+  json_attributes_template: *ioniq_fault_attrs
   device_class: problem
