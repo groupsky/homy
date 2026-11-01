@@ -199,9 +199,10 @@
     - charging
     - parked
 
+# A frame without aux_12v (an implausible value) is skipped too.
 - name: ioniq_12v
   state_topic: "ioniq/parsed/bms/2101"
-  value_template: "{{ '' if value_json.cell_min_v == 0 and value_json.cell_max_v == 0 else value_json.aux_12v }}"
+  value_template: "{{ '' if value_json.cell_min_v == 0 and value_json.cell_max_v == 0 else value_json.aux_12v | default('') }}"
   device_class: voltage
   state_class: measurement
   unit_of_measurement: V
@@ -224,9 +225,15 @@
   value_template: *ioniq_ts
   device_class: timestamp
 
+# The time of the last good fault-code read. A failed read has no `codes`
+# (#1866) and keeps the old time. A timestamp sensor logs a warning for '',
+# so with no old time (after a restart) the template renders None: unknown.
 - name: ioniq_faults_time
   state_topic: "ioniq/parsed/dtc/stored"
-  value_template: *ioniq_ts
+  value_template: >-
+    {% if value_json.codes is defined and value_json.ts is number %}{{ (value_json.ts / 1000) | as_datetime }}
+    {%- elif this.state not in ['unknown', 'unavailable'] %}{{ this.state }}
+    {%- else %}None{% endif %}
   device_class: timestamp
 
 # Tyre pressure after a long park (cold), once a day per wheel: the value
