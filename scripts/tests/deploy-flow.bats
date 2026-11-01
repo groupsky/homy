@@ -31,6 +31,7 @@ setup() {
     # it (kept in $MOCK_DIR/head); every call is recorded
     export GIT_CALLS="$MOCK_DIR/git.log"
     echo "$OLD" > "$MOCK_DIR/head"
+    REAL_GIT=$(command -p -v git)
     cat > "$MOCK_BIN/git" <<EOF
 #!/bin/bash
 echo "\$*" >> "\$GIT_CALLS"
@@ -45,8 +46,23 @@ case "\$*" in
         case "\$*" in *$OLD*|*$NEW*) echo "$NEW" ;; *) exit 1 ;; esac ;;
     *rev-parse*) echo "$NEW" ;;
     show\ *) cat "\$MOCK_DIR/compose-at-commit" 2>/dev/null || exit 128 ;;
-    # provision.json differs between the two commits when the file is there
-    diff\ *) [ -e "\$MOCK_DIR/provision-changed" ] && exit 1 ;;
+    # provision.json differs between the two commits when the file is there.
+    # With changed-files, real git runs the same diff on a scratch repository
+    # where OLD to NEW changes the files listed there, so the pathspec is tested.
+    diff\ *)
+        if [ -f "\$MOCK_DIR/changed-files" ]; then
+            r="\$MOCK_DIR/diff-repo"
+            g() { "$REAL_GIT" -C "\$r" -c user.name=t -c user.email=t@t "\$@" > /dev/null; }
+            mkdir -p "\$r" && g init -q && g commit -q --allow-empty -m old && g tag old
+            while read -r f; do mkdir -p "\$r/\$(dirname "\$f")"; echo x > "\$r/\$f"; g add -- "\$f"; done < "\$MOCK_DIR/changed-files"
+            g commit -q -m new && g tag new
+            args=("\$@")
+            for i in "\${!args[@]}"; do
+                case "\${args[\$i]}" in $OLD) args[\$i]=old ;; $NEW) args[\$i]=new ;; esac
+            done
+            exec "$REAL_GIT" -C "\$r" "\${args[@]}"
+        fi
+        [ -e "\$MOCK_DIR/provision-changed" ] && exit 1 ;;
 esac
 exit 0
 EOF
@@ -796,4 +812,27 @@ dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/
     assert_success
     run cat "$MOCK_DIR/notify.log"
     assert_output --partial "HA up to date with provision.json"
+}
+
+@test "deploy.sh: a change to only the docs or tests of ha-provision is not a change" {
+    printf '%s\n' scripts/ha-provision/README.md scripts/ha-provision/lib.test.mjs > "$MOCK_DIR/changed-files"
+
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 0
+    assert_equal "$(dry_runs)" 1
+}
+
+@test "deploy.sh: a change to the ha-provision code or to provision.json is a change" {
+    printf '%s\n' scripts/ha-provision/README.md scripts/ha-provision/lib.mjs > "$MOCK_DIR/changed-files"
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 1
+
+    rm -rf "$MOCK_DIR/diff-repo" "$MOCK_DIR/calls.log"
+    echo "$OLD" > "$VERSION_FILE"
+    echo config/home-assistant/provision.json > "$MOCK_DIR/changed-files"
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 1
 }

@@ -507,9 +507,11 @@ provision_ha() {
         warn "Could not pull $HA_PROVISION_IMAGE for ha-provision"
     fi
     # The file and the script that applies it, between the running and the new
-    # commit. Unknown (no commit to compare) counts as changed.
+    # commit; not the script's docs or tests, which change nothing in HA.
+    # Unknown (no commit to compare) counts as changed.
     if [[ "$CURRENT_VERSION" =~ ^[0-9a-f]{40}$ ]] && \
-       git diff --quiet "$CURRENT_VERSION" "$NEW_VERSION" -- config/home-assistant/provision.json scripts/ha-provision 2>/dev/null; then
+       git diff --quiet "$CURRENT_VERSION" "$NEW_VERSION" -- config/home-assistant/provision.json scripts/ha-provision \
+           ':(exclude)scripts/ha-provision/*.md' ':(exclude)scripts/ha-provision/*.test.mjs' 2>/dev/null; then
         changed=0
     fi
     if [ "$changed" -eq 1 ]; then
