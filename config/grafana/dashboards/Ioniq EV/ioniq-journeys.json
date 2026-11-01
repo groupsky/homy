@@ -113,7 +113,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "The km of the journeys in the range, from the GPS track.",
+      "description": "The km of the journeys in the range, from the GPS track; homy km when a trip has too few GPS points.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -569,7 +569,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT sum(\"kwh\") / sum(\"km\") * 1000 AS \"whkm\" FROM \"ev_trips\" WHERE $timeFilter GROUP BY time(1d) fill(none) tz('Europe/Sofia')",
+          "query": "SELECT sum(\"kwh\") / sum(\"km\") * 1000 AS \"whkm\" FROM \"ev_trips\" WHERE \"km\" > 0 AND $timeFilter GROUP BY time(1d) fill(none) tz('Europe/Sofia')",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table"
@@ -878,6 +878,20 @@
               {
                 "id": "decimals",
                 "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "—"
+                      }
+                    }
+                  }
+                ]
               }
             ]
           },

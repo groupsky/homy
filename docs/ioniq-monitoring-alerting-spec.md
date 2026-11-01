@@ -259,7 +259,7 @@ New `Ioniq EV` dashboard family (JSON under `config/grafana/dashboards/`, provid
 | **Battery health** | SoC & SoH trend; cell max/min/spread (derived) timeseries; 12-module temp heatmap + spread; isolation; available charge/discharge envelope; cumulative Ah/kWh + derived usable-Ah and round-trip efficiency. |
 | **12 V / LDC** | `aux_12v` timeseries banded by state; per-drive LDC on-voltage ceiling; parked resting-voltage trend (daily min/median); derived `ldc_ok`. |
 | **Tires** | Per-wheel cold-pressure trend (bar); inter-wheel spread (bar); per-wheel temp vs ambient; over/under-inflation bands. |
-| **Trips & charging** | State timeline (active/charging/parked); per-trip distance/energy/efficiency (kWh/100 km); regen recovery %; charge sessions (AC/DC, kWh, avg power); SoC-at-park distribution; charger-meter AC power overlay (if live). |
+| **Charging & parking** (was "Trips & charging"; the trips moved to **Пътувания**, `ioniq-journeys`, from ev-journal, #1874) | State timeline (active/charging/parked); regen recovery %; charge sessions (AC/DC, kWh, avg power); SoC-at-park distribution; charger-meter AC power overlay (if live). |
 
 > **Data source (2026-07-18):** this dashboard was previously **deferred** — per-trip distance/energy/
 > efficiency, regen-recovery %, and charge-session breakdowns need trip/charge **session boundaries** that
