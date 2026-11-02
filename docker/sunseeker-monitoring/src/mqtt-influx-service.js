@@ -45,6 +45,9 @@ export class SunseekerMqttInfluxService {
 
       if (isTestMode) {
         logger.connection('⚠️  Running in TEST_MODE - continuing despite connection failure');
+        // Keep the process running for the container healthcheck. Since mqtt 5.16 a
+        // refused CONNACK closes the socket, and nothing else keeps Node alive.
+        this.testModeKeepAlive = setInterval(() => {}, 60 * 60 * 1000);
       } else {
         throw error;
       }
@@ -56,6 +59,8 @@ export class SunseekerMqttInfluxService {
    */
   async stop() {
     logger.stop('Stopping Sunseeker MQTT-InfluxDB service...');
+
+    clearInterval(this.testModeKeepAlive);
 
     try {
       if (this.mqttClient) {
