@@ -24,6 +24,6 @@
     "testcontainers": "^11.13.0"
   },
   "engines": {
-    "node": "22"
+    "node": "24"
   }
 }

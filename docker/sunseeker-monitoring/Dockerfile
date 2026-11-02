@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/node:22.22.0-alpine3.23
+FROM ghcr.io/groupsky/homy/node:24.13.0-alpine3.23
 
 WORKDIR /usr/src/app
 
