@@ -7,7 +7,8 @@ const mqtt = require('mqtt')
 const CURRENT_TOPIC = 'homy/weather/current'
 
 function createPublisher({url, connect = mqtt.connect, log = console}) {
-    const client = connect(url)
+    // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+    const client = connect(url, {reconnectOnConnackError: true})
     // The client reconnects by itself, about once a second, and each failed try
     // is an error event. One line per outage is enough; an error event must not
     // end the process.

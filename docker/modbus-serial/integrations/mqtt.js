@@ -20,7 +20,8 @@ function formatUnicorn (format, values) {
 module.exports = ({ url, publishTopic, subscribeTopic }) => {
   if (!publishTopic) throw new Error('Missing publish topic')
 
-  const client = mqtt.connect(url)
+  // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+  const client = mqtt.connect(url, { reconnectOnConnackError: true })
 
   const connectPromise = new Promise((resolve, reject) => {
     client.once('connect', resolve)

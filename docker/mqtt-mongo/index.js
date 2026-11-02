@@ -13,7 +13,9 @@ const mongoUser = getFileEnv('MONGODB_USERNAME')
 const mongoPassword = getFileEnv('MONGODB_PASSWORD')
 
 const client = mqtt.connect(mqttUrl, {
-    clientId: process.env.MQTT_CLIENT_ID
+    clientId: process.env.MQTT_CLIENT_ID,
+    // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+    reconnectOnConnackError: true
 })
 
 function getFile(filePath) {
