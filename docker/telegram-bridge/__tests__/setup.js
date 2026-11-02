@@ -8,10 +8,14 @@ let interceptedRequests = []
 // Track unhandled external requests (not localhost)
 let unhandledExternalRequests = []
 
-const onUnhandledRequest = (req) => {
+// msw 3 reports every unhandled network frame here; only HTTP frames carry a request
+const onUnhandledFrame = ({ frame }) => {
+  const req = frame.data?.request
+  if (!req) return
+
   // Pass through requests to localhost (test server)
   if (req.url.includes('localhost')) {
-    return 'bypass'
+    return
   }
   
   // Track unhandled external request
@@ -43,9 +47,10 @@ const telegramHandlers = [
 ]
 
 export const server = setupServer(...telegramHandlers)
+export const listenOptions = { onUnhandledFrame }
 
 // Enable MSW
-beforeAll(() => server.listen({ onUnhandledRequest }))
+beforeAll(() => server.listen(listenOptions))
 
 afterEach(() => {
   // Fail test if any unhandled external requests were made

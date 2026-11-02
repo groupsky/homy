@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals'
-import { server } from './setup.js'
+import { server, listenOptions } from './setup.js'
 import { http as mswHttp, HttpResponse } from 'msw'
 import { buildSentLine, normalizeSource } from '../src/sent-log.js'
 
@@ -142,12 +142,19 @@ describe('bridge writes a telegram.sent line per Bot API call', () => {
   test('a malformed request URL gets 400 and the server keeps running', async () => {
     const net = await import('net')
     const port = serverInstance.address().port
-    const reply = await new Promise((resolve) => {
-      const sock = net.connect(port, 'localhost', () => sock.write('GET http://[ HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'))
-      let data = ''
-      sock.on('data', (d) => { data += d })
-      sock.on('close', () => resolve(data))
-    })
+    // msw 3 also parses raw sockets and throws on this URL, so send it with msw off
+    server.close()
+    let reply
+    try {
+      reply = await new Promise((resolve) => {
+        const sock = net.connect(port, 'localhost', () => sock.write('GET http://[ HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'))
+        let data = ''
+        sock.on('data', (d) => { data += d })
+        sock.on('close', () => resolve(data))
+      })
+    } finally {
+      server.listen(listenOptions)
+    }
     expect(reply).toMatch(/^HTTP\/1\.1 400/)
     expect((await fetch(`${baseUrl}/health`)).status).toBe(200)
   })
