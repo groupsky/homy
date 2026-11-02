@@ -97,6 +97,92 @@
           }
         ]
       }
+    },
+    "dashboard-oven": {
+      "title": "Фурна",
+      "icon": "mdi:stove",
+      "config": {
+        "views": [
+          {
+            "title": "Фурна",
+            "path": "oven",
+            "cards": [
+              {
+                "type": "entities",
+                "title": "Фурна",
+                "visibility": [
+                  {
+                    "condition": "user",
+                    "users": [
+                      "74ee715f953d4c8b8167d86e709d58a1",
+                      "fc0a3f49c9704fbb814cb08b380eaf7d",
+                      "cc5d0af6263649b88029eee8c85fe442"
+                    ]
+                  }
+                ],
+                "entities": [
+                  {
+                    "entity": "sensor.oven_bsh_common_status_operationstate",
+                    "name": "Състояние"
+                  },
+                  {
+                    "entity": "sensor.oven_bsh_common_status_doorstate",
+                    "name": "Врата"
+                  },
+                  {
+                    "entity": "sensor.oven_bsh_common_setting_powerstate",
+                    "name": "Захранване"
+                  },
+                  {
+                    "entity": "sensor.oven_cooking_oven_status_cavity_001_currenttemperature",
+                    "name": "Температура сега"
+                  },
+                  {
+                    "entity": "sensor.oven_bsh_common_option_remainingprogramtime",
+                    "name": "Остава"
+                  },
+                  {
+                    "entity": "sensor.oven_bsh_common_option_programprogress",
+                    "name": "Напредък"
+                  },
+                  {
+                    "type": "section",
+                    "label": "Управление"
+                  },
+                  {
+                    "entity": "select.oven_bsh_common_root_selectedprogram",
+                    "name": "Избрана програма"
+                  },
+                  {
+                    "entity": "number.oven_cooking_oven_option_setpointtemperature",
+                    "name": "Температура"
+                  },
+                  {
+                    "entity": "number.oven_bsh_common_option_duration",
+                    "name": "Продължителност"
+                  },
+                  {
+                    "entity": "select.oven_bsh_common_root_activeprogram",
+                    "name": "Старт на програма"
+                  },
+                  {
+                    "entity": "button.oven_bsh_common_command_abortprogram",
+                    "name": "Стоп"
+                  },
+                  {
+                    "entity": "switch.oven_cooking_oven_setting_light_cavity_001_power",
+                    "name": "Осветление"
+                  },
+                  {
+                    "entity": "number.oven_cooking_oven_setting_cavity_001_alarmclock",
+                    "name": "Таймер (аларма)"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     }
   },
   "registry_names": {

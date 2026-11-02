@@ -10,6 +10,7 @@ This directory contains technical documentation for the home automation system.
   - **IMPORTANT**: Always keep the specification and diagram synchronized when making changes
 
 ### Vehicle Telemetry
+- **[Kitchen oven](oven.md)** - The Home Connect oven: MQTT topics of the hcpy bridge, the `oven` InfluxDB measurement, and the parents-only oven card (it only hides the card)
 - **[Ioniq EV Monitoring & Alerting](ioniq-monitoring-alerting-spec.md)** - Monitoring and alerting specification for the Hyundai Ioniq Electric (battery / 12 V / tires / DTC alerts, Grafana rules, and automations bots over the OBD-logger telemetry)
 
 ### Component Documentation
