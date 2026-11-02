@@ -17,6 +17,7 @@ import {
   imageNamesNeedingShaTag,
   partitionBuildStrategy,
   servicesNeedingShaTag,
+  servicesToHealthcheck,
 } from '../../src/lib/build-strategy.js';
 
 describe('partitionBuildStrategy', () => {
@@ -211,5 +212,22 @@ describe('imageNamesNeedingShaTag', () => {
     });
 
     expect(result).toEqual(['alpha', 'mid', 'zeta']);
+  });
+});
+
+describe('servicesToHealthcheck', () => {
+  test('a base-image bump whose affected service is reused checks nothing', () => {
+    // base-images/influxdb changed; docker/influxdb is affected, and its
+    // base-SHA image is reused, so no image exists at the PR SHA.
+    expect(servicesToHealthcheck({ candidates: ['influxdb'], toBuild: [] })).toEqual([]);
+  });
+
+  test('built services are checked, reused ones are not', () => {
+    expect(
+      servicesToHealthcheck({
+        candidates: ['telegram-bridge', 'mongo', 'automations'],
+        toBuild: ['telegram-bridge', 'automations', 'no-healthcheck'],
+      })
+    ).toEqual(['automations', 'telegram-bridge']);
   });
 });
