@@ -30,6 +30,7 @@ const converters = {
     dds024mr: require('./converters/dds024mr'),
     dds519mr: require('./converters/dds519mr'),
     ex9em: require('./converters/ex9em'),
+    homeconnect: require('./converters/homeconnect'),
     ioniq: require('./converters/ioniq'),
     'ioniq-session': require('./converters/ioniq-session'),
     mbsl32di: require('./converters/mbsl32di'),
@@ -108,7 +109,16 @@ function startBridge({clientId, topics, converter, tags}) {
 
     client.on('message', function (topic, message) {
         try {
-            const data = JSON.parse(message)
+            // Some producers (the Home Connect bridge) send plain text such as
+            // `Inactive` or `True`. A bridge that names its converter gets that
+            // text as is; without a converter, dispatch needs JSON with _type.
+            let data
+            try {
+                data = JSON.parse(message)
+            } catch (err) {
+                if (!forcedConverterFn) throw err
+                data = message.toString()
+            }
 
             const converterFn = forcedConverterFn || resolveConverter(data._type)
             if (!converterFn) {

@@ -88,6 +88,7 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 - **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
 - **mqtt-influx-ioniq**: `ioniq/parsed/#` → InfluxDB (`ioniq` measurement; decoded Hyundai Ioniq OBD telemetry, tags `group`/`state`)
 - **mqtt-influx-ioniq-sessions**: `ioniq/derived/#` → InfluxDB (`ioniq_sessions` measurement; one record per closed trip/charge/park session from the `ioniq-sessions` bot, tag `kind`)
+- **mqtt-influx-oven**: `homeconnect/+/state/+`, `homeconnect/+/event/+`, `homeconnect/+/LWT` → InfluxDB (`oven` measurement; the kitchen oven via the Home Connect bridge, tag `device`)
 - **energy-report**: `ioniq_charges`, one point per Ioniq charge with home/away and the home cost (below)
 - **ev-journal** (its own repo, not in this compose file): `ev_trips`, `ev_journeys`, `ev_outings`, `ev_month` and `ev_track`, the Ioniq trips merged into journeys, with GPS km, places and the price. Fields: [ev-journal outputs](https://github.com/groupsky/ev-journal/blob/main/docs/outputs.md). Dashboard: **Ioniq EV – Пътувания** (`ioniq-journeys`)
 - **automation-events-processor**: `homy/automation/+/status` → InfluxDB (dedicated service for automation decision events)
@@ -711,6 +712,42 @@ SHOW TAG VALUES FROM "energy_monthly" WITH KEY = "month"
 SELECT "kwh", "kwh_night", "cost_eur" FROM "energy_monthly" WHERE "month" = '2025-11' GROUP BY "meter" ORDER BY time DESC LIMIT 1
 -- The main meter, month by month (the time column is the write time, not the month)
 SELECT "kwh", "night_share_pct" FROM "energy_monthly" WHERE "meter" = 'main' GROUP BY "month" ORDER BY time DESC LIMIT 1
+```
+
+### Kitchen Oven
+
+#### `oven` Measurement
+**Source**: `mqtt-influx-oven` bridge, converter `homeconnect` (#1898). The Home Connect bridge
+hcpy (runs outside this repo) publishes the oven under `homeconnect/oven/`. One point per MQTT
+message, written when it arrives. The bridge sends every retained value again when it or
+mqtt-influx restarts, so a restart writes a point for each key.
+
+**Tags**: `device` (`oven`, from the topic).
+
+**Fields**: one field per key, named as in the topic. Only keys that start with `bsh_common_` or
+`cooking_oven_` are logged; the identity topics (serial number, MAC, network data) are dropped.
+- state values: `True`/`False` → boolean, digits → float, anything else → string
+- events: the `event_type` string (`Present`, `Confirmed` or `Off`)
+- `availability`: `online`/`offline` from `homeconnect/oven/LWT`
+
+Main fields:
+| Field | Type | Meaning |
+|---|---|---|
+| `bsh_common_status_operationstate` | string | `Inactive`, `Ready`, `Run`, `Finished`, ... |
+| `bsh_common_status_doorstate` | string | `Open`, `Closed` |
+| `bsh_common_setting_powerstate` | string | `On`, `Standby` |
+| `bsh_common_root_activeprogram`, `bsh_common_root_selectedprogram` | string | program, when the bridge sends it |
+| `cooking_oven_option_setpointtemperature` | float | °C |
+| `cooking_oven_status_cavity_001_currenttemperature` | float | °C |
+| `bsh_common_option_remainingprogramtime`, `bsh_common_option_elapsedprogramtime`, `bsh_common_option_duration` | float | seconds |
+| `bsh_common_option_programprogress` | float | % |
+| `cooking_oven_setting_light_cavity_001_power` | boolean | oven light |
+| `cooking_oven_event_cavity_001_regularpreheatfinished`, `..._fastpreheatfinished`, `..._programfinished`, `..._programaborted` | string | events |
+
+**Queries**:
+```sql
+SELECT "cooking_oven_status_cavity_001_currenttemperature", "cooking_oven_option_setpointtemperature" FROM "oven" WHERE time > now() - 1d
+SELECT "bsh_common_status_operationstate" FROM "oven" WHERE time > now() - 7d
 ```
 
 ### Automation System Monitoring
