@@ -111,6 +111,10 @@ export class SunseekerMqttInfluxService {
       clientId: generateClientId(MQTT.CLIENT_ID_PREFIX),
       clean: true,
       reconnectPeriod: MQTT.RECONNECT_PERIOD_MS,
+      // Since mqtt 5.16 a refused CONNACK closes the socket and, by default, stops
+      // reconnecting. Keep retrying, as before 5.16, so one refused login does not
+      // leave the bridge without MQTT.
+      reconnectOnConnackError: true,
       connectTimeout: MQTT.CONNECT_TIMEOUT_MS
     };
 
