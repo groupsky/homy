@@ -132,3 +132,24 @@ export function imageNamesNeedingShaTag(input: ShaTagImageInput): string[] {
     .filter((image) => !builtImages.has(image))
     .sort();
 }
+
+export interface HealthcheckInput {
+  /** Changed or affected services whose Dockerfile has a HEALTHCHECK. */
+  candidates: string[];
+  /** Services this run builds. */
+  toBuild: string[];
+}
+
+/**
+ * Services the healthcheck stage can test.
+ *
+ * The healthcheck stage pulls `<image>:<this SHA>`, and on a PR only the build
+ * stage pushes that tag. A service whose base-SHA image is reused (an affected
+ * service after a base-image change, or a test-only change) gets no SHA tag on
+ * a PR, so its healthcheck can only fail with "not found". Its image is the one
+ * already tested at the base SHA, so it is left out.
+ */
+export function servicesToHealthcheck(input: HealthcheckInput): string[] {
+  const built = new Set(input.toBuild);
+  return input.candidates.filter((name) => built.has(name)).sort();
+}

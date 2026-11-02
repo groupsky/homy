@@ -22,6 +22,7 @@ import {
   imageNamesNeedingShaTag,
   partitionBuildStrategy,
   servicesNeedingShaTag,
+  servicesToHealthcheck,
 } from './lib/build-strategy.js';
 import { validatePackageJson, validateNvmrc } from './lib/validation.js';
 import type { DetectionResult, GitHubActionsOutputs, Service, BuildGroup } from './lib/types.js';
@@ -368,8 +369,8 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
   console.error(`Testable services: ${testableServices.length}`);
 
   console.error('Step 12: Detecting healthcheck services...');
-  // Health checks should run for all changed services, not just ones being built
-  const healthcheckServices = services
+  // Health checks run for the changed and affected services that this run builds
+  const healthcheckCandidates = services
     .filter((s) => changedServices.includes(s.service_name) || affectedServices.includes(s.service_name))
     .filter((s) => {
       try {
@@ -379,8 +380,8 @@ async function detectChanges(options: CliOptions): Promise<DetectionResult> {
         return false;
       }
     })
-    .map((s) => s.service_name)
-    .sort();
+    .map((s) => s.service_name);
+  const healthcheckServices = servicesToHealthcheck({ candidates: healthcheckCandidates, toBuild });
   console.error(`Healthcheck services: ${healthcheckServices.length}`);
 
   console.error('Step 13: Detecting version check services...');
