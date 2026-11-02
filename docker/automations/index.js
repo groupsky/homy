@@ -35,7 +35,9 @@ const playground = {
   }),
   gates: {
     mqtt: mqtt.connect(mqttUrl, {
-      clientId: mqttClientId
+      clientId: mqttClientId,
+      // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+      reconnectOnConnackError: true
     }),
     state: stateManager
   }

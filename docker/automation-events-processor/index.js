@@ -59,7 +59,9 @@ if (!process.env.INFLUXDB_DATABASE) {
 
 // Initialize clients
 const client = mqtt.connect(mqttUrl, {
-    clientId: process.env.MQTT_CLIENT_ID || 'automation-events-processor'
+    clientId: process.env.MQTT_CLIENT_ID || 'automation-events-processor',
+    // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+    reconnectOnConnackError: true
 })
 
 const writeApi = new InfluxDB({url: influxUrl, token: influxToken})

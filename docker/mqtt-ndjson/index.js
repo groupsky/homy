@@ -26,7 +26,9 @@ const writer = createDayFileWriter({
 writer.ensureWritable()
 
 const client = mqtt.connect(mqttUrl, {
-    clientId: process.env.MQTT_CLIENT_ID
+    clientId: process.env.MQTT_CLIENT_ID,
+    // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+    reconnectOnConnackError: true
 })
 
 // Registered once, before connecting: messages only arrive after the

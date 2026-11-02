@@ -24,7 +24,7 @@ function setup(options) {
 describe('createPublisher', () => {
     test('connects to the broker url', () => {
         const {connect} = setup()
-        expect(connect).toHaveBeenCalledWith('mqtt://broker')
+        expect(connect).toHaveBeenCalledWith('mqtt://broker', {reconnectOnConnackError: true})
     })
 
     test('publishes the current values retained on homy/weather/current', () => {

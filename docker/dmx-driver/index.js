@@ -10,7 +10,9 @@ const topic = process.env.TOPIC
 const dmx = new DMX(process.env.DMX_DEVICE ? parseInt(process.env.DMX_DEVICE) : 0)
 
 const client = mqtt.connect(mqttUrl, {
-  clientId: process.env.MQTT_CLIENT_ID
+  clientId: process.env.MQTT_CLIENT_ID,
+  // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+  reconnectOnConnackError: true
 })
 
 client.on('reconnect', function () {

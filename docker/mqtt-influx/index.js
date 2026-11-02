@@ -73,7 +73,8 @@ function startBridge({clientId, topics, converter, tags}) {
     const writeApi = influx.getWriteApi(influxOrg, influxBucket, 'ms', {
         defaultTags: tags
     })
-    const client = mqtt.connect(mqttUrl, {clientId})
+    // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
+    const client = mqtt.connect(mqttUrl, {clientId, reconnectOnConnackError: true})
 
     client.on('connect', function () {
         console.log(log, 'connected to', mqttUrl)
