@@ -14,7 +14,7 @@ cannot take from YAML:
   whole config when it differs, so the repo owns it in full: an edit in the UI
   is replaced on the next run. The `url_path` needs a hyphen. `title` and
   `icon` are used only when the dashboard is created; change them later in the
-  UI (Settings → Dashboards). Today: `dashboard-ioniq` (#1800).
+  UI (Settings → Dashboards). Today: `dashboard-ioniq` (#1800) and `dashboard-oven` (#1898).
 - **Registry names** (`registry_names`), keyed by entity id:
   `{ "name": <entity name>, "device": <device name> }`, either optional. The
   script writes only two fields: the entity registry `name` and the

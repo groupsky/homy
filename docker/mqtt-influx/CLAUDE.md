@@ -18,6 +18,7 @@ Each name below is the bridge's MQTT client id in `INSTANCES`:
 - **mqtt-influx-ioniq**: Hyundai Ioniq OBD telemetry (`ioniq/parsed/#`) → `ioniq` measurement
 - **mqtt-influx-ioniq-sessions**: Ioniq session records from the `ioniq-sessions` automations bot (`ioniq/derived/#`) → `ioniq_sessions` measurement (one record per closed trip/charge/park session)
 - **mqtt-influx-zigbee**: Zigbee mesh via zigbee2mqtt (`z2m/house1/+` and `z2m/house1/+/availability`) → `zigbee` measurement. Uses `"converter": "zigbee"` rather than payload dispatch, because zigbee2mqtt does not stamp a `_type` into its payloads
+- **mqtt-influx-oven**: Kitchen oven via the Home Connect bridge hcpy (`homeconnect/+/state/+`, `homeconnect/+/event/+`, `homeconnect/+/LWT`) → `oven` measurement. Uses `"converter": "homeconnect"`: the state values are plain text, not JSON
 - **Water System Integration**: See `docs/water_system_spec.md` for complete MQTT topic mappings for pumps, boiler, and heat pump energy monitoring
 
 ### Data Flow
@@ -56,6 +57,7 @@ module.exports = (data) => {
 - **ex9em**: EX9EM energy meter data
 - **ioniq**: Hyundai Ioniq OBD telemetry — recursively-typed/flattened parsed frames into the `ioniq` measurement (tags `group`, `state`)
 - **ioniq-session**: Ioniq session records (`_type: 'ioniq-session'`) — one closed trip/charge/park record per emit into the `ioniq_sessions` measurement (tag `kind`; timestamp `start_ts`; `end_ts` and all other §4 metrics as typed fields, null metrics omitted)
+- **homeconnect**: Home Connect appliances (hcpy bridge) → `oven` measurement (tag `device` from the topic). One field per state key (`True`/`False` → boolean, digits → float, else string), events as their `event_type` string, `availability` from LWT. **Only keys starting with `bsh_common_` or `cooking_oven_` are logged**, so the serial number, MAC and network data the bridge also publishes never reach InfluxDB. It sets `acceptsText`, so index.js hands it non-JSON payloads as plain text (other converters still skip them)
 - **mbsl32di**: MBSL32DI digital-input module — raw word + per-input boolean fields (`dry_switch_input`)
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data
