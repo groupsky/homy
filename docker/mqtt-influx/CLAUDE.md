@@ -57,7 +57,7 @@ module.exports = (data) => {
 - **ex9em**: EX9EM energy meter data
 - **ioniq**: Hyundai Ioniq OBD telemetry — recursively-typed/flattened parsed frames into the `ioniq` measurement (tags `group`, `state`)
 - **ioniq-session**: Ioniq session records (`_type: 'ioniq-session'`) — one closed trip/charge/park record per emit into the `ioniq_sessions` measurement (tag `kind`; timestamp `start_ts`; `end_ts` and all other §4 metrics as typed fields, null metrics omitted)
-- **homeconnect**: Home Connect appliances (hcpy bridge) → `oven` measurement (tag `device` from the topic). One field per state key (`True`/`False` → boolean, digits → float, else string), events as their `event_type` string, `availability` from LWT. **Only keys starting with `bsh_common_` or `cooking_oven_` are logged**, so the serial number, MAC and network data the bridge also publishes never reach InfluxDB. A bridge that names its converter gets non-JSON payloads as plain text
+- **homeconnect**: Home Connect appliances (hcpy bridge) → `oven` measurement (tag `device` from the topic). One field per state key (`True`/`False` → boolean, digits → float, else string), events as their `event_type` string, `availability` from LWT. **Only keys starting with `bsh_common_` or `cooking_oven_` are logged**, so the serial number, MAC and network data the bridge also publishes never reach InfluxDB. It sets `acceptsText`, so index.js hands it non-JSON payloads as plain text (other converters still skip them)
 - **mbsl32di**: MBSL32DI digital-input module — raw word + per-input boolean fields (`dry_switch_input`)
 - **or-we-514**: OR-WE-514 energy meter data
 - **sdm630**: SDM630 three-phase energy meter data

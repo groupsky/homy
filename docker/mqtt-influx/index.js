@@ -110,13 +110,14 @@ function startBridge({clientId, topics, converter, tags}) {
     client.on('message', function (topic, message) {
         try {
             // Some producers (the Home Connect bridge) send plain text such as
-            // `Inactive` or `True`. A bridge that names its converter gets that
-            // text as is; without a converter, dispatch needs JSON with _type.
+            // `Inactive` or `True`. Only a named converter that says it takes
+            // text (`acceptsText`) gets it; for the others a non-JSON message
+            // is still an error and is skipped.
             let data
             try {
                 data = JSON.parse(message)
             } catch (err) {
-                if (!forcedConverterFn) throw err
+                if (!forcedConverterFn || !forcedConverterFn.acceptsText) throw err
                 data = message.toString()
             }
 

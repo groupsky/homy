@@ -44,7 +44,7 @@ function addField(point, key, value) {
  * - `homeconnect/<device>/LWT`: `online`/`offline` -> string field `availability`
  *
  * The payload is the JSON-parsed message when it is JSON, else its text
- * (see index.js). Anything else is dropped.
+ * (see `acceptsText` below). Anything else is dropped.
  */
 module.exports = function homeconnect(data, topic) {
     const parts = String(topic || '').split('/')
@@ -73,3 +73,6 @@ module.exports = function homeconnect(data, topic) {
     }
     return []
 }
+
+// index.js passes non-JSON payloads (the plain-text state values) as text.
+module.exports.acceptsText = true
