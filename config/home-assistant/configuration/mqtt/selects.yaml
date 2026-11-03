@@ -12,7 +12,7 @@
 # The command sends the full program key: hcpy finds the program by a
 # substring match, so the short `PorkNeckJoint` could pick
 # `BonelessPorkNeckJoint`. Never retained: hcpy would get it again at every
-# restart. Tests: docker/modbus-serial/test/ha-oven-templates.test.js
+# restart. Tests: docker/modbus-serial/integrations/ha-oven-templates.test.js
 - name: oven_selected_program
   state_topic: "homeconnect/oven/state/bsh_common_root_selectedprogram"
   command_topic: "homeconnect/oven/selectedProgram"
