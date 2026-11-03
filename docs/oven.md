@@ -41,7 +41,7 @@ entities are `unavailable`, again and again in the history. The bridge has no
 setting for this, and it cannot rename select options either. The entities
 here depend only on `homeconnect/LWT` and `homeconnect/oven/LWT`, so they keep
 their state. `binary_sensor.oven_local_control` shows the lock instead: while
-it is ON, the oven does not take commands. The bridge's own entities are
+it is ON, the bridge treats its controls as unavailable. The bridge's own entities are
 left as they are; the card just does not show them.
 
 **Where the names come from.** The program names and the `описание`
