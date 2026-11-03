@@ -34,6 +34,7 @@ mqtt:
   binary_sensor: !include configuration/mqtt/binary_sensors.yaml
   climate: !include configuration/mqtt/climate.yaml
   light: !include configuration/mqtt/lights.yaml
+  select: !include configuration/mqtt/selects.yaml
   sensor: !include configuration/mqtt/sensors.yaml
 
 binary_sensor: !include configuration/binary_sensors.yaml

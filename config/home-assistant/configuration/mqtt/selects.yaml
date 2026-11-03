@@ -1,0 +1,87 @@
+# The oven's programs in Bulgarian (#1907). hcpy's own selects
+# (select.oven_bsh_common_root_*) go `unavailable` whenever the oven is used
+# from its panel: hcpy adds `bsh_common_status_localcontrolactive` as an
+# availability topic. These depend only on the bridge's LWT topics, so they
+# keep their state; binary_sensor.oven_local_control shows the lock instead.
+#
+# hcpy publishes the last part of the program key (`3DHotAir`) or `None`.
+# The Bulgarian names and descriptions are copied from Bosch's Bulgarian
+# manual for this oven (document 9001919872, bg-BG, HBG578EB7); see
+# docs/oven.md. A key with no name in the manual stays as the raw key.
+#
+# The command sends the full program key: hcpy finds the program by a
+# substring match, so the short `PorkNeckJoint` could pick
+# `BonelessPorkNeckJoint`. Never retained: hcpy would get it again at every
+# restart. Tests: docker/modbus-serial/integrations/ha-oven-templates.test.js
+- name: oven_selected_program
+  state_topic: "homeconnect/oven/state/bsh_common_root_selectedprogram"
+  command_topic: "homeconnect/oven/selectedProgram"
+  retain: false
+  availability_mode: all
+  availability: &oven_availability
+    - topic: "homeconnect/LWT"
+    - topic: "homeconnect/oven/LWT"
+  value_template: &oven_program_bg >-
+    {% set m = {'Pyrolysis': 'Пиролиза', 'BeefRoulade': 'Говежди рула от месо', 'BonelessLegOfLambMedium': 'Агнешко бутче, средно изпечено', 'BonelessLegOfLambWellDone': 'Агнешки бут, добре опечен', 'BonelessLegOfVenison': 'Бут от сърна', 'BonelessPorkNeckJoint': 'Свински печен врат', 'ChickenParts': 'Части пиле', 'FrozenDeepPanPizza': 'Пица, дебел блат', 'FrozenLasagne': 'Лазаня', 'FrozenThinCrustPizza': 'Пица, тънък блат', 'Goulash': 'Гулаш', 'JointOfPorkWithCrackling': 'Свинско печено, с коричка', 'JointOfVealLean': 'Телешко печено, постно', 'JointOfVealMarbled': 'Телешко печено, прошарено', 'MeatLoafMadeFromFreshMincedMeat': 'Руло от кайма, прясно', 'PartCookedBreadRollsOrBaguette': 'Печени хлебчета', 'PastaBake': 'Пудинг с юфка', 'PommesFrites': 'Пържени картофи', 'PotRoastedBeef': 'Говежд. задуш. на фурна', 'PotatoGratin': 'Огретен с картофи', 'SirloinMedium': 'Ростбиф, средно изпечен', 'StewWithMeat': 'Яхния, с месо', 'StewWithVegetables': 'Яхния, със зеленчуци', 'TurkeyBreast': 'Пуешки гърди', 'UnstuffedChicken': 'Пиле, непълнено', 'UnstuffedDuck': 'Патица, непълнена', 'UnstuffedGoose': 'Гъска, непълнена', 'WholeBakedPotatoes': 'Печени картофи на фурна, цели', 'WholeFish': 'Риба, цяла', 'WholeRabbit': 'Питомен заек, цял', 'SubsequentCooking': 'Допълнително готвене', '3DHotAir': '3D горещ въздух', 'AirFry': 'Air Fry', 'Defrost': 'Размразяване', 'GrillLargeArea': 'Грил, гол. повърх.', 'HotAirGentle': 'Мек горещ въздух', 'HotAirGrilling': 'Вентилаторно печене на грил', 'PizzaSetting': 'Степен за пица', 'SabbathProgramme': 'Поддържане топло за по-дълъг период', 'SlowCook': 'Печ. слабо', 'TopBottomHeating': 'Горно/долно нагряване'} %}{{ m[value] if value in m else value }}
+  command_template: &oven_program_cmd >-
+    {% set m = {'Пиролиза': 'Cleaning.Pyrolysis', 'Говежди рула от месо': 'Dish.Automatic.Conv.BeefRoulade', 'Агнешко бутче, средно изпечено': 'Dish.Automatic.Conv.BonelessLegOfLambMedium', 'Агнешки бут, добре опечен': 'Dish.Automatic.Conv.BonelessLegOfLambWellDone', 'Бут от сърна': 'Dish.Automatic.Conv.BonelessLegOfVenison', 'Свински печен врат': 'Dish.Automatic.Conv.BonelessPorkNeckJoint', 'Части пиле': 'Dish.Automatic.Conv.ChickenParts', 'Пица, дебел блат': 'Dish.Automatic.Conv.FrozenDeepPanPizza', 'Лазаня': 'Dish.Automatic.Conv.FrozenLasagne', 'Пица, тънък блат': 'Dish.Automatic.Conv.FrozenThinCrustPizza', 'Гулаш': 'Dish.Automatic.Conv.Goulash', 'Свинско печено, с коричка': 'Dish.Automatic.Conv.JointOfPorkWithCrackling', 'Телешко печено, постно': 'Dish.Automatic.Conv.JointOfVealLean', 'Телешко печено, прошарено': 'Dish.Automatic.Conv.JointOfVealMarbled', 'Руло от кайма, прясно': 'Dish.Automatic.Conv.MeatLoafMadeFromFreshMincedMeat', 'Печени хлебчета': 'Dish.Automatic.Conv.PartCookedBreadRollsOrBaguette', 'Пудинг с юфка': 'Dish.Automatic.Conv.PastaBake', 'Пържени картофи': 'Dish.Automatic.Conv.PommesFrites', 'PorkNeckJoint': 'Dish.Automatic.Conv.PorkNeckJoint', 'Говежд. задуш. на фурна': 'Dish.Automatic.Conv.PotRoastedBeef', 'Огретен с картофи': 'Dish.Automatic.Conv.PotatoGratin', 'Ростбиф, средно изпечен': 'Dish.Automatic.Conv.SirloinMedium', 'Яхния, с месо': 'Dish.Automatic.Conv.StewWithMeat', 'Яхния, със зеленчуци': 'Dish.Automatic.Conv.StewWithVegetables', 'Пуешки гърди': 'Dish.Automatic.Conv.TurkeyBreast', 'Пиле, непълнено': 'Dish.Automatic.Conv.UnstuffedChicken', 'Патица, непълнена': 'Dish.Automatic.Conv.UnstuffedDuck', 'Гъска, непълнена': 'Dish.Automatic.Conv.UnstuffedGoose', 'Печени картофи на фурна, цели': 'Dish.Automatic.Conv.WholeBakedPotatoes', 'Риба, цяла': 'Dish.Automatic.Conv.WholeFish', 'Питомен заек, цял': 'Dish.Automatic.Conv.WholeRabbit', 'Допълнително готвене': 'Dish.SubsequentCooking', '3D горещ въздух': 'HeatingMode.3DHotAir', 'Air Fry': 'HeatingMode.AirFry', 'BottomHeating': 'HeatingMode.BottomHeating', 'Размразяване': 'HeatingMode.Defrost', 'Грил, гол. повърх.': 'HeatingMode.GrillLargeArea', 'Мек горещ въздух': 'HeatingMode.HotAirGentle', 'Вентилаторно печене на грил': 'HeatingMode.HotAirGrilling', 'LetRest': 'HeatingMode.LetRest', 'Степен за пица': 'HeatingMode.PizzaSetting', 'PreHeating': 'HeatingMode.PreHeating', 'Поддържане топло за по-дълъг период': 'HeatingMode.SabbathProgramme', 'Печ. слабо': 'HeatingMode.SlowCook', 'Горно/долно нагряване': 'HeatingMode.TopBottomHeating'} %}[{"program":"Cooking.Oven.Program.{{ m[value] }}","options":[]}]
+  json_attributes_topic: "homeconnect/oven/state/bsh_common_root_selectedprogram"
+  json_attributes_template: >-
+    {% set m = {'Pyrolysis': 'Настройте функцията за почистване, която почиства почти самостоятелно камерата', 'BeefRoulade': 'напълнено със зеленчуци или с месо', 'BonelessLegOfLambMedium': 'без кост, с подправки', 'BonelessLegOfLambWellDone': 'без кост, с подправки', 'BonelessLegOfVenison': 'без кост, подсолен', 'BonelessPorkNeckJoint': 'без кост, с подправки', 'ChickenParts': 'готово за кухнята, с подправки', 'FrozenDeepPanPizza': 'дълбоко замразени, предварително изпечени', 'FrozenLasagne': 'дълбоко замразен', 'FrozenThinCrustPizza': 'дълбоко замразени, предварително изпечени', 'Goulash': 'Телешко или свинско месо, на кубчета със зеленчук', 'JointOfPorkWithCrackling': 'напр. бут, с подправки и с нарязана кожичка', 'JointOfVealLean': 'напр. бифтек или шол', 'JointOfVealMarbled': 'напр. гръб или плешка', 'MeatLoafMadeFromFreshMincedMeat': 'Кълцано месо от говеждо, свинско или агнешко', 'PartCookedBreadRollsOrBaguette': 'дълбоко замразени, предварително изпечени', 'PastaBake': 'с предварително сготвена юфка', 'PommesFrites': 'дълбоко замразен', 'PotRoastedBeef': 'напр. ребърца, бъг, кугел или задушено месо с вино', 'SirloinMedium': 'готово за кухнята, с подправки', 'StewWithVegetables': 'вегетарианско', 'TurkeyBreast': 'на парче, с подправки', 'UnstuffedChicken': 'готово за кухнята, с подправки', 'UnstuffedDuck': 'готово за кухнята, с подправки', 'UnstuffedGoose': 'готово за кухнята, с подправки', 'WholeBakedPotatoes': 'небелени, брашнени картофи', 'WholeFish': 'готово за кухнята, с подправки', 'WholeRabbit': 'готово за кухнята, с подправки', 'SubsequentCooking': 'За да настроите продължителност за допълнително готвене, натиснете бутон. Уредът продължава да нагрява с настройките на програмата.', '3DHotAir': 'Печене и пържене на едно или няколко нива.', 'AirFry': 'Хрупкаво готвене на едно ниво с малко мазнина. Особено подходящо за обикновено пържените в олио ястия, напр. пържени картофи.', 'Defrost': 'Щадящо размразяване на замразени ястия.', 'GrillLargeArea': 'Печене на грил на плоски продукти като зеленчуци, наденички или тост. Гратиниране на ястия.', 'HotAirGentle': 'Гответе щадящо избрани ястия без предварително нагряване на едно ниво.', 'HotAirGrilling': 'Печене на птици, цели риби или по-големи парчета месо.', 'PizzaSetting': 'Приготвяйте пица или ястия, които се нуждаят от много топлина отдолу.', 'SabbathProgramme': 'Можете да използвате уреда си, за да поддържате храната топла до 70 часа между 85 °C и 140 °C с Горно/долно нагряване, без да трябва да включвате или изключвате уреда.', 'SlowCook': 'Щадящо и бавно гответе запечените, нежни парчета месо.', 'TopBottomHeating': 'Традиционно печене или пържене на едно ниво.'} %}{{ {'описание': m[value] if value in m else ('' if value == 'None' else 'Няма описание в ръководството')} | tojson }}
+  options: &oven_program_options
+  - "Пиролиза"
+  - "Говежди рула от месо"
+  - "Агнешко бутче, средно изпечено"
+  - "Агнешки бут, добре опечен"
+  - "Бут от сърна"
+  - "Свински печен врат"
+  - "Части пиле"
+  - "Пица, дебел блат"
+  - "Лазаня"
+  - "Пица, тънък блат"
+  - "Гулаш"
+  - "Свинско печено, с коричка"
+  - "Телешко печено, постно"
+  - "Телешко печено, прошарено"
+  - "Руло от кайма, прясно"
+  - "Печени хлебчета"
+  - "Пудинг с юфка"
+  - "Пържени картофи"
+  - "PorkNeckJoint"
+  - "Говежд. задуш. на фурна"
+  - "Огретен с картофи"
+  - "Ростбиф, средно изпечен"
+  - "Яхния, с месо"
+  - "Яхния, със зеленчуци"
+  - "Пуешки гърди"
+  - "Пиле, непълнено"
+  - "Патица, непълнена"
+  - "Гъска, непълнена"
+  - "Печени картофи на фурна, цели"
+  - "Риба, цяла"
+  - "Питомен заек, цял"
+  - "Допълнително готвене"
+  - "3D горещ въздух"
+  - "Air Fry"
+  - "BottomHeating"
+  - "Размразяване"
+  - "Грил, гол. повърх."
+  - "Мек горещ въздух"
+  - "Вентилаторно печене на грил"
+  - "LetRest"
+  - "Степен за пица"
+  - "PreHeating"
+  - "Поддържане топло за по-дълъг период"
+  - "Печ. слабо"
+  - "Горно/долно нагряване"
+
+# Selecting here starts the program on the oven.
+- name: oven_active_program
+  state_topic: "homeconnect/oven/state/bsh_common_root_activeprogram"
+  command_topic: "homeconnect/oven/activeProgram"
+  retain: false
+  availability_mode: all
+  availability: *oven_availability
+  value_template: *oven_program_bg
+  command_template: *oven_program_cmd
+  options: *oven_program_options

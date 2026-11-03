@@ -122,36 +122,62 @@
                 ],
                 "entities": [
                   {
-                    "entity": "sensor.oven_bsh_common_status_operationstate",
+                    "entity": "sensor.oven_operation_state",
                     "name": "Състояние"
                   },
                   {
-                    "entity": "sensor.oven_bsh_common_status_doorstate",
+                    "entity": "sensor.oven_door_state",
                     "name": "Врата"
                   },
                   {
-                    "entity": "sensor.oven_bsh_common_setting_powerstate",
+                    "entity": "sensor.oven_power_state",
                     "name": "Захранване"
+                  },
+                  {
+                    "entity": "binary_sensor.oven_local_control",
+                    "name": "Управлява се от фурната"
+                  },
+                  {
+                    "entity": "binary_sensor.oven_remote_start_allowed",
+                    "name": "Дистанционен старт"
                   },
                   {
                     "entity": "sensor.oven_cooking_oven_status_cavity_001_currenttemperature",
                     "name": "Температура сега"
                   },
                   {
-                    "entity": "sensor.oven_bsh_common_option_remainingprogramtime",
+                    "entity": "sensor.oven_remaining_time",
                     "name": "Остава"
                   },
                   {
-                    "entity": "sensor.oven_bsh_common_option_programprogress",
+                    "entity": "sensor.oven_program_progress",
                     "name": "Напредък"
+                  },
+                  {
+                    "entity": "binary_sensor.oven_preheat_finished",
+                    "name": "Загряването приключи"
+                  },
+                  {
+                    "entity": "binary_sensor.oven_program_finished",
+                    "name": "Програмата приключи"
+                  },
+                  {
+                    "entity": "binary_sensor.oven_program_aborted",
+                    "name": "Програмата е прекратена"
                   },
                   {
                     "type": "section",
                     "label": "Управление"
                   },
                   {
-                    "entity": "select.oven_bsh_common_root_selectedprogram",
+                    "entity": "select.oven_selected_program",
                     "name": "Избрана програма"
+                  },
+                  {
+                    "type": "attribute",
+                    "entity": "select.oven_selected_program",
+                    "attribute": "описание",
+                    "name": "Описание"
                   },
                   {
                     "entity": "number.oven_cooking_oven_option_setpointtemperature",
@@ -162,7 +188,7 @@
                     "name": "Продължителност"
                   },
                   {
-                    "entity": "select.oven_bsh_common_root_activeprogram",
+                    "entity": "select.oven_active_program",
                     "name": "Старт на програма"
                   },
                   {
