@@ -35,3 +35,48 @@
   json_attributes_topic: "ioniq/parsed/dtc/pending"
   json_attributes_template: *ioniq_fault_attrs
   device_class: problem
+
+# The kitchen oven (#1907), from the hcpy bridge. Only the bridge's LWT
+# topics decide availability (see selects.yaml for why).
+# ON while someone uses the oven from its panel or door: hcpy's own
+# controls are `unavailable` then.
+- name: oven_local_control
+  state_topic: "homeconnect/oven/state/bsh_common_status_localcontrolactive"
+  payload_on: "True"
+  payload_off: "False"
+  availability_mode: all
+  availability: &oven_availability
+    - topic: "homeconnect/LWT"
+    - topic: "homeconnect/oven/LWT"
+
+- name: oven_remote_start_allowed
+  state_topic: "homeconnect/oven/state/bsh_common_status_remotecontrolstartallowed"
+  payload_on: "True"
+  payload_off: "False"
+  availability_mode: all
+  availability: *oven_availability
+
+# Events: `Present` while the oven shows it, then `Confirmed` or `Off`.
+- name: oven_preheat_finished
+  state_topic: "homeconnect/oven/event/cooking_oven_event_cavity_001_regularpreheatfinished"
+  value_template: &oven_event "{{ 'ON' if value_json.event_type == 'Present' else 'OFF' }}"
+  availability_mode: all
+  availability: *oven_availability
+
+- name: oven_fast_preheat_finished
+  state_topic: "homeconnect/oven/event/cooking_oven_event_cavity_001_fastpreheatfinished"
+  value_template: *oven_event
+  availability_mode: all
+  availability: *oven_availability
+
+- name: oven_program_finished
+  state_topic: "homeconnect/oven/event/cooking_oven_event_cavity_001_programfinished"
+  value_template: *oven_event
+  availability_mode: all
+  availability: *oven_availability
+
+- name: oven_program_aborted
+  state_topic: "homeconnect/oven/event/cooking_oven_event_cavity_001_programaborted"
+  value_template: *oven_event
+  availability_mode: all
+  availability: *oven_availability

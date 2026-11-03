@@ -306,3 +306,43 @@
   value_template: "{{ value_json.month.journeys | default(0) }}"
   json_attributes_topic: "homy/ioniq/journeys"
   json_attributes_template: "{{ {'month': value_json.month, 'journeys': value_json.journeys} | tojson }}"
+
+# The kitchen oven (#1907), from the hcpy bridge, with Bulgarian state text.
+# Only the bridge's LWT topics decide availability (see selects.yaml). The
+# manual has no labels for these states, so the text is plain Bulgarian; an
+# unknown value shows as the raw key.
+- name: oven_operation_state
+  state_topic: "homeconnect/oven/state/bsh_common_status_operationstate"
+  value_template: >-
+    {% set m = {'Inactive': 'Неактивна', 'Ready': 'Готова', 'DelayedStart': 'Отложен старт', 'Run': 'Работи', 'Pause': 'Пауза', 'ActionRequired': 'Нужно е действие', 'Finished': 'Приключи', 'Error': 'Грешка', 'Aborting': 'Прекратява се'} %}{{ m[value] if value in m else value }}
+  availability_mode: all
+  availability: &oven_availability
+    - topic: "homeconnect/LWT"
+    - topic: "homeconnect/oven/LWT"
+
+- name: oven_door_state
+  state_topic: "homeconnect/oven/state/bsh_common_status_doorstate"
+  value_template: >-
+    {% set m = {'Open': 'Отворена', 'Closed': 'Затворена', 'Locked': 'Заключена'} %}{{ m[value] if value in m else value }}
+  availability_mode: all
+  availability: *oven_availability
+
+- name: oven_power_state
+  state_topic: "homeconnect/oven/state/bsh_common_setting_powerstate"
+  value_template: >-
+    {% set m = {'On': 'Включена', 'Standby': 'В готовност', 'Off': 'Изключена'} %}{{ m[value] if value in m else value }}
+  availability_mode: all
+  availability: *oven_availability
+
+- name: oven_remaining_time
+  state_topic: "homeconnect/oven/state/bsh_common_option_remainingprogramtime"
+  device_class: duration
+  unit_of_measurement: "s"
+  availability_mode: all
+  availability: *oven_availability
+
+- name: oven_program_progress
+  state_topic: "homeconnect/oven/state/bsh_common_option_programprogress"
+  unit_of_measurement: "%"
+  availability_mode: all
+  availability: *oven_availability
