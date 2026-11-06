@@ -430,11 +430,15 @@ groups:
       #   * PV output gates "the sun is actually out", using an independent sensor
       #     (the SUN2000 inverter) rather than the collector probe `t3`, which is
       #     the very thing that failed silently in #1472.
-      #   * `max(t2) < 55` suppresses the legitimate case "the tank is already hot,
+      #   * `max(t2) < 57` suppresses the legitimate case "the tank is already hot,
       #     so the controller has correctly stopped circulating". The electric
-      #     heater cuts out at 50 degC (`comfortMin: 47` + `hysteresis: 3` in
-      #     config/automations/boiler-controller-config.js), so a top temperature
-      #     below 55 means nothing but electricity has heated this tank.
+      #     heater heats the top to at most 55 degC (`hotWaterLimit` in
+      #     config/automations/boiler-controller-config.js; the evening top-up
+      #     and night boost of #1911), so a top temperature below 57 means
+      #     nothing but electricity has heated this tank. Until #1911 the limit
+      #     here was 55 with a 50 degC cutoff; a replay over 2024-08-01..2026-11-06
+      #     gives the same result (0 alert days outside the outage, 50 of the 63
+      #     outage days) for any limit from 55 to 58.
       #
       # IMPORTANT - why the PV query is `GROUP BY time(1h)` with `reducer: avg` and
       # not a bare `mean("ap")`: InfluxQL `mean()` averages over POINTS, not over
@@ -543,7 +547,7 @@ groups:
                     type: avg  # average the hourly buckets -> time-weighted, see comment above
                   type: query
                 - evaluator:
-                    params: [55]  # electric cutoff is 50 degC; above 55 means solar did work
+                    params: [57]  # electric heating stops at 55 degC (#1911); above 57 means solar did work
                     type: lt
                   operator:
                     type: and
@@ -558,7 +562,7 @@ groups:
         for: 1h
         annotations:
           summary: "☀️ Solar Circulation Idle While Sunny"
-          description: "The solar pump has run for under ~2 minutes in the last 6 hours while the PV inverter averaged over 1.5 kW and the boiler top stayed below 55°C. Only the SR-04 anti-seize kick is moving the pump. Check the collector probe (t3) against the actual collector temperature, then the pump and the SR-04 delta settings."
+          description: "The solar pump has run for under ~2 minutes in the last 6 hours while the PV inverter averaged over 1.5 kW and the boiler top stayed below 57°C. Only the SR-04 anti-seize kick is moving the pump. Check the collector probe (t3) against the actual collector temperature, then the pump and the SR-04 delta settings."
         labels:
           severity: warning
           system: boiler
@@ -570,14 +574,20 @@ groups:
       # on a day with real PV yield, a boiler top that never rises above the
       # electric cutoff proves 100% of the heat was electric.
       #
-      #   * 50.0 degC is the electric cutoff (`comfortMin: 47` + `hysteresis: 3`).
-      #     Through the 2026-06-08..2026-08-09 outage `max(t2)` was exactly 50.0 on
-      #     51 of the 63 days and never above 50.9 except on the 2026-08-09 repair
-      #     day; before it, good days reached 61-71 degC. `lt 50.5` allows half a
-      #     degree of overshoot and measurement noise.
-      #   * `solar_kw > 1.3` is a TIME-WEIGHTED kW over 12 h (see the long note on
+      #   * 55 degC is the highest top the element heats to since #1911
+      #     (`hotWaterLimit`: the evening top-up and the night boost; the day
+      #     cutoff is still 50 = `comfortMin: 47` + `hysteresis: 3`). The night
+      #     boost ends at 06:00/07:00 local, so the morning part of the 12 h
+      #     window can hold 55 from electricity alone. Through the
+      #     2026-06-08..2026-08-09 outage `max(t2)` was 50.5 or less in 99 % of
+      #     the hours, half a degree over the cutoff of that time. `lt 55.5`
+      #     keeps that half degree over the new limit. Before #1911 the
+      #     threshold was 50.5 with a 1.3 kW gate.
+      #   * `solar_kw > 1.7` is a TIME-WEIGHTED kW over 12 h (see the long note on
       #     the rule above for why the hourly bucketing is load-bearing), so it
-      #     means ~15.6 kWh actually landed inside the window. A full solar day
+      #     means ~20 kWh actually landed inside the window. With 55.5 the old
+      #     1.3 kW gate gave 14 alert days in two years (spring days on which the
+      #     sun lifted the top only to 51-55 degC); 1.7 gives 5. A full solar day
       #     here is 20-26 kWh, so this can only be satisfied by a window covering
       #     most of one sunny day - which is what makes a 12 h rolling window
       #     behave like a daily check without needing a fixed evaluation time. A
@@ -588,8 +598,17 @@ groups:
       #     days; with the time-weighted form the winter firings drop away, but
       #     2026-02-25 still alerts and is a genuine no-contribution day.
       #
-      # Verified by replay against production InfluxDB, hourly evaluation, over the
-      # full two years 2024-08-01..2026-08-09:
+      # Replay of the #1911 values (55.5 degC, 1.7 kW) over 2024-08-01..2026-11-06,
+      # hourly evaluation, `for: 1h` as two true evaluations in a row: 5 alert
+      # days outside the outage (2026-04-07, 2026-04-08, 2026-04-13, 2026-05-13,
+      # 2026-05-25), and 43 of the 63 outage days, first on 2026-06-08 - day
+      # one. Together with boiler-solar-circulation-stuck (57 degC) 55 of the 63
+      # outage days alert. The replay used the old data, in which the element
+      # stopped at 50, so it counts solar days between 50.5 and 55.5 as alerts:
+      # an upper bound on the false alerts.
+      #
+      # The old values (50.5 degC, 1.3 kW), replayed against production
+      # InfluxDB, hourly evaluation, over the two years 2024-08-01..2026-08-09:
       #   4 alert days outside the outage - 2025-05-28, 2026-02-25, 2026-04-08 and
       #     2026-05-13. All four are true positives by this rule's own definition:
       #     PV yield 18.1-24.2 kWh, collector peaking at 49.2-51.8 degC against a
@@ -640,7 +659,7 @@ groups:
               refId: A
               conditions:
                 - evaluator:
-                    params: [50.5]  # electric cutoff 50 degC + 0.5 degC overshoot allowance
+                    params: [55.5]  # electric heating stops at 55 degC (#1911) + 0.5 degC overshoot allowance
                     type: lt
                   operator:
                     type: and
@@ -650,7 +669,7 @@ groups:
                     type: last
                   type: query
                 - evaluator:
-                    params: [1.3]  # time-weighted kW over 12h => ~15.6 kWh: a genuinely sunny day
+                    params: [1.7]  # time-weighted kW over 12h => ~20 kWh: a clearly sunny day
                     type: gt
                   operator:
                     type: and
@@ -665,7 +684,7 @@ groups:
         for: 1h
         annotations:
           summary: "🔆 No Solar Contribution On A Sunny Day"
-          description: "The boiler top has not exceeded the 50°C electric cutoff in 12 hours, yet the PV inverter averaged over 1.3 kW across the same window. All of the tank's heat is coming from the immersion heater and the solar circuit is contributing nothing. Check the collector probe (t3), the pump, and the SR-04 delta settings."
+          description: "The boiler top has not exceeded 55.5°C (the element stops at 55°C) in 12 hours, yet the PV inverter averaged over 1.7 kW across the same window. All of the tank's heat is coming from the immersion heater and the solar circuit is contributing nothing. Check the collector probe (t3), the pump, and the SR-04 delta settings."
         labels:
           severity: high
           system: boiler

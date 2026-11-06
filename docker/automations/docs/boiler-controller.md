@@ -17,7 +17,9 @@ The boiler system consists of a 200L Eldom cylindrical water heater (height: 140
 - **Location:** Service room (Сервизно)
 
 ### Temperature Sensors
-- **Bottom sensor:** Located at h=45cm from base
+- **Bottom sensor:** h=45cm from base, inside the lower serpentine (the solar coil), not in the open
+  tank water (confirmed by the owner on 2026-11-05). It reads the coil, so the solar pump and the cold
+  water of a draw move it first and fast.
 - **Top sensor:** Located at h=107cm from base
 
 ### Control Hardware
@@ -30,7 +32,7 @@ The boiler system consists of a 200L Eldom cylindrical water heater (height: 140
 
 ### Temperature Monitoring
 ```
-homy/features/sensor/temperature_boiler_low/status     # Bottom sensor (45cm)
+homy/features/sensor/temperature_boiler_low/status     # Bottom sensor (45cm, inside the lower serpentine)
 homy/features/sensor/temperature_boiler_high/status    # Top sensor (107cm)
 homy/features/sensor/temperature_solar_panel/status    # Solar panel temperature
 homy/features/sensor/temperature_room_service/status   # Service room temperature
@@ -63,8 +65,10 @@ homy/features/relay/solar_heater_electric_heater/status # Solar controller elect
 
 ### Electric Heater Control (`boilerController`)
 
-The heater is **threshold-based**, with one time rule: it does not heat in the hour before the night
-tariff zone (see [Night tariff hold](#night-tariff-hold)). It also does not start while the
+The heater is **threshold-based**, with time rules around the night tariff zone: it does not heat in
+the hour before the zone (see [Night tariff hold](#night-tariff-hold)), and it heats the top to 55 °C
+just before that hour and in the night zone (see [Evening draw](#evening-draw-top-up-boost-and-start-on-a-draw)).
+It also starts as soon as a hot-water draw begins. It also does not start while the
 dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). The legacy `boilerOnSchedule`
 `solar-emitter` bot (ON at golden hour, OFF at nadir) was removed in `11ed714` and no longer exists.
 
@@ -87,6 +91,10 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
 | `solarAdvantageMin` | 5 °C | Collector this far above tank top ⇒ defer to solar |
 | `solarDisadvantageMax` | -100 °C | Effectively disables the "solar insufficient, boost" branch |
 | `nightTariff.floor` | 40 °C | The night tariff hold does not apply below this (until 43 °C once on) |
+| `hotWaterLimit` | 55 °C | The top-up, boost and draw rules never heat the top above this (no mixing valve, #1473) |
+| `dayTopUp` | 90 min, 55 °C | Heat the top to 55 °C in the 90 min before the hold (19:30–21:00 winter, 20:30–22:00 summer) |
+| `nightBoostTarget` | 55 °C | Heat the top to 55 °C from the end of the hold to the end of the night zone |
+| `drawDropK` / `drawWindowMinutes` | 3 K / 10 min | A fall of the bottom reading this big this fast is a draw: start the element |
 | `maxInputAgeMs` | 10 min (default) | Boiler top/bottom temperature older than this ⇒ OFF, `input_stale` |
 | `manualOverrideExpiry` | 24 h | Default expiry for `manual_on`/`manual_off`; an object payload's `duration` overrides it. **Vacation modes do not use it** — they expire after `days × 24 − 6` hours (66 / 114 / 162 / 234 / 330 h) |
 
@@ -103,11 +111,15 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
 7. `top < comfortMin` → ON, `comfort_heating_insufficient`
 8. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
 9. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
-10. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
-11. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
+10. A draw was seen and the top is under the target in force → ON, `draw_heating`
+11. In the day-zone top-up or the night boost: top at or above the target → OFF, `day_top_up_reached` /
+    `night_boost_reached`; else ON, `day_top_up` / `night_boost`, with the hysteresis below the target
+12. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
+13. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
 
 After the rules, a start while the element is off waits when a [load stagger](#load-stagger) gate
 is closed (`load_wait_dishwasher` or `load_wait_main_power`), except `emergency_heating_top_cold`.
+So the gates apply to the top-up, the boost and the draw start too.
 
 **Control modes** (`homy/features/control_mode/boiler_controller/set`): `automatic`, `manual_on`,
 `manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`, `vacation_until`.
@@ -118,10 +130,12 @@ automatic. `until` must be in the future and at most 60 days ahead. Otherwise th
 mode stays. The `away-mode` bot uses it; see [away-mode.md](away-mode.md). A pick of `vacation_until` in Home Assistant
 has no `until`, so it is refused.
 
-The 50 °C cutout from step 10 is what makes `max(t2)` a usable solar-contribution signal: a day whose
-top temperature never exceeds 50 °C got all of its heat from the immersion heater. That is the basis
-of the `boiler-solar-no-contribution` alert — see
-`config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
+The highest top the element heats to is what makes `max(t2)` a usable solar-contribution signal: a
+day whose top temperature never exceeds it got all of its heat from the immersion heater. That is the
+basis of the `boiler-solar-no-contribution` alert. That limit was 50 °C (step 12) until #1911 and is
+55 °C (`hotWaterLimit`) since; the alert thresholds moved with it — see
+`config/grafana/dashboards/BOILER_CONTROLLER_README.md`. **If `hotWaterLimit` goes up (after a mixing
+valve is fitted), move the two solar alert limits up too.**
 
 ### Night tariff hold
 
@@ -141,9 +155,10 @@ sources and the cost model.
   the hold begins is switched off. The 15 minutes after the zone start allow for drift of the meter
   clock. They are also the stagger: the car starts at the zone start and the element 15 minutes
   later (see [Load stagger](#load-stagger)).
-- After the hold, the normal rules apply again on the next temperature reading. The element starts
-  if the top is under `comfortMin`. A run that the hold cut off does not resume while the top is
-  still between `comfortMin` and `comfortMin + hysteresis` (47–50 °C).
+- After the hold, the night boost begins on the next temperature reading (see
+  [Evening draw](#evening-draw-top-up-boost-and-start-on-a-draw)). Without `nightBoostTarget` the
+  normal rules apply: the element starts if the top is under `comfortMin`, and a run that the hold
+  cut off does not resume while the top is between `comfortMin` and `comfortMin + hysteresis`.
 - **The floor**: when the top is under `nightTariff.floor` (40 °C), the hold does not apply, and the
   element heats as usual. Once on, it runs until the top reaches the floor plus `hysteresis` (43 °C).
   Without this band the 0.1 K jitter of the reading would switch the contactor every few seconds.
@@ -153,11 +168,63 @@ sources and the cost model.
 
 **To change the zone table**, edit `nightTariff` in `config/automations/boiler-controller-config.js`.
 Each entry of `zones` lists its months (1–12) and the zone `start` and `end` as `HH:MM`. Every month
-must be in exactly one entry; a month in no entry has no hold. Only `start` is used today; `end` is
-there to keep the table complete. To turn the hold off, remove `nightTariff`. Then run the tests in
+must be in exactly one entry; a month in no entry has no hold. `start` places the hold and the
+top-up; `end` ends the night boost. To turn the hold off, remove `nightTariff`. Then run the tests in
 `docker/automations/bots/boiler-controller-night-tariff.test.js`, which read the committed config.
 The Home Assistant automation `grid_tariff_by_zone` has the same table for the energy dashboard
 (`docs/energy-dashboard.md`); change both together.
+
+### Evening draw: top-up, boost and start on a draw
+
+On 5 of the 10 evenings from 2026-10-26 to 2026-11-04 a big hot-water draw soon after 22:15 emptied
+the tank: the top fell from about 49 °C to under 30 °C and `emergency_heating_top_cold` fired. The
+element was off, because the top was still in the 47–50 °C band, and it started 5–25 minutes after
+the draw began, on `emergency_heating_bottom_cold` (#1911). Three rules fix this:
+
+- **Day-zone top-up** (`dayTopUp`): in the `minutesBeforeHold` (90) minutes before the hold, heat
+  the top to `target` (55 °C): 19:30–21:00 in winter, 20:30–22:00 in summer. 200 L from 49 to 55 °C
+  takes 30–60 minutes with this element, so the top is about 55 °C when the hold starts. This costs
+  day price, about 1.4 kWh an evening (the owner chose it on 2026-11-05). The hold at 21:00 stops a
+  top-up that has not finished.
+- **Night boost** (`nightBoostTarget`): from the end of the hold (22:15 in winter, 23:15 in summer)
+  to the end of the night zone (06:00 / 07:00), heat the top to 55 °C, at night price. So the
+  element is running, or the top is at 55 °C, when the evening draw comes, and the tank is full
+  again in the morning.
+- **Start on a draw** (`drawDropK`, `drawWindowMinutes`): when the bottom reading falls by 3 K within
+  10 minutes, the element starts (`draw_heating`) without waiting for the bottom to go under
+  `emergencyMin`. It heats until the top reaches the target in force: 55 °C in the top-up and the
+  boost, else `comfortMin + hysteresis` (50 °C). It does not start when the top is already at that
+  target. The bottom sensor sits inside the lower serpentine, where the cold inflow shows first. A
+  new detection needs a new fall of 3 K from the reading that fired the last one. A manual or
+  vacation mode clears a draw seen before it.
+
+Details:
+
+- **Hysteresis**: the top-up and the boost stop at the target and start again under
+  `target - hysteresis` (52 °C), so the 0.1 K jitter of the reading does not switch the contactor.
+  The first start in each window ignores that band: a top of 54 °C when the hold ends still gets
+  its boost. After a restart of the bot the window counts as just begun.
+- **The night hold still wins**: a draw during the hold does not start the element (the floor rule
+  still does under 40 °C). The boost starts at the end of the hold. The #1740 trial is unchanged.
+- **Load gates** apply to all three starts, like every automatic start except
+  `emergency_heating_top_cold`.
+- **Zone change days**: the windows follow the month's zone. On 1 April and 1 November the night
+  that began the evening before is read with the new table, so the boost of that one night ends an
+  hour late (1 April) or early (1 November).
+- **55 °C limit**: there is no thermostatic mixing valve (#1473), so water at the tank top reaches
+  the taps unmixed. `hotWaterLimit` (55 °C) caps the targets of all three rules, whatever their own
+  values. Do not raise it before a valve is fitted. `maxSafe` (85 °C) and the emergency rules are
+  unchanged.
+- **Why 3 K in 10 min** (data of 2026-10-20 to 2026-11-05, one-minute means of the bottom reading):
+  every fall of 3 K within 10 minutes with the element off was a real draw, after which the bottom
+  fell to 39 °C or lower. On the evenings the tank emptied it came 2–51 minutes (on 2026-11-03,
+  -04 and -05: 16–20 minutes) before the old start. A 2 K threshold also fired on smaller draws;
+  4–6 K or a 5-minute window caught the same draws a little later. No fall was seen from the solar
+  pump or after the element stopped.
+- **Status reasons** in `automation_status`: `day_top_up`, `day_top_up_reached`, `night_boost`,
+  `night_boost_reached`, `draw_heating`.
+- Tests: `docker/automations/bots/boiler-controller-evening-draw.test.js`, which read the committed
+  config.
 
 ### Solar System (External Controller)
 - **External solar controller** manages solar heating logic independently
@@ -201,7 +268,8 @@ The Home Assistant automation `grid_tariff_by_zone` has the same table for the e
 2. **Solar heating:** External controller handles circulation automatically
 3. **Electric heating:** `boilerController` decides on every temperature update, using the thresholds
    above — it defers to solar when the collector is at least 5 °C above the tank top *and* the pump
-   is running, and otherwise holds the top between 47 °C and 50 °C, except in the night tariff hold
+   is running, and otherwise holds the top between 47 °C and 50 °C, except in the night tariff hold,
+   the evening top-up and the night boost (55 °C), and starts early on a draw
 4. **Energy tracking:** Power consumption monitored separately via energy meter
 5. **Manual override:** Available through Home Assistant for electric heater only
 

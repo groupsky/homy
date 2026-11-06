@@ -39,6 +39,22 @@ module.exports = {
         marginMinutes: 15,
         floor: 40
       },
+      // Evening draw (#1911): a big draw soon after the hold ends emptied the
+      // tank on many evenings. So the top is heated to 55 °C before the hold
+      // (19:30-21:00 in winter, 20:30-22:00 in summer, at day price) and again
+      // from the end of the hold to the end of the night zone. 55 °C is the
+      // limit while there is no mixing valve (#1473); `hotWaterLimit` caps
+      // these targets.
+      hotWaterLimit: 55,
+      dayTopUp: { minutesBeforeHold: 90, target: 55 },
+      nightBoostTarget: 55,
+      // Start the element when the bottom reading falls 3 K within 10 min,
+      // without waiting for it to go under emergencyMin. From 2026-10-20 to
+      // 2026-11-05 every such fall with the element off was a real draw (the
+      // bottom then fell to 39 °C or lower), and on the evenings the tank
+      // emptied it came 2-51 min (mostly 15-20 min) before the old start.
+      drawDropK: 3,
+      drawWindowMinutes: 10,
       // Load stagger: the element does not START while the dishwasher runs or
       // the main meter's recent mean power is high. A running element is never
       // stopped by these, and without the two topics the gates are off.

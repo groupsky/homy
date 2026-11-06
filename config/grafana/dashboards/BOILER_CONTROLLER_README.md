@@ -54,6 +54,9 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
 - `temperature_sufficient` - No heating needed
 - `night_tariff_hold` - Held off in the hour before the night tariff zone (#1740)
 - `input_stale` - Boiler temperatures older than 10 min, element off (#1743)
+- `day_top_up` / `day_top_up_reached` - Heating the top to 55 °C before the hold / target reached (#1911)
+- `night_boost` / `night_boost_reached` - Heating the top to 55 °C in the night zone / target reached (#1911)
+- `draw_heating` - Started early on a hot-water draw (bottom fell 3 K in 10 min, #1911)
 - `safety_shutoff_overheated` - Safety temperature exceeded
 - `hysteresis_zone_maintain_*` - Maintaining current state
 
@@ -72,7 +75,7 @@ count back to seven.)
 ### High Priority Alerts
 3. **Temperature Sensor Failure** (`boiler-temperature-sensor-failure`) - No readings for 30+ minutes
 4. **No Solar Contribution On A Sunny Day** (`boiler-solar-no-contribution`) - boiler top has not
-   exceeded the 50°C electric cutoff in 12 hours while the PV inverter averaged >1.3 kW over the same
+   exceeded 55.5°C (the element stops at 55°C, #1911) in 12 hours while the PV inverter averaged >1.7 kW over the same
    window, i.e. every kWh in the tank came from the immersion heater. See "Solar circuit alert
    thresholds" below.
 
@@ -84,7 +87,7 @@ count back to seven.)
    issue #1477.
 6. **Excessive Power** (`boiler-excessive-power-consumption`) - >3kW consumption for 15+ minutes
 7. **Solar Circulation Idle While Sunny** (`boiler-solar-circulation-stuck`) - under ~2 minutes of pump
-   run time in 6 hours while the PV inverter averaged >1.5 kW and the boiler top stayed below 55°C.
+   run time in 6 hours while the PV inverter averaged >1.5 kW and the boiler top stayed below 57°C.
    See "Solar circuit alert thresholds" below.
 
 ## Solar circuit alert thresholds
@@ -100,8 +103,21 @@ all hours - every night, all 107 days - and never once during the 63-day solar o
 
 The replacements measure *how long the pump ran* (a sample count of `outputs.p1 = true`), gate on PV
 output from the **inverter** rather than the collector probe `t3` (the probe is what failed silently in
-#1472), and suppress the legitimate "tank already hot" case using the electric cutoff at 50°C
-(`comfortMin: 47` + `hysteresis: 3`).
+#1472), and suppress the legitimate "tank already hot" case using the highest top the element heats
+to. That was 50°C (`comfortMin: 47` + `hysteresis: 3`) until #1911; since #1911 the evening top-up
+and the night boost heat the top to 55°C (`hotWaterLimit`), so both limits moved up (2026-11-06):
+`boiler-solar-circulation-stuck` from 55 to 57°C, `boiler-solar-no-contribution` from 50.5 to
+55.5°C, with its PV gate from 1.3 to 1.7 kW.
+
+**Since #1911**, replayed hourly over 2024-08-01…2026-11-06 on the old data (in which the element
+stopped at 50°C, so solar days that reached only 50.5–55.5°C count as alerts, an upper bound):
+
+| Rule | Conditions | Result |
+|---|---|---|
+| `boiler-solar-circulation-stuck` | as below, but `max(t2) < 57 °C` | **0** alert days outside the outage; 50 of the 63 outage days (the same for any limit from 55 to 58) |
+| `boiler-solar-no-contribution` | `max(t2) < 55.5 °C` **and** `mean(inverter.ap) > 1.7 kW` | 5 alert days outside the outage (2026-04-07, 2026-04-08, 2026-04-13, 2026-05-13, 2026-05-25); 43 of the 63 outage days, first on 2026-06-08. With the old 1.3 kW gate it would be 14 alert days |
+
+Together they alert on 55 of the 63 outage days, from day one. The table below has the values before #1911.
 
 | Rule | Window | Conditions | Verified behaviour (hourly replay, 2024-08-01…2026-08-09) |
 |---|---|---|---|
