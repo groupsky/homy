@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/ubuntu:24.04
+FROM ghcr.io/groupsky/homy/ubuntu:26.04
 
 COPY entrypoint.sh /entrypoint.sh
 
