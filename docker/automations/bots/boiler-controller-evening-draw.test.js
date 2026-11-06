@@ -271,11 +271,57 @@ describe('boiler-controller evening draw rules (#1911)', () => {
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_boost_reached' })
     })
 
-    test('a top at the target is not heated on a draw', () => {
+    test('a draw seen with the top at the target waits for the top to fall under it', () => {
       const boiler = startAt('2026-11-02T14:00:00+02:00')
       boiler.temperatures({ top: 50, bottom: 47 })
       fall(boiler, '2026-11-02T14:00:00+02:00', 47, 4, 1)
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'temperature_sufficient' })
+      boiler.at('2026-11-02T14:20:00+02:00')
+      boiler.bottom(42)
+      boiler.top(49.9)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'draw_heating' })
+    })
+
+    test('a waiting draw is dropped after 30 min', () => {
+      const boiler = startAt('2026-11-02T14:00:00+02:00')
+      boiler.temperatures({ top: 50, bottom: 47 })
+      fall(boiler, '2026-11-02T14:00:00+02:00', 47, 4, 1)
+      boiler.at('2026-11-02T14:35:00+02:00')
+      boiler.bottom(43)
+      boiler.top(49.9)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'hysteresis_zone_maintain_false' })
+    })
+
+    // The first fall of a bath comes while the top is still at 55 °C after the
+    // boost. It must not be used up: the element starts when the top falls.
+    test('after the boost, the first fall of a draw starts the element once the top falls', () => {
+      const boiler = startAt('2026-11-02T22:40:00+02:00')
+      boiler.temperatures({ top: 55, bottom: 52 })
+      fall(boiler, '2026-11-02T22:40:00+02:00', 52, 3, 1)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_boost_reached' })
+      boiler.top(54.9)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'draw_heating' })
+      boiler.top(55)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_boost_reached' })
+      // The draw is done with; the jitter does not switch the element again.
+      boiler.top(54.9)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_boost_reached' })
+    })
+
+    test('a start the load gates hold back for over 30 min is dropped', () => {
+      const boiler = startAt('2026-11-02T14:00:00+02:00')
+      boiler.dishwasher(1500)
+      boiler.temperatures({ top: 48.5, bottom: 47 })
+      fall(boiler, '2026-11-02T14:00:00+02:00', 47, 3, 1)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
+      // The dishwasher stops; 35 min after the draw the gate opens.
+      boiler.at('2026-11-02T14:35:00+02:00')
+      boiler.dishwasher(0)
+      boiler.at('2026-11-02T14:46:00+02:00')
+      boiler.dishwasher(0)
+      boiler.bottom(44)
+      boiler.top(48.4)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'hysteresis_zone_maintain_false' })
     })
 
     test('the night hold still applies; the boost starts at 22:15', () => {
@@ -286,7 +332,7 @@ describe('boiler-controller evening draw rules (#1911)', () => {
       boiler.at('2026-11-02T22:15:00+02:00')
       boiler.bottom(46)
       boiler.top(53.5)
-      expect(boiler.relay()).toMatchObject({ state: true, reason: 'draw_heating' })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'night_boost' })
     })
 
     test('the load gates apply to its start', () => {

@@ -75,7 +75,7 @@ count back to seven.)
 ### High Priority Alerts
 3. **Temperature Sensor Failure** (`boiler-temperature-sensor-failure`) - No readings for 30+ minutes
 4. **No Solar Contribution On A Sunny Day** (`boiler-solar-no-contribution`) - boiler top has not
-   exceeded 55.5°C (the element stops at 55°C, #1911) in 12 hours while the PV inverter averaged >1.7 kW over the same
+   exceeded 55.5°C (the element heats the top to 55°C at most, #1911) in 12 hours while the PV inverter averaged >1.7 kW over the same
    window, i.e. every kWh in the tank came from the immersion heater. See "Solar circuit alert
    thresholds" below.
 
@@ -119,7 +119,7 @@ stopped at 50°C, so solar days that reached only 50.5–55.5°C count as alerts
 
 Together they alert on 55 of the 63 outage days, from day one. The table below has the values before #1911.
 
-| Rule | Window | Conditions | Verified behaviour (hourly replay, 2024-08-01…2026-08-09) |
+| Rule | Window | Conditions (before #1911) | Verified behaviour (hourly replay, 2024-08-01…2026-08-09) |
 |---|---|---|---|
 | `boiler-solar-circulation-stuck` | 6 h | `count(outputs.p1=true) < 100` **and** time-weighted `mean(inverter.ap) > 1.5 kW` **and** `max(t2) < 55 °C`, `for: 1h` | **0** alert days outside the outage across two full years, neither winter included; 50 of the 63 outage days, first on 2026-06-08 (day one). Fires only 10:00Z–17:00Z. |
 | `boiler-solar-no-contribution` | 12 h | `max(t2) < 50.5 °C` **and** time-weighted `mean(inverter.ap) > 1.3 kW`, `for: 1h` | 4 alert days outside the outage across two years (2025-05-28, 2026-02-25, 2026-04-08, 2026-05-13) — all genuine no-contribution days, see below; 56 of the 63 outage days, first on 2026-06-08. Fires 12:00Z–21:00Z. |

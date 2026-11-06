@@ -68,7 +68,7 @@ homy/features/relay/solar_heater_electric_heater/status # Solar controller elect
 The heater is **threshold-based**, with time rules around the night tariff zone: it does not heat in
 the hour before the zone (see [Night tariff hold](#night-tariff-hold)), and it heats the top to 55 °C
 just before that hour and in the night zone (see [Evening draw](#evening-draw-top-up-boost-and-start-on-a-draw)).
-It also starts as soon as a hot-water draw begins. It also does not start while the
+It starts at once when a hot-water draw begins. It does not start while the
 dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). The legacy `boilerOnSchedule`
 `solar-emitter` bot (ON at golden hour, OFF at nadir) was removed in `11ed714` and no longer exists.
 
@@ -95,6 +95,7 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
 | `dayTopUp` | 90 min, 55 °C | Heat the top to 55 °C in the 90 min before the hold (19:30–21:00 winter, 20:30–22:00 summer) |
 | `nightBoostTarget` | 55 °C | Heat the top to 55 °C from the end of the hold to the end of the night zone |
 | `drawDropK` / `drawWindowMinutes` | 3 K / 10 min | A fall of the bottom reading this big this fast is a draw: start the element |
+| `drawLatchMinutes` | 30 min (default) | A draw that has not started the element in this time is dropped |
 | `maxInputAgeMs` | 10 min (default) | Boiler top/bottom temperature older than this ⇒ OFF, `input_stale` |
 | `manualOverrideExpiry` | 24 h | Default expiry for `manual_on`/`manual_off`; an object payload's `duration` overrides it. **Vacation modes do not use it** — they expire after `days × 24 − 6` hours (66 / 114 / 162 / 234 / 330 h) |
 
@@ -193,10 +194,13 @@ the draw began, on `emergency_heating_bottom_cold` (#1911). Three rules fix this
 - **Start on a draw** (`drawDropK`, `drawWindowMinutes`): when the bottom reading falls by 3 K within
   10 minutes, the element starts (`draw_heating`) without waiting for the bottom to go under
   `emergencyMin`. It heats until the top reaches the target in force: 55 °C in the top-up and the
-  boost, else `comfortMin + hysteresis` (50 °C). It does not start when the top is already at that
-  target. The bottom sensor sits inside the lower serpentine, where the cold inflow shows first. A
-  new detection needs a new fall of 3 K from the reading that fired the last one. A manual or
-  vacation mode clears a draw seen before it.
+  boost, else `comfortMin + hysteresis` (50 °C). A draw seen while the top is still at that target
+  waits: the element starts when the top falls under it. A draw that has not started the element
+  within `drawLatchMinutes` (30) is dropped, for example when the load gates held it back. So in the
+  day zone the rule starts the element only while the top is under 50 °C (before, it waited for 47 °C
+  or a bottom under 30 °C). The bottom sensor sits inside the lower serpentine, where the cold inflow
+  shows first. A new detection needs a new fall of 3 K from the reading that fired the last one. A
+  manual or vacation mode clears a draw seen before it.
 
 Details:
 

@@ -92,6 +92,8 @@ module.exports = (name, {
   // force (the top-up or boost target, else comfortMin + hysteresis).
   drawDropK,
   drawWindowMinutes = 10,
+  // A draw that has not started the element within this time is dropped.
+  drawLatchMinutes = 30,
   // Load stagger: the element does not start while the dishwasher runs or the
   // main meter's recent mean power is high. Both gates are off without topics.
   dishwasherTopic,
@@ -183,7 +185,9 @@ module.exports = (name, {
     // where the cold water of a draw comes in first.
     const drawWindowMs = drawWindowMinutes * 60 * 1000
     let bottomReadings = [] // { at, temp }
-    let drawLatched = false
+    // The time of the last detection, or null. Kept until the element has
+    // heated the top to the target (see decideAutomatic).
+    let drawSeenAt = null
     const bottomSeen = (temp, at) => {
       if (!Number.isFinite(drawDropK)) return
       bottomReadings.push({ at, temp })
@@ -193,7 +197,7 @@ module.exports = (name, {
       // The readings have one decimal; the small slack keeps 47.6 -> 44.6
       // a fall of 3 K in floating point.
       if (highest - temp >= drawDropK - 1e-9) {
-        drawLatched = true
+        drawSeenAt = at
         // A new detection needs a new fall from here, so one long draw does
         // not latch again on every reading.
         bottomReadings = [{ at, temp }]
@@ -305,7 +309,7 @@ module.exports = (name, {
           }
 
           // A draw seen before a manual or vacation mode is old news after it.
-          drawLatched = false
+          drawSeenAt = null
           if (verbose) {
             console.log(`[${name}] ${currentState.controlMode} mode active -> heater ${decision ? 'ON' : 'OFF'}`)
           }
@@ -326,6 +330,11 @@ module.exports = (name, {
       if ((heatWindow?.reason ?? null) !== lastWindowReason) {
         lastWindowReason = heatWindow?.reason ?? null
         windowArmed = Boolean(heatWindow)
+      }
+      // Reaching the target ends the first-start exception, whatever rule
+      // decides below.
+      if (heatWindow && currentState.temperatureTop !== null && currentState.temperatureTop >= heatWindow.target) {
+        windowArmed = false
       }
 
       // A reader that stops leaves the last temperatures here, and heating on
@@ -360,7 +369,15 @@ module.exports = (name, {
 
       // The top the draw rule heats to now.
       const target = heatWindow ? heatWindow.target : comfortMin + hysteresis
-      if (drawLatched && temperatureTop !== null && temperatureTop >= target) drawLatched = false
+      // A draw ends when the element has heated the top to the target. A draw
+      // seen while the top is still at the target waits for the top to fall
+      // under it (the top is the last to cool), but at most drawLatchMinutes
+      // while the element is off: a start the load gates held back that long
+      // is not a draw start any more.
+      if (drawSeenAt !== null && temperatureTop !== null) {
+        if (currentState.heaterState && temperatureTop >= target) drawSeenAt = null
+        else if (!currentState.heaterState && now - drawSeenAt > drawLatchMinutes * 60 * 1000) drawSeenAt = null
+      }
 
       // Comfort heating
       if (temperatureTop !== null && temperatureTop < comfortMin) {
@@ -384,7 +401,7 @@ module.exports = (name, {
 
       // Start on a draw, before the top cools: the element is then already
       // running while the tank empties (#1911). The load gates apply.
-      if (drawLatched && temperatureTop !== null) {
+      if (drawSeenAt !== null && temperatureTop !== null && temperatureTop < target) {
         return { decision: true, reason: 'draw_heating' }
       }
 
@@ -392,7 +409,6 @@ module.exports = (name, {
       // the top to the window's target, with the hysteresis below it.
       if (heatWindow && temperatureTop !== null) {
         if (temperatureTop >= heatWindow.target) {
-          windowArmed = false
           return { decision: false, reason: `${heatWindow.reason}_reached` }
         }
         if (currentState.heaterState || windowArmed || temperatureTop < heatWindow.target - hysteresis) {
@@ -703,6 +719,7 @@ module.exports = (name, {
         dayTopUp: topUpTarget === null ? null : { minutesBeforeHold: dayTopUp.minutesBeforeHold, target: topUpTarget },
         drawDropK,
         drawWindowMinutes,
+        drawLatchMinutes,
         dishwasherTopic,
         mainPowerTopic,
         manualOverrideExpiry: manualOverrideExpiry / 60000 + ' minutes',
