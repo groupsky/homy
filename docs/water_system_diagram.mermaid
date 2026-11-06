@@ -34,7 +34,7 @@ graph TD
     EH --> MT2[MQTT: homy/features/relay/<br/>service_boiler_contactor]
     
     %% Temperature Sensors
-    BR --> TS1[Temp Sensor Bottom<br/>45cm height]
+    BLS --> TS1[Temp Sensor Bottom<br/>45cm height, inside lower serpentine]
     BR --> TS2[Temp Sensor Top<br/>107cm height]
     TS1 --> MT3[MQTT: temperature_boiler_low]
     TS2 --> MT4[MQTT: temperature_boiler_high]

@@ -96,8 +96,11 @@ water_system:
           location: "inside_lower_serpentine_20cm"
           mqtt_topic: "homy/features/sensor/temperature_boiler_low/status"
         top:
-          height: "107cm" 
-          location: "inside_lower_serpentine_20cm"
+          height: "107cm"
+          # Until 2026-11-06 this said "inside_lower_serpentine_20cm", a copy of the
+          # bottom sensor's line (#1911). Whether the top sensor reads the tank water
+          # or sits in the unused upper serpentine is not confirmed.
+          location: "not_confirmed"
           mqtt_topic: "homy/features/sensor/temperature_boiler_high/status"
       monitoring:
         energy_topic: "/modbus/secondary/boiler/reading"

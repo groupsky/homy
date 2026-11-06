@@ -11,12 +11,14 @@ const minutesOfDay = (hhmm) => {
   return hours * 60 + minutes
 }
 
-// Returns a function that tells whether a moment is in the hold before the
-// night tariff zone: from `holdBeforeMinutes` before the zone starts until
-// `marginMinutes` after it. The zone hours are on the local wall clock of
-// `timeZone`, so the month and time are read in that zone, never with a fixed
-// UTC offset that would be an hour off for half of the year.
-const nightTariffHold = ({ timeZone, zones, holdBeforeMinutes, marginMinutes }) => {
+const minutesMod = (minutes) => (minutes % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY
+
+// Returns a function that places a moment in the EVN night tariff table:
+// the zone of its month and the minutes since that zone started. The zone
+// hours are on the local wall clock of `timeZone`, so the month and time are
+// read in that zone, never with a fixed UTC offset that would be an hour off
+// for half of the year.
+const tariffClock = ({ timeZone, zones }) => {
   const clock = new Intl.DateTimeFormat('en-GB', {
     timeZone,
     month: 'numeric',
@@ -27,10 +29,31 @@ const nightTariffHold = ({ timeZone, zones, holdBeforeMinutes, marginMinutes }) 
   return (ms) => {
     const parts = Object.fromEntries(clock.formatToParts(ms).map(({ type, value }) => [type, Number(value)]))
     const zone = zones.find(({ months }) => months.includes(parts.month))
-    if (!zone) return false
-    const holdStart = minutesOfDay(zone.start) - holdBeforeMinutes
-    const sinceHoldStart = ((parts.hour * 60 + parts.minute - holdStart) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY
-    return sinceHoldStart < holdBeforeMinutes + marginMinutes
+    if (!zone) return null
+    const start = minutesOfDay(zone.start)
+    return {
+      sinceZoneStart: minutesMod(parts.hour * 60 + parts.minute - start),
+      zoneLength: minutesMod(minutesOfDay(zone.end) - start)
+    }
+  }
+}
+
+// The night tariff periods of one moment:
+// - hold: from `holdBeforeMinutes` before the zone starts until
+//   `marginMinutes` after it (#1740);
+// - dayTopUp: the `dayTopUpMinutes` just before the hold (0 = none);
+// - nightBoost: from the end of the hold until the zone ends.
+const tariffPeriods = ({ holdBeforeMinutes, marginMinutes, ...table }, dayTopUpMinutes = 0) => {
+  const place = tariffClock(table)
+  return (ms) => {
+    const at = place(ms)
+    if (!at) return { hold: false, dayTopUp: false, nightBoost: false }
+    const { sinceZoneStart, zoneLength } = at
+    return {
+      hold: minutesMod(sinceZoneStart + holdBeforeMinutes) < holdBeforeMinutes + marginMinutes,
+      dayTopUp: minutesMod(sinceZoneStart + holdBeforeMinutes + dayTopUpMinutes) < dayTopUpMinutes,
+      nightBoost: sinceZoneStart >= marginMinutes && sinceZoneStart < zoneLength
+    }
   }
 }
 
@@ -53,6 +76,24 @@ module.exports = (name, {
   solarDisadvantageMax = -3,
   hysteresis = 3,
   nightTariff,
+  // The tank top reaches the taps unmixed while there is no thermostatic
+  // mixing valve (#1473). The top-up, boost and draw rules never heat the top
+  // above this, whatever their own targets say.
+  hotWaterLimit = 55,
+  // Night tariff extras (#1911), all off unless set; they need `nightTariff`.
+  // nightBoostTarget: from the end of the hold to the end of the night zone,
+  // heat the top to this (°C).
+  nightBoostTarget,
+  // dayTopUp: { minutesBeforeHold, target }: in the minutes just before the
+  // hold, heat the top to `target` (°C), at day price.
+  dayTopUp,
+  // Start on a draw: when the bottom reading falls by `drawDropK` K within
+  // `drawWindowMinutes`, start the element and heat the top to the target in
+  // force (the top-up or boost target, else comfortMin + hysteresis).
+  drawDropK,
+  drawWindowMinutes = 10,
+  // A draw that has not started the element within this time is dropped.
+  drawLatchMinutes = 30,
   // Load stagger: the element does not start while the dishwasher runs or the
   // main meter's recent mean power is high. Both gates are off without topics.
   dishwasherTopic,
@@ -118,7 +159,51 @@ module.exports = (name, {
       persistedCache.manualOverrideExpires = currentState.manualOverrideExpires
     }
 
-    const inNightTariffHold = nightTariff ? nightTariffHold(nightTariff) : () => false
+    const capped = (target) => Number.isFinite(target) ? Math.min(target, hotWaterLimit) : null
+    const boostTarget = nightTariff ? capped(nightBoostTarget) : null
+    const topUpTarget = nightTariff && dayTopUp ? capped(dayTopUp.target) : null
+    const periodsAt = nightTariff
+      ? tariffPeriods(nightTariff, topUpTarget === null ? 0 : dayTopUp.minutesBeforeHold)
+      : () => ({ hold: false, dayTopUp: false, nightBoost: false })
+
+    // The top-up or boost in force at a moment, or null.
+    const heatWindowAt = (ms) => {
+      const periods = periodsAt(ms)
+      if (periods.dayTopUp && topUpTarget !== null) return { reason: 'day_top_up', target: topUpTarget }
+      if (periods.nightBoost && boostTarget !== null) return { reason: 'night_boost', target: boostTarget }
+      return null
+    }
+    // The first start in a window heats to its target even when the top is
+    // in the hysteresis band below it: when the hold ends at 22:15, a top of
+    // 54 °C still gets its boost, so the element runs when the evening draw
+    // comes. After the target is reached once the usual hysteresis applies.
+    let lastWindowReason = null
+    let windowArmed = false
+
+    // Draw detection: the bottom readings of the last `drawWindowMinutes`.
+    // The bottom sensor sits inside the lower serpentine, low in the tank,
+    // where the cold water of a draw comes in first.
+    const drawWindowMs = drawWindowMinutes * 60 * 1000
+    let bottomReadings = [] // { at, temp }
+    // The time of the last detection, or null. Kept until the element has
+    // heated the top to the target (see decideAutomatic).
+    let drawSeenAt = null
+    const bottomSeen = (temp, at) => {
+      if (!Number.isFinite(drawDropK)) return
+      bottomReadings.push({ at, temp })
+      const newest = Math.max(...bottomReadings.map(r => r.at))
+      bottomReadings = bottomReadings.filter(r => r.at >= newest - drawWindowMs)
+      const highest = Math.max(...bottomReadings.map(r => r.temp))
+      // The readings have one decimal; the small slack keeps 47.6 -> 44.6
+      // a fall of 3 K in floating point.
+      if (highest - temp >= drawDropK - 1e-9) {
+        drawSeenAt = at
+        // A new detection needs a new fall from here, so one long draw does
+        // not latch again on every reading.
+        bottomReadings = [{ at, temp }]
+        if (verbose) console.log(`[${name}] draw detected: bottom ${highest} -> ${temp}°C within ${drawWindowMinutes} min`)
+      }
+    }
 
     // Use configured topics (with fallbacks for backward compatibility)
     const finalControlModeStatusTopic = controlModeStatusTopic || controlModeTopic.replace('/set', '/status')
@@ -223,6 +308,8 @@ module.exports = (name, {
             reasonPrefix = 'unknown_mode'
           }
 
+          // A draw seen before a manual or vacation mode is old news after it.
+          drawSeenAt = null
           if (verbose) {
             console.log(`[${name}] ${currentState.controlMode} mode active -> heater ${decision ? 'ON' : 'OFF'}`)
           }
@@ -238,6 +325,17 @@ module.exports = (name, {
 
     const decideAutomatic = () => {
       const now = Date.now()
+
+      const heatWindow = heatWindowAt(now)
+      if ((heatWindow?.reason ?? null) !== lastWindowReason) {
+        lastWindowReason = heatWindow?.reason ?? null
+        windowArmed = Boolean(heatWindow)
+      }
+      // Reaching the target ends the first-start exception, whatever rule
+      // decides below.
+      if (heatWindow && currentState.temperatureTop !== null && currentState.temperatureTop >= heatWindow.target) {
+        windowArmed = false
+      }
 
       // A reader that stops leaves the last temperatures here, and heating on
       // them could run the element with no real reading (#1743).
@@ -265,8 +363,20 @@ module.exports = (name, {
       // element tops the tank up in the cheaper night zone instead. A top
       // under the floor still heats, up to the floor plus the hysteresis.
       const holdFrom = nightTariff && nightTariff.floor + (currentState.heaterState ? hysteresis : 0)
-      if (temperatureTop !== null && inNightTariffHold(now) && temperatureTop >= holdFrom) {
+      if (temperatureTop !== null && periodsAt(now).hold && temperatureTop >= holdFrom) {
         return { decision: false, reason: 'night_tariff_hold' }
+      }
+
+      // The top the draw rule heats to now.
+      const target = heatWindow ? heatWindow.target : comfortMin + hysteresis
+      // A draw ends when the element has heated the top to the target. A draw
+      // seen while the top is still at the target waits for the top to fall
+      // under it (the top is the last to cool), but at most drawLatchMinutes
+      // while the element is off: a start the load gates held back that long
+      // is not a draw start any more.
+      if (drawSeenAt !== null && temperatureTop !== null) {
+        if (currentState.heaterState && temperatureTop >= target) drawSeenAt = null
+        else if (!currentState.heaterState && now - drawSeenAt > drawLatchMinutes * 60 * 1000) drawSeenAt = null
       }
 
       // Comfort heating
@@ -287,6 +397,24 @@ module.exports = (name, {
         if (solarAdvantage <= solarDisadvantageMax) {
           return { decision: true, reason: 'solar_insufficient_boost_needed' }
         }
+      }
+
+      // Start on a draw, before the top cools: the element is then already
+      // running while the tank empties (#1911). The load gates apply.
+      if (drawSeenAt !== null && temperatureTop !== null && temperatureTop < target) {
+        return { decision: true, reason: 'draw_heating' }
+      }
+
+      // Day-zone top-up before the hold and night-zone boost after it: heat
+      // the top to the window's target, with the hysteresis below it.
+      if (heatWindow && temperatureTop !== null) {
+        if (temperatureTop >= heatWindow.target) {
+          return { decision: false, reason: `${heatWindow.reason}_reached` }
+        }
+        if (currentState.heaterState || windowArmed || temperatureTop < heatWindow.target - hysteresis) {
+          return { decision: true, reason: heatWindow.reason }
+        }
+        return { decision: false, reason: `${heatWindow.reason}_reached` }
       }
 
       // Temperature is sufficient, check hysteresis
@@ -384,6 +512,7 @@ module.exports = (name, {
         if (typeof temp === 'number' && !isNaN(temp)) {
           currentState.temperatureBottom = temp
           temperatures.seen('bottom', payload?._tz)
+          bottomSeen(temp, readingTime(payload))
           updateHeaterState()
         }
       } catch (err) {
@@ -585,6 +714,12 @@ module.exports = (name, {
         solarDisadvantageMax,
         hysteresis,
         nightTariff,
+        hotWaterLimit,
+        nightBoostTarget: boostTarget,
+        dayTopUp: topUpTarget === null ? null : { minutesBeforeHold: dayTopUp.minutesBeforeHold, target: topUpTarget },
+        drawDropK,
+        drawWindowMinutes,
+        drawLatchMinutes,
         dishwasherTopic,
         mainPowerTopic,
         manualOverrideExpiry: manualOverrideExpiry / 60000 + ' minutes',
