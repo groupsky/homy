@@ -83,6 +83,15 @@ function isGarbageBmsFrame(data) {
 /**
  * Converts an `ioniq` parsed telemetry payload into a single InfluxDB point.
  * Tags: group, state (low-cardinality; what dashboards filter/group by).
+ * An app alert message (group `alerts/<uid>`, #1881) also gets its summary as
+ * tag `alert_summary`, so the Grafana rule can group by it and put the app's
+ * text (with values, e.g. old -> new SoH) into its Telegram message. Grafana
+ * can show tags as labels, but not string fields. The `summary` field stays.
+ * Backslashes are dropped from the tag: the client does not escape them, and
+ * one before a space, comma or end would make InfluxDB reject the point.
+ * It also gets field `firing_at` = ts while firing, else 0. The rule fires
+ * only for the text whose `firing_at` is the newest one, so an older text
+ * never fires again (#1914).
  * Timestamp: data.ts (epoch ms) passed straight to the ms-precision write API.
  */
 module.exports = function ioniq(data) {
@@ -97,6 +106,14 @@ module.exports = function ioniq(data) {
     }
     if (data.state !== undefined && data.state !== null) {
         point.tag('state', String(data.state))
+    }
+    const isAppAlert = String(data.group).startsWith('alerts/')
+    const summaryTag = isAppAlert && typeof data.summary === 'string' ? data.summary.replace(/\\/g, '') : ''
+    if (summaryTag !== '') {
+        point.tag('alert_summary', summaryTag)
+    }
+    if (isAppAlert && Number.isFinite(data.firing) && Number.isFinite(data.ts)) {
+        point.floatField('firing_at', data.firing > 0 ? data.ts : 0)
     }
     if (data.ts !== undefined && data.ts !== null) {
         point.timestamp(data.ts)

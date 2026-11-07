@@ -4,22 +4,32 @@ apiVersion: 1
 #
 # The app runs the real rules in the car and sends each alert to MQTT as
 # `ioniq/parsed/alerts/<uid>`. mqtt-influx stores it in measurement `ioniq`,
-# tag `group` = `alerts/<uid>`, with `firing` = 1 or 0. Each rule here only
-# reads `firing`:
+# tag `group` = `alerts/<uid>`, with `firing` = 1 or 0 (and `firing_at`,
+# below). Each rule here only reads that:
 #   - for: 0s, because the app already waited the rule's duration.
 #   - Evaluated every 5m, to keep the load on routy's InfluxDB low
 #     (#1746). An alert reaches Grafana up to 5m late.
 #   - A 30-day window and noDataState OK: the car sleeps most of the day, and
 #     sleep must not resolve an alert. Only a `firing: 0` message resolves it.
-#   - last("firing"): an alert that fired and resolved before Grafana saw it
+#   - last value only: an alert that fired and resolved before Grafana saw it
 #     firing (a short episode, or both messages sent late from the app's
 #     outbox) reads 0 and sends nothing. It stays in Influx as history.
 #
 # One rule per rule in the other ioniq-*-alerts.yaml files, except
 # ioniq-tpms-coldstart-stale (it reports missing data, not a car problem).
-# The uid gets `-app`; labels, title and annotations are copied. A copied
-# annotation that shows `$values.<x>` shows no value here (the query is not
-# copied); at the switch the app's `summary` replaces it.
+# The uid gets `-app`; labels, title and description are copied.
+# ioniq-soh-rise-app has no rule to copy: only the app has that alert.
+#
+# Telegram text = the app's own `summary` (#1914). mqtt-influx stores it also
+# as tag `alert_summary`, and the query groups by it, so every text is one
+# alert instance with that label. The summary annotation shows the label, or
+# the copied yaml text when the app sent no summary.
+# The queries read `firing_at` (the message time while firing, else 0, set
+# by mqtt-influx): its last value per text, and its last value over all
+# texts. An instance fires only when its text's value is > 0 and is the
+# newest one, so only the text of the newest message, while it fires. An
+# older text never fires again, and a firing and a resolve that Grafana saw
+# only together read 0 and send nothing.
 #
 # Side-by-side run: the label side_by_side=true routes these to the silent
 # receiver (notification-policies.yaml) while today's rules still send.
@@ -37,1187 +47,1428 @@ groups:
         title: "🚗 Ioniq LDC Not Charging"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-ldc-not-charging' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-ldc-not-charging' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: 12v, side_by_side: "true" }
         annotations:
-          summary: "🚗 12V LDC not charging"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 12V LDC not charging{{ end }}"
           description: "The DC-DC converter (LDC) held the 12V rail below 13.2V for about 5 minutes while driving at low HV load. Suspect an LDC fault — the 12V battery is not being replenished. Investigate before it strands the car."
       - uid: ioniq-isolation-low-app
         title: "🚗 Ioniq HV Isolation Low"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-isolation-low' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-isolation-low' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: battery, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 HV isolation resistance below 500 kΩ"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 HV isolation resistance below 500 kΩ{{ end }}"
           description: "Possible HV leak to chassis. Investigate before driving if it keeps falling."
       - uid: ioniq-isolation-critical-app
         title: "🚗 Ioniq HV Isolation Critical"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-isolation-critical' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-isolation-critical' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: battery, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 HV isolation resistance below 100 kΩ"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 HV isolation resistance below 100 kΩ{{ end }}"
           description: "HV isolation at/under the rated minimum. Do not fast-charge; book HV inspection."
       - uid: ioniq-cell-min-low-app
         title: "🚗 Ioniq Min Cell Voltage Low"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-cell-min-low' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-cell-min-low' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Minimum cell voltage below 3.0 V"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Minimum cell voltage below 3.0 V{{ end }}"
           description: "A cell is running low. Monitor; read a full cell dump if it persists."
       - uid: ioniq-cell-min-critical-app
         title: "🚗 Ioniq Min Cell Voltage Critical"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-cell-min-critical' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-cell-min-critical' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Minimum cell voltage below 2.5 V"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Minimum cell voltage below 2.5 V{{ end }}"
           description: "Cell under-voltage. Stop charging/driving; read DTC + cell dump; service."
       - uid: ioniq-cell-max-critical-app
         title: "🚗 Ioniq Max Cell Voltage Critical"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-cell-max-critical' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-cell-max-critical' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Maximum cell voltage above 4.15 V"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Maximum cell voltage above 4.15 V{{ end }}"
           description: "Cell over-voltage. Stop charging; read DTC + cell dump; service."
       - uid: ioniq-pack-temp-high-app
         title: "🚗 Ioniq Pack Temperature High"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-pack-temp-high' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-pack-temp-high' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Pack temperature above 50 °C"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Pack temperature above 50 °C{{ end }}"
           description: "Battery has held above 50 °C for a quarter of an hour. The hottest the pack has ever run in normal use — including DC rapid charging followed by motorway driving on a hot day — is 49 °C, so this is beyond anything seen so far. Stop fast-charging and let it cool."
       - uid: ioniq-pack-temp-critical-app
         title: "🚗 Ioniq Pack Temperature Critical"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-pack-temp-critical' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-pack-temp-critical' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: battery, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 Pack temperature above 55 °C"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Pack temperature above 55 °C{{ end }}"
           description: "Pack over-temp. Stop charging/driving; investigate cooling."
       - uid: ioniq-soh-step-app
         title: "🚗 Ioniq State of Health Reduced"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-soh-step' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-soh-step' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Battery SoH dropped below 98%"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Battery SoH dropped below 98%{{ end }}"
           description: "Capacity fade step. Log and compare against warranty threshold over time."
-      - uid: ioniq-soh-critical-app
-        title: "🚗 Ioniq State of Health Critical"
+      # Only from the app: today's yaml rules have no SoH rise rule (#1914).
+      - uid: ioniq-soh-rise-app
+        title: "🚗 Ioniq State of Health Increased"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-soh-rise' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-soh-rise' AND time >= now() - 30d
+              rawQuery: true
+              resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
+          - refId: A
+            datasourceUid: __expr__
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
+        noDataState: OK
+        execErrState: OK
+        for: 0s
+        labels: { severity: info, device: ioniq, subsystem: battery, side_by_side: "true" }
+        annotations:
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Battery SoH rose{{ end }}"
+          description: "The car app saw the battery SoH go up. Information only."
+      - uid: ioniq-soh-critical-app
+        title: "🚗 Ioniq State of Health Critical"
+        condition: A
+        data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
+          - refId: firing
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-soh-critical' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-soh-critical' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Battery SoH below 85%"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Battery SoH below 85%{{ end }}"
           description: "Significant capacity fade. Compare to warranty replacement threshold."
       - uid: ioniq-avail-dis-derate-app
         title: "🚗 Ioniq Available Discharge Derated"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-avail-dis-derate' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-avail-dis-derate' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Available discharge power derated below 70 kW"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Available discharge power derated below 70 kW{{ end }}"
           description: "BMS is limiting discharge while SoC is healthy (>30%). Watch for a developing pack fault."
       - uid: ioniq-cell-spread-warning-app
         title: "🚗 Ioniq Cell Spread High (warning)"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-cell-spread-warning' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-cell-spread-warning' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Cell voltage spread {{ $values.spread.Value }} mV at rest (> 50 mV)"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Cell voltage spread {{ $values.spread.Value }} mV at rest (> 50 mV){{ end }}"
           description: "Rest cell-voltage spread is elevated (baseline ~20 mV). A widening spread points to a weakening cell; check the outlier cell index on the derived/cell_spread_mv series."
       - uid: ioniq-cell-spread-critical-app
         title: "🚗 Ioniq Cell Spread Critical"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-cell-spread-critical' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-cell-spread-critical' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Cell voltage spread {{ $values.spread.Value }} mV at rest (> 100 mV)"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Cell voltage spread {{ $values.spread.Value }} mV at rest (> 100 mV){{ end }}"
           description: "Rest cell-voltage spread is critically high. A cell is likely failing — inspect the outlier cell and have the pack serviced."
       - uid: ioniq-module-temp-spread-warning-app
         title: "🚗 Ioniq Module Temp Spread High (warning)"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-module-temp-spread-warning' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-module-temp-spread-warning' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 12 °C)"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 12 °C){{ end }}"
           description: "Module temperatures are diverging. Baseline is about 2 °C at rest and up to about 10-11 °C on a long motorway drive or DC rapid charge, where uneven airflow spreads the modules out even on a healthy pack. Uneven cooling or a hot module — watch for a rising trend."
       - uid: ioniq-module-temp-spread-critical-app
         title: "🚗 Ioniq Module Temp Spread Critical"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-module-temp-spread-critical' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-module-temp-spread-critical' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: battery, side_by_side: "true" }
         annotations:
-          summary: "🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 15 °C)"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Battery module temperature spread {{ $values.spread.Value }} °C (> 15 °C){{ end }}"
           description: "Module temperature spread is critically high. Risk of a thermal fault in one module — stop charging/driving and have the battery inspected."
       - uid: ioniq-dtc-present-app
         title: "🚗 Ioniq Diagnostic Trouble Code"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-dtc-present' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-dtc-present' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: dtc, side_by_side: "true" }
         annotations:
-          summary: "🚗 Diagnostic trouble code(s) present: {{ $values.dtc.Value }} active"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Diagnostic trouble code(s) present: {{ $values.dtc.Value }} active{{ end }}"
           description: "The car reported one or more DTCs. The Telegram flag from the ioniq-dtc bot names the specific code(s); decode and act by code."
       - uid: ioniq-tpms-fl-psi-low-app
         title: "🚗 Ioniq Tyre Low — FL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fl-psi-low' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fl-psi-low' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FL (front-left) tyre cold-start pressure below 2.20 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FL (front-left) tyre cold-start pressure below 2.20 bar{{ end }}"
           description: "Front-left tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-fl-psi-crit-app
         title: "🚗 Ioniq Tyre Critical — FL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fl-psi-crit' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fl-psi-crit' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FL (front-left) tyre cold-start pressure below 1.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FL (front-left) tyre cold-start pressure below 1.90 bar{{ end }}"
           description: "Front-left tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-fl-overinflated-app
         title: "🚗 Ioniq Tyre Over-inflated — FL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fl-overinflated' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fl-overinflated' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FL (front-left) tyre cold-pressure above 2.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FL (front-left) tyre cold-pressure above 2.90 bar{{ end }}"
           description: "Cold-normalized front-left tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
       - uid: ioniq-tpms-fr-psi-low-app
         title: "🚗 Ioniq Tyre Low — FR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fr-psi-low' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fr-psi-low' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FR (front-right) tyre cold-start pressure below 2.20 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FR (front-right) tyre cold-start pressure below 2.20 bar{{ end }}"
           description: "Front-right tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-fr-psi-crit-app
         title: "🚗 Ioniq Tyre Critical — FR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fr-psi-crit' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fr-psi-crit' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FR (front-right) tyre cold-start pressure below 1.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FR (front-right) tyre cold-start pressure below 1.90 bar{{ end }}"
           description: "Front-right tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-fr-overinflated-app
         title: "🚗 Ioniq Tyre Over-inflated — FR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fr-overinflated' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fr-overinflated' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FR (front-right) tyre cold-pressure above 2.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FR (front-right) tyre cold-pressure above 2.90 bar{{ end }}"
           description: "Cold-normalized front-right tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
       - uid: ioniq-tpms-rl-psi-low-app
         title: "🚗 Ioniq Tyre Low — RL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rl-psi-low' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rl-psi-low' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RL (rear-left) tyre cold-start pressure below 2.20 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RL (rear-left) tyre cold-start pressure below 2.20 bar{{ end }}"
           description: "Rear-left tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-rl-psi-crit-app
         title: "🚗 Ioniq Tyre Critical — RL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rl-psi-crit' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rl-psi-crit' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RL (rear-left) tyre cold-start pressure below 1.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RL (rear-left) tyre cold-start pressure below 1.90 bar{{ end }}"
           description: "Rear-left tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-rl-overinflated-app
         title: "🚗 Ioniq Tyre Over-inflated — RL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rl-overinflated' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rl-overinflated' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RL (rear-left) tyre cold-pressure above 2.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RL (rear-left) tyre cold-pressure above 2.90 bar{{ end }}"
           description: "Cold-normalized rear-left tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
       - uid: ioniq-tpms-rr-psi-low-app
         title: "🚗 Ioniq Tyre Low — RR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rr-psi-low' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rr-psi-low' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RR (rear-right) tyre cold-start pressure below 2.20 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RR (rear-right) tyre cold-start pressure below 2.20 bar{{ end }}"
           description: "Rear-right tyre read under 2.20 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Inflate before the next drive; check for a slow leak. Clears only once every cold reading in the trailing 7 days is above 2.20 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-rr-psi-crit-app
         title: "🚗 Ioniq Tyre Critical — RR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rr-psi-crit' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rr-psi-crit' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: critical, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RR (rear-right) tyre cold-start pressure below 1.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RR (rear-right) tyre cold-start pressure below 1.90 bar{{ end }}"
           description: "Rear-right tyre read under 1.90 bar on at least one cold reading in the last 7 days (placard 2.5 bar, defined at ambient). Do not drive far — inflate or replace now to avoid tyre damage. Clears only once every cold reading in the trailing 7 days is above 1.90 bar, so expect it to persist for about a week after inflating — a single warm morning must not be able to report the tyre as fixed."
       - uid: ioniq-tpms-rr-overinflated-app
         title: "🚗 Ioniq Tyre Over-inflated — RR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rr-overinflated' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rr-overinflated' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: info, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RR (rear-right) tyre cold-pressure above 2.90 bar"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RR (rear-right) tyre cold-pressure above 2.90 bar{{ end }}"
           description: "Cold-normalized rear-right tyre pressure is high (over 2.90 bar). Consider bleeding down toward the 2.5 bar placard for ride and wear."
       - uid: ioniq-tpms-spread-high-app
         title: "🚗 Ioniq Tyre Pressure Spread High"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-spread-high' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-spread-high' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 Tyre cold-pressure spread above 0.21 bar across wheels"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 Tyre cold-pressure spread above 0.21 bar across wheels{{ end }}"
           description: "The cold-normalized pressures of the four tyres differ by more than 0.21 bar. Even out inflation and check the lowest wheel for a leak."
       - uid: ioniq-tpms-fl-temp-excess-app
         title: "🚗 Ioniq Tyre Hot — FL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fl-temp-excess' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fl-temp-excess' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FL (front-left) tyre running hot vs the other wheels"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FL (front-left) tyre running hot vs the other wheels{{ end }}"
           description: "front-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
       - uid: ioniq-tpms-fr-temp-excess-app
         title: "🚗 Ioniq Tyre Hot — FR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-fr-temp-excess' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-fr-temp-excess' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 FR (front-right) tyre running hot vs the other wheels"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 FR (front-right) tyre running hot vs the other wheels{{ end }}"
           description: "front-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
       - uid: ioniq-tpms-rl-temp-excess-app
         title: "🚗 Ioniq Tyre Hot — RL"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rl-temp-excess' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rl-temp-excess' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RL (rear-left) tyre running hot vs the other wheels"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RL (rear-left) tyre running hot vs the other wheels{{ end }}"
           description: "rear-left tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."
       - uid: ioniq-tpms-rr-temp-excess-app
         title: "🚗 Ioniq Tyre Hot — RR"
         condition: A
         data:
+          # Last `firing_at` per app text: one alert instance per text, with label alert_summary.
           - refId: firing
             relativeTimeRange: { from: 2592000, to: 0 }
             datasourceUid: P3C6603E967DC8568
             model:
               query: |
-                SELECT last("firing") FROM "ioniq"
+                SELECT last("firing_at") FROM "ioniq"
+                WHERE "group"='alerts/ioniq-tpms-rr-temp-excess' AND time >= now() - 30d
+                GROUP BY "alert_summary"
+              rawQuery: true
+              resultFormat: time_series
+          # The newest `firing_at` of the uid, over all texts.
+          - refId: latest
+            relativeTimeRange: { from: 2592000, to: 0 }
+            datasourceUid: P3C6603E967DC8568
+            model:
+              query: |
+                SELECT last("firing_at") FROM "ioniq"
                 WHERE "group"='alerts/ioniq-tpms-rr-temp-excess' AND time >= now() - 30d
               rawQuery: true
               resultFormat: time_series
+          - refId: firing_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: firing, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: latest_last
+            datasourceUid: __expr__
+            model: { type: reduce, expression: latest, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          # Fires for the text of the newest message, while it fires.
           - refId: A
             datasourceUid: __expr__
-            model:
-              type: classic_conditions
-              datasource: { type: __expr__, uid: __expr__ }
-              intervalMs: 1000
-              maxDataPoints: 43200
-              refId: A
-              hide: false
-              conditions:
-                - evaluator: { type: gt, params: [0] }
-                  operator: { type: and }
-                  query: { params: [firing] }
-                  reducer: { type: last }
-                  type: query
-              expression: firing
+            model: { type: math, expression: "$firing_last > 0 && $firing_last == $latest_last", datasource: { type: __expr__, uid: __expr__ } }
         noDataState: OK
         execErrState: OK
         for: 0s
         labels: { severity: warning, device: ioniq, subsystem: tpms, safety: "true", side_by_side: "true" }
         annotations:
-          summary: "🚗 RR (rear-right) tyre running hot vs the other wheels"
+          summary: "{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}🚗 RR (rear-right) tyre running hot vs the other wheels{{ end }}"
           description: "rear-right tyre is more than 8 °C hotter than the mean of the other three wheels. Check for a dragging brake, low pressure, or a failing bearing."

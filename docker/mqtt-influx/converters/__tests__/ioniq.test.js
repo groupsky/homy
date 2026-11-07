@@ -153,7 +153,7 @@ describe('ioniq converter: app alert messages', () => {
         const points = ioniq(firing)
         expect(points).toHaveLength(1)
         const lp = points[0].toLineProtocol()
-        expect(lp).toMatch(/^ioniq,group=alerts\/ioniq-tpms-fl-temp-excess /)
+        expect(lp).toContain(',group=alerts/ioniq-tpms-fl-temp-excess ')
         expect(lp).toMatch(/[ ,]firing=1[ ,]/) // float: no integer i-suffix
         expect(lp).toContain('uid="ioniq-tpms-fl-temp-excess"')
         expect(lp).toContain('title="🚗 Ioniq Tyre Hot — FL"')
@@ -162,5 +162,29 @@ describe('ioniq converter: app alert messages', () => {
         expect(lp).toContain('starts_at=1767261000000')
         expect(lp).toContain('value=9.4')
         expect(lp.endsWith(' 1767261600000')).toBe(true)
+    })
+
+    it('also stores the summary as tag alert_summary, for the Telegram text (#1914)', () => {
+        const lp = ioniq(firing)[0].toLineProtocol()
+        expect(lp.startsWith('ioniq,alert_summary=🚗\\ FL\\ (front-left)\\ tyre\\ running\\ hot\\ vs\\ the\\ other\\ wheels,group=alerts/')).toBe(true)
+    })
+
+    it('stores firing_at = ts while firing, 0 when resolved (#1914)', () => {
+        expect(ioniq(firing)[0].toLineProtocol()).toContain('firing_at=1767261600000')
+        expect(ioniq({...firing, firing: 0})[0].toLineProtocol()).toMatch(/[ ,]firing_at=0[ ,]/)
+    })
+
+    it('drops backslashes from the tag, so the point stays valid', () => {
+        const lp = ioniq({...firing, summary: 'o\\ dd\\'})[0].toLineProtocol()
+        expect(lp.startsWith('ioniq,alert_summary=o\\ dd,group=')).toBe(true)
+        expect(ioniq({...firing, summary: '\\'})[0].toLineProtocol()).not.toContain('alert_summary')
+    })
+
+    it('adds no alert_summary tag or firing_at outside alerts/ groups, or no tag without a summary', () => {
+        const other = ioniq({_type: 'ioniq', group: 'bms/2101', ts: 1, summary: 'x', firing: 1, soc: 50})[0].toLineProtocol()
+        expect(other).not.toContain('alert_summary')
+        expect(other).not.toContain('firing_at')
+        const {summary, ...noSummary} = firing
+        expect(ioniq(noSummary)[0].toLineProtocol()).not.toContain('alert_summary')
     })
 })
