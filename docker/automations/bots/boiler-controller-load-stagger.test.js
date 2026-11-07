@@ -14,19 +14,41 @@ const WINTER_T = '2026-11-02T22:00:00+02:00'
 // Well inside the night zone and outside the hold, so only the load gates act.
 const AFTER_HOLD = '2026-11-03T01:00:00+02:00'
 
-const startAt = (localIso, { config = CONFIG, controlMode = 'automatic' } = {}) => {
+// contactorAtStart: the retained contactor status at the start, or null for
+// none. echo: the relay reader reports each command back. persisted: more of
+// the state kept over a restart.
+const startAt = (localIso, {
+  config = CONFIG,
+  controlMode = 'automatic',
+  contactorAtStart = false,
+  echo = true,
+  persisted = {}
+} = {}) => {
   jest.useFakeTimers({ now: new Date(localIso) })
   const subscriptions = new Map()
   const published = []
   const mqtt = {
     subscribe: (topic, callback) => { subscriptions.set(topic, callback) },
-    publish: (topic, payload) => { published.push({ topic, payload }) }
+    publish: (topic, payload) => {
+      published.push({ topic, payload })
+      // The relay reader reports each command back as the contactor state, as
+      // on the bus (#1912).
+      if (echo && topic === config.boilerRelayTopic && config.contactorStatusTopic) {
+        subscriptions.get(config.contactorStatusTopic)?.({ state: payload.state })
+      }
+    }
   }
   const httpPost = async () => ({ ok: true })
-  require('./boiler-controller')('boiler', { ...config, httpPost }).start({
-    mqtt,
-    persistedCache: { controlMode, manualOverrideExpires: controlMode === 'automatic' ? null : Date.now() + 24 * 60 * MIN }
-  })
+  const persistedCache = {
+    controlMode,
+    manualOverrideExpires: controlMode === 'automatic' ? null : Date.now() + 24 * 60 * MIN,
+    ...persisted
+  }
+  require('./boiler-controller')('boiler', { ...config, httpPost }).start({ mqtt, persistedCache })
+  // The contactor status is retained, so it comes at once after the start.
+  if (config.contactorStatusTopic && contactorAtStart !== null) {
+    subscriptions.get(config.contactorStatusTopic)({ state: contactorAtStart })
+  }
   const deliver = (topic, payload) => {
     const callback = subscriptions.get(topic)
     if (typeof callback !== 'function') throw new Error(`no subscription for ${topic}`)
@@ -54,6 +76,11 @@ const startAt = (localIso, { config = CONFIG, controlMode = 'automatic' } = {}) 
     relay: () => published.filter(m => m.topic === config.boilerRelayTopic).at(-1).payload,
     status: () => published.filter(m => m.topic === config.automationStatusTopic).at(-1).payload,
     relayCount: () => published.filter(m => m.topic === config.boilerRelayTopic).length,
+    // A contactor change made by someone else (the reader reports it).
+    contactor: (state) => deliver(config.contactorStatusTopic, { state }),
+    mode: (payload) => deliver(config.controlModeTopic, payload),
+    modeStatus: () => published.filter(m => m.topic === config.controlModeStatusTopic).at(-1).payload,
+    persistedCache,
     stamp
   }
   return boiler
@@ -248,7 +275,7 @@ describe('boiler-controller load stagger', () => {
       const boiler = startAt(AFTER_HOLD, { controlMode: 'manual_on' })
       boiler.dishwasher(1200)
       boiler.mainPower(9000)
-      boiler.temperatures({ top: 60 })
+      boiler.temperatures({ top: 50 })
       expect(boiler.relay()).toMatchObject({ state: true })
       expect(boiler.relay().reason).toMatch(/^manual_on/)
     })
@@ -339,6 +366,311 @@ describe('boiler-controller load stagger', () => {
       const boiler = startAt(AFTER_HOLD, { config: rest })
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+    })
+  })
+})
+
+// Contactor feedback (#1912): on 2026-11-05 a contactor ON from Home Assistant
+// was stopped 23 min later by the dishwasher gate, because the controller took
+// its own last command as the state of the element.
+describe('boiler-controller contactor feedback (#1912)', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  // Winter day, outside every window and the hold.
+  const DAY = '2026-11-05T14:00:00+02:00'
+  // In the hold (21:00-22:15 in winter).
+  const IN_HOLD = '2026-11-05T21:30:00+02:00'
+  // In the day top-up (19:30-21:00 in winter), target 55 °C.
+  const IN_TOP_UP = '2026-11-05T20:00:00+02:00'
+  // In the hysteresis band (47-50 °C): the controller keeps the element as it is.
+  const IN_BAND = 48
+
+  test('the committed config reads the contactor status and sets the limits', () => {
+    expect(CONFIG.contactorStatusTopic).toBe('homy/features/relay/service_boiler_contactor/status')
+    expect(CONFIG).toMatchObject({
+      externalOnMaxMs: 120 * MIN,
+      externalOffHoldMs: 30 * MIN,
+      boostDurationMs: 120 * MIN
+    })
+  })
+
+  describe('outside ON', () => {
+    test('the 2026-11-05 case: kept through a dishwasher run, with its own reason', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: IN_BAND })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'hysteresis_zone_maintain_false' })
+
+      boiler.contactor(true)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+      expect(boiler.status()).toMatchObject({ heaterState: true, contactorState: true, reason: 'external_on' })
+
+      boiler.dishwasher(1200)
+      boiler.temperatures({ top: 46.9 })
+      boiler.run(20 * MIN, { dish: 1200, top: 46.9 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+    })
+
+    test('ends when the top reaches 50 °C (comfortMin + hysteresis)', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: IN_BAND })
+      boiler.contactor(true)
+      boiler.temperatures({ top: 49.9 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+      boiler.temperatures({ top: 50 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'temperature_sufficient' })
+    })
+
+    test('in the day top-up it heats on to 55 °C', () => {
+      const boiler = startAt(IN_TOP_UP)
+      boiler.temperatures({ top: 55 })
+      boiler.temperatures({ top: 53 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'day_top_up_reached' })
+      boiler.contactor(true)
+      boiler.temperatures({ top: 54.9 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+      boiler.temperatures({ top: 55 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'day_top_up_reached' })
+    })
+
+    test('is kept during the night hold, where the controller itself would not start', () => {
+      const own = startAt(IN_HOLD)
+      own.temperatures({ top: 45 })
+      expect(own.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
+
+      const boiler = startAt(IN_HOLD)
+      boiler.temperatures({ top: 45 })
+      boiler.contactor(true)
+      boiler.run(10 * MIN, { top: 45 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+    })
+
+    test('lasts at most 2 h; then the usual rules decide for a running element', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: IN_BAND })
+      boiler.contactor(true)
+      boiler.run(120 * MIN - 1000, { top: IN_BAND })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+      boiler.run(2000, { top: IN_BAND })
+      boiler.temperatures({ top: IN_BAND })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'hysteresis_zone_maintain_true' })
+    })
+
+    test('the overheat shut-off stops it', () => {
+      const boiler = startAt(DAY, { config: { ...CONFIG, maxSafe: 52, hotWaterLimit: 60 } })
+      boiler.temperatures({ top: IN_BAND })
+      boiler.contactor(true)
+      boiler.temperatures({ top: 52 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'safety_shutoff_overheated' })
+    })
+
+    test('hotWaterLimit stops it when that is below the stop target', () => {
+      const boiler = startAt(DAY, { config: { ...CONFIG, hotWaterLimit: 49 } })
+      boiler.temperatures({ top: 48 })
+      boiler.contactor(true)
+      boiler.temperatures({ top: 49 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'hot_water_limit' })
+    })
+
+    test('old temperatures stop it', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: IN_BAND })
+      boiler.contactor(true)
+      jest.advanceTimersByTime(31 * MIN)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'input_stale' })
+    })
+
+    test('a mode command ends it', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: IN_BAND })
+      boiler.contactor(true)
+      boiler.mode('manual_off')
+      expect(boiler.relay().state).toBe(false)
+      expect(boiler.relay().reason).toMatch(/^manual_off/)
+    })
+  })
+
+  describe('outside OFF', () => {
+    test('no restart for 30 min, then the usual rules', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+
+      boiler.contactor(false)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'external_off' })
+      expect(boiler.status()).toMatchObject({ heaterState: false, contactorState: false })
+      boiler.run(30 * MIN - 1000, { top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'external_off' })
+      boiler.run(31 * 1000, { top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+    })
+
+    test('a mode command ends it', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      boiler.contactor(false)
+      boiler.mode('boost')
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })
+    })
+  })
+
+  describe('the gates and a running element', () => {
+    test('a running element is never stopped by the dishwasher or the main power', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: IN_BAND })
+      boiler.contactor(true)
+      // The outside ON runs out after 2 h; the element is still on.
+      boiler.run(121 * MIN, { top: IN_BAND })
+      boiler.dishwasher(1200)
+      boiler.mainPower(9000)
+      boiler.temperatures({ top: 46.9 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+    })
+  })
+
+  describe('own commands', () => {
+    test('a command that comes back is not an outside change', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      boiler.temperatures({ top: 50 })
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+      expect(boiler.status().reason).not.toMatch(/^external/)
+    })
+
+    test('an old status after a command does not count; a lost command is sent again after 60 s', () => {
+      const boiler = startAt(DAY, { echo: false })
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true })
+      const sent = boiler.relayCount()
+      // The reader still reports the old state: not an outside OFF.
+      boiler.contactor(false)
+      boiler.run(59 * 1000, { top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relayCount()).toBe(sent)
+      boiler.run(31 * 1000, { top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relayCount()).toBe(sent + 1)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+      // The command arrives: it is ours, so no outside ON.
+      boiler.contactor(true)
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay().reason).toBe('comfort_heating_insufficient')
+    })
+  })
+
+  describe('restart', () => {
+    test('no command before the contactor state is known', () => {
+      const boiler = startAt(DAY, { contactorAtStart: null })
+      boiler.temperatures({ top: IN_BAND })
+      expect(boiler.relayCount()).toBe(0)
+      boiler.contactor(true)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'hysteresis_zone_maintain_true' })
+    })
+
+    test('a running element is kept running, as the controller own', () => {
+      const boiler = startAt(DAY, { contactorAtStart: true })
+      boiler.temperatures({ top: IN_BAND })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'hysteresis_zone_maintain_true' })
+      boiler.temperatures({ top: 50 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'temperature_sufficient' })
+    })
+
+    test('an outside ON from before the restart is kept, with its first time', () => {
+      const boiler = startAt(IN_HOLD, { contactorAtStart: true, persisted: { externalOnSince: Date.parse(IN_HOLD) - 90 * MIN } })
+      boiler.temperatures({ top: 45 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+      boiler.run(30 * MIN + 1000, { top: 45 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
+    })
+
+    test('an outside ON is stored for a restart and cleared when it ends', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: IN_BAND })
+      boiler.contactor(true)
+      expect(boiler.persistedCache.externalOnSince).toBe(Date.now())
+      boiler.temperatures({ top: 50 })
+      expect(boiler.persistedCache.externalOnSince).toBeNull()
+    })
+
+    test('without a contactor status for 60 s it decides on its own', () => {
+      const boiler = startAt(DAY, { contactorAtStart: null })
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relayCount()).toBe(0)
+      jest.advanceTimersByTime(60 * 1000)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+    })
+  })
+
+  describe('boost mode', () => {
+    test('starts at once in the night hold with the dishwasher running, and goes back to automatic at 55 °C', () => {
+      const boiler = startAt(IN_HOLD)
+      boiler.dishwasher(1200)
+      boiler.mainPower(9000)
+      boiler.temperatures({ top: 50 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
+
+      boiler.mode({ mode: 'boost', _src: 'ha' })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })
+      expect(boiler.modeStatus()).toMatchObject({ mode: 'boost', manualOverrideExpires: Date.now() + 120 * MIN })
+
+      boiler.temperatures({ top: 54.9 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })
+      boiler.temperatures({ top: 55 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
+      expect(boiler.modeStatus()).toMatchObject({ mode: 'automatic', manualOverrideExpires: null })
+    })
+
+    test('ends after 2 h; a second press starts the 2 h again', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: 50 })
+      boiler.mode('boost')
+      boiler.run(60 * MIN, { top: 50 })
+      boiler.mode('boost')
+      boiler.run(119 * MIN, { top: 50 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })
+      boiler.run(61 * 1000, { top: 50 })
+      expect(boiler.modeStatus().mode).toBe('automatic')
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'temperature_sufficient' })
+    })
+
+    test('old temperatures and maxSafe stop it', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: 50 })
+      boiler.mode('boost')
+      jest.advanceTimersByTime(31 * MIN)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'input_stale' })
+
+      const hot = startAt(DAY, { config: { ...CONFIG, maxSafe: 52, hotWaterLimit: 60 } })
+      hot.temperatures({ top: 50 })
+      hot.mode('boost')
+      hot.temperatures({ top: 52 })
+      expect(hot.relay()).toMatchObject({ state: false, reason: 'safety_shutoff_overheated' })
+      expect(hot.modeStatus().mode).toBe('automatic')
+    })
+  })
+
+  describe('manual_on mode', () => {
+    test('stops at 55 °C and starts again under 52 °C; the mode stays', () => {
+      const boiler = startAt(DAY, { controlMode: 'manual_on' })
+      boiler.temperatures({ top: 50 })
+      expect(boiler.relay().state).toBe(true)
+      expect(boiler.relay().reason).toMatch(/^manual_on \(/)
+      boiler.temperatures({ top: 55 })
+      expect(boiler.relay().state).toBe(false)
+      expect(boiler.relay().reason).toMatch(/^manual_on_limit_reached/)
+      boiler.temperatures({ top: 52 })
+      expect(boiler.relay().state).toBe(false)
+      boiler.temperatures({ top: 51.9 })
+      expect(boiler.relay().state).toBe(true)
+      expect(boiler.relay().reason).toMatch(/^manual_on \(/)
+      expect(boiler.modeStatus().mode).toBe('manual_on')
+    })
+
+    test('maxSafe stops it', () => {
+      const boiler = startAt(DAY, { controlMode: 'manual_on', config: { ...CONFIG, maxSafe: 52, hotWaterLimit: 60 } })
+      boiler.temperatures({ top: 52 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'safety_shutoff_overheated' })
+      expect(boiler.modeStatus().mode).toBe('manual_on')
     })
   })
 })

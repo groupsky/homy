@@ -41,7 +41,7 @@ homy/features/sensor/temperature_room_service/status   # Service room temperatur
 ### Control Topics
 ```
 homy/features/relay/service_boiler_contactor/set       # Electric heater control
-homy/features/relay/service_boiler_contactor/status    # Electric heater status
+homy/features/relay/service_boiler_contactor/status    # Electric heater status (the controller reads it, #1912)
 homy/features/relay/solar_heater_circulation/status    # Solar pump status
 homy/features/relay/solar_heater_electric_heater/status # Solar controller electric heater
 ```
@@ -97,33 +97,58 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
 | `drawDropK` / `drawWindowMinutes` | 3 K / 10 min | A fall of the bottom reading this big this fast is a draw: start the element |
 | `drawLatchMinutes` | 30 min (default) | A draw that has not started the element in this time is dropped |
 | `maxInputAgeMs` | 10 min (default) | Boiler top/bottom temperature older than this ⇒ OFF, `input_stale` |
+| `contactorStatusTopic` | `homy/features/relay/service_boiler_contactor/status` | The real contactor state; see [Contactor feedback](#contactor-feedback). Without it the bot takes its own last command as the state |
+| `externalOnMaxMs` | 2 h | An ON the bot did not send is kept at most this long |
+| `externalOffHoldMs` | 30 min | After an OFF the bot did not send, no start for this long |
+| `boostDurationMs` | 2 h | The longest `boost` |
+| `commandConfirmMs` | 60 s (default) | A status that matches a command sent this recently is that command coming back |
 | `manualOverrideExpiry` | 24 h | Default expiry for `manual_on`/`manual_off`; an object payload's `duration` overrides it. **Vacation modes do not use it** — they expire after `days × 24 − 6` hours (66 / 114 / 162 / 234 / 330 h) |
 
 **Decision order** (first match wins, `makeDecision()` in the bot):
 
-1. Manual override active (`manual_on` / `manual_off` / `vacation_*`) → forced state
-2. Boiler top or bottom temperature older than `maxInputAgeMs` → OFF, `input_stale` (see
+1. An outside OFF in the last `externalOffHoldMs` → OFF, `external_off`; an outside ON →
+   ON, `external_on`, until it ends (see [Contactor feedback](#contactor-feedback))
+2. A mode (see [Control modes](#control-modes)): `boost` → ON, `manual_boost`, until the top reaches
+   `hotWaterLimit` (then `automatic` and the rules below); `manual_on` → ON with the limits;
+   `manual_off` / `vacation_*` → OFF
+3. Boiler top or bottom temperature older than `maxInputAgeMs` → OFF, `input_stale` (see
    [Old input](#old-input))
-3. `top >= maxSafe` → OFF, `safety_shutoff_overheated`
-4. `top < emergencyMin` → ON, `emergency_heating_top_cold`
-5. `bottom < emergencyMin` → ON, `emergency_heating_bottom_cold`
-6. In the night tariff hold **and** `top >= nightTariff.floor` (plus `hysteresis` while the element is on) → OFF,
+4. `top >= maxSafe` → OFF, `safety_shutoff_overheated`
+5. `top < emergencyMin` → ON, `emergency_heating_top_cold`
+6. `bottom < emergencyMin` → ON, `emergency_heating_bottom_cold`
+7. In the night tariff hold **and** `top >= nightTariff.floor` (plus `hysteresis` while the element is on) → OFF,
    `night_tariff_hold`
-7. `top < comfortMin` → ON, `comfort_heating_insufficient`
-8. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
-9. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
-10. A draw was seen and the top is under the target in force → ON, `draw_heating`
-11. In the day-zone top-up or the night boost: top at or above the target → OFF, `day_top_up_reached` /
+8. `top < comfortMin` → ON, `comfort_heating_insufficient`
+9. `collector - top >= solarAdvantageMin` **and** the pump is circulating → OFF, `solar_priority_available`
+10. `collector - top <= solarDisadvantageMax` → ON, `solar_insufficient_boost_needed`
+11. A draw was seen and the top is under the target in force → ON, `draw_heating`
+12. In the day-zone top-up or the night boost: top at or above the target → OFF, `day_top_up_reached` /
     `night_boost_reached`; else ON, `day_top_up` / `night_boost`, with the hysteresis below the target
-12. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
-13. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
+13. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
+14. Otherwise hold the current state, `hysteresis_zone_maintain_{true,false}`
 
+Steps 3-14 are the automatic rules; "the element is on" in them is the real contactor state.
 After the rules, a start while the element is off waits when a [load stagger](#load-stagger) gate
 is closed (`load_wait_dishwasher` or `load_wait_main_power`), except `emergency_heating_top_cold`.
 So the gates apply to the top-up, the boost and the draw start too.
 
-**Control modes** (`homy/features/control_mode/boiler_controller/set`): `automatic`, `manual_on`,
-`manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`, `vacation_until`.
+### Control modes
+
+The topic is `homy/features/control_mode/boiler_controller/set`. Modes: `automatic`, `boost`,
+`manual_on`, `manual_off`, `vacation_3d`, `vacation_5d`, `vacation_7d`, `vacation_10d`, `vacation_14d`, `vacation_until`.
+
+`boost` (#1912) is the Home Assistant button **Загрей до 55 °C**. It starts the element at once, also in the night
+hold and with a load gate closed, reason `manual_boost`. It stops when the top reaches `hotWaterLimit` (55 °C) or
+after `boostDurationMs` (2 h), whichever is first, and the mode then goes back to `automatic` by itself. `maxSafe`
+and old input (`input_stale`) stop it earlier; old input does not end the mode, so it heats again when the
+readings come back within the 2 h. A second press while it runs starts the 2 h again. The mode select shows
+`boost` while it runs.
+
+`manual_on` keeps the mode for `manualOverrideExpiry` (24 h), but no longer heats without a limit (#1912): at
+`hotWaterLimit` (55 °C) the element goes OFF, reason `manual_on_limit_reached (expires: …)`, and it starts
+again when the top falls under `hotWaterLimit - hysteresis` (52 °C). `top >= maxSafe` is OFF,
+`safety_shutoff_overheated`. As before (#1743), old input does not stop `manual_on`; the limits then use the
+last reading.
 
 `vacation_until` (#1756) is a vacation mode with an end time from the command:
 `{"mode": "vacation_until", "until": <epoch ms>}`. The heater is off until `until`, then the mode goes back to
@@ -246,8 +271,12 @@ Details:
 - **Circulation Status:** Solar pump operation
 
 ### Controls
-- **Electric Heater Switch:** Manual override via Home Assistant
-- **Device Class:** Outlet (for electric heater contactor)
+- **Режим на управление** (select): the controller's mode, see [Control modes](#control-modes).
+- **Загрей до 55 °C** (button): sends `{"mode": "boost"}` to the mode topic.
+- **Контактор**: read only since #1912 (a binary sensor; it was a switch). The switch started the
+  element without the controller, and the controller then stopped it. The empty retained config of
+  `haBoilerContactorSwitchRemoved` (`config/automations/config.js`) removes the old switch entity.
+  To heat by hand, use the button or the mode.
 
 ## System Behavior
 
@@ -302,9 +331,8 @@ When both apply, the reason is `load_wait_dishwasher`. When only the cap applies
 `load_wait_main_power`. The bot decides again when a reading changes a gate, so the element starts
 soon after the load is gone.
 
-After a restart the bot starts with the element off, so the gates apply to the first decision too.
-
-**The gates only block a start.** An element that is already on is never switched off by them. The
+**The gates only block a start.** An element that is on is never switched off by them, whoever
+turned it on: the bot reads the real contactor state (#1912, see [Contactor feedback](#contactor-feedback)). The
 element itself adds about 2.9 kW to the main power. If the cap could stop it, it would switch on
 and off.
 
@@ -333,6 +361,49 @@ inputs are the topics `dishwasherTopic` (field `p`) and `mainPowerTopic` (field 
 the topics the gates are off. The tests are in
 `docker/automations/bots/boiler-controller-load-stagger.test.js`.
 
+### Contactor feedback
+
+On 2026-11-05 the contactor was turned on from the Home Assistant switch while hot water was being
+used. The bot took its own last command ("off") as the state, so 23 minutes later the dishwasher gate
+"held back a start" and switched the element off, while the tank emptied (#1912). Since then the bot
+reads `contactorStatusTopic` and uses it as the state of the element.
+
+**Own commands.** Each command the bot sends comes back on the status topic. A change that matches a
+command sent in the last `commandConfirmMs` (60 s) is the bot's own. Until then the rules see the
+command's state, so an old reading from just before the write does not count. A contactor that still
+differs after 60 s gets the command again (a lost write), at most once a minute. No outside change is
+answered with a command against it, so the bot and someone else cannot switch back and forth.
+
+**Outside ON** (a change to ON that the bot did not send): a manual request, reason `external_on`. The
+element stays on until the top reaches the stop target in force: `comfortMin + hysteresis` (50 °C), or
+the target of the day top-up or night boost window (55 °C). It stays on at most `externalOnMaxMs`
+(2 h); after that the usual rules decide, for an element that is on. Only `maxSafe`
+(`safety_shutoff_overheated`), `hotWaterLimit` (`hot_water_limit`, only if a target were above it) and
+old input (`input_stale`) stop it earlier. **It is kept in the night hold (#1740) and with a load gate
+closed**: the hold and the gates are rules for the bot's own starts. It is also kept over a mode such
+as `manual_off` set before the ON. The start time is kept over a restart (`externalOnSince` in the
+state file).
+
+**Outside OFF**: reason `external_off`. No rule and no mode starts the element again for
+`externalOffHoldMs` (30 min); then the usual rules decide. Why 30 min: with the Home Assistant
+contactor read only, an outside OFF is rare and most likely meant (a person at the relay module, or a
+script), so it gets some time. But a reset of the relay module also turns the outputs off, and then
+the tank must not wait long. 30 min is short next to the 2 h of an outside ON and the hours between
+the evening and night heating windows.
+
+**A mode command ends both** (the button, the select, away mode): it is newer than the outside change.
+
+**Restart.** The status is retained, so it arrives at once after a start. The bot sends no command
+before it knows the contactor state, or before `commandConfirmMs` has passed without one (then it
+decides as before, on its own state). A running element after a restart counts as the bot's own (the
+usual rules continue with it on), unless an outside ON started less than `externalOnMaxMs` before;
+that one is kept with its first start time.
+
+**Status.** `homy/automation/boiler_controller/status` has `heaterState` (the real state: the
+contactor, or a command not yet confirmed), `contactorState` (the last status, `null` before the
+first) and `decision` (the bot's own last decision). The tests are in
+`docker/automations/bots/boiler-controller-load-stagger.test.js`.
+
 ### Old input
 
 When the top or the bottom temperature is older than `maxInputAgeMs` (10 min by default), the element
@@ -340,8 +411,9 @@ is OFF with reason `input_stale` (#1743), and the bot posts one Telegram message
 `telegram-bridge`. When both temperatures arrive again it posts one "back" message and decides as
 usual. The age is checked on every reading and every 30 s, and taken from the message's own `_tz`, so
 old retained values after a start count as old; a temperature not seen yet counts from the start.
-The 15-minute heartbeat also decides again, so a manual mode expires on time during an outage. Manual
-and vacation modes still win, so a person can force heating during a long outage. The safe state
+The 15-minute heartbeat also decides again, so a manual mode expires on time during an outage. `manual_on`,
+`manual_off` and the vacation modes still win, so a person can force heating during a long outage;
+`boost` and an outside ON stop on old input. The safe state
 needs no internet; only the message does, and it follows the bridge's quiet hours. A disabled bot
 sends nothing. The Grafana rule `boiler-temperature-sensor-failure` reports the same outage on its own,
 about 35 minutes in.
@@ -363,8 +435,8 @@ and `config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
 - **Bot config:** `config/automations/boiler-controller-config.js`
 - **Bot implementation:** `docker/automations/bots/boiler-controller.js`
 - **Feature mappings:** `config/automations/features.js:797-846`  
-- **HA discovery:** `config/automations/ha_discovery.js` — contactor switch (~:876), temperature
-  sensors (~:942-989 — boiler low/high, solar panel, service room), control-mode select (~:1017)
+- **HA discovery:** `config/automations/ha_discovery.js` — contactor (read-only binary sensor), boost button, control-mode select, temperature
+  sensors (boiler low/high, solar panel, service room)
 
 ## Safety Features
 

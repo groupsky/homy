@@ -18,12 +18,21 @@ const startAt = (localIso) => {
   const httpPost = jest.fn().mockResolvedValue({ ok: true })
   const mqtt = {
     subscribe: (topic, callback) => { subscriptions.set(topic, callback) },
-    publish: (topic, payload) => { published.push({ topic, payload }) }
+    publish: (topic, payload) => {
+      published.push({ topic, payload })
+      // The relay reader reports each command back as the contactor state, as
+      // on the bus (#1912).
+      if (topic === CONFIG.boilerRelayTopic && CONFIG.contactorStatusTopic) {
+        subscriptions.get(CONFIG.contactorStatusTopic)?.({ state: payload.state })
+      }
+    }
   }
   require('./boiler-controller')('boilerController', { ...CONFIG, httpPost }).start({
     mqtt,
     persistedCache: { controlMode: 'automatic', manualOverrideExpires: null }
   })
+  // The contactor status is retained, so it comes at once after the start.
+  if (CONFIG.contactorStatusTopic) subscriptions.get(CONFIG.contactorStatusTopic)({ state: false })
   const deliver = (topic, payload) => {
     const callback = subscriptions.get(topic)
     if (typeof callback !== 'function') throw new Error(`no subscription for ${topic}`)

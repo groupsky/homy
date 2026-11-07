@@ -780,7 +780,10 @@ the 30 days to 2026-08-09; 6 points in the trailing 30 minutes).
   a real field instead. Prefer `count("heaterState")` over `count(*)`: `count(*)` returns one column
   per field, which in a `classic_conditions` alert becomes a multi-series frame.
 - **Controller View** (For Correlation):
-  - `heaterState` (boolean): Controller's intended relay state
+  - `heaterState` (boolean): The element's state as the controller sees it. Since #1912 (2026-11)
+    the real contactor state (or a command not yet confirmed); before, the controller's own last
+    decision. The new reasons `external_on`, `external_off`, `manual_boost`, `hot_water_limit` and
+    `manual_on_limit_reached …` appear in the `reason` tag.
   - `solarCirculation` (boolean): Solar pump state as seen by controller
   - `temp_*_seen` (float): Temperature readings as seen by controller when making decision
 **Use Cases**:
