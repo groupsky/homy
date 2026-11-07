@@ -29,14 +29,14 @@ function appSummary (fallback: string): string {
   return `{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}${fallback}{{ end }}`;
 }
 
-// The data of every thin rule: last firing per app text, and the newest
-// firing over all texts; fires when both are > 0.
+// The data of every thin rule: last firing_at per app text, and the newest
+// firing_at over all texts; fires for the text of the newest message.
 function expectAppQuery (app: any, uid: string): void {
   expect(app.data.map((d: any) => d.refId)).toEqual(['firing', 'latest', 'firing_last', 'latest_last', 'A']);
   const [firing, latest, firingLast, latestLast, condition] = app.data;
   for (const q of [firing, latest]) {
     expect(q.relativeTimeRange.from).toBe(2592000);
-    expect(q.model.query).toMatch(/last\("firing"\)/);
+    expect(q.model.query).toMatch(/last\("firing_at"\)/);
     expect(q.model.query).toContain(`"group"='alerts/${uid}'`);
     expect(q.model.query).toContain('now() - 30d');
   }
@@ -45,7 +45,7 @@ function expectAppQuery (app: any, uid: string): void {
   expect(firingLast.model).toMatchObject({ type: 'reduce', expression: 'firing', reducer: 'last' });
   expect(latestLast.model).toMatchObject({ type: 'reduce', expression: 'latest', reducer: 'last' });
   expect(app.condition).toBe('A');
-  expect(condition.model).toMatchObject({ type: 'math', expression: '$firing_last > 0 && $latest_last > 0' });
+  expect(condition.model).toMatchObject({ type: 'math', expression: '$firing_last > 0 && $firing_last == $latest_last' });
 }
 
 function load (file: string): any {

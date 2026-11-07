@@ -6,7 +6,9 @@
 #   a. a firing message fires the rule, the alert reaches Grafana's
 #      Alertmanager with receiver `silent` and the app's summary as its
 #      summary annotation (the Telegram text, #1914), and firing 0 resolves
-#      it, also when the resolve carries another summary text;
+#      it, also when the resolve carries another summary text; a second
+#      episode with a third text fires with that text only (an old text
+#      never fires again, #1914);
 #   b. a firing and a resolved message sent together are both stored, and the
 #      rule never fires;
 #   c. no webhook is ever called: every contact point, `silent` included,
@@ -149,6 +151,17 @@ log "a. $FIRES: firing 0, with another summary text"
 publish "$FIRES" 0 "$(date +%s%3N)" "$RESOLVE_TEXT"
 wait_for 90 "a. Influx has the resolve for $FIRES" rows_are "$FIRES" 1,0
 wait_for 30 "a. rule $FIRES-app is back to normal" state_is "$FIRES" inactive
+
+NEXT_TEXT='🚗 HV isolation resistance 380 kΩ, below 500 kΩ'
+log "a. $FIRES: a second episode, with a third text"
+publish "$FIRES" 1 "$(date +%s%3N)" "$NEXT_TEXT"
+wait_for 90 "a. Influx has the second episode for $FIRES" rows_are "$FIRES" 1,0,1
+wait_for 30 "a. rule $FIRES-app fires again" state_is "$FIRES" firing
+summary_is() { [ "$(am_summary "$1")" = "$2" ]; }
+wait_for 30 "a. only the new text is in the Alertmanager" summary_is "$FIRES" "$NEXT_TEXT"
+publish "$FIRES" 0 "$(date +%s%3N)" "$NEXT_TEXT"
+wait_for 90 "a. Influx has the second resolve for $FIRES" rows_are "$FIRES" 1,0,1,0
+wait_for 30 "a. rule $FIRES-app is back to normal again" state_is "$FIRES" inactive
 
 # Control: the rewritten webhook host is reachable from Grafana's container.
 # This request is counted apart from the webhook calls.

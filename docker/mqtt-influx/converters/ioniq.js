@@ -87,6 +87,11 @@ function isGarbageBmsFrame(data) {
  * tag `alert_summary`, so the Grafana rule can group by it and put the app's
  * text (with values, e.g. old -> new SoH) into its Telegram message. Grafana
  * can show tags as labels, but not string fields. The `summary` field stays.
+ * A trailing backslash is dropped from the tag: it would escape the space
+ * after the tags and make InfluxDB reject the point.
+ * It also gets field `firing_at` = ts while firing, else 0. The rule fires
+ * only for the text whose `firing_at` is the newest one, so an older text
+ * never fires again (#1914).
  * Timestamp: data.ts (epoch ms) passed straight to the ms-precision write API.
  */
 module.exports = function ioniq(data) {
@@ -102,8 +107,13 @@ module.exports = function ioniq(data) {
     if (data.state !== undefined && data.state !== null) {
         point.tag('state', String(data.state))
     }
-    if (String(data.group).startsWith('alerts/') && typeof data.summary === 'string' && data.summary !== '') {
-        point.tag('alert_summary', data.summary)
+    const isAppAlert = String(data.group).startsWith('alerts/')
+    const summaryTag = isAppAlert && typeof data.summary === 'string' ? data.summary.replace(/\\+$/, '') : ''
+    if (summaryTag !== '') {
+        point.tag('alert_summary', summaryTag)
+    }
+    if (isAppAlert && Number.isFinite(data.firing) && Number.isFinite(data.ts)) {
+        point.floatField('firing_at', data.firing > 0 ? data.ts : 0)
     }
     if (data.ts !== undefined && data.ts !== null) {
         point.timestamp(data.ts)

@@ -406,7 +406,8 @@ because it is the sensor that fails — issue #1472)
     1 m Grafana poll catches the pulse. Feeds the 12 V/LDC dashboard; it has no alert rule — the former
     `ioniq-12v-sag` rule fired mostly on normal driving-load swings and was removed as unreliable.
   - `alerts/<uid>` — an alert the car app computed itself (#1881): fields `firing` (1/0), `uid`,
-    `title`, `summary`, `severity`, `starts_at`, `value`. Read by the thin rules in
+    `title`, `summary`, `severity`, `starts_at`, `value`, and `firing_at` (added by mqtt-influx:
+    `ts` while firing, else 0; the rules fire only for the text with the newest one). Read by the thin rules in
     `config/grafana/provisioning/alerting/ioniq-app-alerts.yaml`.
 - `alert_summary`: only on `alerts/<uid>` points, a copy of the `summary` field (#1914). The thin
   rules group by it so the Telegram text is the app's own text. Grafana can use tags as labels,
