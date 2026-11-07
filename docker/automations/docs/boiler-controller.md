@@ -371,7 +371,8 @@ reads `contactorStatusTopic` and uses it as the state of the element.
 **Own commands.** Each command the bot sends comes back on the status topic. A change that matches a
 command sent in the last `commandConfirmMs` (60 s), and not answered by an earlier reading, is the
 bot's own. A reading answers that command and all older ones, so after a quick ON then OFF the late
-ON reading and then the OFF reading are both the bot's own. Until then the rules see the
+ON reading and then the OFF reading are both the bot's own. When both commands ran between two polls,
+a reading of the newest command's state 10 s or more after it answers them all. Until then the rules see the
 command's state, so an old reading from just before the write does not count. A contactor that still
 differs after 60 s gets the command again (a lost write), at most once a minute. No outside change is
 answered with a command against it, so the bot and someone else cannot switch back and forth.

@@ -554,6 +554,17 @@ describe('boiler-controller contactor feedback (#1912)', () => {
       expect(boiler.relay().reason).toMatch(/^manual_off/)
     })
 
+    test('two commands between two polls: a later outside ON still counts', () => {
+      const boiler = startAt(DAY, { echo: false })
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      boiler.mode('manual_off')
+      // The poll only saw OFF; then the reader keeps reporting OFF.
+      boiler.run(11 * 1000)
+      boiler.contactor(false)
+      boiler.contactor(true)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
+    })
+
     test('a reading still at the old state does not count; a lost command is sent again after 60 s', () => {
       const boiler = startAt(DAY, { echo: false })
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })

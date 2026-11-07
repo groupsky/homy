@@ -184,6 +184,9 @@ module.exports = (name, {
     const startedAt = Date.now()
     let contactorState = null // the last status, null until one arrives
     let commanded = null // { state, at } of the last command sent
+    // The relay acts on a command within a poll or two; a reading this long
+    // after a command shows its result.
+    const COMMAND_SETTLE_MS = 10 * 1000
     // Commands of the last commandConfirmMs that no reading has answered yet.
     let recentCommands = [] // { state, at }
     let externalOn = null // { since }: an outside ON being kept
@@ -711,7 +714,14 @@ module.exports = (name, {
         if (typeof state !== 'boolean') return
         const before = contactorState
         contactorState = state
-        if (before === state) return
+        if (before === state) {
+          // A quick ON then OFF can both run between two polls, so no reading
+          // answers the first. A reading of the newest command's state well
+          // after it was sent answers them all.
+          const newest = recentCommands.at(-1)
+          if (newest && newest.state === state && Date.now() - newest.at >= COMMAND_SETTLE_MS) recentCommands = []
+          return
+        }
         const now = Date.now()
 
         if (before === null) {
