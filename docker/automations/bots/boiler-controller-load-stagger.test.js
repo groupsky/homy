@@ -539,7 +539,22 @@ describe('boiler-controller contactor feedback (#1912)', () => {
       expect(boiler.status().reason).not.toMatch(/^external/)
     })
 
-    test('an old status after a command does not count; a lost command is sent again after 60 s', () => {
+    test('a late reading of a quick ON then OFF is not an outside ON', () => {
+      const boiler = startAt(DAY, { echo: false })
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true })
+      boiler.mode('manual_off')
+      expect(boiler.relay().state).toBe(false)
+      // The reader reports the ON after the OFF was sent, then the OFF.
+      boiler.contactor(true)
+      expect(boiler.relay().state).toBe(false)
+      expect(boiler.relay().reason).toMatch(/^manual_off/)
+      boiler.contactor(false)
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay().reason).toMatch(/^manual_off/)
+    })
+
+    test('a reading still at the old state does not count; a lost command is sent again after 60 s', () => {
       const boiler = startAt(DAY, { echo: false })
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true })

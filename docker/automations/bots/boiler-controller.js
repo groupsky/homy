@@ -184,10 +184,23 @@ module.exports = (name, {
     const startedAt = Date.now()
     let contactorState = null // the last status, null until one arrives
     let commanded = null // { state, at } of the last command sent
+    // Commands of the last commandConfirmMs that no reading has answered yet.
+    let recentCommands = [] // { state, at }
     let externalOn = null // { since }: an outside ON being kept
     let externalOff = null // { since }: an outside OFF being respected
     const commandPending = (state) => commanded !== null && commanded.state === state &&
       Date.now() - commanded.at < commandConfirmMs
+    // A status change is ours when a recent command not answered yet asked
+    // for it: after a quick ON then OFF, the ON reading may arrive after the
+    // OFF command. The reading answers that command and all older ones.
+    const answersCommand = (state) => {
+      const now = Date.now()
+      recentCommands = recentCommands.filter(({ at }) => now - at < commandConfirmMs)
+      const index = recentCommands.findIndex((command) => command.state === state)
+      if (index === -1) return false
+      recentCommands = recentCommands.slice(index + 1)
+      return true
+    }
     // The state the rules work with: the contactor status, or a command just
     // sent that has not come back yet. Without feedback, the last decision.
     const heaterOn = () => {
@@ -551,6 +564,10 @@ module.exports = (name, {
         currentState.lastDecisionReason = reason
         // Before the publish: the status of this command may come back at once.
         commanded = { state: decision, at: Date.now() }
+        // A command for the state the contactor already has needs no answer,
+        // unless an older one is still on its way.
+        recentCommands = recentCommands.filter(({ at }) => commanded.at - at < commandConfirmMs)
+        if (contactorState === null || decision !== contactorState || recentCommands.length) recentCommands.push(commanded)
 
         if (verbose) {
           console.log(`[${name}] heater decision: ${decision} (${reason})`)
@@ -710,7 +727,12 @@ module.exports = (name, {
         }
 
         // The controller's own command coming back
-        if (commandPending(state)) return
+        if (answersCommand(state)) {
+          // The newest command still differs: decide again, so the rules see
+          // the real state and a resend follows when it stays different.
+          if (!commandPending(state)) updateHeaterState()
+          return
+        }
 
         if (state) {
           externalOn = { since: now }
