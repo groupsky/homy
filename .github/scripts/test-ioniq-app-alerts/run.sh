@@ -4,7 +4,9 @@
 # The app publishes ioniq/parsed/alerts/<uid> (retained). mqtt-influx stores it,
 # and the thin rule <uid>-app in ioniq-app-alerts.yaml reads `firing`. Checks:
 #   a. a firing message fires the rule, the alert reaches Grafana's
-#      Alertmanager with receiver `silent`, and firing 0 resolves it;
+#      Alertmanager with receiver `silent` and the app's summary as its
+#      summary annotation (the Telegram text, #1914), and firing 0 resolves
+#      it, also when the resolve carries another summary text;
 #   b. a firing and a resolved message sent together are both stored, and the
 #      rule never fires;
 #   c. no webhook is ever called: every contact point, `silent` included,
@@ -75,12 +77,12 @@ influx() { dc exec -T influxdb influx -database test -format csv -execute "$1"; 
 wait_for 60 "InfluxDB is up" influx 'CREATE DATABASE test'
 wait_for 90 "Grafana is up" curl -fsS "$GRAFANA/api/health"
 
-# publish UID FIRING TS: sends the app's message, retained, as the app does.
+# publish UID FIRING TS [SUMMARY]: sends the app's message, retained, as the app does.
 publish() {
-  local uid=$1 firing=$2 ts=$3
+  local uid=$1 firing=$2 ts=$3 summary=${4:-test}
   dc exec -T broker mosquitto_pub -h localhost -q 1 -r -t "ioniq/parsed/alerts/$uid" -m "$(jq -cn \
-    --arg uid "$uid" --argjson firing "$firing" --argjson ts "$ts" \
-    '{_type: "ioniq", group: ("alerts/" + $uid), ts: $ts, uid: $uid, title: "test", summary: "test",
+    --arg uid "$uid" --argjson firing "$firing" --argjson ts "$ts" --arg summary "$summary" \
+    '{_type: "ioniq", group: ("alerts/" + $uid), ts: $ts, uid: $uid, title: "test", summary: $summary,
       severity: "warning", firing: $firing, starts_at: ($ts - 60000), value: 1, seq: 1, boot_id: "test", vin: "TEST"}')"
 }
 
@@ -102,13 +104,23 @@ am_receivers() {
 }
 in_am_as_silent() { [ "$(am_receivers "$1")" = "silent" ]; }
 
+# am_summary UID: the summary annotation of the rule's alerts in the Alertmanager.
+am_summary() {
+  curl -fsS "$GRAFANA/api/alertmanager/grafana/api/v2/alerts" |
+    jq -r --arg uid "$1-app" '[.[] | select(.labels.__alert_rule_uid__ == $uid) | .annotations.summary] | join(",")'
+}
+
 mqtt_influx_subscribed() { dc logs mqtt-influx | grep -q 'subscribed to'; }
 wait_for 60 "mqtt-influx is subscribed" mqtt_influx_subscribed
 wait_for 60 "Grafana loaded rule $FIRES-app" state_is "$FIRES" inactive
 
+# The app's own text, with a value no yaml annotation has.
+TEXT='🚗 HV isolation resistance 420 kΩ, below 500 kΩ'
+RESOLVE_TEXT='🚗 HV isolation resistance back to 900 kΩ'
+
 now=$(date +%s%3N)
 log "a. $FIRES: firing 1"
-publish "$FIRES" 1 "$now"
+publish "$FIRES" 1 "$now" "$TEXT"
 log "b. $SILENT: firing 1, then firing 0 five seconds later"
 publish "$SILENT" 1 "$((now - 10000))"
 publish "$SILENT" 0 "$((now - 5000))"
@@ -118,6 +130,9 @@ wait_for 90 "a. Influx has $FIRES (group=alerts/$FIRES)" rows_are "$FIRES" 1
 wait_for 10 "b. Influx has both $SILENT rows" rows_are "$SILENT" 1,0
 wait_for 30 "a. rule $FIRES-app fires" state_is "$FIRES" firing
 wait_for 30 "a. alert $FIRES-app is in the Alertmanager with receiver silent" in_am_as_silent "$FIRES"
+got=$(am_summary "$FIRES")
+[ "$got" = "$TEXT" ] || fail "a. summary annotation is '$got', want the app's '$TEXT'"
+log "ok: a. Telegram text (summary annotation) is the app's: $got"
 
 # Hold the alert past the root policy's group_wait (30s), when Grafana would
 # send it; meanwhile the other rule is evaluated several times (every 10s).
@@ -130,8 +145,8 @@ while [ "$SECONDS" -lt "$end" ]; do
 done
 log "ok: b. rule $SILENT-app never fired, nothing in the Alertmanager"
 
-log "a. $FIRES: firing 0"
-publish "$FIRES" 0 "$(date +%s%3N)"
+log "a. $FIRES: firing 0, with another summary text"
+publish "$FIRES" 0 "$(date +%s%3N)" "$RESOLVE_TEXT"
 wait_for 90 "a. Influx has the resolve for $FIRES" rows_are "$FIRES" 1,0
 wait_for 30 "a. rule $FIRES-app is back to normal" state_is "$FIRES" inactive
 
