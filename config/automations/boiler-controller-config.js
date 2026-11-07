@@ -65,6 +65,18 @@ module.exports = {
       mainPowerCapW: 6000, // no start at or above this mean (a choice: the main breaker size is not known)
       mainPowerMeanMs: 5 * 60 * 1000, // window of the mean
       maxLoadInputAgeMs: 10 * 60 * 1000, // newer reading than this or the input is ignored
+      // Contactor feedback (#1912): the real state of the element. An ON the
+      // controller did not send is kept until the top reaches the stop target
+      // in force (50 °C, 55 °C in the top-up and boost windows), for at most
+      // 2 h; only maxSafe, hotWaterLimit and old readings stop it earlier. After
+      // an OFF it did not send, the controller waits 30 min before it starts
+      // the element again.
+      contactorStatusTopic: `${featuresPrefix}/relay/service_boiler_contactor/status`,
+      externalOnMaxMs: 2 * 60 * 60 * 1000,
+      externalOffHoldMs: 30 * 60 * 1000,
+      // The `boost` mode (the Home Assistant button "Загрей до 55 °C") heats the
+      // top to hotWaterLimit now, for at most 2 h, then goes back to automatic.
+      boostDurationMs: 2 * 60 * 60 * 1000,
       verbose: true
     }
   },

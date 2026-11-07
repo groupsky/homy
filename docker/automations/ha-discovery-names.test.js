@@ -26,7 +26,10 @@ const identity = (bots) => Object.fromEntries(Object.entries(bots).map(([key, bo
 // because the topics hold room names that must not be copied into new files.
 // If this test fails, print canonical(identity(load())) here and for the
 // file at a8846ef, and compare the two.
-const BASELINE_SHA256 = 'da14f4213f4ae361d16bdfedc473efeda008e2123228cef3f288f4f07b3061b9'
+// Changed on purpose once since then (#1912): the boiler contactor became a
+// read-only binary sensor and the boost button was added; no other entity
+// changed.
+const BASELINE_SHA256 = 'ba121c52268838dff43711ed950c963aa8a5ec60c5ae6fdda0e06f2be94f56c9'
 const canonical = (ids) => JSON.stringify(Object.keys(ids).sort().map((k) => [k, ids[k]]))
 const sha256 = (text) => require('crypto').createHash('sha256').update(text).digest('hex')
 
@@ -92,3 +95,45 @@ describe('automation switches', () => {
   })
 })
 
+describe('boiler control from Home Assistant (#1912)', () => {
+  const payload = (key) => load()[key].input.params.payload
+  const controlModeSet = 'homy/features/control_mode/boiler_controller/set'
+
+  it('the boost button sends the boost mode to the controller', () => {
+    const button = load().boilerBoostHaDiscovery
+    expect(button.output.params.topic).toBe('homeassistant/button/boiler_boost/config')
+    expect(button.input.params.payload).toMatchObject({
+      name: 'Загрей до 55 °C',
+      command_topic: controlModeSet,
+      device: { identifiers: 'boiler_eldom_200l' },
+    })
+    expect(JSON.parse(button.input.params.payload.payload_press)).toMatchObject({ mode: 'boost' })
+    const boiler = require(path.join(configDir, 'boiler-controller-config.js')).bots.boilerController
+    expect(boiler.controlModeTopic).toBe(controlModeSet)
+  })
+
+  it('the mode select shows boost', () => {
+    expect(payload('boilerControllerModeHaDiscovery').options).toContain('boost')
+  })
+
+  it('the contactor is read only', () => {
+    const contactor = load().serviceBoilerContactorHaDiscovery
+    expect(contactor.output.params.topic).toBe('homeassistant/binary_sensor/service_boiler_contactor/config')
+    expect(contactor.input.params.payload.command_topic).toBeUndefined()
+    expect(contactor.input.params.payload.state_topic).toBe('homy/features/relay/service_boiler_contactor/status')
+    const switches = Object.values(load()).map((bot) => bot.input.params.payload)
+      .filter((p) => (p.command_topic || '').startsWith('homy/features/relay/service_boiler_contactor'))
+    expect(switches).toEqual([])
+  })
+
+  it('the old contactor switch is removed with an empty retained config', () => {
+    const removal = require(path.join(configDir, 'config.js')).bots.haBoilerContactorSwitchRemoved
+    expect(removal).toMatchObject({
+      type: 'mqtt-publish',
+      topic: 'homeassistant/switch/service_boiler_contactor/config',
+      retain: true,
+      content: 'plain',
+      payload: '',
+    })
+  })
+})

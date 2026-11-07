@@ -14,13 +14,24 @@ const startAt = (localIso, config = CONFIG) => {
   const published = []
   const mqtt = {
     subscribe: (topic, callback) => { subscriptions.set(topic, callback) },
-    publish: (topic, payload) => { published.push({ topic, payload }) }
+    publish: (topic, payload) => {
+      published.push({ topic, payload })
+      // The relay reader reports each command back as the contactor state, as
+      // on the bus (#1912).
+      if (topic === config.boilerRelayTopic && config.contactorStatusTopic) {
+        const echoTo = subscriptions.get(config.contactorStatusTopic)
+        if (typeof echoTo === 'function') echoTo({ state: payload.state })
+      }
+    }
   }
   const httpPost = async () => ({ ok: true })
   require('./boiler-controller')('boiler', { ...config, verbose: false, httpPost }).start({
     mqtt,
     persistedCache: { controlMode: 'automatic', manualOverrideExpires: null }
   })
+  // The contactor status is retained, so it comes at once after the start.
+  const retained = config.contactorStatusTopic && subscriptions.get(config.contactorStatusTopic)
+  if (typeof retained === 'function') retained({ state: false })
   const deliver = (topic, payload) => {
     const callback = subscriptions.get(topic)
     if (typeof callback !== 'function') throw new Error(`no subscription for ${topic}`)

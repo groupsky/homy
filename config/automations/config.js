@@ -341,6 +341,16 @@ module.exports = {
         value_template: '{{ value_json.tot | float(default=0) }}',
       }
     },
+    // The contactor was a switch in Home Assistant; it is read only now
+    // (#1912, ha_discovery.js). An empty retained config removes the old
+    // switch entity.
+    haBoilerContactorSwitchRemoved: {
+      type: 'mqtt-publish',
+      topic: 'homeassistant/switch/service_boiler_contactor/config',
+      retain: true,
+      content: 'plain',
+      payload: ''
+    },
     haBoilerHeating: {
       type: 'mqtt-publish',
       topic: 'homeassistant/binary_sensor/boiler-heating/config',

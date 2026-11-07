@@ -104,6 +104,20 @@ module.exports = (name, {
   mainPowerMeanMs = 5 * 60 * 1000,
   maxLoadInputAgeMs = 10 * 60 * 1000,
   maxInputAgeMs = DEFAULT_MAX_INPUT_AGE_MS,
+  // Contactor feedback (#1912): the contactor status topic gives the real
+  // state of the element. Without it the controller takes its own last
+  // command as the state, as before.
+  contactorStatusTopic,
+  // An ON that the controller did not send is kept until the top reaches the
+  // stop target in force, or for at most this long.
+  externalOnMaxMs = 2 * 60 * 60 * 1000,
+  // After an OFF that the controller did not send, no restart for this long.
+  externalOffHoldMs = 30 * 60 * 1000,
+  // The `boost` mode heats the top to hotWaterLimit for at most this long.
+  boostDurationMs = 2 * 60 * 60 * 1000,
+  // A status that matches a command sent within this time is that command
+  // coming back. A contactor that still differs after it gets the command again.
+  commandConfirmMs = 60 * 1000,
   telegramWebhookUrl,
   httpPost,
   verbose
@@ -112,7 +126,8 @@ module.exports = (name, {
     version: 1,
     default: {
       controlMode: 'automatic',
-      manualOverrideExpires: null
+      manualOverrideExpires: null,
+      externalOnSince: null
     },
     migrate: ({ version, defaultState, state }) => {
       return state
@@ -126,7 +141,9 @@ module.exports = (name, {
       solarTemperature: null,
       ambientTemperature: null,
       solarCirculation: false,
-      heaterState: false,
+      // The controller's own last decision. The real state of the element is
+      // heaterOn() below.
+      decision: false,
       controlMode: 'automatic',
       manualOverrideExpires: null,
       lastDecision: null,
@@ -157,7 +174,48 @@ module.exports = (name, {
     const saveState = () => {
       persistedCache.controlMode = currentState.controlMode
       persistedCache.manualOverrideExpires = currentState.manualOverrideExpires
+      persistedCache.externalOnSince = externalOn ? externalOn.since : null
     }
+
+    // Contactor feedback (#1912). The controller's own commands come back on
+    // the status topic too; a change that matches a recent command is ours,
+    // any other change was made by someone else (the Home Assistant switch,
+    // another script, the relay module).
+    const startedAt = Date.now()
+    let contactorState = null // the last status, null until one arrives
+    let commanded = null // { state, at } of the last command sent
+    // The relay acts on a command within a poll or two; a reading this long
+    // after a command shows its result.
+    const COMMAND_SETTLE_MS = 10 * 1000
+    // Commands of the last commandConfirmMs that no reading has answered yet.
+    let recentCommands = [] // { state, at }
+    let externalOn = null // { since }: an outside ON being kept
+    let externalOff = null // { since }: an outside OFF being respected
+    const commandPending = (state) => commanded !== null && commanded.state === state &&
+      Date.now() - commanded.at < commandConfirmMs
+    // A status change is ours when a recent command not answered yet asked
+    // for it: after a quick ON then OFF, the ON reading may arrive after the
+    // OFF command. The reading answers that command and all older ones.
+    const answersCommand = (state) => {
+      const now = Date.now()
+      recentCommands = recentCommands.filter(({ at }) => now - at < commandConfirmMs)
+      const index = recentCommands.findIndex((command) => command.state === state)
+      if (index === -1) return false
+      recentCommands = recentCommands.slice(index + 1)
+      return true
+    }
+    // The state the rules work with: the contactor status, or a command just
+    // sent that has not come back yet. Without feedback, the last decision.
+    const heaterOn = () => {
+      if (!contactorStatusTopic || contactorState === null) return currentState.decision
+      if (commanded !== null && commanded.state !== contactorState && commandPending(commanded.state)) return commanded.state
+      return contactorState
+    }
+    // After a restart the element may be running. No command is sent until
+    // the contactor state is known (the status is retained, so it comes at
+    // once), or until commandConfirmMs has passed without it.
+    const waitingForContactor = () => Boolean(contactorStatusTopic) && contactorState === null &&
+      Date.now() - startedAt < commandConfirmMs
 
     const capped = (target) => Number.isFinite(target) ? Math.min(target, hotWaterLimit) : null
     const boostTarget = nightTariff ? capped(nightBoostTarget) : null
@@ -250,7 +308,7 @@ module.exports = (name, {
     // The one place the gates apply: an automatic rule that would switch the
     // element on while it is off. A running element is never stopped here.
     const gateStart = (result) => {
-      if (!result.decision || currentState.heaterState || LOAD_EXEMPT_REASONS.includes(result.reason)) return result
+      if (!result.decision || heaterOn() || LOAD_EXEMPT_REASONS.includes(result.reason)) return result
       const { dishwasherRunning, capExceeded } = loadInputs()
       if (dishwasherRunning) return { decision: false, reason: 'load_wait_dishwasher' }
       if (capExceeded) return { decision: false, reason: 'load_wait_main_power' }
@@ -277,47 +335,89 @@ module.exports = (name, {
       })
     }
 
+    const backToAutomatic = (why) => {
+      currentState.controlMode = 'automatic'
+      currentState.manualOverrideExpires = null
+      saveState()
+      publishControlModeStatus()
+      if (verbose) console.log(`[${name}] ${why}, resuming automatic control`)
+    }
+
+    const endExternalOn = (why) => {
+      externalOn = null
+      saveState()
+      if (verbose) console.log(`[${name}] outside ON ends: ${why}`)
+    }
+
     const makeDecision = () => {
       const now = Date.now()
 
-      // Check if manual mode is active and not expired
-      if (currentState.controlMode !== 'automatic') {
-        if (currentState.manualOverrideExpires && now >= currentState.manualOverrideExpires) {
-          // Manual mode expired
-          currentState.controlMode = 'automatic'
-          currentState.manualOverrideExpires = null
-          saveState()
-          publishControlModeStatus()
-          if (verbose) {
-            console.log(`[${name}] manual mode expired, resuming automatic control`)
-          }
-        } else {
-          // Manual or vacation mode active
-          let decision
-          let reasonPrefix
+      // Check if a manual mode has expired
+      if (currentState.controlMode !== 'automatic' &&
+        currentState.manualOverrideExpires && now >= currentState.manualOverrideExpires) {
+        backToAutomatic(`${currentState.controlMode} mode expired`)
+      }
 
-          if (currentState.controlMode === 'manual_on') {
-            decision = true
-            reasonPrefix = 'manual_on'
-          } else if (currentState.controlMode === 'manual_off' || currentState.controlMode.startsWith('vacation_')) {
-            decision = false
-            reasonPrefix = currentState.controlMode
-          } else {
-            // Fallback for unknown modes
-            decision = false
-            reasonPrefix = 'unknown_mode'
-          }
+      const top = currentState.temperatureTop
+      const stale = temperatures.isStale()
+      const overheated = top !== null && top >= maxSafe
+      const atLimit = top !== null && top >= hotWaterLimit
+      const expires = ` (expires: ${new Date(currentState.manualOverrideExpires)})`
 
-          // A draw seen before a manual or vacation mode is old news after it.
-          drawSeenAt = null
-          if (verbose) {
-            console.log(`[${name}] ${currentState.controlMode} mode active -> heater ${decision ? 'ON' : 'OFF'}`)
-          }
-          return {
-            decision,
-            reason: `${reasonPrefix} (expires: ${new Date(currentState.manualOverrideExpires)})`
-          }
+      // An outside OFF is the newest order (a mode command ends it): no rule
+      // and no mode starts the element again for externalOffHoldMs.
+      if (externalOff && now - externalOff.since >= externalOffHoldMs) externalOff = null
+      if (externalOff) return { decision: false, reason: 'external_off' }
+
+      // An outside ON is kept until the top reaches the stop target in force,
+      // for at most externalOnMaxMs. The night hold, the load gates and the
+      // modes do not stop it; only maxSafe, hotWaterLimit and old inputs do.
+      if (externalOn) {
+        const target = heatWindowAt(now)?.target ?? comfortMin + hysteresis
+        if (stale) endExternalOn('no fresh temperature')
+        else if (overheated) endExternalOn(`top ${top}°C at maxSafe`)
+        else if (top !== null && top >= target) endExternalOn(`top ${top}°C reached ${target}°C`)
+        else if (atLimit) {
+          // Only with a stop target above the limit. The usual rules could
+          // keep a running element on here, so this stops it.
+          endExternalOn(`top ${top}°C at hotWaterLimit`)
+          return { decision: false, reason: 'hot_water_limit' }
         }
+        else if (now - externalOn.since >= externalOnMaxMs) endExternalOn('time limit')
+        else return { decision: true, reason: 'external_on' }
+      }
+
+      const mode = currentState.controlMode
+      if (mode !== 'automatic') {
+        // A draw seen before a manual or vacation mode is old news after it.
+        drawSeenAt = null
+      }
+
+      // boost: heat the top to hotWaterLimit now, whatever the night hold and
+      // the load gates say, then go back to automatic.
+      if (mode === 'boost') {
+        if (stale) return { decision: false, reason: 'input_stale' }
+        if (!overheated && !atLimit) return { decision: true, reason: 'manual_boost' }
+        backToAutomatic(`boost done: top ${top}°C`)
+      }
+
+      if (mode === 'manual_on') {
+        // On, but never above hotWaterLimit or maxSafe; it starts again below
+        // hotWaterLimit - hysteresis. Old readings do not stop it (#1743): the
+        // limits use the last reading.
+        if (overheated) return { decision: false, reason: 'safety_shutoff_overheated' }
+        if (atLimit || (top !== null && top >= hotWaterLimit - hysteresis && !heaterOn())) {
+          return { decision: false, reason: `manual_on_limit_reached${expires}` }
+        }
+        return { decision: true, reason: `manual_on${expires}` }
+      }
+
+      if (mode === 'manual_off' || mode.startsWith('vacation_')) {
+        return { decision: false, reason: `${mode}${expires}` }
+      }
+
+      if (mode !== 'automatic' && mode !== 'boost') {
+        return { decision: false, reason: `unknown_mode${expires}` }
       }
 
       return gateStart(decideAutomatic())
@@ -362,7 +462,7 @@ module.exports = (name, {
       // Night tariff: no heating in the last part of the day zone, so the
       // element tops the tank up in the cheaper night zone instead. A top
       // under the floor still heats, up to the floor plus the hysteresis.
-      const holdFrom = nightTariff && nightTariff.floor + (currentState.heaterState ? hysteresis : 0)
+      const holdFrom = nightTariff && nightTariff.floor + (heaterOn() ? hysteresis : 0)
       if (temperatureTop !== null && periodsAt(now).hold && temperatureTop >= holdFrom) {
         return { decision: false, reason: 'night_tariff_hold' }
       }
@@ -375,8 +475,8 @@ module.exports = (name, {
       // while the element is off: a start the load gates held back that long
       // is not a draw start any more.
       if (drawSeenAt !== null && temperatureTop !== null) {
-        if (currentState.heaterState && temperatureTop >= target) drawSeenAt = null
-        else if (!currentState.heaterState && now - drawSeenAt > drawLatchMinutes * 60 * 1000) drawSeenAt = null
+        if (heaterOn() && temperatureTop >= target) drawSeenAt = null
+        else if (!heaterOn() && now - drawSeenAt > drawLatchMinutes * 60 * 1000) drawSeenAt = null
       }
 
       // Comfort heating
@@ -411,7 +511,7 @@ module.exports = (name, {
         if (temperatureTop >= heatWindow.target) {
           return { decision: false, reason: `${heatWindow.reason}_reached` }
         }
-        if (currentState.heaterState || windowArmed || temperatureTop < heatWindow.target - hysteresis) {
+        if (heaterOn() || windowArmed || temperatureTop < heatWindow.target - hysteresis) {
           return { decision: true, reason: heatWindow.reason }
         }
         return { decision: false, reason: `${heatWindow.reason}_reached` }
@@ -424,18 +524,53 @@ module.exports = (name, {
 
       // Default to maintaining current state (hysteresis zone)
       return {
-        decision: currentState.heaterState,
-        reason: `hysteresis_zone_maintain_${currentState.heaterState}`
+        decision: heaterOn(),
+        reason: `hysteresis_zone_maintain_${heaterOn()}`
       }
     }
 
+    // The status for monitoring: heaterState is the real state of the element
+    // (see heaterOn), contactorState the last contactor status (null: none
+    // yet, or no feedback configured).
+    const automationStatus = () => ({
+      heaterState: heaterOn(),
+      contactorState,
+      decision: currentState.decision,
+      reason: currentState.lastDecisionReason,
+      controlMode: currentState.controlMode,
+      manualOverrideExpires: currentState.manualOverrideExpires,
+      temperatures: {
+        top: currentState.temperatureTop,
+        bottom: currentState.temperatureBottom,
+        solar: currentState.solarTemperature,
+        ambient: currentState.ambientTemperature
+      },
+      solarCirculation: currentState.solarCirculation,
+      load: loadStatus()
+    })
+
     const updateHeaterState = () => {
+      if (waitingForContactor()) return
       const { decision, reason } = makeDecision()
 
-      if (decision !== currentState.heaterState || reason !== currentState.lastDecisionReason) {
-        currentState.heaterState = decision
+      // A contactor that still differs from the decision after a command had
+      // time to come back gets the command again (a lost write).
+      const resend = Boolean(contactorStatusTopic) && contactorState !== null &&
+        decision !== contactorState && !commandPending(decision)
+
+      if (decision !== currentState.decision || reason !== currentState.lastDecisionReason || resend) {
+        if (resend && verbose && decision === currentState.decision && reason === currentState.lastDecisionReason) {
+          console.log(`[${name}] contactor is ${contactorState}, sending ${decision} again`)
+        }
+        currentState.decision = decision
         currentState.lastDecision = Date.now()
         currentState.lastDecisionReason = reason
+        // Before the publish: the status of this command may come back at once.
+        commanded = { state: decision, at: Date.now() }
+        // A command for the state the contactor already has needs no answer,
+        // unless an older one is still on its way.
+        recentCommands = recentCommands.filter(({ at }) => commanded.at - at < commandConfirmMs)
+        if (contactorState === null || decision !== contactorState || recentCommands.length) recentCommands.push(commanded)
 
         if (verbose) {
           console.log(`[${name}] heater decision: ${decision} (${reason})`)
@@ -454,20 +589,7 @@ module.exports = (name, {
         })
 
         // Publish status for monitoring
-        mqtt.publish(finalAutomationStatusTopic, {
-          heaterState: decision,
-          reason,
-          controlMode: currentState.controlMode,
-          manualOverrideExpires: currentState.manualOverrideExpires,
-          temperatures: {
-            top: currentState.temperatureTop,
-            bottom: currentState.temperatureBottom,
-            solar: currentState.solarTemperature,
-            ambient: currentState.ambientTemperature
-          },
-          solarCirculation: currentState.solarCirculation,
-          load: loadStatus()
-        })
+        mqtt.publish(finalAutomationStatusTopic, automationStatus())
 
         // Publish control mode status
         publishControlModeStatus()
@@ -586,6 +708,57 @@ module.exports = (name, {
     // A hold or a window that runs out needs no new reading; look every 30 s.
     if (mainPowerTopic || dishwasherTopic) setInterval(loadChanged, 30 * 1000).unref?.()
 
+    if (contactorStatusTopic) {
+      mqtt.subscribe(contactorStatusTopic, (payload) => {
+        const state = payload !== null && typeof payload === 'object' ? payload.state : payload
+        if (typeof state !== 'boolean') return
+        const before = contactorState
+        contactorState = state
+        if (before === state) {
+          // A quick ON then OFF can both run between two polls, so no reading
+          // answers the first. A reading of the newest command's state well
+          // after it was sent answers them all.
+          const newest = recentCommands.at(-1)
+          if (newest && newest.state === state && Date.now() - newest.at >= COMMAND_SETTLE_MS) recentCommands = []
+          return
+        }
+        const now = Date.now()
+
+        if (before === null) {
+          // The first status after a start: the state the element is in. An
+          // outside ON from before the restart is kept with its first time;
+          // any other running element counts as the controller's own.
+          const since = persistedCache.externalOnSince
+          externalOn = state && Number.isFinite(since) && now - since < externalOnMaxMs ? { since } : null
+          saveState()
+          if (verbose) console.log(`[${name}] contactor is ${state ? 'ON' : 'OFF'}${externalOn ? ' (outside ON kept over the restart)' : ''}`)
+          updateHeaterState()
+          return
+        }
+
+        // The controller's own command coming back
+        if (answersCommand(state)) {
+          // The newest command still differs: decide again, so the rules see
+          // the real state and a resend follows when it stays different.
+          if (!commandPending(state)) updateHeaterState()
+          return
+        }
+
+        if (state) {
+          externalOn = { since: now }
+          externalOff = null
+        } else {
+          externalOn = null
+          externalOff = { since: now }
+        }
+        saveState()
+        if (verbose) console.log(`[${name}] contactor turned ${state ? 'ON' : 'OFF'} by someone else`)
+        updateHeaterState()
+      })
+      // Decide without the contactor state if it does not come.
+      setTimeout(updateHeaterState, commandConfirmMs).unref?.()
+    }
+
     // Control mode topic
     mqtt.subscribe(controlModeTopic, (payload) => {
       try {
@@ -631,14 +804,20 @@ module.exports = (name, {
         }
 
         // Validate and set new mode
-        const validModes = ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until']
+        const validModes = ['automatic', 'boost', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until']
 
         if (validModes.includes(newMode)) {
           currentState.controlMode = newMode
+          // A mode command is the newest order: it ends an outside ON or OFF.
+          externalOn = null
+          externalOff = null
 
           if (newMode === 'automatic') {
             // Clear manual override expiry for automatic mode
             currentState.manualOverrideExpires = null
+          } else if (newMode === 'boost') {
+            // A second press starts the time again.
+            currentState.manualOverrideExpires = Date.now() + boostDurationMs
           } else if (newMode === 'vacation_until') {
             currentState.manualOverrideExpires = until
           } else if (newMode.startsWith('vacation_')) {
@@ -683,25 +862,15 @@ module.exports = (name, {
       // must still expire on time.
       updateHeaterState()
       mqtt.publish(finalAutomationStatusTopic, {
-        heaterState: currentState.heaterState,
+        ...automationStatus(),
         reason: currentState.lastDecisionReason || 'heartbeat',
-        controlMode: currentState.controlMode,
-        manualOverrideExpires: currentState.manualOverrideExpires,
-        temperatures: {
-          top: currentState.temperatureTop,
-          bottom: currentState.temperatureBottom,
-          solar: currentState.solarTemperature,
-          ambient: currentState.ambientTemperature
-        },
-        solarCirculation: currentState.solarCirculation,
-        load: loadStatus(),
         lastDecision: currentState.lastDecision,
         heartbeat: true,
         timestamp: Date.now()
       })
 
       if (verbose) {
-        console.log(`[${name}] heartbeat: ${currentState.controlMode}, heater=${currentState.heaterState}, temps: top=${currentState.temperatureTop}°C`)
+        console.log(`[${name}] heartbeat: ${currentState.controlMode}, heater=${heaterOn()}, temps: top=${currentState.temperatureTop}°C`)
       }
     }, 15 * 60 * 1000) // 15 minutes
 
@@ -722,6 +891,10 @@ module.exports = (name, {
         drawLatchMinutes,
         dishwasherTopic,
         mainPowerTopic,
+        contactorStatusTopic,
+        externalOnMaxMs: externalOnMaxMs / 60000 + ' minutes',
+        externalOffHoldMs: externalOffHoldMs / 60000 + ' minutes',
+        boostDurationMs: boostDurationMs / 60000 + ' minutes',
         manualOverrideExpiry: manualOverrideExpiry / 60000 + ' minutes',
         heartbeatInterval: '15 minutes'
       })

@@ -871,15 +871,18 @@ const config = {
       },
     }),
 
-    ...haSwitch({
+    // Read only (#1912): the boiler controller owns the contactor. To heat by
+    // hand use the controller's mode or the button "Загрей до 55 °C". The old
+    // switch entity is removed by haBoilerContactorSwitchRemoved in config.js.
+    ...haBinarySensor({
       name: 'serviceBoilerContactor',
       feature_type: 'relay',
       feature: 'service_boiler_contactor',
+      type: 'power',
       config: {
         name: 'Контактор',
-        unique_id: 'service_boiler_contactor',
+        unique_id: 'homy_power_service_boiler_contactor',
         device: devices.boiler,
-        device_class: 'outlet',
       }
     }),
 
@@ -1018,12 +1021,27 @@ const config = {
       name: 'boilerControllerMode',
       feature_type: 'control_mode',
       feature: 'boiler_controller',
-      options: ['automatic', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until'],
+      options: ['automatic', 'boost', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until'],
       config: {
         name: 'Режим на управление',
         unique_id: 'boiler_controller_mode',
         device: devices.boiler,
         icon: 'mdi:water-boiler',
+      }
+    }),
+
+    // Heat the top to 55 °C now, for at most 2 h, whatever the night hold and
+    // the load gates say; then the controller goes back to automatic (#1912).
+    ...haButton({
+      name: 'boilerBoost',
+      feature: 'boiler_boost',
+      config: {
+        name: 'Загрей до 55 °C',
+        device: devices.boiler,
+        object_id: 'boiler_boost',
+        icon: 'mdi:water-boiler-alert',
+        command_topic: `${featuresPrefix}/control_mode/boiler_controller/set`,
+        payload_press: JSON.stringify({ mode: 'boost', _src: 'ha' }),
       }
     }),
 
