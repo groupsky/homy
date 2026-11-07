@@ -19,7 +19,8 @@ const startAt = (localIso, config = CONFIG) => {
       // The relay reader reports each command back as the contactor state, as
       // on the bus (#1912).
       if (topic === config.boilerRelayTopic && config.contactorStatusTopic) {
-        subscriptions.get(config.contactorStatusTopic)?.({ state: payload.state })
+        const echoTo = subscriptions.get(config.contactorStatusTopic)
+        if (typeof echoTo === 'function') echoTo({ state: payload.state })
       }
     }
   }
@@ -30,7 +31,8 @@ const startAt = (localIso, config = CONFIG) => {
     persistedCache: { controlMode: 'automatic', manualOverrideExpires: null }
   })
   // The contactor status is retained, so it comes at once after the start.
-  if (config.contactorStatusTopic) subscriptions.get(config.contactorStatusTopic)({ state: false })
+  const retained = config.contactorStatusTopic && subscriptions.get(config.contactorStatusTopic)
+  if (typeof retained === 'function') retained({ state: false })
   const deliver = (topic, payload) => {
     const callback = subscriptions.get(topic)
     if (typeof callback !== 'function') throw new Error(`no subscription for ${topic}`)

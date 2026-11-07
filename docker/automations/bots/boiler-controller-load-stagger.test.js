@@ -34,7 +34,8 @@ const startAt = (localIso, {
       // The relay reader reports each command back as the contactor state, as
       // on the bus (#1912).
       if (echo && topic === config.boilerRelayTopic && config.contactorStatusTopic) {
-        subscriptions.get(config.contactorStatusTopic)?.({ state: payload.state })
+        const echoTo = subscriptions.get(config.contactorStatusTopic)
+        if (typeof echoTo === 'function') echoTo({ state: payload.state })
       }
     }
   }
@@ -47,7 +48,8 @@ const startAt = (localIso, {
   require('./boiler-controller')('boiler', { ...config, httpPost }).start({ mqtt, persistedCache })
   // The contactor status is retained, so it comes at once after the start.
   if (config.contactorStatusTopic && contactorAtStart !== null) {
-    subscriptions.get(config.contactorStatusTopic)({ state: contactorAtStart })
+    const retained = subscriptions.get(config.contactorStatusTopic)
+    if (typeof retained === 'function') retained({ state: contactorAtStart })
   }
   const deliver = (topic, payload) => {
     const callback = subscriptions.get(topic)
