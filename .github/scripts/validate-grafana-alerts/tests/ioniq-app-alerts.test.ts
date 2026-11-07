@@ -3,8 +3,10 @@
  *
  * ioniq-app-alerts.yaml must hold one `<uid>-app` rule for every rule in the
  * other ioniq-*-alerts.yaml files (except ioniq-tpms-coldstart-stale), with
- * the same labels, title and annotations, reading only the app's message
- * `group='alerts/<uid>'`. During the side-by-side run the label
+ * the same labels, title and description, reading only the app's message
+ * `group='alerts/<uid>'`, plus rules for alerts only the app has
+ * (ioniq-soh-rise). The summary is the app's text, from tag alert_summary
+ * (#1914). During the side-by-side run the label
  * side_by_side=true sends them to the silent receiver, muted all the time.
  */
 import { describe, expect, it } from '@jest/globals';
@@ -17,6 +19,34 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const ALERTING = path.join(REPO_ROOT, 'config/grafana/provisioning/alerting');
 const APP_FILE = 'ioniq-app-alerts.yaml';
 const NOT_FROM_APP = new Set(['ioniq-tpms-coldstart-stale']);
+// Alerts only the app has: no yaml rule to copy.
+const APP_ONLY = [
+  { uid: 'ioniq-soh-rise', labels: { severity: 'info', device: 'ioniq', subsystem: 'battery' } },
+];
+
+// The summary annotation: the app's text from the label, else the fallback.
+function appSummary (fallback: string): string {
+  return `{{ if $labels.alert_summary }}{{ $labels.alert_summary }}{{ else }}${fallback}{{ end }}`;
+}
+
+// The data of every thin rule: last firing per app text, and the newest
+// firing over all texts; fires when both are > 0.
+function expectAppQuery (app: any, uid: string): void {
+  expect(app.data.map((d: any) => d.refId)).toEqual(['firing', 'latest', 'firing_last', 'latest_last', 'A']);
+  const [firing, latest, firingLast, latestLast, condition] = app.data;
+  for (const q of [firing, latest]) {
+    expect(q.relativeTimeRange.from).toBe(2592000);
+    expect(q.model.query).toMatch(/last\("firing"\)/);
+    expect(q.model.query).toContain(`"group"='alerts/${uid}'`);
+    expect(q.model.query).toContain('now() - 30d');
+  }
+  expect(firing.model.query).toContain('GROUP BY "alert_summary"');
+  expect(latest.model.query).not.toContain('GROUP BY');
+  expect(firingLast.model).toMatchObject({ type: 'reduce', expression: 'firing', reducer: 'last' });
+  expect(latestLast.model).toMatchObject({ type: 'reduce', expression: 'latest', reducer: 'last' });
+  expect(app.condition).toBe('A');
+  expect(condition.model).toMatchObject({ type: 'math', expression: '$firing_last > 0 && $latest_last > 0' });
+}
 
 function load (file: string): any {
   return parseYaml(readFileSync(path.join(ALERTING, file), 'utf8'));
@@ -36,16 +66,18 @@ const appByUid = new Map(appRules.map((r) => [r.uid, r]));
 describe(APP_FILE, () => {
   it('has exactly one <uid>-app rule per original rule, and no others', () => {
     expect(originals.length).toBeGreaterThan(0);
-    expect(appRules.map((r) => r.uid).sort()).toEqual(originals.map((r) => `${r.uid}-app`).sort());
+    expect(appRules.map((r) => r.uid).sort()).toEqual(
+      [...originals.map((r) => r.uid), ...APP_ONLY.map((r) => r.uid)].map((u) => `${u}-app`).sort(),
+    );
   });
 
   describe.each(originals.map((o) => [o.uid, o]))('%s', (uid, original) => {
     const app = appByUid.get(`${uid}-app`);
 
-    it('copies labels (plus side_by_side), title and annotations', () => {
+    it('copies labels (plus side_by_side), title and annotations; summary is the app text', () => {
       expect(app.labels).toEqual({ ...original.labels, side_by_side: 'true' });
       expect(app.title).toBe(original.title);
-      expect(app.annotations).toEqual(original.annotations);
+      expect(app.annotations).toEqual({ ...original.annotations, summary: appSummary(original.annotations.summary) });
     });
 
     it('fires at once and stays OK without data or on error', () => {
@@ -54,21 +86,20 @@ describe(APP_FILE, () => {
       expect(app.execErrState).toBe('OK');
     });
 
-    it('reads last("firing") of the app message over 30 days, fires on > 0', () => {
-      expect(app.data.map((d: any) => d.refId)).toEqual(['firing', 'A']);
-      const [firing, condition] = app.data;
-      expect(firing.relativeTimeRange.from).toBe(2592000);
-      expect(firing.model.query).toMatch(/last\("firing"\)/);
-      expect(firing.model.query).toContain(`"group"='alerts/${uid}'`);
-      expect(firing.model.query).toContain('now() - 30d');
-      expect(app.condition).toBe('A');
-      expect(condition.datasourceUid).toBe('__expr__');
-      expect(condition.model.conditions).toEqual([expect.objectContaining({
-        evaluator: { type: 'gt', params: [0] },
-        query: { params: ['firing'] },
-        reducer: { type: 'last' },
-      })]);
+    it('reads the app message over 30 days, one instance per app text', () => {
+      expectAppQuery(app, uid);
     });
+  });
+});
+
+describe.each(APP_ONLY)('$uid (only from the app)', ({ uid, labels }) => {
+  const app = appByUid.get(`${uid}-app`);
+
+  it('has its labels (plus side_by_side), the app text as summary, and the same query', () => {
+    expect(app.labels).toEqual({ ...labels, side_by_side: 'true' });
+    expect(app.annotations.summary).toMatch(/^\{\{ if \$labels\.alert_summary \}\}\{\{ \$labels\.alert_summary \}\}\{\{ else \}\}.+\{\{ end \}\}$/);
+    expect(app).toMatchObject({ for: '0s', noDataState: 'OK', execErrState: 'OK' });
+    expectAppQuery(app, uid);
   });
 });
 
