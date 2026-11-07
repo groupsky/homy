@@ -409,7 +409,7 @@ because it is the sensor that fails — issue #1472)
     `title`, `summary`, `severity`, `starts_at`, `value`, and `firing_at` (added by mqtt-influx:
     `ts` while firing, else 0; the rules fire only for the text with the newest one). Read by the thin rules in
     `config/grafana/provisioning/alerting/ioniq-app-alerts.yaml`.
-- `alert_summary`: only on `alerts/<uid>` points, a copy of the `summary` field (#1914). The thin
+- `alert_summary`: only on `alerts/<uid>` points, a copy of the `summary` field without backslashes (#1914). The thin
   rules group by it so the Telegram text is the app's own text. Grafana can use tags as labels,
   but not string fields. One series per distinct text; the app sends few alerts.
 - `state`: vehicle state (`active` / `parked` / `charging` / …), from `payload.state` — low-cardinality, what dashboards filter/group by

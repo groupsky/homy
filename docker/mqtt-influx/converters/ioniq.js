@@ -87,8 +87,8 @@ function isGarbageBmsFrame(data) {
  * tag `alert_summary`, so the Grafana rule can group by it and put the app's
  * text (with values, e.g. old -> new SoH) into its Telegram message. Grafana
  * can show tags as labels, but not string fields. The `summary` field stays.
- * A trailing backslash is dropped from the tag: it would escape the space
- * after the tags and make InfluxDB reject the point.
+ * Backslashes are dropped from the tag: the client does not escape them, and
+ * one before a space, comma or end would make InfluxDB reject the point.
  * It also gets field `firing_at` = ts while firing, else 0. The rule fires
  * only for the text whose `firing_at` is the newest one, so an older text
  * never fires again (#1914).
@@ -108,7 +108,7 @@ module.exports = function ioniq(data) {
         point.tag('state', String(data.state))
     }
     const isAppAlert = String(data.group).startsWith('alerts/')
-    const summaryTag = isAppAlert && typeof data.summary === 'string' ? data.summary.replace(/\\+$/, '') : ''
+    const summaryTag = isAppAlert && typeof data.summary === 'string' ? data.summary.replace(/\\/g, '') : ''
     if (summaryTag !== '') {
         point.tag('alert_summary', summaryTag)
     }

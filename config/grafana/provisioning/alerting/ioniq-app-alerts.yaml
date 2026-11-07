@@ -23,7 +23,7 @@ apiVersion: 1
 # Telegram text = the app's own `summary` (#1914). mqtt-influx stores it also
 # as tag `alert_summary`, and the query groups by it, so every text is one
 # alert instance with that label. The summary annotation shows the label, or
-# the copied yaml text when it is empty (points stored before the tag).
+# the copied yaml text when the app sent no summary.
 # The queries read `firing_at` (the message time while firing, else 0, set
 # by mqtt-influx): its last value per text, and its last value over all
 # texts. An instance fires only when its text's value is > 0 and is the

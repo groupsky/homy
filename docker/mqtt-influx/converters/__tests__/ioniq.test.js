@@ -174,9 +174,9 @@ describe('ioniq converter: app alert messages', () => {
         expect(ioniq({...firing, firing: 0})[0].toLineProtocol()).toMatch(/[ ,]firing_at=0[ ,]/)
     })
 
-    it('drops a trailing backslash from the tag, so the point stays valid', () => {
-        const lp = ioniq({...firing, summary: 'odd\\'})[0].toLineProtocol()
-        expect(lp.startsWith('ioniq,alert_summary=odd,group=')).toBe(true)
+    it('drops backslashes from the tag, so the point stays valid', () => {
+        const lp = ioniq({...firing, summary: 'o\\ dd\\'})[0].toLineProtocol()
+        expect(lp.startsWith('ioniq,alert_summary=o\\ dd,group=')).toBe(true)
         expect(ioniq({...firing, summary: '\\'})[0].toLineProtocol()).not.toContain('alert_summary')
     })
 
