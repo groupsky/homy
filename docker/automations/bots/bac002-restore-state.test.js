@@ -207,7 +207,28 @@ describe('bac002-restore-state bot', () => {
 
     // The mode write is lost; meanwhile a person sets 23 °C and the fan to low
     readings(at, 5 * 60000, {...LOADED, targetTemp: 23, fanSetting: 'low'})
-    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}, {mode: 'heating'}])
+    expect(writes()).toEqual([
+      {mode: 'heating', targetTemp: 21.5},
+      {mode: 'heating'},
+      {mode: 'heating'},
+      {mode: 'heating'},
+    ])
+  })
+
+  it('keeps a person\'s change in the rounds after the one that saw it', async () => {
+    await startBot()
+    contact(false)
+    let at = readings(WEDNESDAY, 120000)
+    at = readings(at + 60000, 40000, LOADED)
+    // The unit takes nothing; a person sets 23 °C before the second write
+    readings(at, 5 * 60000, {...LOADED, targetTemp: 23})
+
+    expect(writes()).toEqual([
+      {mode: 'heating', targetTemp: 21.5},
+      {mode: 'heating'},
+      {mode: 'heating'},
+      {mode: 'heating'},
+    ])
   })
 
   it('writes for each of several quick restarts', async () => {
@@ -287,7 +308,9 @@ describe('bac002-restore-state bot', () => {
     expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
 
     contact(false)
-    readings(at, 60000, {...WANTED, power: 'off'})
+    at = readings(at, 32000, {...WANTED, power: 'off'})
+    // The unit takes the power write
+    readings(at, 60000, WANTED)
     expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}, {power: 'on'}])
   })
 
@@ -301,12 +324,59 @@ describe('bac002-restore-state bot', () => {
     expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
   })
 
-  it('writes at most twice after a restart', async () => {
+  it('writes at most once per field after a restart', async () => {
     await startBot()
     contact(false)
-    readings(readings(WEDNESDAY, 120000) + 60000, 5 * 60000, LOADED)
+    readings(readings(WEDNESDAY, 120000) + 60000, 10 * 60000, LOADED)
 
+    expect(writes()).toHaveLength(4)
+    expect(console.log).toHaveBeenCalledWith(
+      '[test-thermostat] still differs after 4 writes, not writing again',
+      {mode: 'cooling', targetTemp: 20},
+    )
+  })
+
+  it('keeps writing until the unit takes each field, one per round', async () => {
+    await startBot()
+    contact(false)
+    let at = readings(WEDNESDAY, 120000)
+    // After a power loss the unit takes only the first field of each write
+    const lost = {...LOADED, power: 'off'}
+    at = readings(at + 60000, 40000, lost)
+    expect(writes()).toEqual([{power: 'on', mode: 'heating', targetTemp: 21.5}])
+    at = readings(at, 32000, {...lost, power: 'on'})
     expect(writes()).toHaveLength(2)
+    expect(writes()[1]).toEqual({mode: 'heating', targetTemp: 21.5})
+    at = readings(at, 32000, {...lost, power: 'on', mode: 'heating'})
+    expect(writes()).toHaveLength(3)
+    expect(writes()[2]).toEqual({targetTemp: 21.5})
+    at = readings(at, 32000, WANTED)
+    expect(writes()).toHaveLength(3)
+    expect(console.log).toHaveBeenCalledWith('[test-thermostat] nothing to write back after the restart')
+
+    // The readings after the rounds are stored again
+    at = readings(at, 60000, {...WANTED, targetTemp: 23})
+    readings(at + 60000, 40000, LOADED)
+    expect(writes().at(-1)).toEqual({mode: 'heating', targetTemp: 23})
+  })
+
+  it('keeps a person\'s change made between rounds', async () => {
+    await startBot()
+    contact(false)
+    let at = readings(WEDNESDAY, 120000)
+    at = readings(at + 60000, 40000, LOADED)
+    expect(writes()).toEqual([{mode: 'heating', targetTemp: 21.5}])
+
+    // The unit takes nothing; a person then sets 23 °C at the panel
+    at = readings(at, 32000, LOADED)
+    expect(writes()[1]).toEqual({mode: 'heating', targetTemp: 21.5})
+    at = readings(at, 32000, {...LOADED, mode: 'heating', targetTemp: 23})
+    readings(at, 5 * 60000, {...WANTED, targetTemp: 23})
+    expect(writes()).toHaveLength(2)
+
+    // The 23 °C is now wanted
+    readings(at + 6 * 60000, 40000, LOADED)
+    expect(writes().at(-1)).toEqual({mode: 'heating', targetTemp: 23})
   })
 
   it('keeps a panel change made after the restart', async () => {
