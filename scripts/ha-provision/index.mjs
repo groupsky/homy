@@ -2,10 +2,11 @@
 // Applies config/home-assistant/provision.json to a running Home Assistant:
 // the state HA keeps only in .storage and offers no YAML for - rows of
 // storage-mode dashboards, whole dashboards the repo owns, entity
-// exposure to assistants, and device and entity registry names. Safe to re-run;
+// exposure to assistants, device and entity registry names, and the proxy
+// trust in HA's HTTP settings. Safe to re-run;
 // --dry-run reports what would change and writes nothing. See README.md.
 import { readFileSync } from 'node:fs'
-import { applyRows, describeRegistryChanges, fillGrafanaLinks, planExposure, planFullDashboard, planRegistryNames } from './lib.mjs'
+import { applyRows, describeRegistryChanges, fillGrafanaLinks, parseTrustedProxies, planExposure, planFullDashboard, planHttp, planRegistryNames } from './lib.mjs'
 import { connect, readToken } from './ha-websocket.mjs'
 
 // Fixed on purpose, not configurable: the script only ever talks to the HA
@@ -113,11 +114,89 @@ async function provisionFullDashboard (ha, urlPath, desired, dryRun) {
   if (!dryRun) await ha.call({ type: 'lovelace/config/save', url_path: urlPath, config: desired.config })
 }
 
-async function main () {
-  const dryRun = process.argv.slice(2).includes('--dry-run')
-  const desired = JSON.parse(readFileSync(DESIRED, 'utf8'))
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+// How long one run waits for HA to start or to restart with new HTTP settings.
+// A run that runs out of time exits 1; the next run carries on from where
+// HA is.
+const HTTP_WAIT_MS = 100_000
 
-  const ha = await connect(HA_URL, readToken(TOKEN_FILE))
+// Opens a connection, trying again while HA is down or restarting.
+async function connectWhenUp (token, deadline) {
+  for (;;) {
+    try {
+      return await connect(HA_URL, token)
+    } catch (err) {
+      if (Date.now() > deadline || /authentication/.test(err.message)) throw err
+      await sleep(5000)
+    }
+  }
+}
+
+// The proxy trust in HA's HTTP settings (#1820). HA keeps them in .storage
+// since 2026.8 and applies a change only by restarting, as a trial that
+// reverts by itself unless it is promoted. So this step connects again after
+// the restart and promotes the settings once HA runs with them. The proxy
+// address comes from TRUSTED_PROXIES, not from the public repo.
+async function provisionHttp (token, desired, dryRun) {
+  const want = { use_x_forwarded_for: desired.use_x_forwarded_for, trusted_proxies: parseTrustedProxies(process.env.TRUSTED_PROXIES) }
+  const deadline = Date.now() + HTTP_WAIT_MS
+  for (;;) {
+    const ha = await connectWhenUp(token, deadline)
+    try {
+      if (await httpStep(ha, want, dryRun)) return
+    } finally {
+      ha.close()
+    }
+    if (Date.now() > deadline) throw new Error('http: HA is not running yet, or has not restarted with the new proxy trust; run again')
+    await sleep(5000)
+  }
+}
+
+// One look at HA's HTTP settings and the action it needs. Returns true when
+// nothing is left to do in this run.
+async function httpStep (ha, want, dryRun) {
+  // HA answers early in its start; HTTP settings, entities and dashboards
+  // are there only once it runs.
+  if ((await ha.call({ type: 'get_config' })).state !== 'RUNNING') return false
+  const plan = planHttp(await ha.call({ type: 'http/config' }), want)
+  if (plan.action === 'none') {
+    console.log('http: up to date')
+    return true
+  }
+  if (plan.action === 'failed') throw new Error(`http: HA could not apply the proxy trust: ${plan.error}`)
+  if (dryRun) {
+    console.log(`http: would set the proxy trust from TRUSTED_PROXIES (step: ${plan.action})`)
+    return true
+  }
+  if (plan.action === 'promote') {
+    await ha.call({ type: 'http/config/promote' })
+    console.log('http: the proxy trust from TRUSTED_PROXIES is confirmed')
+    return true
+  }
+  if (plan.action === 'configure') {
+    try {
+      await ha.call({ type: 'http/config/configure', config: plan.config })
+      console.log('http: set the proxy trust from TRUSTED_PROXIES; HA restarts to apply it')
+    } catch (err) {
+      // HA takes HTTP settings only while it runs; it may have just stopped.
+      if (!/not_running/.test(err.message)) throw err
+    }
+  }
+  return false
+}
+
+async function main () {
+  const args = process.argv.slice(2)
+  const dryRun = args.includes('--dry-run')
+  const desired = JSON.parse(readFileSync(DESIRED, 'utf8'))
+  const token = readToken(TOKEN_FILE)
+
+  // First, as it may restart HA. --http-only stops here: a fresh HA, as in
+  // CI, has none of the entities and dashboards of the other steps.
+  if (desired.http) await provisionHttp(token, desired.http, dryRun)
+  if (args.includes('--http-only')) return 0
+
+  const ha = await connect(HA_URL, token)
   try {
     await provisionExposure(ha, desired.exposure ?? {}, dryRun)
     let ok = await provisionRegistryNames(ha, desired.registry_names ?? {}, dryRun)

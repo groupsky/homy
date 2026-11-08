@@ -31,6 +31,20 @@ cannot take from YAML:
   is not in the registry, has no device to name, or names one device twice
   differently.
 
+- **Proxy trust** (`http`, #1820). Since 2026.8 HA keeps its HTTP settings
+  in `/config/.storage/http` and ignores an `http:` YAML block, so
+  `configuration.yaml` has none. `"use_x_forwarded_for": true` here, with the
+  proxy address from the `TRUSTED_PROXIES` environment variable, which
+  `scripts/deploy.sh` fills from `PROXY_BACKEND_ADDRESS` in `.env` (nginx's
+  pinned address). The address is not in the repo. Without this trust HA
+  answers 400 to every request through nginx (#1555). To change the proxy,
+  change `PROXY_BACKEND_ADDRESS` and deploy: the deploy runs this step every
+  time (`--http-only`), as git does not see `.env` change. HA applies a new setting only by **restarting**, as a
+  trial that reverts by itself after 5 minutes unless it is confirmed. The
+  script waits for the restart (up to 100 s per run) and then confirms it;
+  if HA is slower, run it again and it carries on. This step runs first, and
+  `--http-only` runs only it (CI does this on its fresh HA).
+
 A rebuilt data volume reverts all of these, and an edit in the UI reverts what it
 touches. Re-run the script to restore them. It is idempotent.
 
@@ -62,16 +76,19 @@ docker run --rm --network homy_automation \
   -v "$PWD":/w:ro \
   -v "$secrets/ha_provision_token":/run/secrets/ha_provision_token:ro \
   -e HA_GRAFANA_BASE_URL="$(sed -n 's/^HA_GRAFANA_BASE_URL=//p' .env)" \
+  -e TRUSTED_PROXIES="$(sed -n 's/^PROXY_BACKEND_ADDRESS=//p' .env)" \
   ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 \
   node /w/scripts/ha-provision/index.mjs --dry-run
 ```
 
-Drop `--dry-run` to apply. `scripts/deploy.sh` runs the same command after a
-successful deploy (see `docs/DEPLOYMENT.md`), so a hand run is needed only
-when the deploy reports that it failed or was skipped. No container is restarted; HA applies all changes
-live.
+Drop `--dry-run` to apply.
+`scripts/deploy.sh` runs the same command after a successful deploy (see
+`docs/DEPLOYMENT.md`), so a hand run is needed only when the deploy reports
+that it failed or was skipped. No container is restarted, and HA applies all
+changes live, except a change of the proxy trust, which restarts HA.
 
-One setting comes from `.env`: `HA_GRAFANA_BASE_URL`, the base of the
+Two settings come from `.env`. `PROXY_BACKEND_ADDRESS` is the proxy HA
+trusts, passed as `TRUSTED_PROXIES` (see above). `HA_GRAFANA_BASE_URL` is the base of the
 dashboards' Grafana links. In `provision.json` such a link is written
 `[name](grafana:/d/uid)`. With the setting set it becomes
 `[name](<base>/d/uid)`; empty or missing, only the name is shown, with no link

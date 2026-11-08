@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyRows, describeRegistryChanges, fillGrafanaLinks, planExposure, planFullDashboard, planRegistryNames } from './lib.mjs'
+import { applyRows, describeRegistryChanges, fillGrafanaLinks, parseTrustedProxies, planExposure, planFullDashboard, planHttp, planRegistryNames } from './lib.mjs'
 
 const RELAY = 'switch.relay'
 const desiredRow = {
@@ -197,4 +197,48 @@ test('reports an entity not in the registry, without a device, or a device with 
     'sensor.template: has no device to name',
     'sensor.room_humidity: device living-temp-humid is named both "Хол" (by sensor.room_temperature) and "Кухня"'
   ])
+})
+
+test('parseTrustedProxies: plain addresses become networks, an empty list is refused', () => {
+  assert.deepEqual(parseTrustedProxies('192.0.2.11'), ['192.0.2.11/32'])
+  assert.deepEqual(parseTrustedProxies(' 192.0.2.0/24, 2001:DB8::1 '), ['192.0.2.0/24', '2001:db8::1/128'])
+  assert.throws(() => parseTrustedProxies(''), /TRUSTED_PROXIES is empty/)
+  assert.throws(() => parseTrustedProxies(undefined), /TRUSTED_PROXIES is empty/)
+})
+
+const proxyTrust = { use_x_forwarded_for: true, trusted_proxies: ['192.0.2.11/32'] }
+const stable = { server_port: 8123, cors_allowed_origins: ['https://cast.home-assistant.io'], ip_ban_enabled: true, created_at: 't0', error: null, error_message: null }
+
+test('planHttp: nothing to do when the confirmed settings already trust the proxy', () => {
+  const current = { stable: { ...stable, ...proxyTrust }, pending: null, active_config_type: 'stable' }
+  assert.deepEqual(planHttp(current, proxyTrust), { action: 'none' })
+})
+
+test('planHttp: a fresh HA gets its other settings kept and the proxy trust added', () => {
+  const current = { stable, pending: null, active_config_type: 'default' }
+  assert.deepEqual(planHttp(current, proxyTrust), {
+    action: 'configure',
+    config: { server_port: 8123, cors_allowed_origins: ['https://cast.home-assistant.io'], ip_ban_enabled: true, ...proxyTrust }
+  })
+})
+
+test('planHttp: a different proxy is configured again', () => {
+  const current = { stable: { ...stable, use_x_forwarded_for: true, trusted_proxies: ['192.0.2.12/32'] }, pending: null, active_config_type: 'stable' }
+  assert.equal(planHttp(current, proxyTrust).action, 'configure')
+})
+
+test('planHttp: the matching pending settings are promoted once HA runs with them', () => {
+  const pending = { ...stable, ...proxyTrust, error: null }
+  assert.deepEqual(planHttp({ stable, pending, active_config_type: 'pending' }, proxyTrust), { action: 'promote' })
+  assert.deepEqual(planHttp({ stable, pending, active_config_type: 'stable' }, proxyTrust), { action: 'wait' })
+})
+
+test('planHttp: matching pending settings HA could not apply are reported, not tried again', () => {
+  const pending = { ...stable, ...proxyTrust, error: 'apply_failed', error_message: 'cannot bind' }
+  assert.deepEqual(planHttp({ stable, pending, active_config_type: 'stable' }, proxyTrust), { action: 'failed', error: 'apply_failed cannot bind' })
+})
+
+test('planHttp: a trial that ran out before it was confirmed is tried again', () => {
+  const pending = { ...stable, ...proxyTrust, error: 'not_promoted', error_message: null }
+  assert.equal(planHttp({ stable, pending, active_config_type: 'stable' }, proxyTrust).action, 'configure')
 })

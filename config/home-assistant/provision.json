@@ -1,4 +1,7 @@
 {
+  "http": {
+    "use_x_forwarded_for": true
+  },
   "exposure": {
     "conversation": {
       "switch.1217_mariboli": false

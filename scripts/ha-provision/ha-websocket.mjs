@@ -40,6 +40,8 @@ export function connect (url, token) {
     })
     ws.addEventListener('error', () => reject(new Error(`cannot connect to ${url}`)))
     ws.addEventListener('close', () => {
+      // Closed before auth_ok, for example by an HA that is shutting down
+      reject(new Error(`connection to ${url} closed`))
       for (const { rej, type } of pending.values()) rej(new Error(`${type}: connection closed`))
       pending.clear()
     })
