@@ -59,10 +59,19 @@ const timeOfDayWrong = ({ hours, minutes, _tz }) => {
  *   the unit's clock, which the clock check sees.
  * - The unit reloads its saved values for about 24 s, so readings in the next
  *   `reloadMs` are not stored. The first reading after that gets one write with
- *   only the values that differ. Readings in the next `reloadMs` are not stored
- *   either; a field that still differs and still shows its value from the
- *   first write is written once more. Later changes are a person's and are
- *   stored.
+ *   only the values that differ.
+ * - Right after a power-on or a mode change, the unit can drop the fields that
+ *   come next in the same write (the driver writes power, mode, then set
+ *   point). So the bot checks again `reloadMs` after each write and writes the
+ *   fields that still differ, in rounds, at most one write per field in
+ *   `FIELDS`. A later round writes only a field that still shows the value it
+ *   had at the write before; a new value is a person's change and is kept,
+ *   in the later rounds too.
+ *   A round with nothing to write ends the rounds. Until they end, readings
+ *   are not stored. A field that still differs after the last write is logged
+ *   and not written again; later readings are stored as usual.
+ * - Known limit: a value the unit itself changes between rounds looks like a
+ *   person's change, so it is kept.
  * - No write without stored state, or when it was last seen more than
  *   `maxStateAgeMs` before the restart. No power write unless every contact is
  *   fresh and closed.
@@ -106,8 +115,14 @@ module.exports = (name, {
     let closedBefore = false
     let restartAt = null
     let restoreAfter = null
-    // After the first write: the value the unit showed for each field then
+    // The value the unit showed for each field at the latest write, and the
+    // number of writes for this restart
     let written = null
+    let writeCount = 0
+    const endRounds = () => {
+      written = null
+      writeCount = 0
+    }
 
     switches.forEach(({ topic, isOpen }, index) => {
       mqtt.subscribe(topic, (payload) => {
@@ -132,32 +147,41 @@ module.exports = (name, {
       const { wanted, seenAt } = persistedCache
       if (seenAt == null || restartAt - seenAt > maxStateAgeMs) {
         console.log(`[${name}] not writing back: the stored state is ${seenAt == null ? 'missing' : `from ${new Date(seenAt).toISOString()}`}`)
+        endRounds()
         return
       }
-      const again = written != null
+      const again = writeCount > 0
+      // In a later round, a new value is a person's change: write only the
+      // fields that still show the value they had at the write before. Such a
+      // field stays kept in the rounds after, too (null in `written`).
+      const changed = again ? FIELDS.filter((field) => written[field] == null || !same(field, written[field], payload[field])) : []
       const write = {}
       for (const field of FIELDS) {
         if (wanted[field] == null || same(field, wanted[field], payload[field])) continue
-        // The second time, a new value is a person's change: write only the
-        // fields that still show the value they had at the first write.
-        if (again && !same(field, written[field], payload[field])) continue
+        if (changed.includes(field)) continue
         if (field === 'power' && !contactsClosed()) {
           console.log(`[${name}] not writing power ${wanted.power}: a contact is open or has no fresh data`)
           continue
         }
         write[field] = wanted[field]
       }
-      written = null
       if (Object.keys(write).length === 0) {
         console.log(`[${name}] nothing to write back after the restart`)
+        endRounds()
         return
       }
-      console.log(`[${name}] writing back after the restart${again ? ', again' : ''}`, write)
+      if (writeCount >= FIELDS.length) {
+        const differs = Object.fromEntries(Object.keys(write).map((field) => [field, payload[field]]))
+        console.log(`[${name}] still differs after ${writeCount} writes, not writing again`, differs)
+        endRounds()
+        return
+      }
+      writeCount++
+      console.log(`[${name}] writing back after the restart${again ? `, again (write ${writeCount})` : ''}`, write)
       mqtt.publish(writeTopic, write)
       restored(`${name}: ${Object.entries(write).map(([field, value]) => `${field} ${value}`).join(', ')}${again ? ' (again)' : ''}`)
-      if (again) return
       // Check after another reload time that the unit took it
-      written = Object.fromEntries(FIELDS.map((field) => [field, payload[field]]))
+      written = Object.fromEntries(FIELDS.map((field) => [field, changed.includes(field) ? null : payload[field]]))
       restoreAfter = payload._tz + reloadMs
     }
 
@@ -184,14 +208,14 @@ module.exports = (name, {
       if (gap > maxSilenceMs && restoreAfter != null) {
         console.log(`[${name}] no reading for ${Math.round(gap / 1000)} s, dropping the waiting write-back`)
         restoreAfter = null
-        written = null
+        endRounds()
       }
       if (signal) {
         console.log(`[${name}] restart seen (${signal}), writing back the wanted state in ${reloadMs / 1000} s`)
         // A restart while a write-back waits starts it over; the age check
         // stays with the first one.
         if (restoreAfter == null) restartAt = at
-        written = null
+        endRounds()
         restoreAfter = at + reloadMs
         return
       }
