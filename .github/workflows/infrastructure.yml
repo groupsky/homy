@@ -14,6 +14,10 @@ on:
       # The network pin and the trusted-proxy address live here (#1555).
       - 'example.env'
       - '.github/workflows/infrastructure.yml'
+      # HA's proxy trust: set by ha-provision, no http: YAML (#1820).
+      - 'config/home-assistant/configuration.yaml'
+      - 'config/home-assistant/provision.json'
+      - 'scripts/ha-provision/**'
 
   pull_request:
     paths:
@@ -25,6 +29,10 @@ on:
       # The network pin and the trusted-proxy address live here (#1555).
       - 'example.env'
       - '.github/workflows/infrastructure.yml'
+      # HA's proxy trust: set by ha-provision, no http: YAML (#1820).
+      - 'config/home-assistant/configuration.yaml'
+      - 'config/home-assistant/provision.json'
+      - 'scripts/ha-provision/**'
 
   # Weekly validation (catch indirect failures from base image updates)
   schedule:
@@ -139,18 +147,6 @@ jobs:
           fi
           echo "✓ nginx holds its pinned address $actual_address"
 
-          # The invariant that actually matters: what HA trusts must be the
-          # address nginx really has, not merely what example.env claims.
-          ha_cid=$(docker compose --env-file example.env ps -q ha)
-          ha_trusted=$(docker inspect "$ha_cid" \
-            -f '{{range .Config.Env}}{{println .}}{{end}}' | grep '^TRUSTED_PROXIES=' | cut -d= -f2-)
-          if [ "$ha_trusted" != "$actual_address" ]; then
-            echo "FAIL: HA trusts '$ha_trusted' but nginx reaches it from '$actual_address'"
-            echo "      Every proxied request would return 400."
-            exit 1
-          fi
-          echo "✓ HA trusts exactly the address nginx proxies from ($ha_trusted)"
-
           echo "Starting ingressgen to generate nginx config..."
           docker compose --env-file example.env up -d ingressgen
 
@@ -210,6 +206,57 @@ jobs:
           echo "Checking ingressgen logs for critical errors..."
           docker compose --env-file example.env logs ingressgen
           echo "✓ Ingress template validation complete"
+
+      - name: Give HA its proxy trust with ha-provision
+        run: |
+          # HA keeps its HTTP settings in .storage and has no http: YAML
+          # (#1820). A fresh HA, as here, trusts no proxy until ha-provision
+          # sets it. The address is the one nginx really has, so HA trusts what
+          # nginx is, not merely what example.env claims.
+          ha_curl() { docker compose --env-file example.env exec -T ha curl -sf "$@"; }
+          for i in $(seq 1 60); do
+            ha_curl -o /dev/null http://localhost:8123/api/onboarding && break
+            if [ "$i" -eq 60 ]; then
+              echo "FAIL: HA did not start"
+              docker compose --env-file example.env logs ha | tail -30
+              exit 1
+            fi
+            sleep 5
+          done
+
+          # An admin token: onboard the fresh HA with a throwaway owner.
+          client=http://localhost:8123/
+          code=$(ha_curl -X POST -H 'Content-Type: application/json' \
+            -d "{\"client_id\":\"$client\",\"name\":\"CI\",\"username\":\"ci\",\"password\":\"$(openssl rand -hex 16)\",\"language\":\"en\"}" \
+            http://localhost:8123/api/onboarding/users | jq -r .auth_code)
+          token=$(ha_curl -X POST -d "grant_type=authorization_code&code=$code&client_id=$client" \
+            http://localhost:8123/auth/token | jq -r .access_token)
+          token_file=$(mktemp)
+          printf '%s' "$token" > "$token_file"
+          chmod 644 "$token_file"
+
+          nginx_cid=$(docker compose --env-file example.env ps -q ingress)
+          proxy=$(docker inspect "$nginx_cid" \
+            -f '{{(index .NetworkSettings.Networks "homy_ingress").IPAddress}}')
+          provision() {
+            docker run --rm --init --network homy_automation \
+              -v "$PWD":/w:ro -v "$token_file":/run/secrets/ha_provision_token:ro \
+              -e TRUSTED_PROXIES="$proxy" \
+              ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 \
+              node /w/scripts/ha-provision/index.mjs --http-only "$@"
+          }
+          # One run waits up to 100 s for HA's restart; the restart may take longer.
+          for i in 1 2 3 4; do
+            provision && break
+            if [ "$i" -eq 4 ]; then echo "FAIL: ha-provision did not set the proxy trust"; exit 1; fi
+          done
+          out=$(provision --dry-run)
+          echo "$out"
+          if [ "$out" != "http: up to date" ]; then
+            echo "FAIL: HA's confirmed HTTP settings do not trust nginx ($proxy)"
+            exit 1
+          fi
+          echo "✓ HA trusts exactly the address nginx proxies from ($proxy)"
 
       - name: Verify a proxied request is not rejected as an untrusted proxy
         run: |

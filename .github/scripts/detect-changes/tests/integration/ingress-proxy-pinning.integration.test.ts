@@ -1,8 +1,9 @@
 /**
  * Integration test for the trusted-proxy contract behind issue #1555.
  *
- * Home Assistant sets `use_x_forwarded_for: true` and takes `trusted_proxies`
- * from a single `!env_var TRUSTED_PROXIES` entry. If that value does not cover
+ * Home Assistant keeps `use_x_forwarded_for` and `trusted_proxies` in its
+ * `.storage`; `scripts/ha-provision` sets them from `TRUSTED_PROXIES`, which
+ * `scripts/deploy.sh` fills from `PROXY_BACKEND_ADDRESS` (#1820). If that value does not cover
  * the address nginx reaches HA from, HA answers *every* proxied request with
  * `400 Bad Request` — no fallback, no degraded mode.
  *
@@ -244,7 +245,6 @@ describe('the pinned values are required, not defaulted (#1555)', () => {
         (readCompose().services?.['ingress']?.networks as ComposeServiceNetworks)?.['ingress']
           ?.ipv4_address,
     ],
-    ["HA's TRUSTED_PROXIES", () => envEntry(readCompose().services!['ha']!, 'TRUSTED_PROXIES')],
   ])('%s uses the ${VAR:?message} form', (_label, read) => {
     // A plain `$VAR` interpolates to "" when the host's .env is missing it, and
     // compose then *silently* drops an empty ipv4_address and creates the network
@@ -329,34 +329,24 @@ describe('nginx reaches HA over exactly one network (#1555)', () => {
 });
 
 describe("HA's trusted_proxies cannot drift from the proxy's address (#1555)", () => {
-  test('TRUSTED_PROXIES resolves to a value that covers nginx', () => {
-    const compose = readCompose();
-    const env = readExampleEnv();
-
-    const trusted = expand(envEntry(compose.services!['ha']!, 'TRUSTED_PROXIES')!, env);
-    const nginxNetworks = compose.services!['ingress']!.networks as ComposeServiceNetworks;
-    const nginxAddress = expand(nginxNetworks['ingress']!.ipv4_address!, env);
-
-    // Accept either an exact address or a CIDR containing it, so tightening or
-    // widening the trust scope stays a deliberate one-line choice.
-    const covers = trusted.includes('/')
-      ? ipInCidr(nginxAddress, trusted)
-      : trusted === nginxAddress;
-
-    expect(covers).toBe(true);
-  });
-
-  test('TRUSTED_PROXIES and the proxy address share one variable', () => {
-    const compose = readCompose();
-    const trustedRef = referencedVar(envEntry(compose.services!['ha']!, 'TRUSTED_PROXIES'));
-    const nginxNetworks = compose.services!['ingress']!.networks as ComposeServiceNetworks;
+  test('ha-provision trusts the variable that pins the proxy address (#1820)', () => {
+    const deployRaw = fs.readFileSync(path.join(repoRoot, 'scripts/deploy.sh'), 'utf-8');
+    const nginxNetworks = readCompose().services!['ingress']!.networks as ComposeServiceNetworks;
     const addressRef = referencedVar(nginxNetworks['ingress']!.ipv4_address);
 
-    // The previous shape had TRUSTED_PROXIES on its own variable with nothing
-    // tying it to the network. Two independent values is exactly how they drift:
-    // one source means correcting the address corrects the trust automatically.
-    expect(trustedRef).not.toBeNull();
-    expect(trustedRef).toEqual(addressRef);
+    // One source: correcting the address corrects the trust on the next deploy.
+    // Two independent values is exactly how they drifted in #1555.
+    expect(addressRef).not.toBeNull();
+    expect(deployRaw).toContain(`-e TRUSTED_PROXIES="$(dotenv_value ${addressRef})"`);
+  });
+
+  test('HA takes no proxy trust from YAML or its environment (#1820)', () => {
+    const haConfig = fs.readFileSync(path.join(repoRoot, 'config/home-assistant/configuration.yaml'), 'utf-8');
+
+    // HA reads the http: YAML only once, as an import; after that it is ignored
+    // and raises a repair. An env var there would look like it still matters.
+    expect(haConfig).not.toMatch(/^http:/m);
+    expect(envEntry(readCompose().services!['ha']!, 'TRUSTED_PROXIES')).toBeUndefined();
   });
 
   test('the retired HOMEASSISTANT_TRUSTED_PROXIES variable is gone', () => {
