@@ -42,6 +42,13 @@ const devices = {
     name: 'Соларен панел',
     suggested_area: areas.roof
   },
+
+  mower: {
+    identifiers: 'sunseeker_mower',
+    manufacturer: 'sunseeker',
+    name: 'Косачка',
+    suggested_area: areas.external
+  },
 }
 
 const haLight = (
@@ -1223,6 +1230,23 @@ const config = {
         object_id: 'dark_sky_tonight',
         icon: 'mdi:weather-night',
       }
+    }),
+
+    // The mower's rain sensor (#1841); sunseeker-monitoring retains this
+    // state, homy only reads it. No expire_after: the mower may go quiet when
+    // dry, and the last retained state is still right.
+    ...haBinarySensor({
+      name: 'mowerRainSensorWet',
+      feature: 'mower_rain_sensor_wet',
+      type: 'moisture',
+      config: {
+        name: 'Дъждовен сензор',
+        device: devices.mower,
+        object_id: 'mower_rain_sensor_wet',
+        unique_id: 'homy_mower_rain_sensor_wet',
+        state_topic: 'homy/mower/rain',
+        value_template: "{{ 'ON' if value_json.wet else 'OFF' }}",
+      },
     }),
 
     // Away mode (#1756): the `away-mode` bot in config.js owns both entities

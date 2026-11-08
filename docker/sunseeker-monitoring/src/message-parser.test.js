@@ -754,6 +754,47 @@ describe('rain fields', () => {
   });
 });
 
+describe('rainState', () => {
+  const parser = new SunseekerMessageParser();
+
+  it('is wet when rain_status is 2', () => {
+    expect(parser.rainState('{"cmd":505,"rain_status":2,"rain_delay_left":720,"rain_delay_set":720,"rain_en":1}'))
+      .toEqual({ wet: true, rain_status: 2, rain_delay_left: 720 });
+  });
+
+  it('is dry when rain_status is 1 or 0', () => {
+    expect(parser.rainState('{"cmd":505,"rain_status":1,"rain_delay_left":300}'))
+      .toEqual({ wet: false, rain_status: 1, rain_delay_left: 300 });
+    expect(parser.rainState('{"cmd":505,"rain_status":0,"rain_delay_left":0}'))
+      .toEqual({ wet: false, rain_status: 0, rain_delay_left: 0 });
+  });
+
+  it('gives rain_delay_left as null when the message has none', () => {
+    expect(parser.rainState('{"cmd":505,"rain_status":2}'))
+      .toEqual({ wet: true, rain_status: 2, rain_delay_left: null });
+  });
+
+  it('finds rain_status inside a data object or a JSON string', () => {
+    expect(parser.rainState('{"cmd":505,"data":{"rain_status":2,"rain_delay_left":10}}'))
+      .toEqual({ wet: true, rain_status: 2, rain_delay_left: 10 });
+    const payload = JSON.stringify({ cmd: 505, data: JSON.stringify({ rain_status: 1 }) });
+    expect(parser.rainState(payload)).toEqual({ wet: false, rain_status: 1, rain_delay_left: null });
+  });
+
+  it('is null when the message has no numeric rain_status', () => {
+    expect(parser.rainState('{"cmd":501,"mode":0}')).toBeNull();
+    expect(parser.rainState('{"cmd":505,"rain_en":1,"rain_delay_left":5}')).toBeNull();
+    expect(parser.rainState('{"cmd":505,"rain_status":null}')).toBeNull();
+    expect(parser.rainState('{"cmd":505,"my_rain_status":2}')).toBeNull();
+  });
+
+  it('is null for a payload that is not a JSON object', () => {
+    expect(parser.rainState('not json')).toBeNull();
+    expect(parser.rainState('2')).toBeNull();
+    expect(parser.rainState('null')).toBeNull();
+  });
+});
+
 describe('InfluxDataPoint', () => {
   it('should create data points with correct structure', () => {
     // This will be tested when we implement the InfluxDataPoint class

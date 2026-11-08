@@ -9,6 +9,7 @@
 
 import { SunseekerMqttInfluxService } from './mqtt-influx-service.js';
 import { MEASUREMENTS } from './constants.js';
+import { jest } from '@jest/globals';
 
 const TEST_DEVICE_ID = 'TEST_DEVICE_0000000000000';
 
@@ -167,5 +168,46 @@ describe('SunseekerMqttInfluxService._createInfluxPoint', () => {
       expect(fieldsOf(point).value).toBe('1');
       expect(point.toLineProtocol()).toMatch(/^sunseeker_rain,cmd=501,device_id=[^ ]+,field=rain\.rain_flag /);
     });
+  });
+});
+
+describe('SunseekerMqttInfluxService rain state to the local broker', () => {
+  let service;
+
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    service = new SunseekerMqttInfluxService(TEST_CONFIG);
+    service.writeApi = { writePoints: jest.fn(), flush: jest.fn(async () => {}) };
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const topic = `/device/${TEST_DEVICE_ID}/update`;
+
+  it('publishes the rain state when a local publisher is set', async () => {
+    service.localPublisher = { publishRain: jest.fn() };
+    await service._handleMessage(topic, Buffer.from('{"cmd":505,"rain_status":2,"rain_delay_left":720}'));
+    expect(service.localPublisher.publishRain).toHaveBeenCalledWith({ wet: true, rain_status: 2, rain_delay_left: 720 });
+    expect(service.writeApi.writePoints).toHaveBeenCalled();
+  });
+
+  it('publishes nothing for a message without rain_status', async () => {
+    service.localPublisher = { publishRain: jest.fn() };
+    await service._handleMessage(topic, Buffer.from('{"cmd":501,"mode":0}'));
+    expect(service.localPublisher.publishRain).not.toHaveBeenCalled();
+  });
+
+  it('still publishes when the InfluxDB write fails', async () => {
+    service.localPublisher = { publishRain: jest.fn() };
+    service.writeApi.flush = jest.fn(async () => { throw new Error('influx down'); });
+    await service._handleMessage(topic, Buffer.from('{"cmd":505,"rain_status":1}'));
+    expect(service.localPublisher.publishRain).toHaveBeenCalledWith({ wet: false, rain_status: 1, rain_delay_left: null });
+  });
+
+  it('works without a local publisher', async () => {
+    await expect(service._handleMessage(topic, Buffer.from('{"cmd":505,"rain_status":2}'))).resolves.toBeUndefined();
+    expect(service.writeApi.writePoints).toHaveBeenCalled();
   });
 });

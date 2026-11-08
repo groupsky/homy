@@ -29,7 +29,9 @@ const identity = (bots) => Object.fromEntries(Object.entries(bots).map(([key, bo
 // Changed on purpose once since then (#1912): the boiler contactor became a
 // read-only binary sensor and the boost button was added; no other entity
 // changed.
-const BASELINE_SHA256 = 'ba121c52268838dff43711ed950c963aa8a5ec60c5ae6fdda0e06f2be94f56c9'
+// Changed on purpose again (#1841): the mower rain sensor was added. Without
+// it the identity still hashed to ba121c52…f56c9.
+const BASELINE_SHA256 = '8064950a3ee3cee44b12d0d19a173dc9defeb5b1b8c113c180e265b37b5fa110'
 const canonical = (ids) => JSON.stringify(Object.keys(ids).sort().map((k) => [k, ids[k]]))
 const sha256 = (text) => require('crypto').createHash('sha256').update(text).digest('hex')
 
