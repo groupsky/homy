@@ -45,6 +45,34 @@ export class SunseekerMessageParser {
   }
 
   /**
+   * The rain sensor state for Home Assistant, from a message that has a
+   * numeric rain_status (cmd 505): 2 is wet; 1 (rain delay counting down) and
+   * 0 are dry. rain_delay_left is in minutes, null when the message has none.
+   * @param {string} payload - JSON payload
+   * @returns {{wet: boolean, rain_status: number, rain_delay_left: number|null}|null}
+   */
+  rainState(payload) {
+    let data;
+    try {
+      data = JSON.parse(payload);
+    } catch {
+      return null;
+    }
+    if (data === null || typeof data !== 'object') return null;
+
+    const fields = this._findRainFields(data);
+    const numberAt = (name) => {
+      const field = fields.find(({ path, value }) =>
+        (path === name || path.endsWith(`.${name}`)) && Number.isFinite(value));
+      return field ? field.value : null;
+    };
+
+    const status = numberAt('rain_status');
+    if (status === null) return null;
+    return { wet: status === 2, rain_status: status, rain_delay_left: numberAt('rain_delay_left') };
+  }
+
+  /**
    * Find scalar fields whose path has a rain name (see RAIN_KEY_PATTERN).
    * Looks into nested objects and into string values that hold a JSON object
    * (the mower may send `data` that way).

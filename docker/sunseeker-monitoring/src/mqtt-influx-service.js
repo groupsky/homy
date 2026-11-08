@@ -8,6 +8,7 @@ import { SunseekerMessageParser } from './message-parser.js';
 import { MQTT, HEALTH_CHECK, FLOAT_FIELDS } from './constants.js';
 import { validateConfig, generateClientId, isTimestampRecent, createError } from './utils.js';
 import { logger } from './logger.js';
+import { createLocalPublisher } from './local-publisher.js';
 
 export class SunseekerMqttInfluxService {
   constructor(config) {
@@ -16,6 +17,7 @@ export class SunseekerMqttInfluxService {
     this.mqttClient = null;
     this.influxDB = null;
     this.writeApi = null;
+    this.localPublisher = null;
 
     // Health and metrics tracking
     this.isConnected = false;
@@ -35,6 +37,12 @@ export class SunseekerMqttInfluxService {
 
     // In test mode, don't fail if connections fail - just log and continue
     const isTestMode = process.env.TEST_MODE === 'true';
+
+    // Best effort and never fatal: it does not wait for the connection
+    if (this.config.localMqtt) {
+      logger.connection(`Publishing the rain state to the local broker: ${this.config.localMqtt.url}`);
+      this.localPublisher = createLocalPublisher({ url: this.config.localMqtt.url });
+    }
 
     try {
       await this._connectMqtt();
@@ -60,6 +68,10 @@ export class SunseekerMqttInfluxService {
     try {
       if (this.mqttClient) {
         this.mqttClient.end(true);
+      }
+
+      if (this.localPublisher) {
+        await this.localPublisher.close();
       }
 
       if (this.writeApi) {
@@ -181,6 +193,12 @@ export class SunseekerMqttInfluxService {
 
       this.metrics.messagesProcessed++;
       this.metrics.lastMessageTime = Date.now();
+
+      // Before the InfluxDB write, so a failed write does not stop it
+      if (this.localPublisher) {
+        const rain = this.parser.rainState(payload);
+        if (rain) this.localPublisher.publishRain(rain);
+      }
 
       const dataPoints = this.parser.parseMessage(topic, payload);
 

@@ -49,7 +49,10 @@ export function loadConfig() {
       token: influxToken,
       org: influxOrg,
       bucket: influxBucket
-    }
+    },
+    // The local homy broker, for the rain state in Home Assistant. Optional;
+    // not the vendor broker above.
+    localMqtt: process.env.BROKER ? { url: process.env.BROKER } : null
   };
 
   // Validate required fields using utility function
