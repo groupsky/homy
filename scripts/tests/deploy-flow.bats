@@ -781,6 +781,16 @@ dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/
     assert_output --partial "ha_provision_token:/run/secrets/ha_provision_token:ro"
 }
 
+@test "deploy.sh: ha-provision gets the proxy address from PROXY_BACKEND_ADDRESS (#1820)" {
+    echo "PROXY_BACKEND_ADDRESS=192.0.2.11" > "$PROJECT_DIR/.env"
+    touch "$MOCK_DIR/provision-changed"
+
+    run deploy
+    assert_success
+    run grep "docker run" "$MOCK_DIR/calls.log"
+    assert_output --partial "-e TRUSTED_PROXIES=192.0.2.11"
+}
+
 @test "deploy.sh: a dry run that still differs after the apply is reported" {
     touch "$MOCK_DIR/provision-changed"
     echo "dashboard dashboard-x: save the config from provision.json" > "$MOCK_DIR/provision.out"

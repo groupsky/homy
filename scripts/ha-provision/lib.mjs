@@ -171,3 +171,45 @@ export function describeRegistryChanges ({ entityChanges, deviceChanges }, dryRu
     ...entityChanges.map((c) => `registry: ${verb} name of ${c.entityId}: ${JSON.stringify(c.from)} -> ${JSON.stringify(c.to)}`)
   ]
 }
+
+// Fields HA adds to stored HTTP settings to track a trial; not settings.
+const HTTP_META = ['created_at', 'error', 'error_message']
+const withoutMeta = (config) => Object.fromEntries(Object.entries(config ?? {}).filter(([key]) => !HTTP_META.includes(key)))
+
+/**
+ * Turns a comma separated list of proxy addresses (the TRUSTED_PROXIES
+ * setting) into networks as HA stores them: a plain address becomes /32 or
+ * /128. Throws when the list is empty, so HA is never told to trust nobody
+ * by mistake.
+ */
+export function parseTrustedProxies (value) {
+  const proxies = String(value ?? '').split(',').map((part) => part.trim()).filter(Boolean)
+  if (proxies.length === 0) throw new Error('TRUSTED_PROXIES is empty: set it to the address nginx reaches HA from')
+  return proxies.map((proxy) => (proxy.includes('/') ? proxy : `${proxy}/${proxy.includes(':') ? 128 : 32}`))
+}
+
+/**
+ * Plans the proxy trust in HA's HTTP settings (#1820). `current` is the
+ * answer of `http/config`; `desired` holds `use_x_forwarded_for` and
+ * `trusted_proxies`. A change is a trial in HA: it is stored as `pending`,
+ * HA restarts with it, and it reverts by itself unless it is promoted
+ * within 5 minutes. Returns `{ action }`, one of:
+ *
+ * - `none`: the confirmed (`stable`) settings already match
+ * - `promote`: HA runs with the matching pending settings; confirm them
+ * - `wait`: the matching settings are pending but HA has not restarted yet
+ * - `failed`: the matching settings failed their trial; `error` says why
+ * - `configure`: store `config` as pending, which restarts HA
+ */
+export function planHttp (current, desired) {
+  const matches = (config) => config != null &&
+    config.use_x_forwarded_for === desired.use_x_forwarded_for &&
+    isDeepStrictEqual([...(config.trusted_proxies ?? [])].sort(), [...desired.trusted_proxies].sort())
+  if (matches(current.stable)) return { action: 'none' }
+  const pending = current.pending
+  if (matches(pending)) {
+    if (pending.error) return { action: 'failed', error: `${pending.error} ${pending.error_message ?? ''}`.trim() }
+    return { action: current.active_config_type === 'pending' ? 'promote' : 'wait' }
+  }
+  return { action: 'configure', config: { ...withoutMeta(current.stable), ...desired } }
+}

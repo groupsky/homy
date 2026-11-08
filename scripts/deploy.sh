@@ -472,6 +472,7 @@ HA_PROVISION_CMD=(docker run --rm --init --network homy_automation
     -v "$PROJECT_DIR":/w:ro
     -v "$(resolve_secrets_dir)/ha_provision_token":/run/secrets/ha_provision_token:ro
     -e HA_GRAFANA_BASE_URL="$(dotenv_value HA_GRAFANA_BASE_URL)"
+    -e TRUSTED_PROXIES="$(dotenv_value PROXY_BACKEND_ADDRESS)"
     "$HA_PROVISION_IMAGE"
     node /w/scripts/ha-provision/index.mjs)
 HA_PROVISION_TEXT=$(printf '%q ' "${HA_PROVISION_CMD[@]}")
