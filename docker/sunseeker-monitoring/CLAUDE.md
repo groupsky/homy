@@ -108,6 +108,8 @@ export function loadSecret(name) {
 - **cmd 400**: Command acknowledgments
 - **Any cmd, rain fields** (#1841): every scalar field whose key path has a rain name (`rain`, `rain_*`, `*_rain*`, `rainFlag`; not `train`/`drain`), up to 4 levels deep and inside string values that hold a JSON object (such as `data`), is logged as `Rain field seen: cmd=<cmd> <path>=<value>` and stored in `sunseeker_rain`. The rule is `RAIN_KEY_PATTERN` in `src/constants.js`. It is there to learn which field the rain sensor uses; it adds nothing to the other measurements.
 
+**Rain state to the local broker** (#1841): with `BROKER` set (`mqtt://broker` in compose), a second, anonymous MQTT client publishes each message that has a numeric `rain_status` (path `rain_status` or `*.rain_status`, sent with cmd 505 about once a minute) retained, qos 1, to `homy/mower/rain` as `{"wet": <rain_status === 2>, "rain_status": n, "rain_delay_left": minutes or null}`. `rain_status` is 2 wet, 1 dry with the rain delay counting down, 0 dry. Home Assistant reads it as `binary_sensor.mower_rain_sensor_wet` (`config/automations/ha_discovery.js`). Best effort: local broker errors are only logged; this client never connects to the vendor broker and the vendor client never publishes.
+
 **Log Data Extraction:**
 Use regex patterns to extract structured data from log text:
 ```javascript
@@ -368,6 +370,8 @@ MQTT_USERNAME=app
 MQTT_PASSWORD_FILE=/run/secrets/sunseeker_mqtt_password
 MQTT_DEVICE_ID=${SUNSEEKER_DEVICE_ID}
 MQTT_APP_ID=${SUNSEEKER_APP_ID}
+# Optional: the local homy broker, for homy/mower/rain (not the vendor broker)
+BROKER=mqtt://broker
 ```
 
 ## Testing Commands
