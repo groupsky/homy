@@ -458,6 +458,11 @@ present from a previous deploy, an empty value would otherwise be accepted
 silently, leaving the network unpinned and the stack green but broken — this is
 exactly how issue #1555 happened.
 
+HA trusts the proxy at `PROXY_BACKEND_ADDRESS`. HA keeps this in its
+`.storage`, not in YAML; `scripts/ha-provision` sets it after a deploy that
+changes it, and HA restarts once to apply it (#1820, see
+`scripts/ha-provision/README.md`).
+
 ## Image Management
 
 ### Built Images
