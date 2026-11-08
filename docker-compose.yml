@@ -879,6 +879,7 @@ services:
     image: ghcr.io/groupsky/homy/sunseeker-monitoring:${IMAGE_TAG:-latest}
     build: docker/sunseeker-monitoring
     depends_on:
+      - broker
       - influxdb
     restart: unless-stopped
     networks:
@@ -899,6 +900,8 @@ services:
       - INFLUXDB_USERNAME_FILE=/run/secrets/influxdb_write_user
       - INFLUXDB_PASSWORD_FILE=/run/secrets/influxdb_write_user_password
       - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
+      # The local broker, for the rain state in Home Assistant (homy/mower/rain)
+      - BROKER=mqtt://broker
     mem_limit: *node-mem-limit
     logging: *default-logging
 
