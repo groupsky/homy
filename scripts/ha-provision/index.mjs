@@ -159,25 +159,24 @@ async function httpStep (ha, want, dryRun) {
   // are there only once it runs.
   if ((await ha.call({ type: 'get_config' })).state !== 'RUNNING') return false
   const plan = planHttp(await ha.call({ type: 'http/config' }), want)
-  const proxies = want.trusted_proxies.join(', ')
   if (plan.action === 'none') {
     console.log('http: up to date')
     return true
   }
   if (plan.action === 'failed') throw new Error(`http: HA could not apply the proxy trust: ${plan.error}`)
   if (dryRun) {
-    console.log(`http: would trust the proxy ${proxies} (step: ${plan.action})`)
+    console.log(`http: would set the proxy trust from TRUSTED_PROXIES (step: ${plan.action})`)
     return true
   }
   if (plan.action === 'promote') {
     await ha.call({ type: 'http/config/promote' })
-    console.log(`http: trusts the proxy ${proxies}`)
+    console.log('http: the proxy trust from TRUSTED_PROXIES is confirmed')
     return true
   }
   if (plan.action === 'configure') {
     try {
       await ha.call({ type: 'http/config/configure', config: plan.config })
-      console.log(`http: set the proxy trust ${proxies}; HA restarts to apply it`)
+      console.log('http: set the proxy trust from TRUSTED_PROXIES; HA restarts to apply it')
     } catch (err) {
       // HA takes HTTP settings only while it runs; it may have just stopped.
       if (!/not_running/.test(err.message)) throw err
