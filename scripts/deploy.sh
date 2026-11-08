@@ -215,7 +215,7 @@ echo "    2. Update the code and pull the new images from GHCR"
 echo "    3. Recreate only the services whose image or configuration changed"
 echo "    4. Health-check the recreated services; on failure roll code and"
 echo "       images back (data is never rolled back automatically)"
-echo "    5. On success, bring HA's dashboards to provision.json (ha-provision)"
+echo "    5. On success, bring HA's dashboards and proxy trust to provision.json (ha-provision)"
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 
@@ -461,7 +461,7 @@ block_deploys() {
 }
 
 # scripts/ha-provision as its README runs it. ha_provision adds the arguments
-# (--dry-run or none) and prints the output of its last try; HA_PROVISION_TEXT
+# (--dry-run, --http-only or none) and prints the output of its last try; HA_PROVISION_TEXT
 # is the command for a human to run. HA has no healthcheck, so the gate may
 # pass while it is still starting: a failed try is repeated a few times.
 HA_PROVISION_IMAGE=ghcr.io/groupsky/homy/node:22.22.0-alpine3.23
@@ -520,6 +520,16 @@ provision_ha() {
         if ! ha_provision | tee -a "$LOG_FILE"; then
             error "ha-provision failed. HA is running; run it by hand: $HA_PROVISION_TEXT"
             HA_PROVISION_NOTE="ha-provision FAILED, run it by hand (scripts/ha-provision/README.md)"
+            return 0
+        fi
+    else
+        # The proxy HA trusts comes from .env, which git does not see change:
+        # its step runs on every deploy, and does nothing when HA already
+        # trusts that address (#1820).
+        log "Checking HA's proxy trust (ha-provision --http-only)..."
+        if ! ha_provision --http-only | tee -a "$LOG_FILE"; then
+            error "ha-provision --http-only failed. HA is running; run it by hand: $HA_PROVISION_TEXT --http-only"
+            HA_PROVISION_NOTE="ha-provision FAILED to set HA's proxy trust, run it by hand (scripts/ha-provision/README.md)"
             return 0
         fi
     fi

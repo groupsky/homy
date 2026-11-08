@@ -185,7 +185,8 @@ const withoutMeta = (config) => Object.fromEntries(Object.entries(config ?? {}).
 export function parseTrustedProxies (value) {
   const proxies = String(value ?? '').split(',').map((part) => part.trim()).filter(Boolean)
   if (proxies.length === 0) throw new Error('TRUSTED_PROXIES is empty: set it to the address nginx reaches HA from')
-  return proxies.map((proxy) => (proxy.includes('/') ? proxy : `${proxy}/${proxy.includes(':') ? 128 : 32}`))
+  // Lower case, as HA writes IPv6 addresses
+  return proxies.map((proxy) => proxy.toLowerCase()).map((proxy) => (proxy.includes('/') ? proxy : `${proxy}/${proxy.includes(':') ? 128 : 32}`))
 }
 
 /**
@@ -198,7 +199,7 @@ export function parseTrustedProxies (value) {
  * - `none`: the confirmed (`stable`) settings already match
  * - `promote`: HA runs with the matching pending settings; confirm them
  * - `wait`: the matching settings are pending but HA has not restarted yet
- * - `failed`: the matching settings failed their trial; `error` says why
+ * - `failed`: HA could not apply the matching settings; `error` says why
  * - `configure`: store `config` as pending, which restarts HA
  */
 export function planHttp (current, desired) {
@@ -208,6 +209,9 @@ export function planHttp (current, desired) {
   if (matches(current.stable)) return { action: 'none' }
   const pending = current.pending
   if (matches(pending)) {
+    // not_promoted: the trial ran out before it was confirmed, for example
+    // when a run stopped during HA's restart. HA takes the same settings again.
+    if (pending.error === 'not_promoted') return { action: 'configure', config: { ...withoutMeta(current.stable), ...desired } }
     if (pending.error) return { action: 'failed', error: `${pending.error} ${pending.error_message ?? ''}`.trim() }
     return { action: current.active_config_type === 'pending' ? 'promote' : 'wait' }
   }

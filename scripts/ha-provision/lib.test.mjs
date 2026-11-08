@@ -201,7 +201,7 @@ test('reports an entity not in the registry, without a device, or a device with 
 
 test('parseTrustedProxies: plain addresses become networks, an empty list is refused', () => {
   assert.deepEqual(parseTrustedProxies('192.0.2.11'), ['192.0.2.11/32'])
-  assert.deepEqual(parseTrustedProxies(' 192.0.2.0/24, 2001:db8::1 '), ['192.0.2.0/24', '2001:db8::1/128'])
+  assert.deepEqual(parseTrustedProxies(' 192.0.2.0/24, 2001:DB8::1 '), ['192.0.2.0/24', '2001:db8::1/128'])
   assert.throws(() => parseTrustedProxies(''), /TRUSTED_PROXIES is empty/)
   assert.throws(() => parseTrustedProxies(undefined), /TRUSTED_PROXIES is empty/)
 })
@@ -233,7 +233,12 @@ test('planHttp: the matching pending settings are promoted once HA runs with the
   assert.deepEqual(planHttp({ stable, pending, active_config_type: 'stable' }, proxyTrust), { action: 'wait' })
 })
 
-test('planHttp: matching pending settings that failed their trial are reported, not tried again', () => {
+test('planHttp: matching pending settings HA could not apply are reported, not tried again', () => {
+  const pending = { ...stable, ...proxyTrust, error: 'apply_failed', error_message: 'cannot bind' }
+  assert.deepEqual(planHttp({ stable, pending, active_config_type: 'stable' }, proxyTrust), { action: 'failed', error: 'apply_failed cannot bind' })
+})
+
+test('planHttp: a trial that ran out before it was confirmed is tried again', () => {
   const pending = { ...stable, ...proxyTrust, error: 'not_promoted', error_message: null }
-  assert.deepEqual(planHttp({ stable, pending, active_config_type: 'stable' }, proxyTrust), { action: 'failed', error: 'not_promoted' })
+  assert.equal(planHttp({ stable, pending, active_config_type: 'stable' }, proxyTrust).action, 'configure')
 })

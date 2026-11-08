@@ -38,8 +38,8 @@ cannot take from YAML:
   `scripts/deploy.sh` fills from `PROXY_BACKEND_ADDRESS` in `.env` (nginx's
   pinned address). The address is not in the repo. Without this trust HA
   answers 400 to every request through nginx (#1555). To change the proxy,
-  change `PROXY_BACKEND_ADDRESS` and deploy, or run the script by hand with
-  `-e TRUSTED_PROXIES=…`. HA applies a new setting only by **restarting**, as a
+  change `PROXY_BACKEND_ADDRESS` and deploy: the deploy runs this step every
+  time (`--http-only`), as git does not see `.env` change. HA applies a new setting only by **restarting**, as a
   trial that reverts by itself after 5 minutes unless it is confirmed. The
   script waits for the restart (up to 100 s per run) and then confirms it;
   if HA is slower, run it again and it carries on. This step runs first, and

@@ -666,6 +666,7 @@ registry_misses() {
 
 provision_runs() { grep -c "docker run .*ha-provision/index.mjs\$" "$MOCK_DIR/calls.log" || true; }
 dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/calls.log" || true; }
+http_runs() { grep -c "docker run .*ha-provision/index.mjs --http-only" "$MOCK_DIR/calls.log" || true; }
 
 @test "deploy.sh: a changed provision.json is applied after the gate, then checked with a dry run" {
     touch "$MOCK_DIR/provision-changed"
@@ -677,6 +678,7 @@ dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/
     assert_success
     assert_equal "$(provision_runs)" 1
     assert_equal "$(dry_runs)" 1
+    assert_equal "$(http_runs)" 0
     # apply comes after up, the dry run after the apply
     up_line=$(grep -n "compose up" "$MOCK_DIR/calls.log" | tail -n1 | cut -d: -f1)
     run_line=$(grep -n "docker run" "$MOCK_DIR/calls.log" | head -n1 | cut -d: -f1)
@@ -692,10 +694,11 @@ dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/
     assert_equal "$(cat "$VERSION_FILE")" "$NEW"
 }
 
-@test "deploy.sh: an unchanged provision.json gets only the dry run" {
+@test "deploy.sh: an unchanged provision.json gets only the proxy trust step and the dry run" {
     run deploy
     assert_success
     assert_equal "$(provision_runs)" 0
+    assert_equal "$(http_runs)" 1
     assert_equal "$(dry_runs)" 1
     run cat "$MOCK_DIR/notify.log"
     assert_output --partial "HA up to date with provision.json"
@@ -779,6 +782,16 @@ dry_runs() { grep -c "docker run .*ha-provision/index.mjs --dry-run" "$MOCK_DIR/
     run grep "docker run" "$MOCK_DIR/calls.log"
     assert_output --partial "--init --network homy_automation"
     assert_output --partial "ha_provision_token:/run/secrets/ha_provision_token:ro"
+}
+
+@test "deploy.sh: a failed proxy trust step is reported and does not fail the deploy (#1820)" {
+    : > "$MOCK_DIR/provision.fail"
+
+    run deploy
+    assert_success
+    assert_output --partial "ha-provision --http-only failed"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "FAILED to set HA's proxy trust"
 }
 
 @test "deploy.sh: ha-provision gets the proxy address from PROXY_BACKEND_ADDRESS (#1820)" {

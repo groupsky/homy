@@ -143,36 +143,47 @@ async function provisionHttp (token, desired, dryRun) {
   for (;;) {
     const ha = await connectWhenUp(token, deadline)
     try {
-      const plan = planHttp(await ha.call({ type: 'http/config' }), want)
-      if (plan.action === 'none') {
-        console.log('http: up to date')
-        return
-      }
-      if (plan.action === 'failed') throw new Error(`http: the proxy trust failed its trial in HA: ${plan.error}`)
-      if (dryRun) {
-        console.log(`http: would trust the proxy ${want.trusted_proxies.join(', ')} (step: ${plan.action})`)
-        return
-      }
-      if (plan.action === 'promote') {
-        await ha.call({ type: 'http/config/promote' })
-        console.log(`http: trusts the proxy ${want.trusted_proxies.join(', ')}`)
-        return
-      }
-      if (plan.action === 'configure') {
-        try {
-          await ha.call({ type: 'http/config/configure', config: plan.config })
-          console.log(`http: set the proxy trust ${want.trusted_proxies.join(', ')}; HA restarts to apply it`)
-        } catch (err) {
-          // HA takes HTTP settings only once it has fully started.
-          if (!/not_running/.test(err.message)) throw err
-        }
-      }
+      if (await httpStep(ha, want, dryRun)) return
     } finally {
       ha.close()
     }
-    if (Date.now() > deadline) throw new Error('http: HA has not restarted with the new proxy trust yet; run again')
+    if (Date.now() > deadline) throw new Error('http: HA is not running yet, or has not restarted with the new proxy trust; run again')
     await sleep(5000)
   }
+}
+
+// One look at HA's HTTP settings and the action it needs. Returns true when
+// nothing is left to do in this run.
+async function httpStep (ha, want, dryRun) {
+  // HA answers early in its start; HTTP settings, entities and dashboards
+  // are there only once it runs.
+  if ((await ha.call({ type: 'get_config' })).state !== 'RUNNING') return false
+  const plan = planHttp(await ha.call({ type: 'http/config' }), want)
+  const proxies = want.trusted_proxies.join(', ')
+  if (plan.action === 'none') {
+    console.log('http: up to date')
+    return true
+  }
+  if (plan.action === 'failed') throw new Error(`http: HA could not apply the proxy trust: ${plan.error}`)
+  if (dryRun) {
+    console.log(`http: would trust the proxy ${proxies} (step: ${plan.action})`)
+    return true
+  }
+  if (plan.action === 'promote') {
+    await ha.call({ type: 'http/config/promote' })
+    console.log(`http: trusts the proxy ${proxies}`)
+    return true
+  }
+  if (plan.action === 'configure') {
+    try {
+      await ha.call({ type: 'http/config/configure', config: plan.config })
+      console.log(`http: set the proxy trust ${proxies}; HA restarts to apply it`)
+    } catch (err) {
+      // HA takes HTTP settings only while it runs; it may have just stopped.
+      if (!/not_running/.test(err.message)) throw err
+    }
+  }
+  return false
 }
 
 async function main () {
