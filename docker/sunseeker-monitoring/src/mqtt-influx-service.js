@@ -70,16 +70,17 @@ export class SunseekerMqttInfluxService {
         this.mqttClient.end(true);
       }
 
-      if (this.localPublisher) {
-        await this.localPublisher.close();
-      }
-
       if (this.writeApi) {
         await this.writeApi.close();
       }
 
       if (this.influxDB) {
         this.influxDB.close();
+      }
+
+      // Last, so a failure here cannot skip the InfluxDB flush
+      if (this.localPublisher) {
+        await this.localPublisher.close();
       }
 
       logger.success('Service stopped successfully');
