@@ -107,8 +107,11 @@ module.exports = function createIoniq12vLdc (name, config = {}) {
         // Slow parked drift: only while parked, and referenced against the
         // oldest PARKED sample in the sustain window (scoped to parked so an
         // active->parked transition does not mix a driving voltage into the rate).
-        if (sample.state === 'parked') {
-          const parked = window.filter((s) => s.state === 'parked' && s.rxTs >= now - sustainMs)
+        // plugged-waiting (cable in, not charging) is parked with the cable in;
+        // logger builds before 2026-11-09 reported it as parked.
+        const isParked = (s) => s.state === 'parked' || s.state === 'plugged-waiting'
+        if (isParked(sample)) {
+          const parked = window.filter((s) => isParked(s) && s.rxTs >= now - sustainMs)
           const ref = parked[0]
           if (ref) {
             const spanMs = now - ref.rxTs
