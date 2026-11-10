@@ -186,7 +186,9 @@
   value_template: &ioniq_ts "{{ (value_json.ts / 1000) | as_datetime if value_json.ts is number else '' }}"
   device_class: timestamp
 
-# active, charging or parked, as the car reported it last. A mis-decoded
+# active, charging, plugged-preheat, parked or plugged-waiting, as the car
+# reported it last (the two plugged- states come from logger builds after
+# 2026-11-09). A mis-decoded
 # bms/2101 frame with all cell voltages 0 (one of the shapes mqtt-influx
 # drops, docker/mqtt-influx/converters/ioniq.js) is skipped: the empty value
 # is not one of the enum options, and a numeric sensor ignores it.
@@ -197,7 +199,9 @@
   options:
     - active
     - charging
+    - plugged-preheat
     - parked
+    - plugged-waiting
 
 # A frame without aux_12v (an implausible value) is skipped too.
 - name: ioniq_12v

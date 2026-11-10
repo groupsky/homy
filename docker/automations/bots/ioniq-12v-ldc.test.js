@@ -162,6 +162,14 @@ describe('ioniq-12v-ldc bot', () => {
       expect(lastFor(mqtt, AUX_DROP).value).toBe(1)
     })
 
+    it('flags a slow drift while plugged-waiting, also across a parked sample', async () => {
+      await bot.start({ mqtt, persistedCache })
+      await feed(mqtt, 0, { aux_12v: 12.8, ignition: 0, hv_kw: 0, state: 'parked' })
+      await feed(mqtt, 30000, { aux_12v: 12.6, ignition: 0, hv_kw: 0, state: 'plugged-waiting' })
+      await feed(mqtt, 60000, { aux_12v: 12.4, ignition: 0, hv_kw: 0, state: 'plugged-waiting' })
+      expect(lastFor(mqtt, AUX_DROP).value).toBe(1)
+    })
+
     it('does not flag the same slow drift while active (parked-only)', async () => {
       await bot.start({ mqtt, persistedCache })
       await feed(mqtt, 0, { aux_12v: 12.8, ignition: 1, hv_kw: 2, state: 'active' })

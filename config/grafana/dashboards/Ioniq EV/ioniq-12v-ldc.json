@@ -265,7 +265,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "12 V reading split by vehicle state (GROUP BY \"state\" tag → one line per active/charging/parked). state is BOTH a tag and a field here; banding uses the tag. The state distribution is heavily skewed — active ~98 %, charging ~1.3 %, parked ~0.6 % — so over a 6 h window the charging and parked lines are often ABSENT. That is real data, not a bug; widen the range to catch a parked window. The horizontal band lines are the parked-only alert thresholds (11.8 / 12.2 V).",
+      "description": "12 V reading split by vehicle state (GROUP BY \"state\" tag → one line per state: active, charging, plugged-preheat, parked, plugged-waiting). plugged-waiting (ignition off, cable in, not charging) and plugged-preheat (cable in, charge bit set, but no energy into the pack, e.g. cabin preheat) come from logger builds after 2026-11-09; before that the same frames were parked and charging. state is BOTH a tag and a field here; banding uses the tag. The state distribution is heavily skewed — active ~98 %, charging ~1.3 %, parked ~0.6 % — so over a 6 h window the non-active lines are often ABSENT. That is real data, not a bug; widen the range to catch a parked window. The horizontal band lines are the thresholds of the former parked 12 V alerts (11.8 / 12.2 V).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -458,7 +458,7 @@
         "type": "influxdb",
         "uid": "P3C6603E967DC8568"
       },
-      "description": "Resting 12 V while parked (state='parked') — per-interval minimum and median. This is the true health signal the parked 12 V alerts (critical <11.8 V, low <12.2 V) evaluate. parked is only ~0.6 % of samples, so this panel is NEARLY EMPTY over a 6 h window BY DESIGN — widen to several days to see the resting trend. Points (not just lines) are drawn because the data is intermittent.",
+      "description": "Resting 12 V while parked (state parked or plugged-waiting; plugged-waiting is ignition off with the cable in but not charging, named so from logger builds after 2026-11-09, parked before) — per-interval minimum and median. The thresholds of the former parked 12 V alerts were critical <11.8 V, low <12.2 V. parked is only ~0.6 % of samples, so this panel is NEARLY EMPTY over a 6 h window BY DESIGN — widen to several days to see the resting trend. Points (not just lines) are drawn because the data is intermittent.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -544,7 +544,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT min(\"aux_12v\") AS \"parked_min\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND \"state\"='parked' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "query": "SELECT min(\"aux_12v\") AS \"parked_min\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND \"state\" =~ /^(parked|plugged-waiting)$/ AND $timeFilter GROUP BY time($__interval) fill(none)",
           "rawQuery": true,
           "refId": "A"
         },
@@ -554,7 +554,7 @@
             "type": "influxdb",
             "uid": "P3C6603E967DC8568"
           },
-          "query": "SELECT percentile(\"aux_12v\", 50) AS \"parked_median\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND \"state\"='parked' AND $timeFilter GROUP BY time($__interval) fill(none)",
+          "query": "SELECT percentile(\"aux_12v\", 50) AS \"parked_median\" FROM \"ioniq\" WHERE \"group\"='bms/2101' AND \"state\" =~ /^(parked|plugged-waiting)$/ AND $timeFilter GROUP BY time($__interval) fill(none)",
           "rawQuery": true,
           "refId": "B"
         }
