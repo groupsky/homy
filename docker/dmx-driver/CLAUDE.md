@@ -131,3 +131,7 @@ unrelated changes.
 **Limit:** the native addon ignores write errors in its update thread. If the
 adapter goes silent *after* it was opened, while it stays on the USB bus, the
 state stays `online`. Detecting that needs the addon to report write errors.
+
+**Limit:** if the adapter opens but its setup (baud rate, line settings) then
+fails, the addon does not close the USB handle. Retries in the same process may
+then keep failing as busy until the container is restarted.
