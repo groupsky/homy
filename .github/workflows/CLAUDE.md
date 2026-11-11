@@ -599,11 +599,9 @@ tests deciding which images get built and tagged were green only on a developer'
 It triggers on `docker-compose.yml` too, because
 `tests/integration/sha-tag-coverage.integration.test.ts` reads the real compose file.
 
-It also gates on tests and typecheck only, collecting coverage in a separate non-gating
-step: `jest.config.js` asks for 80% globally and branch coverage has never met it (78.96%
-at `c92cae9`), precisely because nothing ran the suite to find out. Issue #1548 closes that
-gap and restores the gate. Do **not** paper over it by lowering the threshold or passing
-`--coverageThreshold='{}'`.
+Its test step runs with `--coverage`, so it also gates on the 80% global threshold in
+`jest.config.js`. If a change drops coverage below it, add tests; do **not** lower the
+threshold or pass `--coverageThreshold='{}'`.
 
 **Workflow Structure** (consistent across the 7 service workflows):
 ```yaml
