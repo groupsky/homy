@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/zigbee2mqtt:2.14.2
+FROM ghcr.io/groupsky/homy/zigbee2mqtt:2.14.3
 
 # Add custom entrypoint wrapper to support _FILE suffix for Docker secrets
 COPY docker-entrypoint-wrapper.sh /usr/local/bin/
