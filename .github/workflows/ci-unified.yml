@@ -1361,9 +1361,8 @@ jobs:
           #      this step while run B is still building. B's images are not
           #      pushed yet, so the fallback would mint <image>:<C> from A's
           #      manifest - shipping code that predates B.
-          #   b) A push of several commits at once. GitHub fires one run, for the
-          #      head, and HEAD^ is an intermediate commit that never had a run,
-          #      so it will never have images.
+          #   b) A base commit whose run never pushed images (cancelled, or
+          #      the wait-for-base-run job gave up after 55 minutes).
           #   c) A red run. Nothing is tagged at that commit, so the next commit
           #      would have sourced a :latest older than the changes between.
           #
@@ -1386,7 +1385,7 @@ jobs:
           # is in it.
           if ! docker buildx imagetools inspect "$BASE_IMAGE" >/dev/null 2>&1; then
             echo "::error::No image at $BASE_IMAGE for $IMAGE_NAME."
-            echo "The base commit's images were never pushed - its run failed, was cancelled, is still running, or it is an intermediate commit in a multi-commit push (issue #1549)."
+            echo "The base commit's images were never pushed - its run failed or was cancelled, or it was still running when wait-for-base-run gave up (issue #1549)."
             echo "Do NOT deploy $SHA until this is green."
             echo ""
             echo "Recovery, in order of preference:"
