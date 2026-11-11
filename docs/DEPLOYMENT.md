@@ -61,6 +61,7 @@ Options:
   -y, --yes           Skip confirmation prompt
   --skip-snapshot     Deploy without the pre-deploy ZFS snapshot (DANGEROUS)
   --skip-backup       Old name of --skip-snapshot
+  --allow-red-ci      Deploy even when the commit's ci-unified run is not green
 ```
 
 **Examples:**
@@ -203,6 +204,8 @@ The script:
 
 1. Checks that `docker compose` v2 is installed, and stops if it is not (see [Hosts without docker compose v2](#hosts-without-docker-compose-v2)).
 2. Shows the deployment plan and asks for confirmation. Then **waits for the images**: CI pushes the images of a commit some minutes after the merge. Every homy image that the new commit's `docker-compose.yml` names with `${IMAGE_TAG}` is checked in the registry (`docker manifest inspect`, in parallel, each with a 60 s timeout); while one is missing, the missing ones are checked again every `IMAGE_WAIT_INTERVAL` (30 s), for up to `IMAGE_WAIT_SECONDS` (1800 s). If one is still missing then, it stops with the image and tag in the message, before the snapshot: nothing was changed (#1748).
+
+   Then it **waits for a green CI run**: the images exist as soon as CI has built them, before its tests run, so they say nothing about the tests. It reads the commit's `ci-unified` runs from the public GitHub API (no token needed) every `CI_WAIT_INTERVAL` (120 s). It goes on when one run succeeded (a green re-run or `force_rebuild` counts); it stops when the runs failed, or when no run is green after `CI_WAIT_SECONDS` (3600 s, also when GitHub does not answer). Both stops are before the snapshot: nothing was changed. `--allow-red-ci` skips this check; `--tag latest` skips it too, because CI moves `latest` only after all tests passed. A tag that is not a known commit is refused without `--allow-red-ci` (#1550).
 3. **Takes the snapshot** (`snapshot.sh`) before anything else. If it fails, the deploy stops here: the code, the images and every container are untouched.
 4. Updates the code to `origin/master` and pulls the images for that commit. If the pull fails, the code is put back and nothing is restarted.
 5. Writes `docker-compose.deploy.yml` (not in git): every service pinned to its image **digest** and labelled with a hash of the host files it mounts (see [Recreating only what changed](#recreating-only-what-changed)).
