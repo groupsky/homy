@@ -461,7 +461,7 @@ retag waits. Runs chain: C waits for B, which waits for A.
 
 This is enough for a few merges close together. A long burst (like the 49 merges above)
 can still go past 55 minutes or the account's limit of parallel jobs; then 5B fails
-loudly, as before. Recovery is `force_rebuild=true` on the tip (below). Still merge large
+loudly, as before. Recovery is `force_rebuild=true` on the tip (above). Still merge large
 batches one at a time.
 
 Decision: a wait, not a queue-by-branch concurrency group. With `cancel-in-progress:
