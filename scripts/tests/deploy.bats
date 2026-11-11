@@ -105,6 +105,14 @@ exit 0
 EOF
     chmod +x "$TEST_DIR/docker"
 
+    # GitHub: the commit's ci-unified run passed (the CI gate is tested in
+    # deploy-flow.bats); nothing reaches the network
+    cat > "$TEST_DIR/curl" <<'EOF'
+#!/bin/bash
+echo '{"workflow_runs":[{"event":"push","status":"completed","conclusion":"success"}]}'
+EOF
+    chmod +x "$TEST_DIR/curl"
+
     export PATH="$TEST_DIR:$PATH"
 
     cp "${BATS_TEST_DIRNAME}/../docker-helper.sh" "$PROJECT_DIR/scripts/docker-helper.sh"

@@ -534,10 +534,17 @@ rule above has to be strict — 5C cannot be the backstop for a stale tag.
 `<image>:<short-sha>` itself, with `--push`, and depends only on
 `[detect-changes, prepare-base-images]` — it runs *before* any test. So the SHA tags exist as
 soon as the builds finish, whatever the tests then do; only `:latest` is test-gated, which is
-what the "Critical rule" comment in the Stage 5 header means. Since `deploy.sh` deploys by
-SHA and never by `:latest`, **test-gating protects only the tag nobody deploys** — filed as
-issue #1550. This is also what makes the `force_rebuild` recovery terminate: it needs all 20
-builds to succeed, not a fully green run.
+what the "Critical rule" comment in the Stage 5 header means. `deploy.sh` deploys by SHA,
+not by `:latest`, so **the test gate for a deploy is in `deploy.sh`** (issue #1550): before
+the snapshot it reads the commit's `ci-unified` runs from the GitHub API and goes on only
+when one of them succeeded. A failed run stops the deploy; a run that is still going is
+waited for (`CI_WAIT_SECONDS`, default 3600). `--allow-red-ci` skips the check. A green
+re-run or `force_rebuild` dispatch of the same commit counts, so a red run never leaves a
+commit undeployable for good.
+
+The SHA tags stay ungated on purpose. That is what makes the `force_rebuild` recovery
+terminate: it needs all 20 builds to succeed, not a fully green run, so a red run never
+leaves the next commit unable to produce SHA tags.
 
 It also enumerates services by their `image:` field, so a service that CI *builds* but that
 carries no homy image would be absent from 5C's count and silently reported as covered. The

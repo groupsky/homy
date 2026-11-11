@@ -66,9 +66,20 @@ case "\$*" in
 esac
 exit 0
 EOF
-    # notifications: recorded, never sent; nothing reaches the real journal
+    # notifications: recorded, never sent; nothing reaches the real journal.
+    # GitHub's list of ci-unified runs answers from $MOCK_DIR/ci-runs (one
+    # answer per line, the last one repeats; "down" fails like a network
+    # error); without the file CI passed.
     cat > "$MOCK_BIN/curl" <<'EOF'
 #!/bin/bash
+case "$*" in *api.github.com*)
+    echo "$*" >> "$MOCK_DIR/github.log"
+    [ -f "$MOCK_DIR/ci-runs" ] || { echo '{"workflow_runs":[{"status":"completed","conclusion":"success"}]}'; exit 0; }
+    n=$(wc -l < "$MOCK_DIR/github.log")
+    line=$(sed -n "${n}p" "$MOCK_DIR/ci-runs"); [ -n "$line" ] || line=$(tail -n 1 "$MOCK_DIR/ci-runs")
+    [ "$line" = down ] && exit 22
+    echo "$line"; exit 0 ;;
+esac
 for a in "$@"; do case "$a" in text=*) echo "${a#text=}" >> "$MOCK_DIR/notify.log" ;; esac; done
 echo '{"ok":true,"result":{"message_id":1}}'
 EOF
@@ -234,6 +245,98 @@ registry_misses() {
     assert_failure
     assert_output --partial "ghcr.io/groupsky/homy/automations:latest was not found in the registry"
     refute_output --partial "homy/old"
+}
+
+# --- CI must be green (#1550) -------------------------------------------------
+
+RUN_OK='{"workflow_runs":[{"status":"completed","conclusion":"success"}]}'
+RUN_RED='{"workflow_runs":[{"status":"completed","conclusion":"failure"}]}'
+RUN_BUSY='{"workflow_runs":[{"status":"in_progress","conclusion":null}]}'
+
+assert_nothing_changed() {
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "0"
+    run calls
+    refute_output --partial "compose pull"
+    refute_output --partial "compose up"
+    run cat "$GIT_CALLS"
+    refute_output --partial "pull origin"
+    assert_equal "$(cat "$VERSION_FILE")" "$OLD"
+}
+
+@test "deploy.sh: a commit whose ci-unified run failed is not deployed" {
+    compose_at_commit automations
+    echo "$RUN_RED" > "$MOCK_DIR/ci-runs"
+
+    run deploy
+    assert_failure
+    assert_output --partial "ci-unified run of"
+    assert_output --partial "failed"
+    assert_output --partial "--allow-red-ci"
+    assert_nothing_changed
+    run cat "$MOCK_DIR/github.log"
+    assert_output --partial "head_sha=$NEW"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "its ci-unified run failed. Nothing was changed."
+}
+
+@test "deploy.sh: --allow-red-ci deploys a commit whose ci-unified run failed" {
+    compose_at_commit automations
+    echo "$RUN_RED" > "$MOCK_DIR/ci-runs"
+
+    run deploy --allow-red-ci
+    assert_success
+    assert_output --partial "--allow-red-ci"
+    assert_output --partial "Deployment successful"
+    [ ! -e "$MOCK_DIR/github.log" ]
+    assert_equal "$(cat "$VERSION_FILE")" "$NEW"
+}
+
+@test "deploy.sh: waits for a ci-unified run that is still going, then deploys" {
+    compose_at_commit automations
+    printf '%s\n' '{"workflow_runs":[]}' "$RUN_BUSY" "$RUN_OK" > "$MOCK_DIR/ci-runs"
+    export CI_WAIT_INTERVAL=0
+
+    run deploy
+    assert_success
+    assert_equal "$(grep -c "is pending; checking again" <<<"$output")" "2"
+    assert_output --partial "Deployment successful"
+}
+
+@test "deploy.sh: a green force_rebuild run makes a commit with a red push run deployable" {
+    compose_at_commit automations
+    echo '{"workflow_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"failure"}]}' > "$MOCK_DIR/ci-runs"
+
+    run deploy
+    assert_success
+    assert_output --partial "Deployment successful"
+}
+
+@test "deploy.sh: a green pull request run does not count" {
+    compose_at_commit automations
+    echo '{"workflow_runs":[{"event":"pull_request","status":"completed","conclusion":"success"},{"event":"push","status":"completed","conclusion":"failure"}]}' > "$MOCK_DIR/ci-runs"
+
+    run deploy
+    assert_failure
+    assert_output --partial "ci-unified run of ${NEW:0:8} failed"
+    assert_nothing_changed
+}
+
+@test "deploy.sh: GitHub that does not answer stops the deploy when the wait runs out" {
+    compose_at_commit automations
+    echo down > "$MOCK_DIR/ci-runs"
+    export CI_WAIT_SECONDS=0
+
+    run deploy
+    assert_failure
+    assert_output --partial "was not green after 0 s (last state: unknown)"
+    assert_nothing_changed
+}
+
+@test "deploy.sh: a tag that is not a known commit is refused without --allow-red-ci" {
+    run deploy --tag feature-x
+    assert_failure
+    assert_output --partial "feature-x is not a commit this repository knows"
+    assert_nothing_changed
 }
 
 @test "deploy.sh: data that is not on ZFS stops the deploy before anything is touched" {
