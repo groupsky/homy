@@ -118,6 +118,8 @@ module.exports = (name, {
   // A status that matches a command sent within this time is that command
   // coming back. A contactor that still differs after it gets the command again.
   commandConfirmMs = 60 * 1000,
+  // When the first status goes out after start
+  startupStatusDelayMs = 10 * 1000,
   telegramWebhookUrl,
   httpPost,
   verbose
@@ -857,17 +859,29 @@ module.exports = (name, {
     publishControlModeStatus()
 
     // Periodic heartbeat to ensure service health monitoring
+    // A full status even when nothing changed. Monitoring needs a point now
+    // and then, and the events processor drops a status without a reason.
+    const publishStatus = (fallbackReason, extra) => mqtt.publish(finalAutomationStatusTopic, {
+      ...automationStatus(),
+      reason: currentState.lastDecisionReason || fallbackReason,
+      lastDecision: currentState.lastDecision,
+      ...extra,
+      timestamp: Date.now()
+    })
+
+    // One status soon after start (#1696): the heartbeat comes only after 15
+    // minutes, so a restart left a hole in automation_status. The short wait
+    // lets the retained inputs arrive first.
+    setTimeout(() => {
+      updateHeaterState()
+      publishStatus('startup', { startup: true })
+    }, startupStatusDelayMs).unref?.()
+
     const heartbeatInterval = setInterval(() => {
       // No input arrives during an outage, so decide here too: a manual mode
       // must still expire on time.
       updateHeaterState()
-      mqtt.publish(finalAutomationStatusTopic, {
-        ...automationStatus(),
-        reason: currentState.lastDecisionReason || 'heartbeat',
-        lastDecision: currentState.lastDecision,
-        heartbeat: true,
-        timestamp: Date.now()
-      })
+      publishStatus('heartbeat', { heartbeat: true })
 
       if (verbose) {
         console.log(`[${name}] heartbeat: ${currentState.controlMode}, heater=${heaterOn()}, temps: top=${currentState.temperatureTop}°C`)
