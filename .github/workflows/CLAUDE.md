@@ -400,7 +400,7 @@ content"*. **That argument is false, and false silently.** "Not rebuilt in this 
 | shape | what the fallback would have done |
 |---|---|
 | Two master merges minutes apart | Master runs do not serialize, so run C reaches 5B while run B is still building. B's images are not pushed yet, so `<image>:<C>` gets **A's** manifest — shipping code that predates B. |
-| A push of several commits at once | One run fires, for the head. `HEAD^` is an intermediate commit that never had a run, so it will never have images. The detector has the same blind spot — issue #1549. |
+| A base commit whose run never pushed | A cancelled run, or a base run still going when `wait-for-base-run` gave up. Its SHA tags do not exist, so the fallback would read a `:latest` older or newer than the base. |
 | A red run, then a green one | Nothing was tagged at the red commit, so the next commit bootstraps from a `:latest` older than the changes between. |
 
 In each case the SHA tag **exists** and its **content is stale**, and Stage 5C cannot tell
@@ -438,11 +438,35 @@ Use it for **all** of these:
 - **A red or cancelled run at commit N**, which leaves N with SHA tags only for the images
   Stage 3 happened to build. Re-running N's workflow just re-runs the same failing tests, so
   it does not help; rebuild N+1 instead.
-- **An intermediate commit in a multi-commit push** (issue #1549), which never had a run at
-  all and so can never be re-run.
-- **Two master merges that overlapped**, where the older run had not finished pushing when
-  the newer one reached Stage 5B. Waiting for the older run and re-running the newer one
-  also works here, and is cheaper.
+- **A base run still going after 55 minutes**, when `wait-for-base-run` gave up (see
+  below). Waiting for the older run and re-running the newer one also works here, and is
+  cheaper.
+
+#### Which commit is the base, and rapid merges (issue #1549)
+
+The base of a master push is `github.event.before`, the tip before the push, from
+`scripts/ci/master-base-ref.sh` (tests: `scripts/tests/master-base-ref.bats`). It was
+`HEAD^1`, which in a push of several commits is an intermediate commit: it never had a
+run, so it has no images, and change detection did not see the earlier commits' changes.
+The script falls back to `HEAD^1` for `workflow_dispatch`, branch creation (null SHA) and
+force-push (`before` is not an ancestor). Detect Changes exports it as `base_ref`, and
+Stage 5B reuses images from that same commit.
+
+Rapid merges broke the chain too. On 2026-09-10, 49 Dependabot merges about 4 s apart
+turned ~20 master runs red in a row: each run reached 5B while its base's run was still
+building. Job `wait-for-base-run` now waits until every `ci-unified.yml` run of the base
+commit has finished (polling every 30 s, up to 55 min), and 5B needs it. Builds and tests
+still run in parallel; the wait job starts only after this run's own tests, and only the
+retag waits. Runs chain: C waits for B, which waits for A.
+
+This is enough for a few merges close together. A long burst (like the 49 merges above)
+can still go past 55 minutes or the account's limit of parallel jobs; then 5B fails
+loudly, as before. Recovery is `force_rebuild=true` on the tip (above). Still merge large
+batches one at a time.
+
+Decision: a wait, not a queue-by-branch concurrency group. With `cancel-in-progress:
+false` GitHub keeps only one *pending* run per group and cancels the others. A cancelled
+run tags nothing, so a burst of merges would again leave commits with no images.
 
 **The chain is only self-sustaining while every master run is green through Stage 5.** Each
 green run tags every image at its own SHA, so the next run finds its base — but one flaky

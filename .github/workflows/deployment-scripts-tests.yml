@@ -94,6 +94,11 @@ jobs:
           cd scripts/tests
           ./bats-core/bin/bats ndjson-overlap.bats
 
+      - name: Run CI master base ref tests
+        run: |
+          cd scripts/tests
+          ./bats-core/bin/bats master-base-ref.bats
+
       - name: Test Summary
         if: always()
         run: |
