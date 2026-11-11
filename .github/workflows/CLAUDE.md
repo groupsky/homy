@@ -456,7 +456,13 @@ Rapid merges broke the chain too. On 2026-09-10, 49 Dependabot merges about 4 s 
 turned ~20 master runs red in a row: each run reached 5B while its base's run was still
 building. Job `wait-for-base-run` now waits until every `ci-unified.yml` run of the base
 commit has finished (polling every 30 s, up to 55 min), and 5B needs it. Builds and tests
-still run in parallel; only the retag waits. Runs chain: C waits for B, which waits for A.
+still run in parallel; the wait job starts only after this run's own tests, and only the
+retag waits. Runs chain: C waits for B, which waits for A.
+
+This is enough for a few merges close together. A long burst (like the 49 merges above)
+can still go past 55 minutes or the account's limit of parallel jobs; then 5B fails
+loudly, as before. Recovery is `force_rebuild=true` on the tip (below). Still merge large
+batches one at a time.
 
 Decision: a wait, not a queue-by-branch concurrency group. With `cancel-in-progress:
 false` GitHub keeps only one *pending* run per group and cancels the others. A cancelled
