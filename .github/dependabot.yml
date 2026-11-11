@@ -106,6 +106,10 @@ updates:
     directory: "/base-images/mongo"
     schedule:
       interval: "weekly"
+    # Mongo is being retired (#1622) and cannot skip majors; remove when it is gone.
+    ignore:
+      - dependency-name: "mongo"
+        update-types: ["version-update:semver-major"]
     reviewers:
       - "groupsky"
     groups:
@@ -245,6 +249,10 @@ updates:
     directory: "/docker/mongo"
     schedule:
       interval: "monthly"
+    # Mongo is being retired (#1622) and cannot skip majors; remove when it is gone.
+    ignore:
+      - dependency-name: "groupsky/homy/mongo"
+        update-types: ["version-update:semver-major"]
     reviewers:
       - "groupsky"
     groups:
