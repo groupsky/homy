@@ -317,12 +317,14 @@ done
 # Prints the state of the ci-unified runs of commit $1: "success" when one of
 # them succeeded (a re-run or a force_rebuild dispatch that went green
 # counts), "pending" when none did yet and one is still running or none has
-# started, else "failed". Fails when GitHub does not answer.
+# started, else "failed". Pull request runs do not count: their jobs can all
+# be skipped by the path filter and still end as success. Fails when GitHub
+# does not answer.
 ci_state() {
     local json
     json=$(curl -sf --max-time 30 -H 'Accept: application/vnd.github+json' \
         "$CI_RUNS_URL?head_sha=$1&per_page=100") || return 1
-    jq -er '[.workflow_runs[]] as $r
+    jq -er '[.workflow_runs[] | select(.event != "pull_request")] as $r
         | if any($r[]; .conclusion == "success") then "success"
           elif ($r | length) == 0 or any($r[]; .status != "completed") then "pending"
           else "failed" end' <<<"$json"

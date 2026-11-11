@@ -311,6 +311,16 @@ assert_nothing_changed() {
     assert_output --partial "Deployment successful"
 }
 
+@test "deploy.sh: a green pull request run does not count" {
+    compose_at_commit automations
+    echo '{"workflow_runs":[{"event":"pull_request","status":"completed","conclusion":"success"},{"event":"push","status":"completed","conclusion":"failure"}]}' > "$MOCK_DIR/ci-runs"
+
+    run deploy
+    assert_failure
+    assert_output --partial "ci-unified run of ${NEW:0:8} failed"
+    assert_nothing_changed
+}
+
 @test "deploy.sh: GitHub that does not answer stops the deploy when the wait runs out" {
     compose_at_commit automations
     echo down > "$MOCK_DIR/ci-runs"
