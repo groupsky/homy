@@ -3660,3 +3660,130 @@ describe('bath-lights', () => {
     })
 })
 
+
+describe('bath-lights restart', () => {
+    const config = {
+        light: {commandTopic: 'lights/command', statusTopic: 'lights/status'},
+        door: {statusTopic: 'door/status'},
+        lock: {statusTopic: 'lock/status'},
+        toggle: {statusTopic: 'switch/status', type: 'button'},
+        timeouts: {closed: 2 * 60000, opened: 12 * 60000, toggled: 25 * 60000, unlocked: 3 * 60000},
+    }
+    const MIN = 60000
+
+    const freshCache = () => structuredClone(BathLights('x', config).persistedCache.default)
+
+    // Runs the bot until `before` ms after a toggle-on, then "restarts" it
+    // `downtime` ms later with the saved cache, and returns the new publish mock
+    const restartAfterToggle = (before, downtime) => {
+        const cache = freshCache()
+        const first = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: first}, persistedCache: cache})
+        publish('lights/status', {state: false})
+        publish('switch/status', {state: true})
+        expect(first).toHaveBeenCalledWith('lights/command', {state: true, r: 'tgl-loff'})
+        jest.advanceTimersByTime(before)
+        expect(cache.deadlines.toggled).toBe(Date.now() + config.timeouts.toggled - before)
+
+        // Restart: the old timers die with the process. clearAllTimers also
+        // resets the fake clock, so set the time again
+        const stoppedAt = Date.now()
+        jest.clearAllTimers()
+        jest.setSystemTime(stoppedAt + downtime)
+        const second = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: second}, persistedCache: cache})
+        return {cache, publish: second}
+    }
+
+    test('declares a persisted cache with the four deadlines', () => {
+        expect(freshCache()).toEqual({deadlines: {closed: null, opened: null, toggled: null, unlocked: null}})
+    })
+
+    test('restart mid-timer re-arms with the remaining time', () => {
+        const {cache, publish: mock} = restartAfterToggle(10 * MIN, 5 * MIN)
+        publish('lights/status', {state: true})
+        // 25 - 10 - 5 = 10 minutes left
+        jest.advanceTimersByTime(10 * MIN - 1)
+        expect(mock).not.toHaveBeenCalled()
+        jest.advanceTimersByTime(1)
+        expect(mock).toHaveBeenCalledTimes(1)
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: false, r: 'tgl-tout'})
+        expect(cache.deadlines.toggled).toBeNull()
+    })
+
+    test('restart after the deadline fires once', () => {
+        const cache = freshCache()
+        const first = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: first}, persistedCache: cache})
+        publish('lights/status', {state: false})
+        publish('lock/status', {state: false}) // arms unlocked (3 min)
+        publish('door/status', {state: false}) // arms closed (2 min)
+        expect(cache.deadlines.unlocked).not.toBeNull()
+        expect(cache.deadlines.closed).not.toBeNull()
+
+        const stoppedAt = Date.now()
+        jest.clearAllTimers()
+        jest.setSystemTime(stoppedAt + 30 * MIN)
+        const mock = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: mock}, persistedCache: cache})
+        expect(mock).not.toHaveBeenCalled()
+        publish('lights/status', {state: true})
+        expect(mock).toHaveBeenCalledTimes(1)
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: false, r: 'unl-tout'})
+        jest.advanceTimersByTime(60 * MIN)
+        expect(mock).toHaveBeenCalledTimes(1)
+        expect(cache.deadlines).toEqual({closed: null, opened: null, toggled: null, unlocked: null})
+    })
+
+    test('restart with the light already off does not command anything', () => {
+        const {cache, publish: mock} = restartAfterToggle(10 * MIN, 30 * MIN)
+        publish('lights/status', {state: false})
+        jest.advanceTimersByTime(60 * MIN)
+        expect(mock).not.toHaveBeenCalled()
+        expect(cache.deadlines.toggled).toBeNull()
+    })
+
+    test('nothing happens before the light reports its live state', () => {
+        const {publish: mock} = restartAfterToggle(10 * MIN, 30 * MIN)
+        jest.advanceTimersByTime(60 * MIN)
+        expect(mock).not.toHaveBeenCalled()
+    })
+
+    test('a pending toggled timer keeps priority over an expired closed timer', () => {
+        const cache = freshCache()
+        cache.deadlines.toggled = Date.now() + 5 * MIN
+        cache.deadlines.closed = Date.now() - MIN
+        const mock = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: mock}, persistedCache: cache})
+        publish('lights/status', {state: true})
+        expect(mock).not.toHaveBeenCalled()
+        jest.advanceTimersByTime(5 * MIN)
+        expect(mock).toHaveBeenCalledTimes(1)
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: false, r: 'tgl-tout'})
+    })
+
+    test('a lock before the first light status cancels the saved timers', () => {
+        const cache = freshCache()
+        cache.deadlines.closed = Date.now() + MIN
+        const mock = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: mock}, persistedCache: cache})
+        publish('lock/status', {state: true})
+        publish('lights/status', {state: true})
+        expect(cache.deadlines.closed).toBeNull()
+        jest.advanceTimersByTime(60 * MIN)
+        expect(mock).toHaveBeenCalledTimes(1)
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: true, r: 'lck'})
+    })
+
+    test('a door open before the first light status drops the saved unlocked timer', () => {
+        const cache = freshCache()
+        cache.deadlines.unlocked = Date.now() + MIN
+        const mock = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: mock}, persistedCache: cache})
+        publish('door/status', {state: true})
+        publish('lights/status', {state: true})
+        expect(cache.deadlines.unlocked).toBeNull()
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: true, r: 'don'})
+        expect(mock).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'don-unl'}))
+    })
+})

@@ -118,10 +118,13 @@ Key patterns:
 #### `bath-lights` - Occupancy-based lighting
 - **Purpose**: Bathroom lighting automation with timeout logic
 - **Features**: Door/lock sensors, toggle switches, multiple timeout scenarios
-- **State**: In-memory only - the door, lock, toggle and unlocked timers, and the
-  command-verification retry state, live in the `start()` closure. This bot does not
-  declare a `persistedCache` hook, so a restart drops every pending timeout: a light
-  switched on before the restart stays on until the next door, lock or toggle event
+- **State**: The deadlines of the four off timers (closed, opened, toggled, unlocked)
+  are in the persistent cache. After a restart the bot waits for the first live light
+  status. If the light is off, it drops the deadlines and sends nothing. If it is on,
+  each timer runs again for its remaining time; timers whose deadline passed during the
+  downtime turn the light off once. A pending toggled timer still has priority. The
+  door, lock and toggle states and the command-verification retry state are in memory
+  only (#1557)
 - **Configuration**:
   ```javascript
   {
