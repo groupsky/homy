@@ -44,11 +44,10 @@ client.on('connect', function () {
     }
     console.log('subscribed to', topic)
   })
+  // The will may have replaced the state while the client was away.
+  publishState()
 })
 
 client.on('message', createMessageHandler(dmx))
 
-dmx.setHz(20)
-dmx.step(5)
-// this also starts the update thread
-dmx.set(0)
+dmx.start()
