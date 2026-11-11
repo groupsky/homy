@@ -19,6 +19,7 @@ addon built against libftdi. The container is `privileged` and mounts
 |---|---|
 | `index.js` | client wiring: MQTT connection, subscription, DMX universe lifecycle |
 | `message-handler.js` | the `message` listener — payload → channel levels |
+| `universe.js` | opens the adapter in the background, retried with backoff, and reports its state |
 | `payload-preview.js` | bounded, never-throwing payload rendering for logs |
 
 The listener lives in its own module so it can be tested without a broker or a
@@ -101,3 +102,36 @@ optional platform bindings differently, and npm 10.8.2 then rejects it with
 `npm ci can only install packages when your package.json and package-lock.json are
 in sync` / `Missing: @emnapi/core@... from lock file` — which breaks both the test
 workflow and the image build.
+
+## Opening the adapter
+
+The adapter is opened by `universe.js`, not at module load. When `new DMX()`
+throws (for example `ftdi_usb_open_dev failed: -4 (libusb_open() failed)`), the
+error is logged and the open is retried after 1 s, then 2 s, 4 s and so on, at
+most every 60 s. The service keeps running, so it does not crash-loop, and it
+opens the adapter by itself once the adapter is back. Readings that arrive while
+the adapter is closed are not lost: the latest frame is written when it opens.
+Issue #1547.
+
+The adapter state is published, retained, on `STATUS_TOPIC` (default
+`homy/dmx-driver/status`):
+
+```json
+{"state":"offline","error":"ftdi_usb_open_dev failed: -4 (libusb_open() failed)","attempt":3,"at":"2026-11-11T10:00:00.000Z"}
+```
+
+`state` is `opening`, `online` or `offline`. The MQTT last will sets it to
+`offline` when the service dies. Check it with
+`mosquitto_sub -t homy/dmx-driver/status -C 1`.
+
+There is no Docker healthcheck on purpose: a dead adapter is a hardware fault,
+and an unhealthy container would make the deploy health gate roll back
+unrelated changes.
+
+**Limit:** the native addon ignores write errors in its update thread. If the
+adapter goes silent *after* it was opened, while it stays on the USB bus, the
+state stays `online`. Detecting that needs the addon to report write errors.
+
+**Limit:** if the adapter opens but its setup (baud rate, line settings) then
+fails, the addon does not close the USB handle. Retries in the same process may
+then keep failing as busy until the container is restarted.

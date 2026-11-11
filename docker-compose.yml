@@ -998,6 +998,7 @@ services:
       - DMX_DRIVER=enttec-open-usb-dmx
       - DMX_PORT=/dev/ttyUSB5
       - MQTT_CLIENT_ID=dmx-driver
+      - STATUS_TOPIC=homy/dmx-driver/status
       - TOPIC=/modbus/dry-switches/mbsl32di1/reading
     volumes:
       - /dev/bus/usb:/dev/bus/usb
