@@ -377,7 +377,7 @@ module.exports = (name, {
                 if (payload.state) {
                     // Door opened. A door open ends an unlocked timer, also one
                     // saved before a restart and not yet restored
-                    restored.unlocked = null
+                    if (!timers.unlocked) disarm('unlocked')
                     if (timers.unlocked) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights`)
