@@ -47,8 +47,10 @@ describe('boiler-controller status at start', () => {
   })
 
   test('does not wait for the contactor status timeout', () => {
-    const { statuses } = setup({ contactorStatusTopic: 'contactor/status' })
+    const { mqtt, statuses } = setup({ contactorStatusTopic: 'contactor/status' })
     jest.advanceTimersByTime(10 * 1000)
+    // Still waiting for the contactor: no command to the heater yet.
+    expect(mqtt.publish).not.toHaveBeenCalledWith('relay/boiler', expect.anything())
     expect(statuses()).toEqual([expect.objectContaining({ startup: true, reason: expect.any(String) })])
   })
 })
