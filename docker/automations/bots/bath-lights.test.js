@@ -3774,4 +3774,16 @@ describe('bath-lights restart', () => {
         expect(mock).toHaveBeenCalledTimes(1)
         expect(mock).toHaveBeenCalledWith('lights/command', {state: true, r: 'lck'})
     })
+
+    test('a door open before the first light status drops the saved unlocked timer', () => {
+        const cache = freshCache()
+        cache.deadlines.unlocked = Date.now() + MIN
+        const mock = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: mock}, persistedCache: cache})
+        publish('door/status', {state: true})
+        publish('lights/status', {state: true})
+        expect(cache.deadlines.unlocked).toBeNull()
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: true, r: 'don'})
+        expect(mock).not.toHaveBeenCalledWith('lights/command', expect.objectContaining({r: 'don-unl'}))
+    })
 })

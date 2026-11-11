@@ -212,6 +212,7 @@ module.exports = (name, {
         const fire = (kind) => {
             timers[kind] = null
             cache.deadlines[kind] = null
+            restored[kind] = null
             if (verbose) {
                 console.log(`[${name}] turning off lights from ${kind} timeout`)
             }
@@ -374,7 +375,9 @@ module.exports = (name, {
                 }
 
                 if (payload.state) {
-                    // Door opened
+                    // Door opened. A door open ends an unlocked timer, also one
+                    // saved before a restart and not yet restored
+                    restored.unlocked = null
                     if (timers.unlocked) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights`)
