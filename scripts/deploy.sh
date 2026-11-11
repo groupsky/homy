@@ -3,7 +3,8 @@
 # Production Deployment Script
 #
 # Deploys the homy stack from prebuilt GHCR images while it keeps running:
-#   0. wait until CI has pushed the images of the new version
+#   0. wait until CI has pushed the images of the new version and its
+#      ci-unified run is green (--allow-red-ci skips the second part)
 #   1. one ZFS snapshot of all the stack's data (about a second, nothing stops)
 #   2. update the code and pull the images
 #   3. pin every service to its image digest and a hash of the config files it
@@ -39,6 +40,10 @@ FORCE_DEPLOY=0
 IMAGE_TAG="${IMAGE_TAG:-}"
 YES_FLAG=0
 SKIP_SNAPSHOT=0
+ALLOW_RED_CI=0
+CI_WAIT_SECONDS="${CI_WAIT_SECONDS:-3600}"
+CI_WAIT_INTERVAL="${CI_WAIT_INTERVAL:-120}"
+CI_RUNS_URL="${CI_RUNS_URL:-https://api.github.com/repos/groupsky/homy/actions/workflows/ci-unified.yml/runs}"
 IMAGE_WAIT_SECONDS="${IMAGE_WAIT_SECONDS:-1800}"
 IMAGE_WAIT_INTERVAL="${IMAGE_WAIT_INTERVAL:-30}"
 
@@ -59,6 +64,8 @@ Options:
   --skip-snapshot     Deploy without the pre-deploy ZFS snapshot (DANGEROUS:
                       a stateful service that breaks cannot be restored)
   --skip-backup       Old name of --skip-snapshot
+  --allow-red-ci      Deploy even when the commit's ci-unified run on GitHub
+                      is not green (failed, still running, or unknown)
 
 Examples:
   $(basename "$0")                    # Deploy latest from master
@@ -75,6 +82,9 @@ Environment Variables:
   IMAGE_WAIT_SECONDS    Wait this long for CI to push the images of the new
                         version before giving up (default 1800)
   IMAGE_WAIT_INTERVAL   Seconds between two registry checks (default 30)
+  CI_WAIT_SECONDS       Wait this long for the commit's ci-unified run to
+                        finish before giving up (default 3600)
+  CI_WAIT_INTERVAL      Seconds between two GitHub checks (default 120)
 
 EOF
     exit 0
@@ -100,6 +110,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-snapshot|--skip-backup)
             SKIP_SNAPSHOT=1
+            shift
+            ;;
+        --allow-red-ci)
+            ALLOW_RED_CI=1
             shift
             ;;
         *)
@@ -206,6 +220,11 @@ echo "  Force deploy:     $FORCE_DEPLOY"
 echo ""
 echo "  This will:"
 echo "    0. Wait until CI has pushed the new images (up to ${IMAGE_WAIT_SECONDS} s)"
+if [ "$ALLOW_RED_CI" -eq 0 ]; then
+    echo "       and its ci-unified run is green (up to ${CI_WAIT_SECONDS} s)"
+else
+    echo "       NOT checking that its ci-unified run is green (--allow-red-ci)"
+fi
 if [ "$SKIP_SNAPSHOT" -eq 0 ]; then
     echo "    1. Snapshot the stack's data (ZFS; nothing is stopped)"
 else
@@ -290,6 +309,59 @@ while WAIT_IMAGES=$(missing_images "$WAIT_IMAGES" | LC_ALL=C sort) && [ -n "$WAI
     log "Waiting for $(wc -l <<<"$WAIT_IMAGES") image(s) CI has not pushed yet, e.g. $FIRST_MISSING..."
     sleep "$IMAGE_WAIT_INTERVAL"
 done
+
+# 0b. Wait for a green CI run. Stage 3 of ci-unified pushes the SHA tags
+#     before any test runs, so images in the registry say nothing about the
+#     tests (#1550). The repository is public: GitHub answers without a token.
+
+# Prints the state of the ci-unified runs of commit $1: "success" when one of
+# them succeeded (a re-run or a force_rebuild dispatch that went green
+# counts), "pending" when none did yet and one is still running or none has
+# started, else "failed". Fails when GitHub does not answer.
+ci_state() {
+    local json
+    json=$(curl -sf --max-time 30 -H 'Accept: application/vnd.github+json' \
+        "$CI_RUNS_URL?head_sha=$1&per_page=100") || return 1
+    jq -er '[.workflow_runs[]] as $r
+        | if any($r[]; .conclusion == "success") then "success"
+          elif ($r | length) == 0 or any($r[]; .status != "completed") then "pending"
+          else "failed" end' <<<"$json"
+}
+
+if [ "$ALLOW_RED_CI" -eq 1 ]; then
+    warn "Not checking that CI passed for $(format_version_short "$PULL_TAG") (--allow-red-ci)"
+elif [ "$PULL_TAG" = "latest" ]; then
+    # CI moves :latest only after every test passed
+    log "Tag latest is set only by a green CI run; not checking CI"
+elif [[ ! "$PULL_TAG" =~ ^[0-9a-f]{40}$ ]]; then
+    error "$PULL_TAG is not a commit this repository knows, so its CI run cannot be checked. Nothing was changed. Use --allow-red-ci to deploy it anyway."
+    notify "Deployment of $PULL_TAG stopped: its CI run cannot be checked. Nothing was changed."
+    exit 1
+else
+    log "Checking that the ci-unified run of $(format_version_short "$PULL_TAG") is green..."
+    CI_DEADLINE=$((SECONDS + CI_WAIT_SECONDS))
+    while :; do
+        CI_STATE=$(ci_state "$PULL_TAG") || CI_STATE="unknown"
+        case "$CI_STATE" in
+            success)
+                log "CI passed for $(format_version_short "$PULL_TAG")"
+                break
+                ;;
+            failed)
+                error "The ci-unified run of $(format_version_short "$PULL_TAG") failed. Nothing was changed. Fix CI (or re-run it), or deploy with --allow-red-ci."
+                notify "Deployment of $(format_version_short "$PULL_TAG") stopped: its ci-unified run failed. Nothing was changed."
+                exit 1
+                ;;
+        esac
+        if [ "$SECONDS" -ge "$CI_DEADLINE" ]; then
+            error "The ci-unified run of $(format_version_short "$PULL_TAG") was not green after ${CI_WAIT_SECONDS} s (last state: $CI_STATE). Nothing was changed. Deploy again later, or with --allow-red-ci."
+            notify "Deployment of $(format_version_short "$PULL_TAG") stopped: its ci-unified run was not green after ${CI_WAIT_SECONDS} s (last state: $CI_STATE). Nothing was changed."
+            exit 1
+        fi
+        log "CI for $(format_version_short "$PULL_TAG") is $CI_STATE; checking again in ${CI_WAIT_INTERVAL} s..."
+        sleep "$CI_WAIT_INTERVAL"
+    done
+fi
 
 # 1. Snapshot, before anything is touched
 SNAPSHOT_NAME=""
