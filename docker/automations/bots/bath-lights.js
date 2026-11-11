@@ -29,15 +29,19 @@ module.exports = (name, {
     commandConfig = {},
     verbose
 }) => ({
-    start: ({mqtt}) => {
+    // The deadline of each pending off timer (epoch ms), so a restart can re-arm it
+    persistedCache: {
+        version: 1,
+        default: {deadlines: {closed: null, opened: null, toggled: null, unlocked: null}},
+    },
+
+    start: ({mqtt, persistedCache}) => {
+        const cache = persistedCache || {deadlines: {closed: null, opened: null, toggled: null, unlocked: null}}
         let lightState = null
         let lockState = null
         let toggleState = null
         let doorState = null
-        let closedTimer = null
-        let openedTimer = null
-        let toggledTimer = null
-        let unlockedTimer = null
+        const timers = {closed: null, opened: null, toggled: null, unlocked: null}
         let toggledOffAt = -Infinity
 
         // Command verification configuration (safe defaults = disabled)
@@ -178,35 +182,67 @@ module.exports = (name, {
         const toggledOffRecently = () =>
             timeouts?.toggledOff && Date.now() - toggledOffAt < timeouts.toggledOff
 
+        const offReasons = {closed: 'doff-tout', opened: 'don-tout', toggled: 'tgl-tout', unlocked: 'unl-tout'}
+
+        const disarm = (kind) => {
+            if (timers[kind]) {
+                if (verbose) {
+                    console.log(`[${name}] cancelling ${kind} timer`)
+                }
+                clearTimeout(timers[kind])
+                timers[kind] = null
+            }
+            cache.deadlines[kind] = null
+        }
+
         const cancelTimers = () => {
-            if (closedTimer) {
-                if (verbose) {
-                    console.log(`[${name}] cancelling closed timer`)
-                }
-                clearTimeout(closedTimer)
-                closedTimer = null
+            Object.keys(timers).forEach(disarm)
+        }
+
+        // An off timer ran out: turn the lights off, unless they are already
+        // off, the door is locked, or a toggled timer is pending (it has priority)
+        const fire = (kind) => {
+            timers[kind] = null
+            cache.deadlines[kind] = null
+            if (verbose) {
+                console.log(`[${name}] turning off lights from ${kind} timeout`)
             }
-            if (openedTimer) {
-                if (verbose) {
-                    console.log(`[${name}] cancelling opened timer`)
-                }
-                clearTimeout(openedTimer)
-                openedTimer = null
+            if (lightState !== false && !lockState && (kind === 'toggled' || !timers.toggled)) {
+                smartPublish(light.commandTopic, {state: false, r: offReasons[kind]})
             }
-            if (toggledTimer) {
-                if (verbose) {
-                    console.log(`[${name}] cancelling toggled timer`)
-                }
-                clearTimeout(toggledTimer)
-                toggledTimer = null
+        }
+
+        const arm = (kind, ms) => {
+            if (verbose) {
+                console.log(`[${name}] turning off lights in ${ms / 60000} minutes from ${kind} timeout`)
             }
-            if (unlockedTimer) {
-                if (verbose) {
-                    console.log(`[${name}] cancelling unlocked timer`)
+            timers[kind] = setTimeout(() => fire(kind), ms)
+            cache.deadlines[kind] = Date.now() + ms
+        }
+
+        // Deadlines saved before a restart. Like door-alarm, they are not acted
+        // on until the light reports its live state: a light that went off while
+        // the bot was down needs no command.
+        const restored = {...cache.deadlines}
+        let restorePending = Object.values(restored).some((deadline) => deadline != null)
+
+        const restoreTimers = () => {
+            const now = Date.now()
+            let expired = null
+            // toggled first, so it is pending when the others check its priority
+            for (const kind of ['toggled', 'unlocked', 'opened', 'closed']) {
+                const deadline = restored[kind]
+                if (deadline == null || timers[kind]) continue
+                if (deadline > now) {
+                    arm(kind, deadline - now)
+                } else {
+                    // The deadline passed while the bot was down
+                    cache.deadlines[kind] = null
+                    expired = expired || kind
                 }
-                clearTimeout(unlockedTimer)
-                unlockedTimer = null
             }
+            // Several timers may have run out; the lights go off only once
+            if (expired) fire(expired)
         }
 
         mqtt.subscribe(light.statusTopic, (payload) => {
@@ -231,6 +267,14 @@ module.exports = (name, {
                     pendingCommand = null
                 }
                 // If state doesn't match, let the verification timeout handle retries
+            }
+
+            if (restorePending) {
+                restorePending = false
+                if (payload.state) {
+                    restoreTimers()
+                }
+                // A light that is off clears the saved deadlines below
             }
 
             // Original logic with state change handling
@@ -269,20 +313,8 @@ module.exports = (name, {
                             console.log(`[${name}] turning on lights`)
                         }
                         smartPublish(light.commandTopic, {state: true, r: 'tgl-loff'})
-                        if (timeouts?.toggled && !toggledTimer) {
-                            if (verbose) {
-                                console.log(`[${name}] turning off lights in ${timeouts.toggled / 60000} minutes from toggled timeout`)
-                            }
-                            toggledTimer = setTimeout(() => {
-                                if (verbose) {
-                                    console.log(`[${name}] turning off lights from toggled timeout`)
-                                }
-                                // Check current state before turning off
-                                if (lightState !== false && !lockState) {
-                                    smartPublish(light.commandTopic, {state: false, r: 'tgl-tout'})
-                                }
-                                toggledTimer = null
-                            }, timeouts.toggled)
+                        if (timeouts?.toggled && !timers.toggled) {
+                            arm('toggled', timeouts.toggled)
                         }
                     }
                 }
@@ -313,20 +345,8 @@ module.exports = (name, {
                     smartPublish(light.commandTopic, {state: true, r: 'lck'})
 
                     cancelTimers()
-                } else if (timeouts?.unlocked != null && !unlockedTimer) {
-                    if (verbose) {
-                        console.log(`[${name}] turning off lights in ${timeouts.unlocked / 60000} minutes from unlocked timeout`)
-                    }
-                    unlockedTimer = setTimeout(() => {
-                        if (verbose) {
-                            console.log(`[${name}] turning off lights from unlocked timeout`)
-                        }
-                        // Check current state before turning off - toggledTimer takes priority
-                        if (lightState !== false && !lockState && !toggledTimer) {
-                            smartPublish(light.commandTopic, {state: false, r: 'unl-tout'})
-                        }
-                        unlockedTimer = null
-                    }, timeouts.unlocked)
+                } else if (timeouts?.unlocked != null && !timers.unlocked) {
+                    arm('unlocked', timeouts.unlocked)
                 }
             })
         }
@@ -353,16 +373,12 @@ module.exports = (name, {
 
                 if (payload.state) {
                     // Door opened
-                    if (unlockedTimer) {
+                    if (timers.unlocked) {
                         if (verbose) {
                             console.log(`[${name}] turning off lights`)
                         }
                         smartPublish(light.commandTopic, {state: false, r: 'don-unl'})
-                        if (verbose) {
-                            console.log(`[${name}] cancelling unlocked timer`)
-                        }
-                        clearTimeout(unlockedTimer)
-                        unlockedTimer = null
+                        disarm('unlocked')
                     } else if (toggledOffRecently()) {
                         if (verbose) {
                             console.log(`[${name}] keeping lights off, the wall switch turned them off ${Date.now() - toggledOffAt}ms ago`)
@@ -372,20 +388,8 @@ module.exports = (name, {
                             console.log(`[${name}] turning on lights`)
                         }
                         smartPublish(light.commandTopic, {state: true, r: 'don'})
-                        if (timeouts?.opened && !openedTimer && !toggledTimer) {
-                            if (verbose) {
-                                console.log(`[${name}] turning off lights in ${timeouts.opened / 60000} minutes from opened timeout`)
-                            }
-                            openedTimer = setTimeout(() => {
-                                if (verbose) {
-                                    console.log(`[${name}] turning off lights from opened timeout`)
-                                }
-                                // Check current state before turning off - toggledTimer takes priority
-                                if (lightState !== false && !lockState && !toggledTimer) {
-                                    smartPublish(light.commandTopic, {state: false, r: 'don-tout'})
-                                }
-                                openedTimer = null
-                            }, timeouts.opened)
+                        if (timeouts?.opened && !timers.opened && !timers.toggled) {
+                            arm('opened', timeouts.opened)
                         }
                     }
                 } else if (toggledOffRecently()) {
@@ -399,20 +403,8 @@ module.exports = (name, {
                         console.log(`[${name}] turning on lights`)
                     }
                     smartPublish(light.commandTopic, {state: true, r: 'doff'})
-                    if (timeouts?.closed && !closedTimer && !lockState && !toggledTimer) {
-                        if (verbose) {
-                            console.log(`[${name}] turning off lights in ${timeouts.closed / 60000} minutes from closed timeout`)
-                        }
-                        closedTimer = setTimeout(() => {
-                            if (verbose) {
-                                console.log(`[${name}] turning off lights from closed timeout`)
-                            }
-                            // Check current state before turning off - toggledTimer takes priority
-                            if (lightState !== false && !lockState && !toggledTimer) {
-                                smartPublish(light.commandTopic, {state: false, r: 'doff-tout'})
-                            }
-                            closedTimer = null
-                        }, timeouts.closed)
+                    if (timeouts?.closed && !timers.closed && !lockState && !timers.toggled) {
+                        arm('closed', timeouts.closed)
                     }
                 }
             })
