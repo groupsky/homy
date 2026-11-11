@@ -184,6 +184,12 @@ module.exports = (name, {
 
         const offReasons = {closed: 'doff-tout', opened: 'don-tout', toggled: 'tgl-tout', unlocked: 'unl-tout'}
 
+        // Deadlines saved before a restart. Like door-alarm, they are not acted
+        // on until the light reports its live state: a light that went off while
+        // the bot was down needs no command.
+        const restored = {...cache.deadlines}
+        let restorePending = Object.values(restored).some((deadline) => deadline != null)
+
         const disarm = (kind) => {
             if (timers[kind]) {
                 if (verbose) {
@@ -193,6 +199,8 @@ module.exports = (name, {
                 timers[kind] = null
             }
             cache.deadlines[kind] = null
+            // A cancel before the first light status also cancels the saved timer
+            restored[kind] = null
         }
 
         const cancelTimers = () => {
@@ -219,12 +227,6 @@ module.exports = (name, {
             timers[kind] = setTimeout(() => fire(kind), ms)
             cache.deadlines[kind] = Date.now() + ms
         }
-
-        // Deadlines saved before a restart. Like door-alarm, they are not acted
-        // on until the light reports its live state: a light that went off while
-        // the bot was down needs no command.
-        const restored = {...cache.deadlines}
-        let restorePending = Object.values(restored).some((deadline) => deadline != null)
 
         const restoreTimers = () => {
             const now = Date.now()

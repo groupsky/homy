@@ -3729,7 +3729,7 @@ describe('bath-lights restart', () => {
         expect(mock).not.toHaveBeenCalled()
         publish('lights/status', {state: true})
         expect(mock).toHaveBeenCalledTimes(1)
-        expect(mock).toHaveBeenCalledWith('lights/command', expect.objectContaining({state: false}))
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: false, r: 'unl-tout'})
         jest.advanceTimersByTime(60 * MIN)
         expect(mock).toHaveBeenCalledTimes(1)
         expect(cache.deadlines).toEqual({closed: null, opened: null, toggled: null, unlocked: null})
@@ -3760,5 +3760,18 @@ describe('bath-lights restart', () => {
         jest.advanceTimersByTime(5 * MIN)
         expect(mock).toHaveBeenCalledTimes(1)
         expect(mock).toHaveBeenCalledWith('lights/command', {state: false, r: 'tgl-tout'})
+    })
+
+    test('a lock before the first light status cancels the saved timers', () => {
+        const cache = freshCache()
+        cache.deadlines.closed = Date.now() + MIN
+        const mock = jest.fn()
+        BathLights('bath', config).start({mqtt: {subscribe, publish: mock}, persistedCache: cache})
+        publish('lock/status', {state: true})
+        publish('lights/status', {state: true})
+        expect(cache.deadlines.closed).toBeNull()
+        jest.advanceTimersByTime(60 * MIN)
+        expect(mock).toHaveBeenCalledTimes(1)
+        expect(mock).toHaveBeenCalledWith('lights/command', {state: true, r: 'lck'})
     })
 })
