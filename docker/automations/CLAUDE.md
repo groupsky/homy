@@ -207,6 +207,11 @@ Key patterns:
 - **Never**: changes a thermostat mode, or touches irrigation
 - **State**: away flag, return date, saved values, boiler mode set, unconfirmed writes, in the persistent cache
 
+#### `leaving-home-check` - What is still on when the car leaves
+- **Purpose**: `leavingHomeCheck` (#1955): when the car leaves home on a workday morning (Monday to Friday, 05:00–10:00 local), one Telegram message lists lights on, oven or stove on, and open outside doors and windows. Nothing is sent when all is off and closed. Details: [docs/leaving-home-check.md](docs/leaving-home-check.md)
+- **Inputs**: `homy/ioniq/home` (retained home place from ev-journal), `ioniq/parsed/gps`, light and contact feature status, oven and stove power meters
+- **State**: `home` or `away`, in the persistent cache; the last values in memory (retained topics fill them at start)
+
 #### `solar-emitter` - Night lights from sunset to sunrise
 - **Dark sky switch** (#1751): the night light bots `nightExternalLights` and `nightExternalLightsZ2M` (`solar-emitter`) can be held off for one night by the HA switch `dark_sky_tonight`. Details: [docs/dark-sky-switch.md](docs/dark-sky-switch.md)
 
