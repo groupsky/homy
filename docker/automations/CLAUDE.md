@@ -210,6 +210,9 @@ Key patterns:
 #### `solar-emitter` - Night lights from sunset to sunrise
 - **Dark sky switch** (#1751): the night light bots `nightExternalLights` and `nightExternalLightsZ2M` (`solar-emitter`) can be held off for one night by the HA switch `dark_sky_tonight`. Details: [docs/dark-sky-switch.md](docs/dark-sky-switch.md)
 
+#### `feature-toggle-on-feature-change` - Wall-switch toggles
+- **Power dips** (#1956): an input module reading of all zeros is dropped, and a toggle computes from the last command until a status comes. Details: [docs/power-dip.md](docs/power-dip.md)
+
 #### `stateful-counter` - Example with persistent cache and migration
 - **Purpose**: Demonstrates persistent cache patterns with versioning
 - **Features**: Incrementing counter with history tracking and reset functionality
