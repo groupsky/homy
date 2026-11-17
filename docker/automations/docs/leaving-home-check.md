@@ -50,3 +50,11 @@ In `config/automations/config.js`, `bots.leavingHomeCheck`:
 The bot has the usual on/off switch in Home Assistant,
 `switch.automation_leaving_home_check` (device "Проверка при тръгване"). It
 sends `homy/automation/leavingHomeCheck/control`. It is on by default.
+
+## Known limits
+
+- While the switch is off, the bot gets no messages. If it is turned on again
+  while the car is away, the next fix far from home counts as a departure,
+  and the check uses the values from before the switch went off.
+- The oven is checked by its power meter only: a reading taken while the
+  heating element is off for a moment may show it as off.
