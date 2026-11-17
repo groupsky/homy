@@ -834,3 +834,69 @@ module.exports.bots.awayMode = {
   timeZone: 'Europe/Sofia',
   telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
 }
+
+// When the car leaves home on a workday morning, one Telegram message lists
+// what is still on or open (#1955). Home is the place ev-journal publishes.
+// Details: docker/automations/docs/leaving-home-check.md
+module.exports.bots.leavingHomeCheck = {
+  type: 'leaving-home-check',
+  homeTopic: 'homy/ioniq/home',
+  gpsTopic: 'ioniq/parsed/gps',
+  featuresPrefix,
+  lights: [
+    'kitchen_all_ceiling_lights', 'corridor1_ceiling_light', 'corridor2_both_ceiling_lights',
+    'laundry_ceiling_light', 'bath3_ceiling_light', 'external_house_lights', 'bedroom_ceiling_light',
+    'martin_ceiling_light', 'gergana_ceiling_light', 'boris_ceiling_light', 'bath2_ceiling_light',
+    'bath1_ceiling_light', 'office_ceiling_light', 'livingroom_ceiling_light',
+  ],
+  // Outside doors and windows only; inside doors are left out
+  contacts: [
+    'front_main_door_open', 'front_side_door_open', 'living_window_open', 'cabinet_south_window_open',
+    'cabinet_west_window_open', 'bath1_window_open', 'kitchen_window_open', 'bath2_window_open',
+    'bath3_window_open', 'laundry_window_open', 'bedroom_external_door_open', 'bedroom_window_open',
+    'martin_west_window_open', 'martin_south_window_open', 'gergana_external_door_open',
+    'boris_external_door_open', 'gergana_window_open', 'boris_window_open',
+  ],
+  // Power meters: on above minW watts (the same limits as Home Assistant)
+  meters: [
+    { name: 'oven', topic: '/modbus/secondary/oven/reading', minW: 1 },
+    { name: 'stove', topic: '/modbus/secondary/stove/reading', minW: 10 },
+  ],
+  // Names in the message; a name not listed here is shown as it is
+  labels: {
+    kitchen_all_ceiling_lights: 'кухня',
+    corridor1_ceiling_light: 'коридор 1',
+    corridor2_both_ceiling_lights: 'коридор 2',
+    laundry_ceiling_light: 'пералня',
+    bath1_ceiling_light: 'баня 1',
+    bath2_ceiling_light: 'баня 2',
+    bath3_ceiling_light: 'баня 3',
+    external_house_lights: 'външно осветление',
+    bedroom_ceiling_light: 'спалня',
+    office_ceiling_light: 'кабинет',
+    livingroom_ceiling_light: 'хол',
+    oven: 'фурна',
+    stove: 'котлон',
+    front_main_door_open: 'входна врата',
+    front_side_door_open: 'помощна врата',
+    living_window_open: 'прозорец хол',
+    kitchen_window_open: 'прозорец кухня',
+    laundry_window_open: 'прозорец пералня',
+    bath1_window_open: 'прозорец баня 1',
+    bath2_window_open: 'прозорец баня 2',
+    bath3_window_open: 'прозорец баня 3',
+    bedroom_window_open: 'прозорец спалня',
+    bedroom_external_door_open: 'врата тераса спалня',
+  },
+  // Names that are not checked, for example a light an automation keeps on
+  ignore: [],
+  // A departure is the first fix this far past the home radius, in metres
+  marginM: 200,
+  // Monday to Friday only, local time
+  windowStart: '05:00',
+  windowEnd: '10:00',
+  timeZone: 'Europe/Sofia',
+  // An older value is listed as unknown
+  maxValueAgeMs: 24 * 60 * 60 * 1000,
+  telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
+}

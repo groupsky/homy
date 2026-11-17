@@ -31,7 +31,9 @@ const identity = (bots) => Object.fromEntries(Object.entries(bots).map(([key, bo
 // changed.
 // Changed on purpose again (#1841): the mower rain sensor was added. Without
 // it the identity still hashed to ba121c52…f56c9.
-const BASELINE_SHA256 = '8064950a3ee3cee44b12d0d19a173dc9defeb5b1b8c113c180e265b37b5fa110'
+// Changed on purpose again (#1955): the leaving-home check switch was added.
+// Without it the identity still hashed to 8064950a…a110.
+const BASELINE_SHA256 = 'b0fde0e10152286401201d266335f5a9ef1e4432a5116bba94b1564134a67ed9'
 const canonical = (ids) => JSON.stringify(Object.keys(ids).sort().map((k) => [k, ids[k]]))
 const sha256 = (text) => require('crypto').createHash('sha256').update(text).digest('hex')
 
