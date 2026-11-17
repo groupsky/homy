@@ -10,13 +10,17 @@ While an input module restarts, it reads `inputs: 0` for a few seconds. Then
 the real value comes back.
 
 - Every dry-switch feature in `config/automations/features.js` (switches,
-  buttons, locks, door and window contacts) drops a reading where all inputs
-  are 0 (`funcs/inputs_not_all_zero.js`, the `filterInput` of `drySwitch()`).
+  buttons, locks, door and window contacts) drops a reading of all 0 when the
+  last good reading had 2 or more inputs set
+  (`funcs/inputs_not_all_zero.js`, the `filterInput` of `drySwitch()`).
 - So no switch looks toggled and no door or window looks open. The last good
   value stays published. When the real reading comes back, only bits that
   really changed count.
-- A real reading of all 0 does not happen: some door and window contacts are
-  always closed. A single switch or contact change is not delayed.
+- A 0 after a reading with one input set is a real change (for example a
+  button released while every other input is open) and passes. Several
+  inputs that really open at the very same poll are not seen until the next
+  change on that module; this is not expected to happen.
+- A single switch or contact change is not delayed.
 - Bots that read the raw module topic themselves (`bac002-toggle-power`
   window contacts in `config/automations/config.js`) do not use this filter.
   They wait 30 s before acting (#1797).
