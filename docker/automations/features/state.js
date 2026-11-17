@@ -21,12 +21,13 @@ class StateFeature extends EventEmitter {
   #state
 
   /**
-   * True from a command until the next status. The command may have failed
-   * (a relay board restarting does not answer), so the old state is not
-   * known to be right (#1956).
-   * @type {boolean}
+   * The last command, until the next status comes. A toggle computes from it,
+   * not from the older status: the write may have failed (a restarting relay
+   * board does not answer, and then no status follows for minutes), and
+   * toggling the old status again would write the same value twice (#1956).
+   * @type {any}
    */
-  #commandPending = false
+  #command = undefined
 
   /**
    * @param {{name: string, type: string}} feature
@@ -64,7 +65,7 @@ class StateFeature extends EventEmitter {
 
   set state (newVal) {
     console.debug('update state', this.#feature, newVal)
-    this.#commandPending = true
+    this.#command = newVal
     this.#mqtt.publish(this.commandTopic, { state: newVal }, { retain: this.#retain })
   }
 
@@ -73,14 +74,15 @@ class StateFeature extends EventEmitter {
   }
 
   /**
-   * Switches the state to its opposite. When the state is not known yet, or a
-   * command has no status after it yet, waits for the next status and toggles
-   * from that, so a failed write is never taken as done.
-   * @param {{timeout?: number}} [options] give up after this many ms; 0 waits forever
+   * Switches the state to its opposite: of the last command when no status
+   * came after it yet, else of the last status. When neither is known, waits
+   * for the first status.
+   * @param {{timeout?: number}} [options] give up waiting after this many ms; 0 waits forever
    */
   toggle ({ timeout = 0 } = {}) {
-    if (this.#state != null && !this.#commandPending) {
-      this.state = !this.#state
+    const current = this.#command !== undefined ? this.#command : this.#state
+    if (current != null) {
+      this.state = !current
       return
     }
     console.info('waiting for state update to toggle', timeout > 0 ? `within next ${timeout / 1000}s` : '')
@@ -104,7 +106,7 @@ class StateFeature extends EventEmitter {
 
   #onStateMessage = ({ state }) => {
     console.debug('state update', this.#feature, state)
-    this.#commandPending = false
+    this.#command = undefined
     this.emit('update', state, this.#state, this)
     if (this.#state !== state) {
       if (this.#state != null) {

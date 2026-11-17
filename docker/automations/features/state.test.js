@@ -35,24 +35,18 @@ describe('StateFeature toggle', () => {
     expect(commands).toEqual([true])
   })
 
-  test('after a failed write, the next toggle waits for a fresh status and toggles from it (#1956)', () => {
-    feature.toggle({ timeout: 1000 }) // writes "on"; the relay board does not answer
-    expect(commands).toEqual([true])
-
+  test('after a failed write, the next toggle computes from the command, not the old state (#1956)', () => {
+    feature.toggle({ timeout: 1000 }) // writes "on"; the relay board does not answer, no status follows
     jest.advanceTimersByTime(4500)
-    feature.toggle({ timeout: 1000 }) // the old state "off" is not trusted
-    expect(commands).toEqual([true])
-
-    status(false) // the board is back: the light is still off
-    expect(commands).toEqual([true, true])
+    feature.toggle({ timeout: 1000 })
+    expect(commands).toEqual([true, false])
   })
 
-  test('after a failed write, gives up when no status comes within the timeout', () => {
+  test('a status after a command wins over the command', () => {
+    feature.toggle({ timeout: 1000 }) // writes "on"
+    status(false) // the board reports the light still off
     feature.toggle({ timeout: 1000 })
-    feature.toggle({ timeout: 1000 })
-    jest.advanceTimersByTime(1001)
-    status(false)
-    expect(commands).toEqual([true])
+    expect(commands).toEqual([true, true])
   })
 
   test('a written command and its status: the next toggle is at once', () => {
