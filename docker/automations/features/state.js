@@ -21,6 +21,15 @@ class StateFeature extends EventEmitter {
   #state
 
   /**
+   * The last command, until the next status comes. A toggle computes from it,
+   * not from the older status: the write may have failed (a restarting relay
+   * board does not answer, and then no status follows for minutes), and
+   * toggling the old status again would write the same value twice (#1956).
+   * @type {any}
+   */
+  #command = undefined
+
+  /**
    * @param {{name: string, type: string}} feature
    * @param {import(mqtt)}mqtt
    * @param {boolean} [autoSubscribe]
@@ -56,6 +65,7 @@ class StateFeature extends EventEmitter {
 
   set state (newVal) {
     console.debug('update state', this.#feature, newVal)
+    this.#command = newVal
     this.#mqtt.publish(this.commandTopic, { state: newVal }, { retain: this.#retain })
   }
 
@@ -63,26 +73,31 @@ class StateFeature extends EventEmitter {
     return `${this.baseFeatureTopic}/status`
   }
 
-  toggle ({ timeout = 0 }) {
-    if (this.#state == null) {
-      console.info('waiting for state update to toggle', timeout > 0 ? `within next ${timeout/1000}s` : '')
-      let timer
-      const toggler = () => {
-        if (timer) {
-          clearTimeout(timer)
-        }
-        this.state = !this.state
-      }
-      if (timeout > 0) {
-        timer = setTimeout(() => {
-          console.info('timed out waiting for state update to toggle')
-          this.off('update', toggler)
-        })
-      }
-      this.once('update', toggler)
-    } else {
-      this.state = !this.state
+  /**
+   * Switches the state to its opposite: of the last command when no status
+   * came after it yet, else of the last status. When neither is known, waits
+   * for the first status.
+   * @param {{timeout?: number}} [options] give up waiting after this many ms; 0 waits forever
+   */
+  toggle ({ timeout = 0 } = {}) {
+    const current = this.#command !== undefined ? this.#command : this.#state
+    if (current != null) {
+      this.state = !current
+      return
     }
+    console.info('waiting for state update to toggle', timeout > 0 ? `within next ${timeout / 1000}s` : '')
+    let timer
+    const toggler = (state) => {
+      clearTimeout(timer)
+      this.state = !state
+    }
+    if (timeout > 0) {
+      timer = setTimeout(() => {
+        console.info('timed out waiting for state update to toggle')
+        this.off('update', toggler)
+      }, timeout)
+    }
+    this.once('update', toggler)
   }
 
   subscribe () {
@@ -91,6 +106,7 @@ class StateFeature extends EventEmitter {
 
   #onStateMessage = ({ state }) => {
     console.debug('state update', this.#feature, state)
+    this.#command = undefined
     this.emit('update', state, this.#state, this)
     if (this.#state !== state) {
       if (this.#state != null) {

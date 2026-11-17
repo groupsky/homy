@@ -19,10 +19,13 @@ const contactBot = (extra = {}) => transform('bath1DoorOpenState', {
   ...extra,
 })
 
-const CLOSED = {inputs: 1 << 6}
-const OPEN = {inputs: 0}
+// Other contacts of the module stay closed: a reading of all zeros is a module
+// restart and features.js drops it (#1956).
+const OTHER = 1 << 26
+const CLOSED = {inputs: (1 << 6) | OTHER}
+const OPEN = {inputs: OTHER}
 // Another bit of the same module changed; the contact did not.
-const OPEN_OTHER_BIT = {inputs: 1 << 7}
+const OPEN_OTHER_BIT = {inputs: (1 << 7) | OTHER}
 
 // features.js prints the whole config when it is loaded.
 const loadFeatureBots = () => {
