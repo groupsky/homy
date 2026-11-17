@@ -8,6 +8,7 @@ const prefix = process.env.TOPIC_PREFIX || 'homy/features'
  * @param {Array<string|object>} transform
  * @param {string} outputTopic
  * @param {number} [debounceMs] a new value is published only after it stayed the same this long; 0 is off
+ * @param {string} [filterInput] drops input messages for which it returns false
  * @return {Object}
  */
 const state = (
@@ -17,12 +18,14 @@ const state = (
     transform,
     output: { topic: outputTopic },
     debounceMs = 0,
+    filterInput,
   }
 ) => ({
   [`${name}State`]: {
     type: 'transform',
     ...(debounceMs > 0 && { debounceMs }),
     input: { name: 'inputs/mqtt', params: { topic: inputTopic } },
+    ...(filterInput && { filterInput }),
     transform: [
       ...transform,
       'to_state',
@@ -86,6 +89,8 @@ const drySwitch = (
   name,
   debounceMs,
   input: { topic: `/modbus/${bus}/${device}/reading` },
+  // a module restarting after a power dip reads all zeros (#1956)
+  filterInput: 'inputs_not_all_zero',
   transform: [
     { name: 'get_object_key', params: { key: 'inputs' } },
     { name: 'bit_to_bool', params: { bit } },

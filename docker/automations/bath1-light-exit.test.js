@@ -16,6 +16,9 @@ const READING = '/modbus/dry-switches/mbsl32di1/reading'
 // bath1DoorLock is bit 5, set when locked; bath1DoorOpen is bit 6, set when closed
 const LOCKED = 1 << 5
 const CLOSED = 1 << 6
+// Other contacts of the module stay closed: a reading of all zeros is a module
+// restart and is dropped (#1956)
+const OTHER = 1 << 26
 
 const createBroker = (lightConfig) => {
   const subscribers = {}
@@ -47,7 +50,7 @@ describe('bath1 light with the debounced door contact', () => {
   let broker
   let controller
 
-  const reading = (inputs) => broker.deliver(READING, { inputs })
+  const reading = (inputs) => broker.deliver(READING, { inputs: inputs | OTHER })
   const press = () => {
     broker.deliver(controller.toggle.statusTopic, { state: true })
     jest.advanceTimersByTime(200)
