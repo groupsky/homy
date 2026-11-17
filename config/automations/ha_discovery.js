@@ -1124,6 +1124,17 @@ const config = {
     }),
 
     ...haAutomationSwitch({
+      name: 'leavingHomeCheckAutomation',
+      bot_name: 'leavingHomeCheck',
+      config: {
+        name: 'Автоматизация',
+        device: { identifiers: 'leaving_home_check', name: 'Проверка при тръгване' },
+        object_id: 'automation_leaving_home_check',
+        icon: 'mdi:home-export-outline',
+      }
+    }),
+
+    ...haAutomationSwitch({
       name: 'irrigationGrassWestCenterAutomation',
       bot_name: 'irrigationGrassWestCenterSchedule',
       config: {
