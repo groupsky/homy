@@ -38,7 +38,10 @@ client.
 | `fleet-fully-metrics`, `fleet-fully-metrics-check` | `fleet-fully-metrics` | 1885, or `127.0.0.1:1883` on routy | nothing | `fully/#` |
 
 The clients that run on routy itself may stay on `127.0.0.1:1883` without a
-login; their users are there for when they move. The others must move to
+login, but only on the address `127.0.0.1`: routy's own name or tailnet
+address no longer reaches 1883. Their users are there for when they move.
+Client ids are shared by all listeners, so a client must not use the same id
+on two ports at once (the second one pushes the first off). The others must move to
 1884 or 1885 with a login: after the deploy, the outside cannot reach 1883.
 A user on 1885 that `servers.acl` does not name may do nothing.
 
