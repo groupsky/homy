@@ -101,13 +101,18 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "1883:1883"
+      # Anonymous: on routy itself only, not to the outside (#1964). The
+      # services on the docker networks use broker:1883 and do not need it.
+      - "127.0.0.1:1883:1883"
       # Login only, for the car app (#1962).
       - "1884:1884"
+      # Login only, for the server clients outside docker (#1964).
+      - "1885:1885"
     volumes:
       - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
       - ${CONFIG_PATH}/mosquitto/car.acl:/mosquitto/config/car.acl:ro
-      # Holds `passwd`, from the deploy; never in the repo. A folder, not the
+      - ${CONFIG_PATH}/mosquitto/servers.acl:/mosquitto/config/servers.acl:ro
+      # Holds `passwd` and `servers.passwd`, from the deploy; never in the repo. A folder, not the
       # file, so a missing file does not stop the broker (entrypoint.sh).
       - ${SECRETS_PATH}/mosquitto:/mosquitto/secrets:ro
       # The image declares both as VOLUMEs; without a mount here docker makes
