@@ -6,7 +6,7 @@
 #   a. the car user can publish to its own topic (ioniq/...);
 #   b. it can read homy/ioniq/journeys and homy/ioniq/road_check;
 #   c. it cannot publish to homy/ioniq/journeys;
-#   d. it cannot read or write a topic outside ioniq/ and homy/ioniq/;
+#   d. it cannot read or write any other topic, also ioniq/derived/...;
 #   e. a client without a login, or with a wrong password, cannot use 1884;
 #   f. with no password file the broker still starts, 1883 works, and nobody
 #      can log in on 1884.
@@ -60,6 +60,13 @@ pub_car()  { dc exec -T "$SVC" mosquitto_pub -p 1884 -u ioniq -P test-password -
 # nothing after 3s.
 retained()     { dc exec -T "$SVC" mosquitto_sub -p 1883 -C 1 -W 3 -t "$1" 2>/dev/null || true; }
 retained_car() { dc exec -T "$SVC" mosquitto_sub -p 1884 -u ioniq -P test-password -C 1 -W 3 -t "$1" 2>/dev/null || true; }
+# refused SERVICE ARGS...: mosquitto_pub ARGS fails because the broker says
+# "not authorised" (not because nothing listens).
+refused() {
+  local svc=$1 out; shift
+  if out=$(dc exec -T "$svc" mosquitto_pub "$@" 2>&1); then return 1; fi
+  grep -q "not authorised" <<<"$out"
+}
 is() { [ "$1" = "$2" ] || fail "$3: got '$1', want '$2'"; log "ok: $3"; }
 
 wait_for 30 "broker is up" dc exec -T broker mosquitto_sub -p 1883 -t '$SYS/#' -C 1
@@ -91,12 +98,15 @@ pub_car -t homy/other/state -m from-car || true
 is "$(retained homy/other/state)" other-1 "d: car cannot publish homy/other/state"
 pub_car -t other/x -m from-car || true
 is "$(retained other/x)" "" "d: car cannot publish other/x"
+pub_anon -t ioniq/derived/trip -m trip-1
+pub_car -t ioniq/derived/trip -m from-car || true
+is "$(retained ioniq/derived/trip)" trip-1 "d: car cannot publish ioniq/derived/trip"
 
 # e. no login, or a wrong one, on the car's listener.
-! dc exec -T broker mosquitto_pub -p 1884 -t ioniq/status -m anon 2>/dev/null ||
+refused broker -p 1884 -t ioniq/status -m anon ||
   fail "e: a client without a login could publish on 1884"
 log "ok: e: no login is refused on 1884"
-! dc exec -T broker mosquitto_pub -p 1884 -u ioniq -P wrong -t ioniq/status -m bad 2>/dev/null ||
+refused broker -p 1884 -u ioniq -P wrong -t ioniq/status -m bad ||
   fail "e: a wrong password could publish on 1884"
 log "ok: e: a wrong password is refused on 1884"
 is "$(retained ioniq/status)" '{"online":true}' "e: ioniq/status unchanged"
@@ -106,7 +116,7 @@ SVC=broker-nopass
 wait_for 30 "broker without a password file is up" dc exec -T broker-nopass mosquitto_sub -p 1883 -t '$SYS/#' -C 1
 pub_anon -t test/anon -m anon-1
 is "$(retained test/anon)" anon-1 "f: 1883 works without a password file"
-! dc exec -T broker-nopass mosquitto_pub -p 1884 -u ioniq -P test-password -t ioniq/status -m x 2>/dev/null ||
+refused broker-nopass -p 1884 -u ioniq -P test-password -t ioniq/status -m x ||
   fail "f: the car could log in without a password file"
 log "ok: f: nobody can log in on 1884 without a password file"
 

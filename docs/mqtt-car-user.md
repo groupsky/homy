@@ -22,12 +22,15 @@ step, after those clients have their own logins.
 
 User `ioniq` (the user name the car app already sends):
 
-- **read and write** `ioniq/#`: the car app's own topics. It publishes
-  `ioniq/parsed/<group>`, `ioniq/raw/<group>`, `ioniq/log` and its
-  will/status topic `ioniq/status`.
+- **read and write** the car app's own topics: `ioniq/parsed/#`,
+  `ioniq/raw/#`, `ioniq/log` and its will/status topic `ioniq/status`. Not
+  other `ioniq/` topics: `ioniq/derived/#` comes from the automations.
 - **read only** `homy/ioniq/journeys`, `homy/ioniq/road_check` and
   `homy/ioniq/home`, which ev-journal publishes for the car.
 - nothing else: no write to any `homy/ioniq/` topic, and no other topic.
+
+On 1884 the broker uses the user name as the client id
+(`use_username_as_clientid`), so the car cannot take the id of another client.
 
 A user on port 1884 that `car.acl` does not name may do nothing.
 
@@ -55,7 +58,12 @@ docker compose restart broker
 Then, in the car app's settings: port 1884, user `ioniq`, and the password.
 
 To change the password, run the same command without `-c`, then restart the
-broker. To remove the user: `mosquitto_passwd -D /out/passwd ioniq`.
+broker. To remove the user, then restart the broker:
+
+```bash
+docker compose run --rm --no-deps -v "$SECRETS_PATH/mosquitto:/out" \
+  --entrypoint mosquitto_passwd broker -D /out/passwd ioniq
+```
 
 ## Test
 
