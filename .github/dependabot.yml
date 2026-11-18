@@ -339,6 +339,11 @@ updates:
       interval: "monthly"
     reviewers:
       - "groupsky"
+    ignore:
+      # jest 30 accepts node-notifier only up to ^10 (peerOptional), so a
+      # major bump breaks npm ci with ERESOLVE (seen in #1953).
+      - dependency-name: "node-notifier"
+        update-types: ["version-update:semver-major"]
     groups:
       mqtt-services:
         patterns:
