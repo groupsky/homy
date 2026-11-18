@@ -962,3 +962,91 @@ http_runs() { grep -c "docker run .*ha-provision/index.mjs --http-only" "$MOCK_D
     assert_success
     assert_equal "$(provision_runs)" 1
 }
+
+# --- A failed or skipped apply stays pending (#1965) --------------------------
+
+PENDING() { echo "$PROJECT_DIR/.ha-provision-pending"; }
+
+@test "deploy.sh: a failed apply leaves a marker, and the next deploy with no file change applies it (#1965)" {
+    echo "PROXY_BACKEND_ADDRESS=192.0.2.11" > "$PROJECT_DIR/.env"
+    echo "HA_GRAFANA_BASE_URL=https://grafana.example" >> "$PROJECT_DIR/.env"
+    touch "$MOCK_DIR/provision-changed" "$MOCK_DIR/provision.fail"
+    run deploy
+    assert_success
+    assert_equal "$(cat "$(PENDING)")" "$NEW"
+    # the hand command has every -e value of the deploy's own run
+    assert_output --partial "run it by hand: docker run"
+    assert_output --partial "-e HA_GRAFANA_BASE_URL=https://grafana.example -e TRUSTED_PROXIES=192.0.2.11"
+    assert_output --partial "after a good run, delete $(PENDING)"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "the apply is still pending"
+
+    # next deploy, to another commit with the same provision.json
+    rm "$MOCK_DIR/provision-changed" "$MOCK_DIR/provision.fail" "$MOCK_DIR/calls.log"
+    : > "$MOCK_DIR/notify.log"
+    run deploy --tag "$OLD"
+    assert_success
+    assert_equal "$(provision_runs)" 1
+    assert_equal "$(http_runs)" 0
+    assert_output --partial "An earlier apply of provision.json is pending (from ${NEW:0:7})"
+    [ ! -e "$(PENDING)" ]
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "also the pending apply from ${NEW:0:7}"
+}
+
+@test "deploy.sh: a skipped apply (no token) leaves a marker, and a later deploy applies it (#1965)" {
+    mv "$PROJECT_DIR/secrets/ha_provision_token" "$MOCK_DIR/token"
+    touch "$MOCK_DIR/provision-changed"
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 0
+    assert_equal "$(cat "$(PENDING)")" "$NEW"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "no ha_provision_token secret; the apply of provision.json is still pending"
+
+    mv "$MOCK_DIR/token" "$PROJECT_DIR/secrets/ha_provision_token"
+    rm "$MOCK_DIR/provision-changed"
+    run deploy --tag "$OLD"
+    assert_success
+    assert_equal "$(provision_runs)" 1
+    [ ! -e "$(PENDING)" ]
+}
+
+@test "deploy.sh: a skip with no file change and no marker leaves no marker (#1965)" {
+    rm "$PROJECT_DIR/secrets/ha_provision_token"
+    run deploy
+    assert_success
+    [ ! -e "$(PENDING)" ]
+}
+
+@test "deploy.sh: the marker stays while the dry run still differs after the apply (#1965)" {
+    echo "$OLD" > "$(PENDING)"
+    echo "dashboard dashboard-x: would save the config from provision.json" > "$MOCK_DIR/provision-dry.out"
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 1
+    assert_equal "$(cat "$(PENDING)")" "$NEW"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "the apply is still pending"
+}
+
+@test "deploy.sh: a rollback after a failed gate leaves the marker as it was (#1965)" {
+    echo "$OLD" > "$(PENDING)"
+    recreate_on_up 1 automations img-a2 exited
+    recreate_on_up 2 automations img-a1
+    run deploy
+    assert_failure
+    assert_output --partial "Rollback to $OLD complete"
+    assert_equal "$(cat "$(PENDING)")" "$OLD"
+    run grep -c "docker run" "$MOCK_DIR/calls.log"
+    assert_output "0"
+}
+
+@test "deploy.sh: no marker and a difference gives only the UI-edit warning (#1965)" {
+    printf '%s\n' "dashboard dashboard-x: would save the config from provision.json" > "$MOCK_DIR/provision-dry.out"
+    run deploy
+    assert_success
+    assert_equal "$(provision_runs)" 0
+    assert_output --partial "an edit in the HA UI?"
+    [ ! -e "$(PENDING)" ]
+}
