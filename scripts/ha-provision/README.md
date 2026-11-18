@@ -87,6 +87,15 @@ Drop `--dry-run` to apply.
 that it failed or was skipped. No container is restarted, and HA applies all
 changes live, except a change of the proxy trust, which restarts HA.
 
+When the full run fails, or is skipped for a missing `ha_provision_token`
+secret, the deploy writes the marker `.ha-provision-pending` next to
+`.deployed-version` (#1965). It holds the commit whose file was not applied.
+While it is there, each deploy runs the full apply, also when `provision.json`
+did not change. The deploy removes it after a full run passed and the dry run
+says "up to date". A hand run does not remove it: **after a good hand run,
+delete `.ha-provision-pending`**, or the next deploy applies the file again and
+may overwrite a later edit in the HA UI.
+
 Two settings come from `.env`. `PROXY_BACKEND_ADDRESS` is the proxy HA
 trusts, passed as `TRUSTED_PROXIES` (see above). `HA_GRAFANA_BASE_URL` is the base of the
 dashboards' Grafana links. In `provision.json` such a link is written

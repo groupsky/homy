@@ -564,22 +564,33 @@ ha_provision() {
     printf '%s\n' "$out"
 }
 
+# A marker that provision.json was not applied: its full run failed, or was
+# skipped for a missing token (#1965). It holds the commit whose file was not
+# applied, for information only. While it is there, every deploy runs the full
+# ha-provision, so the next deploy does not read the old difference as an edit
+# in the HA UI. Removed only after a full run passed and the dry run said "up
+# to date". A hand run does not remove it: delete it after a good hand run.
+HA_PROVISION_PENDING_FILE="${HA_PROVISION_PENDING_FILE:-$PROJECT_DIR/.ha-provision-pending}"
+mark_provision_pending() {
+    # A failed write must not stop the deploy before its success notice
+    if echo "$NEW_VERSION" 2>/dev/null > "$HA_PROVISION_PENDING_FILE"; then
+        log "provision.json is not applied; $HA_PROVISION_PENDING_FILE makes the next deploy apply it"
+    else
+        warn "Could not write $HA_PROVISION_PENDING_FILE: the next deploy will not know that provision.json is not applied"
+    fi
+}
+
 # Brings HA's .storage state (dashboards, exposure, registry names) to
 # provision.json (#1878). It runs only after the gate passed, so a failed
-# deploy never applies the new file and its rollback leaves HA as it was. A
-# failure here does not fail the deploy: HA itself is fine. Sets
-# HA_PROVISION_NOTE, one line for the notice.
+# deploy never applies the new file and its rollback leaves HA as it was (and
+# the pending marker as it was). A failure here does not fail the deploy: HA
+# itself is fine. Sets HA_PROVISION_NOTE, one line for the notice.
 provision_ha() {
-    local changed=1 out
-    if [ ! -f "$(resolve_secrets_dir)/ha_provision_token" ]; then
-        warn "No ha_provision_token secret: provision.json was not applied or checked"
-        HA_PROVISION_NOTE="ha-provision skipped: no ha_provision_token secret"
-        return 0
-    fi
-    # Pulled first, so docker's pull messages are not read as a difference
-    if ! docker image inspect "$HA_PROVISION_IMAGE" > /dev/null 2>&1 && \
-       ! timeout -k 5 300 docker pull -q "$HA_PROVISION_IMAGE" > /dev/null 2>&1; then
-        warn "Could not pull $HA_PROVISION_IMAGE for ha-provision"
+    local changed=1 pending="" out
+    if [ -f "$HA_PROVISION_PENDING_FILE" ]; then
+        pending=$(head -n 1 "$HA_PROVISION_PENDING_FILE")
+        pending="${pending:0:7}"
+        pending="${pending:-unknown}"
     fi
     # The file and the script that applies it, between the running and the new
     # commit; not the script's docs or tests, which change nothing in HA.
@@ -589,17 +600,37 @@ provision_ha() {
            ':(exclude)scripts/ha-provision/*.md' ':(exclude)scripts/ha-provision/*.test.mjs' 2>/dev/null; then
         changed=0
     fi
+    if [ -n "$pending" ]; then
+        log "An earlier apply of provision.json is pending (from $pending): applying it now"
+        changed=1
+    fi
+    if [ ! -f "$(resolve_secrets_dir)/ha_provision_token" ]; then
+        warn "No ha_provision_token secret: provision.json was not applied or checked"
+        HA_PROVISION_NOTE="ha-provision skipped: no ha_provision_token secret"
+        if [ "$changed" -eq 1 ]; then
+            mark_provision_pending
+            HA_PROVISION_NOTE="$HA_PROVISION_NOTE; the apply of provision.json is still pending"
+        fi
+        return 0
+    fi
+    # Pulled first, so docker's pull messages are not read as a difference
+    if ! docker image inspect "$HA_PROVISION_IMAGE" > /dev/null 2>&1 && \
+       ! timeout -k 5 300 docker pull -q "$HA_PROVISION_IMAGE" > /dev/null 2>&1; then
+        warn "Could not pull $HA_PROVISION_IMAGE for ha-provision"
+    fi
     if [ "$changed" -eq 1 ]; then
         log "provision.json changed: applying it to HA (scripts/ha-provision)..."
         if ! ha_provision | tee -a "$LOG_FILE"; then
-            error "ha-provision failed. HA is running; run it by hand: $HA_PROVISION_TEXT"
-            HA_PROVISION_NOTE="ha-provision FAILED, run it by hand (scripts/ha-provision/README.md)"
+            mark_provision_pending
+            error "ha-provision failed. HA is running; run it by hand: $HA_PROVISION_TEXT; after a good run, delete $HA_PROVISION_PENDING_FILE"
+            HA_PROVISION_NOTE="ha-provision FAILED, run it by hand (scripts/ha-provision/README.md); the apply is still pending"
             return 0
         fi
     else
         # The proxy HA trusts comes from .env, which git does not see change:
         # its step runs on every deploy, and does nothing when HA already
-        # trusts that address (#1820).
+        # trusts that address (#1820). Its failure needs no marker: it runs
+        # again on the next deploy anyway.
         log "Checking HA's proxy trust (ha-provision --http-only)..."
         if ! ha_provision --http-only | tee -a "$LOG_FILE"; then
             error "ha-provision --http-only failed. HA is running; run it by hand: $HA_PROVISION_TEXT --http-only"
@@ -610,15 +641,17 @@ provision_ha() {
     log "Checking HA against provision.json (ha-provision --dry-run)..."
     if ! out=$(ha_provision --dry-run); then
         printf '%s\n' "$out" | tee -a "$LOG_FILE"
-        error "The ha-provision dry run failed. HA is running; check it by hand: $HA_PROVISION_TEXT"
+        error "The ha-provision dry run failed. HA is running; check it by hand: $HA_PROVISION_TEXT --dry-run"
         HA_PROVISION_NOTE="ha-provision dry run FAILED, check it by hand (scripts/ha-provision/README.md)"
+        [ "$changed" -eq 1 ] && mark_provision_pending
         return 0
     fi
     printf '%s\n' "$out" | tee -a "$LOG_FILE"
     if grep -qv ': up to date$' <<<"$out"; then
         if [ "$changed" -eq 1 ]; then
+            mark_provision_pending
             warn "HA still differs from provision.json after ha-provision"
-            HA_PROVISION_NOTE="ha-provision applied, but the dry run still shows changes; see the deploy log"
+            HA_PROVISION_NOTE="ha-provision applied, but the dry run still shows changes, the apply is still pending; see the deploy log"
         else
             warn "HA differs from provision.json (an edit in the HA UI?). Not overwritten; to apply the file: $HA_PROVISION_TEXT"
             HA_PROVISION_NOTE="HA differs from provision.json (edited in the UI?); not overwritten, see the deploy log"
@@ -626,7 +659,11 @@ provision_ha() {
         return 0
     fi
     if [ "$changed" -eq 1 ]; then
+        rm -f "$HA_PROVISION_PENDING_FILE"
         HA_PROVISION_NOTE="provision.json applied, HA up to date"
+        if [ -n "$pending" ]; then
+            HA_PROVISION_NOTE="provision.json applied (also the pending apply from $pending), HA up to date"
+        fi
     else
         HA_PROVISION_NOTE="HA up to date with provision.json"
     fi

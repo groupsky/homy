@@ -11,6 +11,7 @@ coverage/
 .deployed-version
 .previous-version
 .pre-upgrade-backup
+.ha-provision-pending
 
 # Deployment logs
 logs/deploy-*.log
