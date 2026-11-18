@@ -11,12 +11,14 @@ on:
     paths:
       - 'config/mosquitto/**'
       - 'docker/mosquitto/**'
+      - 'docker-compose.yml'
       - '.github/scripts/test-mqtt-car-user/**'
       - '.github/workflows/test-mqtt-car-user.yml'
   pull_request:
     paths:
       - 'config/mosquitto/**'
       - 'docker/mosquitto/**'
+      - 'docker-compose.yml'
       - '.github/scripts/test-mqtt-car-user/**'
       - '.github/workflows/test-mqtt-car-user.yml'
   workflow_dispatch:
