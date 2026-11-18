@@ -572,8 +572,12 @@ ha_provision() {
 # to date". A hand run does not remove it: delete it after a good hand run.
 HA_PROVISION_PENDING_FILE="${HA_PROVISION_PENDING_FILE:-$PROJECT_DIR/.ha-provision-pending}"
 mark_provision_pending() {
-    echo "$NEW_VERSION" > "$HA_PROVISION_PENDING_FILE"
-    log "provision.json is not applied; $HA_PROVISION_PENDING_FILE makes the next deploy apply it"
+    # A failed write must not stop the deploy before its success notice
+    if echo "$NEW_VERSION" 2>/dev/null > "$HA_PROVISION_PENDING_FILE"; then
+        log "provision.json is not applied; $HA_PROVISION_PENDING_FILE makes the next deploy apply it"
+    else
+        warn "Could not write $HA_PROVISION_PENDING_FILE: the next deploy will not know that provision.json is not applied"
+    fi
 }
 
 # Brings HA's .storage state (dashboards, exposure, registry names) to
