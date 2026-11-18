@@ -1,0 +1,36 @@
+name: Test MQTT Car User
+
+# Integration test for the car-only MQTT user (#1962): the real broker image
+# and config, the car user's ACL on the login-only listener, and a broker
+# without a password file. See .github/scripts/test-mqtt-car-user/run.sh.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'config/mosquitto/**'
+      - 'docker/mosquitto/**'
+      - '.github/scripts/test-mqtt-car-user/**'
+      - '.github/workflows/test-mqtt-car-user.yml'
+  pull_request:
+    paths:
+      - 'config/mosquitto/**'
+      - 'docker/mosquitto/**'
+      - '.github/scripts/test-mqtt-car-user/**'
+      - '.github/workflows/test-mqtt-car-user.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test MQTT car user
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run integration test
+        run: .github/scripts/test-mqtt-car-user/run.sh

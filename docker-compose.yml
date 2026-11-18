@@ -102,8 +102,14 @@ services:
       - no-new-privileges:true
     ports:
       - "1883:1883"
+      # Login only, for the car app (#1962).
+      - "1884:1884"
     volumes:
       - ${CONFIG_PATH}/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${CONFIG_PATH}/mosquitto/car.acl:/mosquitto/config/car.acl:ro
+      # Holds `passwd`, from the deploy; never in the repo. A folder, not the
+      # file, so a missing file does not stop the broker (entrypoint.sh).
+      - ${SECRETS_PATH}/mosquitto:/mosquitto/secrets:ro
       # The image declares both as VOLUMEs; without a mount here docker makes
       # unnamed volumes that `down` throws away with the retained messages.
       - ${DATA_PATH}/mosquitto/data:/mosquitto/data

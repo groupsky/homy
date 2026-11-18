@@ -1,0 +1,16 @@
+# The broker for run.sh: built from docker/mosquitto, with the repository's
+# broker.conf and car.acl, as on routy. SECRETS_DIR holds a test password file.
+services:
+  broker:
+    build: ../../../docker/mosquitto
+    volumes:
+      - ../../../config/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../../../config/mosquitto/car.acl:/mosquitto/config/car.acl:ro
+      - ${SECRETS_DIR:?run run.sh}:/mosquitto/secrets:ro
+
+  # The same broker when the deploy has no password file.
+  broker-nopass:
+    build: ../../../docker/mosquitto
+    volumes:
+      - ../../../config/mosquitto/broker.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../../../config/mosquitto/car.acl:/mosquitto/config/car.acl:ro

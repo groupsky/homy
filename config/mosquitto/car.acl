@@ -1,0 +1,12 @@
+# Rights of the users on the login-only listener (port 1884, #1962).
+# A user not named here may do nothing. No passwords here: those are in the
+# password file the deploy provides (docs/mqtt-car-user.md).
+
+# The car app. It publishes ioniq/parsed/#, ioniq/raw/#, ioniq/log and its
+# will/status topic ioniq/status. It may read what ev-journal publishes for
+# the car, but never write it, and nothing else outside ioniq/.
+user ioniq
+topic readwrite ioniq/#
+topic read homy/ioniq/journeys
+topic read homy/ioniq/road_check
+topic read homy/ioniq/home
