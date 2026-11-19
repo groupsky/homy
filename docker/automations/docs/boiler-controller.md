@@ -2,25 +2,25 @@
 
 ## Overview
 
-The boiler system consists of a 200L Eldom cylindrical water heater (height: 140cm) with dual heating capabilities:
+The boiler system consists of an Eldom FV20060S21 cylindrical water heater (184 L net, height: 143cm) with dual heating capabilities:
 - Electric heater controlled by automation
 - Solar heater system (always active when conditions permit)
 
 ## Hardware Configuration
 
 ### Boiler Specifications
-- **Model:** Eldom 200L
+- **Model:** Eldom FV20060S21 (rating plate read on 2026-11-19)
 - **Type:** Cylindrical water heater
-- **Height:** 140cm
-- **Volume:** 200L
+- **Height:** 143cm
+- **Volume:** 184L net
 - **Electric heater:** 3kW single phase
 - **Location:** Service room (Сервизно)
 
 ### Temperature Sensors
-- **Bottom sensor:** h=45cm from base, inside the lower serpentine (the solar coil), not in the open
-  tank water (confirmed by the owner on 2026-11-05). It reads the coil, so the solar pump and the cold
-  water of a draw move it first and fast.
-- **Top sensor:** Located at h=107cm from base
+- **Bottom sensor:** about 47cm from base, in the sensor socket (port 8) of the lower port group.
+  The cold inlet is at 21cm and the solar coil S1 runs from 26cm to 117cm, so the solar pump and the
+  cold water of a draw move it first and fast.
+- **Top sensor:** h=106.5cm from base, port 11 (the unused coil S2 inlet port)
 
 ### Control Hardware
 - **Electric heater contactor:** Relay bit 14 on `/modbus/dry-switches/relays00-15`
@@ -32,8 +32,8 @@ The boiler system consists of a 200L Eldom cylindrical water heater (height: 140
 
 ### Temperature Monitoring
 ```
-homy/features/sensor/temperature_boiler_low/status     # Bottom sensor (45cm, inside the lower serpentine)
-homy/features/sensor/temperature_boiler_high/status    # Top sensor (107cm)
+homy/features/sensor/temperature_boiler_low/status     # Bottom sensor (about 47cm, port 8)
+homy/features/sensor/temperature_boiler_high/status    # Top sensor (106.5cm, port 11)
 homy/features/sensor/temperature_solar_panel/status    # Solar panel temperature
 homy/features/sensor/temperature_room_service/status   # Service room temperature
 ```
@@ -208,7 +208,7 @@ element was off, because the top was still in the 47–50 °C band, and it start
 the draw began, on `emergency_heating_bottom_cold` (#1911). Three rules fix this:
 
 - **Day-zone top-up** (`dayTopUp`): in the `minutesBeforeHold` (90) minutes before the hold, heat
-  the top to `target` (55 °C): 19:30–21:00 in winter, 20:30–22:00 in summer. 200 L from 49 to 55 °C
+  the top to `target` (55 °C): 19:30–21:00 in winter, 20:30–22:00 in summer. 184 L from 49 to 55 °C
   takes 30–60 minutes with this element, so the top is about 55 °C when the hold starts. This costs
   day price, about 1.4 kWh an evening (the owner chose it on 2026-11-05). The hold at 21:00 stops a
   top-up that has not finished.
@@ -223,7 +223,7 @@ the draw began, on `emergency_heating_bottom_cold` (#1911). Three rules fix this
   waits: the element starts when the top falls under it. A draw that has not started the element
   within `drawLatchMinutes` (30) is dropped, for example when the load gates held it back. So in the
   day zone the rule starts the element only while the top is under 50 °C (before, it waited for 47 °C
-  or a bottom under 30 °C). The bottom sensor sits inside the lower serpentine, where the cold inflow
+  or a bottom under 30 °C). The bottom sensor sits low in the tank, near the cold inlet, where the cold inflow
   shows first. A new detection needs a new fall of 3 K from the reading that fired the last one. A
   manual or vacation mode clears a draw seen before it.
 
@@ -447,3 +447,5 @@ and `config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
 - **Temperature monitoring:** Multiple sensors for system health
 - **Manual override:** Available for emergency situations
 - **Power monitoring:** Heating status detection via power consumption
+
+See `docs/water_system_spec.md` for the full port table and coil data.

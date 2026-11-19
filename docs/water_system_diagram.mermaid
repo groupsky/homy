@@ -20,22 +20,22 @@ graph TD
     HP --> DR[Drainage 250mm<br/>to irrigation channel]
     
     %% Hot Water System
-    DOM --> BR[Boiler<br/>Eldom FV20060S2<br/>200L Service Room]
+    DOM --> BR[Boiler<br/>Eldom FV20060S21<br/>184L net, Service Room]
     
     %% Solar System
     SP[Solar Panels<br/>Roof 7m] --> SC[Solar Controller]
     SC --> SPump[Solar Circulation Pump]
-    SPump --> BLS[Boiler Lower Serpentine<br/>4.2L, 0.35m²]
+    SPump --> BLS[Boiler Solar Coil S1<br/>4.3L, 0.90m², 26-117cm]
     BLS --> ET[Expansion Tank]
     
     %% Boiler Details
-    BR --> BHS[Boiler Upper Serpentine<br/>1.79L, 0.86m² - Unused]
+    BR --> BHS[Boiler Coil S2<br/>3.2L, 0.67m² - Unused]
     BR --> EH[Electric Heater 3kW]
     EH --> MT2[MQTT: homy/features/relay/<br/>service_boiler_contactor]
     
     %% Temperature Sensors
-    BLS --> TS1[Temp Sensor Bottom<br/>45cm height, inside lower serpentine]
-    BR --> TS2[Temp Sensor Top<br/>107cm height]
+    BR --> TS1[Temp Sensor Bottom<br/>about 47cm, port 8]
+    BR --> TS2[Temp Sensor Top<br/>106.5cm, port 11]
     TS1 --> MT3[MQTT: temperature_boiler_low]
     TS2 --> MT4[MQTT: temperature_boiler_high]
     SP --> MT5[MQTT: temperature_solar_panel]
