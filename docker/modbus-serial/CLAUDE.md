@@ -340,6 +340,7 @@ The modbus-serial service provides authoritative data for:
 - ✅ Solar production data
 
 This data is the source of truth for system monitoring and automation decisions.
+
 ## Stopping
 
 On `SIGTERM` or `SIGINT`, `shutdown.js` stops the poll loop, calls `close()` on
