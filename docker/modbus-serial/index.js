@@ -90,7 +90,15 @@ const reconnectLoop = async () => {
   }
 }
 
-const pollDevice = async (device) => {
+// Reads in progress, so a stop can wait until their points are published.
+const reading = new Set()
+const pollDevice = (device) => {
+  const promise = pollDeviceNow(device).finally(() => reading.delete(promise))
+  reading.add(promise)
+  return promise
+}
+
+const pollDeviceNow = async (device) => {
   let val = null
   let start
   let end
@@ -202,7 +210,10 @@ connect().then(async () => {
 // (#1971): the integrations' close() flushes them, with a timeout.
 const shutdown = require('./shutdown')({
   integrations,
-  stopPolling: () => { stopped = true },
+  stopPolling: () => {
+    stopped = true
+    return Promise.allSettled([...reading])
+  },
 })
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT', () => shutdown('SIGINT'))

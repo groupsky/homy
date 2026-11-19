@@ -75,4 +75,21 @@ describe('shutdown', () => {
     expect(close).toHaveBeenCalledTimes(1)
     expect(exit).toHaveBeenCalledTimes(1)
   })
+
+  it('waits for the reads in progress before it closes the integrations', async () => {
+    const events = []
+    let finishRead
+    const read = new Promise((resolve) => { finishRead = resolve })
+    const {shutdown} = setup([{close: async () => { events.push('close') }}], {
+      stopPolling: () => read.then(() => events.push('read published')),
+    })
+
+    const done = shutdown('SIGTERM')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(events).toEqual([])
+    finishRead()
+    await done
+
+    expect(events).toEqual(['read published', 'close'])
+  })
 })

@@ -17,19 +17,28 @@ module.exports = ({
       let code = 0
       let timer
       try {
-        stopPolling()
-        const flush = Promise.all(
-          integrations
-            .filter(({client}) => typeof client.close === 'function')
-            .map(async ({client, name}) => {
-              try {
-                await client.close()
-              } catch (e) {
-                code = 1
-                log(`Error closing ${name}`, e)
-              }
-            })
-        )
+        // stopPolling may return a promise that settles when the reads in
+        // progress are published, so their points are in the batch before it
+        // is flushed.
+        const flush = (async () => {
+          try {
+            await stopPolling()
+          } catch (e) {
+            log('Error stopping the poll', e)
+          }
+          await Promise.all(
+            integrations
+              .filter(({client}) => typeof client.close === 'function')
+              .map(async ({client, name}) => {
+                try {
+                  await client.close()
+                } catch (e) {
+                  code = 1
+                  log(`Error closing ${name}`, e)
+                }
+              })
+          )
+        })()
         const timeout = new Promise((resolve) => {
           timer = setTimeout(() => {
             code = 1
