@@ -447,4 +447,5 @@ and `config/grafana/dashboards/BOILER_CONTROLLER_README.md`.
 - **Temperature monitoring:** Multiple sensors for system health
 - **Manual override:** Available for emergency situations
 - **Power monitoring:** Heating status detection via power consumption
+
 See `docs/water_system_spec.md` for the full port table and coil data.
