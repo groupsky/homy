@@ -38,6 +38,9 @@ const integrations = Object.entries(integrationsConfig).map(
 
 const deviceErrors = new Map()
 
+// Set when the service is stopping: the poll loop does not start another round.
+let stopped = false
+
 // Wait before each reconnect: 5 s, doubled after each failure, at most 60 s.
 // Reset by the next good read.
 const msReconnectDelayMin = 5000
@@ -87,7 +90,15 @@ const reconnectLoop = async () => {
   }
 }
 
-const pollDevice = async (device) => {
+// Reads in progress, so a stop can wait until their points are published.
+const reading = new Set()
+const pollDevice = (device) => {
+  const promise = pollDeviceNow(device).finally(() => reading.delete(promise))
+  reading.add(promise)
+  return promise
+}
+
+const pollDeviceNow = async (device) => {
   let val = null
   let start
   let end
@@ -153,6 +164,7 @@ const poll = async () => {
   try {
     // get value of all meters
     for (const device of devices) {
+      if (stopped) break
       await pollDevice(device)
       await sleep(msDelayBetweenDevices)
     }
@@ -161,7 +173,7 @@ const poll = async () => {
     console.error(e)
   } finally {
     // after get all data from slave repeat it again
-    setImmediate(poll)
+    if (!stopped) setImmediate(poll)
   }
 }
 
@@ -194,9 +206,14 @@ connect().then(async () => {
 // Node as PID 1 ignores SIGTERM unless it has a handler, so `docker stop`
 // waited out the grace period and then killed the service (#1680). The raw
 // file is written with writeSync, so nothing in it is lost, and the OS closes
-// the port and the files. Points still in the InfluxDB batch are dropped, as
-// they were by the kill.
-process.on('SIGTERM', () => {
-  console.error('Received SIGTERM, exiting')
-  process.exit(0)
+// the port and the files. Points still in the InfluxDB batch are sent first
+// (#1971): the integrations' close() flushes them, with a timeout.
+const shutdown = require('./shutdown')({
+  integrations,
+  stopPolling: () => {
+    stopped = true
+    return Promise.allSettled([...reading])
+  },
 })
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

@@ -64,5 +64,9 @@ module.exports = ({
 
   logger.toString = () => 'influxdb'
 
-  return { publish: logger }
+  // Sends the points still in the client's memory batch and closes the write
+  // API. Called when the service stops (#1971).
+  const close = () => writeApi.close()
+
+  return { publish: logger, close }
 }

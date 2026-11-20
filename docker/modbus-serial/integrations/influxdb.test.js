@@ -1,4 +1,4 @@
-const {beforeEach, describe, expect, it, jest} = require('@jest/globals')
+const {afterEach, beforeEach, describe, expect, it, jest} = require('@jest/globals')
 
 // Only the network client is replaced; Point is the real one, so the test checks
 // the line protocol that would really be sent to InfluxDB.
@@ -40,5 +40,49 @@ describe('influxdb publish', () => {
     expect(written).toHaveLength(1)
     expect(written[0]).not.toContain('_id')
     expect(written[0]).toContain('v=230')
+  })
+})
+
+describe('influxdb close', () => {
+  const http = require('http')
+  let server
+  let bodies
+
+  beforeEach(async () => {
+    bodies = []
+    server = http.createServer((req, res) => {
+      let body = ''
+      req.on('data', (c) => { body += c })
+      req.on('end', () => {
+        bodies.push(body)
+        res.statusCode = 204
+        res.end()
+      })
+    })
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    // Use the real client against a local server, so the test sees what is
+    // really sent over HTTP.
+    const actual = jest.requireActual('@influxdata/influxdb-client')
+    InfluxDB.mockImplementation((opts) => new actual.InfluxDB(opts))
+  })
+
+  afterEach(async () => {
+    await new Promise((resolve) => server.close(resolve))
+  })
+
+  it('sends a pending point when closed, long before the batch interval', async () => {
+    const {publish, close} = createInfluxIntegration({
+      url: `http://127.0.0.1:${server.address().port}`,
+      database: 'homy',
+      measurement: 'raw',
+    })
+
+    publish({device: 'main', _type: 'sdm630', _addr: 1, _tz: 1700000000000, v: 230})
+    expect(bodies).toHaveLength(0)
+
+    await close()
+
+    expect(bodies).toHaveLength(1)
+    expect(bodies[0]).toContain('v=230')
   })
 })
