@@ -138,6 +138,9 @@ const pollDeviceNow = async (device) => {
         return
       }
 
+      // Since #1368 this path reconnects inside the process and does not
+      // exit, so the points in the InfluxDB batch stay in memory and are sent
+      // with the next batch. No flush is needed here (#1971).
       console.error('Too many errors, reconnecting', e)
       deviceErrors.clear()
       await reconnect()

@@ -347,4 +347,5 @@ On `SIGTERM` or `SIGINT`, `shutdown.js` stops the poll loop, calls `close()` on
 every integration that has one (the InfluxDB integration sends its pending
 points), and exits. The flush is cut off after 5 s, below the 10 s that
 `docker stop` waits. Exit code 0 on a clean flush, 1 if a close failed or timed
-out (#1971).
+out (#1971). The "Too many errors" path does not exit: it reconnects inside the
+process (#1368), so the pending points stay in the batch and no flush is needed.
