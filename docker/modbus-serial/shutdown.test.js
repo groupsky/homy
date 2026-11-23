@@ -92,4 +92,19 @@ describe('shutdown', () => {
 
     expect(events).toEqual(['read published', 'close'])
   })
+
+  it('does not wait for a stuck read longer than msReadTimeout, then still flushes', async () => {
+    const close = jest.fn(async () => {})
+    const {exit, shutdown} = setup([{close}], {
+      stopPolling: () => new Promise(() => {}),
+      msReadTimeout: 50,
+    })
+    const start = Date.now()
+
+    await shutdown('SIGTERM')
+
+    expect(Date.now() - start).toBeLessThan(1000)
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(exit).toHaveBeenCalledWith(0)
+  })
 })

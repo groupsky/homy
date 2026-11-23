@@ -93,6 +93,9 @@ const reconnectLoop = async () => {
 // Reads in progress, so a stop can wait until their points are published.
 const reading = new Set()
 const pollDevice = (device) => {
+  // Also stops the reads that an MQTT command starts after the stop: their
+  // points would be published after the final flush began (#1971).
+  if (stopped) return Promise.resolve()
   const promise = pollDeviceNow(device).finally(() => reading.delete(promise))
   reading.add(promise)
   return promise

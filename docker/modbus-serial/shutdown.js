@@ -1,13 +1,16 @@
 // Stops the service in order: stop polling, flush every integration that can
 // be flushed, then exit. A stuck integration must not block the stop, so the
 // flush is cut off after msTimeout. Keep msTimeout well under the 10 s that
-// `docker stop` waits before it kills the process.
+// `docker stop` waits before it kills the process. A read in progress can wait
+// for a reconnect for up to a minute, so stopPolling is waited for only
+// msReadTimeout: the points already in the batch must still be sent.
 module.exports = ({
   integrations,
   stopPolling,
   exit = process.exit,
   log = console.error,
   msTimeout = 5000,
+  msReadTimeout = 2000,
 }) => {
   let stopping = null
 
@@ -19,12 +22,23 @@ module.exports = ({
       try {
         // stopPolling may return a promise that settles when the reads in
         // progress are published, so their points are in the batch before it
-        // is flushed.
+        // is flushed. It is waited for only msReadTimeout.
         const flush = (async () => {
+          let readTimer
           try {
-            await stopPolling()
+            await Promise.race([
+              stopPolling(),
+              new Promise((resolve) => {
+                readTimer = setTimeout(() => {
+                  log(`Reads in progress took more than ${msReadTimeout} ms, flushing anyway`)
+                  resolve()
+                }, msReadTimeout)
+              }),
+            ])
           } catch (e) {
             log('Error stopping the poll', e)
+          } finally {
+            clearTimeout(readTimer)
           }
           await Promise.all(
             integrations

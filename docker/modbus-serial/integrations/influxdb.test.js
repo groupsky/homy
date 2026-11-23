@@ -1,4 +1,4 @@
-const {afterEach, beforeEach, describe, expect, it, jest} = require('@jest/globals')
+const {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest} = require('@jest/globals')
 
 // Only the network client is replaced; Point is the real one, so the test checks
 // the line protocol that would really be sent to InfluxDB.
@@ -44,45 +44,93 @@ describe('influxdb publish', () => {
 })
 
 describe('influxdb close', () => {
-  const http = require('http')
-  let server
+  // MSW is an ES module: it is loaded with import(), which needs the test
+  // script's --experimental-vm-modules.
+  let http, HttpResponse, server
+  const url = 'http://influxdb.test'
   let bodies
+  let statuses
 
-  beforeEach(async () => {
+  const reading = {device: 'main', _type: 'sdm630', _addr: 1, _tz: 1700000000000, v: 230}
+  const create = () => createInfluxIntegration({url, database: 'homy', measurement: 'raw'})
+
+  beforeAll(async () => {
+    const msw = await import('msw')
+    const {setupServer} = await import('msw/node')
+    http = msw.http
+    HttpResponse = msw.HttpResponse
+    server = setupServer()
+    server.listen({onUnhandledRequest: 'error'})
+  })
+  afterAll(() => server.close())
+
+  beforeEach(() => {
     bodies = []
-    server = http.createServer((req, res) => {
-      let body = ''
-      req.on('data', (c) => { body += c })
-      req.on('end', () => {
-        bodies.push(body)
-        res.statusCode = 204
-        res.end()
-      })
-    })
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-    // Use the real client against a local server, so the test sees what is
-    // really sent over HTTP.
+    // One status per request; the last one repeats.
+    statuses = [204]
+    // Use the real client, so the test sees what is really sent over HTTP.
     const actual = jest.requireActual('@influxdata/influxdb-client')
     InfluxDB.mockImplementation((opts) => new actual.InfluxDB(opts))
+    server.use(http.post(`${url}/api/v2/write`, async ({request}) => {
+      bodies.push(await request.text())
+      const status = statuses.length > 1 ? statuses.shift() : statuses[0]
+      return new HttpResponse(null, {status})
+    }))
   })
 
-  afterEach(async () => {
-    await new Promise((resolve) => server.close(resolve))
-  })
+  afterEach(() => server.resetHandlers())
 
   it('sends a pending point when closed, long before the batch interval', async () => {
-    const {publish, close} = createInfluxIntegration({
-      url: `http://127.0.0.1:${server.address().port}`,
-      database: 'homy',
-      measurement: 'raw',
-    })
+    const {publish, close} = create()
 
-    publish({device: 'main', _type: 'sdm630', _addr: 1, _tz: 1700000000000, v: 230})
+    publish(reading)
     expect(bodies).toHaveLength(0)
 
     await close()
 
     expect(bodies).toHaveLength(1)
     expect(bodies[0]).toContain('v=230')
+  })
+
+  it('sends a point that waits for a retry', async () => {
+    statuses = [503, 204]
+    const {publish, close} = create()
+
+    publish(reading)
+    await close()
+
+    expect(bodies).toHaveLength(2)
+    expect(bodies[1]).toContain('v=230')
+  })
+
+  it('rejects when the point cannot be delivered', async () => {
+    statuses = [503]
+    const {publish, close} = create()
+
+    publish(reading)
+
+    await expect(close()).rejects.toThrow('1 points were not written')
+  })
+
+  it('waits for a write that is still in flight', async () => {
+    let release
+    const gate = new Promise((resolve) => { release = resolve })
+    server.use(http.post(`${url}/api/v2/write`, async ({request}) => {
+      bodies.push(await request.text())
+      await gate
+      return new HttpResponse(null, {status: 204})
+    }))
+    const {publish, close} = create()
+    publish(reading)
+
+    let closed = false
+    const closing = close().then(() => { closed = true })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(bodies).toHaveLength(1)
+    expect(closed).toBe(false)
+
+    release()
+    await closing
+    expect(closed).toBe(true)
   })
 })

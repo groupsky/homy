@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "index.js",
-    "test": "jest"
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest"
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.35.0",
@@ -24,6 +24,7 @@
   "devDependencies": {
     "jest": "^30.5.2",
     "js-yaml": "^5.5.0",
+    "msw": "^3.0.7",
     "nunjucks": "^3.2.4"
   }
 }

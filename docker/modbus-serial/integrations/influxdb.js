@@ -42,9 +42,24 @@ module.exports = ({
   tags,
   measurement = 'modbus'
 }) => {
+  // The client's close() can drop points that wait for a retry and can return
+  // before an earlier HTTP write is done. So the points are counted here: close()
+  // waits until every published point is written or known to be lost.
+  let published = 0
+  let delivered = 0
+  let lost = 0
+  let closing = false
+  let failedWhileClosing = false
+  let wake = null
+  const pending = () => published - delivered - lost
+  const notify = () => { if (wake) wake() }
+
   const writeApi = new InfluxDB({ url, token })
     .getWriteApi(org, bucket, 'ms', {
-      defaultTags: tags
+      defaultTags: tags,
+      writeSuccess: (lines) => { delivered += lines.length; notify() },
+      writeFailed: () => { if (closing) { failedWhileClosing = true; notify() } },
+      writeRetrySkipped: ({lines}) => { lost += lines.length; notify() },
     })
 
   const logger = (entry) => {
@@ -59,14 +74,37 @@ module.exports = ({
     // bytes became 12 fields _id.buffer.0 to _id.buffer.11 (#1778).
     mapObject('', entry, point, ['device', '_type', '_addr', '_ms', '_tz', '_id'])
 
+    published++
     writeApi.writePoint(point)
   }
 
   logger.toString = () => 'influxdb'
 
-  // Sends the points still in the client's memory batch and closes the write
-  // API. Called when the service stops (#1971).
-  const close = () => writeApi.close()
+  // Sends the points still in the client's memory batch, including the ones
+  // waiting for a retry, and waits for the writes in flight. It rejects when a
+  // point was not delivered. Called when the service stops (#1971); the caller
+  // sets the deadline.
+  // A failed flush rejects, but its points stay in the client's retry buffer
+  // and are counted as pending, so the failure is reported below.
+  const flushAll = () => writeApi.flush(true).catch(() => {})
+
+  const close = async () => {
+    closing = true
+    await flushAll()
+    // A write that started earlier can still be in flight: wait for its result.
+    while (pending() > 0 && !failedWhileClosing) {
+      await new Promise((resolve) => { wake = resolve })
+      wake = null
+    }
+    if (pending() > 0) {
+      // The write in flight failed: try its points once more.
+      await flushAll()
+    }
+    if (pending() > 0) {
+      throw new Error(`${pending()} points were not written to InfluxDB`)
+    }
+    await writeApi.close()
+  }
 
   return { publish: logger, close }
 }
