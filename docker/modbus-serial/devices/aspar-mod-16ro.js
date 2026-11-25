@@ -224,6 +224,9 @@ async function readWithRestore (client, config, state, maxMsBetweenReports) {
 async function restoreOutputs (client, name, state) {
   const { from, to, goneMs } = state.pendingRestore
   const { data: [outputs] } = await client.readInputRegisters(0x33, 1)
+  // Each request is counted by the board, so a second restart during the
+  // restore or the report still shows as a lower counter.
+  state.counter += 1
   const written = []
   const commands = state.commands || {}
   for (const { key, bit, restoreWithinMs, defaultState } of state.restoreOutputs) {
@@ -246,6 +249,7 @@ async function restoreOutputs (client, name, state) {
     }
     if (value == null || bitOf(outputs, bit) === value) continue
     await client.writeCoil(COIL_MAP[key], value)
+    state.counter += 1
     written.push(`${key}=${value} (${why})`)
   }
   console.log(`${name} restarted (received packets ${from} -> ${to}), gone ${goneMs} ms: ` +
@@ -377,12 +381,13 @@ async function write (client, values, config, state = {}) {
   // The wanted value of each output, kept before the write so that a write
   // that fails (the board is restarting) is what a restore writes back.
   if (config?.options?.restore) {
+    // in the order of the writes below: the outN coils, then the outputs word
     const commands = state.commands = state.commands || {}
-    if ('outputs' in values) {
-      for (const [bit, key] of OUTPUT_NAMES.entries()) commands[key] = bitOf(values.outputs, bit)
-    }
     for (const key of OUTPUT_NAMES) {
       if (key in values) commands[key] = !!values[key]
+    }
+    if ('outputs' in values) {
+      for (const [bit, key] of OUTPUT_NAMES.entries()) commands[key] = bitOf(values.outputs, bit)
     }
   }
 
@@ -409,6 +414,10 @@ async function write (client, values, config, state = {}) {
       state.lastReport = 0
     }
   }
+
+  // The board answered, so a back-off after earlier errors ends here and the
+  // next poll reads it (and finds a restart, if there was one).
+  if (config?.options?.restore) state.nextTryAt = null
 }
 
 /**

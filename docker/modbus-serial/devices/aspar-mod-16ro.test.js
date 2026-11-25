@@ -321,6 +321,37 @@ describe('restore after a board restart', () => {
     expect(logs.some((l) => l.startsWith('relays00-15 could not set the power-up state'))).toBe(true)
   })
 
+  it('notices a second restart during the report after a restore', async () => {
+    const board = fakeBoard({outputs: (1 << 9) | (1 << 13)})
+    const config = restoreConfig()
+    const state = {}
+    await poll(board, config, state, 2000)
+    board.restart()
+    // the board restarts again on the first read of the report
+    board.client.readHoldingRegisters.mockImplementationOnce(async () => {
+      board.restart()
+      throw timeout()
+    })
+    const reports = await poll(board, config, state, 5000)
+    expect(outputWrites(board)).toEqual(['out9=true', 'out13=true', 'out9=true', 'out13=true'])
+    expect(reports.at(-1).outputs).toBe((1 << 9) | (1 << 13))
+  })
+
+  it('a successful write ends the back-off, so a restart is found at the next poll', async () => {
+    const board = fakeBoard({outputs: 1 << 9})
+    const config = restoreConfig()
+    const state = {}
+    await poll(board, config, state, 2000)
+    board.up = false
+    await poll(board, config, state, 40 * 1000, 100)
+    board.restart()
+    board.up = true
+    await write(board.client, {out14: true}, config, state)
+    const reports = await poll(board, config, state, 200)
+    expect(outputWrites(board)).toEqual(['out14=true', 'out9=true'])
+    expect(reports[0].outputs).toBe((1 << 9) | (1 << 14))
+  })
+
   it('a board with no restore config gets no extra reads', async () => {
     const board = fakeBoard()
     const state = {}

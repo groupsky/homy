@@ -102,7 +102,8 @@ the `monitoring` bus) is read exactly as before.
   up to 60 s (`relays00-15 does not answer (...), next try in N ms`). The
   driver logs these errors and does not throw them, so they do not make the
   reader reopen the port; the other devices on the bus keep their normal poll.
-  Only a closed port (`PortNotOpenError`) is thrown.
+  Only a closed port (`PortNotOpenError`) is thrown. A write that works ends
+  the wait, so the next poll reads the board at once.
 - **Restore**, at the first good contact after a restart, per listed output:
   if the board was gone (last good contact before, to first good contact
   after) no longer than `restoreWithinMs`, its wanted value: the last command
