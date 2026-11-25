@@ -243,6 +243,8 @@ the listed devices, also failed ones and ones with no change, to
 - a dip event `{state, _tz, durationMs, readings}` goes to
   `/modbus/dry-switches/power-dip/reading` (not to the reader's own
   `influxdb` integration; mqtt-influx stores it as `power_dip`);
+- held dip readings are only in the dip event, not in the raw archives;
+- a listed module that never answers delays the other's changes by `stableMs`;
 - log lines `power dip start ...`, `power dip end after <N> ms ...`, and
   `power dip still on ...` every 5 minutes.
 

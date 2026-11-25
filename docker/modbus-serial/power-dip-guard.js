@@ -11,8 +11,9 @@
  *   more bits changed against the last published value of that module.
  * - Hold: any other change is published only after a good read of every
  *   guarded module (not in a dip) came after it with no dip start. A failed
- *   read does not count, so the hold goes on, but never longer than
- *   `stableMs`: a module that stopped answering must not stop the others.
+ *   read does not count, so the hold goes on. A module that stopped
+ *   answering must not stop the others: once the change's own module
+ *   confirmed it, the others are waited for at most `stableMs`.
  *   The change keeps its own `_tz`.
  * - During a dip nothing is published for any guarded module.
  * - Dip end, per module: the reading equals the value from before the dip
@@ -169,8 +170,14 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
     queue.push({ entry, device, heldAt: now, waitFor })
   }
 
+  // A held change is ready when every module confirmed it. A module that
+  // stopped answering may hold it up for at most `stableMs`, and only after
+  // the change's own module confirmed it: while every read fails it waits.
+  const ready = (held, now) => held.waitFor.size === 0 ||
+    (!held.waitFor.has(held.device.name) && now - held.heldAt >= stableMs)
+
   const release = (now) => {
-    while (queue.length && (queue[0].waitFor.size === 0 || now - queue[0].heldAt >= stableMs)) {
+    while (queue.length && ready(queue[0], now)) {
       const { entry, device } = queue.shift()
       publish(modules.get(device.name), entry, device)
     }

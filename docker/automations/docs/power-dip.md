@@ -23,8 +23,9 @@ publishes every reading at once, as before.
   (3) or more inputs changed against the last published value.
 - **Hold:** any other change is published after the next good read of each
   input module shows no dip start: one poll pass, about 30 ms. A failed read
-  makes the hold go on, but never longer than `stableMs`. The change keeps
-  its own `_tz`.
+  makes the hold go on. Once the change's own module read again with no dip
+  start, a module that does not answer holds it up for at most `stableMs`.
+  The change keeps its own `_tz`.
 - **During a dip** nothing is published for either module. Consumers keep
   the last good value.
 - **Dip end**, per module: the reading equals the value from before the dip
@@ -39,7 +40,11 @@ publishes every reading at once, as before.
   pressed and let go together), the press is not published.
 - **Dip event** on `/modbus/dry-switches/power-dip/reading`:
   `{state: 'start' | 'end', _tz, durationMs, readings}`, with up to 20 held
-  raw readings. mqtt-influx stores it in measurement `power_dip`.
+  raw readings. mqtt-influx stores it in measurement `power_dip`. The held
+  readings of a dip are not in the raw archives (MongoDB, NDJSON files) or in
+  `dry_switch_input`: the dip event is the only record of them.
+- A module that does not answer at all (unplugged) delays each change of the
+  other module by `stableMs` (1 s).
 - **Log lines:** `power dip start on <module>: ...` and
   `power dip end after <N> ms: ...`, with the module values. While a dip
   lasts, `power dip still on after <N> ms, waiting for <modules>` every

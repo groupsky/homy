@@ -205,6 +205,22 @@ describe('power dip guard in the dry-switches reader', () => {
     expect(reader.events()).toEqual([])
   })
 
+  it('does not let a module that stopped answering block the other one for more than stableMs', async () => {
+    const reader = startReader({
+      di1: timeline(0xffa8001f, [[DIP, 0xffa8001e]]),
+      di2: timeline(0x00302c93, [[DIP - 500, 'timeout']]),
+    })
+    // a failing read is retried after 100 ms, and after 11 errors the reader
+    // reconnects (5 s), so mbsl32di1 is read less often here
+    await reader.run(DIP + 10000)
+    expect(reader.inputs('mbsl32di1')).toEqual([0xffa8001f, 0xffa8001e])
+    const change = reader.readings('mbsl32di1')[1]
+    expect(change.at - (change._tz - T0)).toBeGreaterThanOrEqual(1000)
+    // stableMs, plus the 5 s reconnect pause of the whole bus
+    expect(change.at - (change._tz - T0)).toBeLessThan(1000 + 5000 + 1000)
+    expect(reader.events()).toEqual([])
+  })
+
   it('publishes a single switch change after at most one extra poll pass', async () => {
     const reader = startReader({
       di1: timeline(0xffa8001f, [[DIP, 0xffa8001e], [DIP + 500, 0xffa8001f]]),
