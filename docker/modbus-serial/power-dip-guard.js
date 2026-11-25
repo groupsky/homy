@@ -13,7 +13,8 @@
  *   guarded module (not in a dip) came after it with no dip start. A failed
  *   read does not count, so the hold goes on. A module that stopped
  *   answering must not stop the others: once the change's own module
- *   confirmed it, the others are waited for at most `stableMs`.
+ *   confirmed it, the others are waited for at most `stableMs`. No change
+ *   is held longer than `maxHoldMs`.
  *   The change keeps its own `_tz`.
  * - During a dip nothing is published for any guarded module.
  * - Dip end, per module: the reading equals the value from before the dip
@@ -31,6 +32,7 @@
 const DEFAULTS = {
   minChangedBits: 3,
   stableMs: 1000,
+  maxHoldMs: 10000,
   maxReadings: 20,
   msLogInterval: 5 * 60 * 1000,
 }
@@ -56,7 +58,7 @@ const hex = (value) => value === undefined ? 'unknown' : (value >>> 0).toString(
  * @param {(line: string) => void} [hooks.log]
  */
 function createPowerDipGuard (config, { publishReading, publishEvent, log = console.log }) {
-  const { devices, minChangedBits, stableMs, maxReadings, msLogInterval } = { ...DEFAULTS, ...config }
+  const { devices, minChangedBits, stableMs, maxHoldMs, maxReadings, msLogInterval } = { ...DEFAULTS, ...config }
   if (!Array.isArray(devices) || devices.length === 0) {
     throw new Error('powerDipGuard.devices must list the guarded input modules')
   }
@@ -172,9 +174,11 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
 
   // A held change is ready when every module confirmed it. A module that
   // stopped answering may hold it up for at most `stableMs`, and only after
-  // the change's own module confirmed it: while every read fails it waits.
+  // the change's own module confirmed it: while every read fails it waits,
+  // but never longer than `maxHoldMs`, so a change is delayed, never lost.
   const ready = (held, now) => held.waitFor.size === 0 ||
-    (!held.waitFor.has(held.device.name) && now - held.heldAt >= stableMs)
+    (!held.waitFor.has(held.device.name) && now - held.heldAt >= stableMs) ||
+    now - held.heldAt >= maxHoldMs
 
   const release = (now) => {
     while (queue.length && ready(queue[0], now)) {

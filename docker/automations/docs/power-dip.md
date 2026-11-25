@@ -25,7 +25,8 @@ publishes every reading at once, as before.
   input module shows no dip start: one poll pass, about 30 ms. A failed read
   makes the hold go on. Once the change's own module read again with no dip
   start, a module that does not answer holds it up for at most `stableMs`.
-  The change keeps its own `_tz`.
+  No change is held longer than `maxHoldMs` (10 s). The change keeps its
+  own `_tz`.
 - **During a dip** nothing is published for either module. Consumers keep
   the last good value.
 - **Dip end**, per module: the reading equals the value from before the dip
