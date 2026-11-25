@@ -1,4 +1,4 @@
-const { InfluxDB, Point } = require('@influxdata/influxdb-client')
+const { HttpError, InfluxDB, Point } = require('@influxdata/influxdb-client')
 
 // InfluxDB 1.x reserves the name "time": it strips such a field and fails the
 // write with "partial write", so a device's own clock (for example the
@@ -30,6 +30,22 @@ const mapObject = (prefix, entry, point, skip=[]) => {
   }
 }
 
+const MAX_RETRIES = 5
+
+// Tells whether the client keeps the lines of a failed write for a retry. It
+// repeats the client's own rule: no retry when the client is closed, when the
+// retries are used up (attempt counts from 1), or for an HTTP error below 429.
+// Not retried, but not lost: InfluxDB 1.x "hinted handoff queue not empty",
+// which the client counts as a success.
+const outcome = (error, attempt, closed) => {
+  if (error instanceof HttpError && error.json && typeof error.json.error === 'string' &&
+      error.json.error.includes('hinted handoff queue not empty')) return 'written'
+  if (error && error.message === 'Max retry time exceeded.') return 'lost'
+  if (closed || attempt > MAX_RETRIES) return 'lost'
+  if (error instanceof HttpError && error.statusCode < 429) return 'lost'
+  return 'retry'
+}
+
 module.exports = ({
   url,
   username,
@@ -58,7 +74,14 @@ module.exports = ({
     .getWriteApi(org, bucket, 'ms', {
       defaultTags: tags,
       writeSuccess: (lines) => { delivered += lines.length; notify() },
-      writeFailed: () => { if (closing) { failedWhileClosing = true; notify() } },
+      maxRetries: MAX_RETRIES,
+      writeFailed: (error, lines, attempt) => {
+        // Called before the client decides about a retry. A line that will not
+        // be retried is lost; the client never reports it again.
+        if (outcome(error, attempt, writeApi.closed) === 'lost') lost += lines.length
+        if (closing) failedWhileClosing = true
+        notify()
+      },
       writeRetrySkipped: ({lines}) => { lost += lines.length; notify() },
     })
 
@@ -90,6 +113,8 @@ module.exports = ({
 
   const close = async () => {
     closing = true
+    // Points lost before the stop do not fail it; the ones lost now do.
+    const lostBefore = lost
     await flushAll()
     // A write that started earlier can still be in flight: wait for its result.
     while (pending() > 0 && !failedWhileClosing) {
@@ -100,8 +125,8 @@ module.exports = ({
       // The write in flight failed: try its points once more.
       await flushAll()
     }
-    if (pending() > 0) {
-      throw new Error(`${pending()} points were not written to InfluxDB`)
+    if (pending() > 0 || lost > lostBefore) {
+      throw new Error(`${pending() + lost - lostBefore} points were not written to InfluxDB`)
     }
     await writeApi.close()
   }

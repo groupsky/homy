@@ -134,3 +134,78 @@ describe('influxdb close', () => {
     expect(closed).toBe(true)
   })
 })
+
+describe('influxdb close after a write that is not retried', () => {
+  const {HttpError} = jest.requireActual('@influxdata/influxdb-client')
+  const reading = {device: 'main', _type: 'sdm630', _addr: 1, _tz: 1700000000000, v: 230}
+  let options
+  let onFlush
+
+  const create = () => {
+    onFlush = async () => {}
+    InfluxDB.mockImplementation(() => ({
+      getWriteApi: (org, bucket, precision, opts) => {
+        options = opts
+        return {
+          closed: false,
+          writePoint: () => {},
+          flush: async () => onFlush(),
+          close: async () => {},
+        }
+      },
+    }))
+    return createInfluxIntegration({url: 'http://influxdb', database: 'homy'})
+  }
+  const httpError = (status, json) => new HttpError(status, 'status', JSON.stringify(json || {}), '0', 'application/json')
+  // close() must not wait for the 5 s deadline of the caller.
+  const closesAtOnce = async (close) => {
+    const result = await Promise.race([
+      close().then(() => 'closed', (e) => `rejected: ${e.message}`),
+      new Promise((resolve) => setTimeout(() => resolve('hangs'), 500)),
+    ])
+    expect(result).toBe('closed')
+  }
+
+  it('counts a write that InfluxDB rejects with a 400 as lost', async () => {
+    const {publish, close} = create()
+    publish(reading)
+    options.writeFailed(httpError(400, {error: 'unable to parse'}), ['line'], 1, Date.now() + 10000)
+
+    await closesAtOnce(close)
+  })
+
+  it('counts a write whose last retry failed as lost', async () => {
+    const {publish, close} = create()
+    publish(reading)
+    options.writeFailed(httpError(503), ['line'], 6, Date.now() + 10000)
+
+    await closesAtOnce(close)
+  })
+
+  it('counts a write that ran out of retry time as lost', async () => {
+    const {publish, close} = create()
+    publish(reading)
+    options.writeFailed(new Error('Max retry time exceeded.'), ['line'], 2, Date.now() - 1)
+
+    await closesAtOnce(close)
+  })
+
+  it('does not count a write that waits for a retry as lost', async () => {
+    const {publish, close} = create()
+    publish(reading)
+    options.writeFailed(httpError(503), ['line'], 1, Date.now() + 10000)
+    // Each flush in close() retries the line, and the retry fails again.
+    onFlush = async () => options.writeFailed(new Error('socket hang up'), ['line'], 2, Date.now() + 10000)
+
+    await expect(close()).rejects.toThrow('1 points were not written')
+  })
+
+  it('does not count a write as lost that the client counts as written', async () => {
+    const {publish, close} = create()
+    publish(reading)
+    options.writeFailed(httpError(500, {error: 'hinted handoff queue not empty'}), ['line'], 1, Date.now() + 10000)
+    options.writeSuccess(['line'])
+
+    await closesAtOnce(close)
+  })
+})
