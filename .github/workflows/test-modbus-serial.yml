@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'docker/modbus-serial/**'
+      - 'config/modbus-serial/dry-switches.js'
       - 'docker/mqtt-ndjson/day-file-writer.js'
       - 'docker/mqtt-ndjson/day-file-writer.test.js'
       - 'docker/mqtt-ndjson/test-fixtures/day-file-writer-child.js'
@@ -17,6 +18,7 @@ on:
   pull_request:
     paths:
       - 'docker/modbus-serial/**'
+      - 'config/modbus-serial/dry-switches.js'
       - 'docker/mqtt-ndjson/day-file-writer.js'
       - 'docker/mqtt-ndjson/day-file-writer.test.js'
       - 'docker/mqtt-ndjson/test-fixtures/day-file-writer-child.js'

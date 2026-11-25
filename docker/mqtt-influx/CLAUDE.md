@@ -14,7 +14,7 @@ Each name below is the bridge's MQTT client id in `INSTANCES`:
 - **mqtt-influx-primary**: Primary electrical monitoring bus (`/modbus/main/+/+`)
 - **mqtt-influx-secondary**: Secondary circuits and boiler monitoring (`/modbus/secondary/+/+`)
 - **mqtt-influx-tetriary**: Additional power monitoring points (`/modbus/tetriary/+/+`)
-- **mqtt-influx-dry-switches**: Digital I/O bus (`/modbus/dry-switches/+/reading`) — decomposes packed input/output words into per-bit boolean fields for contact-sensor and RS485 bus-health diagnostics
+- **mqtt-influx-dry-switches**: Digital I/O bus (`/modbus/dry-switches/+/reading`) — decomposes packed input/output words into per-bit boolean fields for contact-sensor and RS485 bus-health diagnostics; the reader's power dip events go to `power_dip` (converter `power-dip`)
 - **mqtt-influx-ioniq**: Hyundai Ioniq OBD telemetry (`ioniq/parsed/#`) → `ioniq` measurement
 - **mqtt-influx-ioniq-sessions**: Ioniq session records from the `ioniq-sessions` automations bot (`ioniq/derived/#`) → `ioniq_sessions` measurement (one record per closed trip/charge/park session)
 - **mqtt-influx-zigbee**: Zigbee mesh via zigbee2mqtt (`z2m/house1/+` and `z2m/house1/+/availability`) → `zigbee` measurement. Uses `"converter": "zigbee"` rather than payload dispatch, because zigbee2mqtt does not stamp a `_type` into its payloads
