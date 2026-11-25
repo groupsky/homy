@@ -73,11 +73,42 @@ the deployed config on a fake bus and clock, and replays three recorded dips.
   window contacts in `config/automations/config.js`) do not use this filter.
   They wait 30 s before acting (#1797).
 
-## Relay board restart: a write times out
+## Relay board restart: outputs reset, writes time out
 
-A restarting relay board does not answer, so a write to it fails. The board
-reports its outputs only on change, after a successful write, or every 7 to
-11 minutes, so no status follows the failed write.
+A restarting relay board does not answer, so a write to it fails. It comes
+back with its outputs in its power-up state (all off today). The reader has no
+change detection for the outputs: it publishes a full report every 7
+(`relays00-15`) or 11 (`relays16-31`) minutes, after each successful write,
+and after a restart.
+
+### The reader restores the outputs (#2008)
+
+`docker/modbus-serial/devices/aspar-mod-16ro.js`, set per board with
+`options.restore` in `config/modbus-serial/dry-switches.js`. Details:
+`docker/modbus-serial/CLAUDE.md`.
+
+- About every 1 s the reader reads the board's received-packets counter. A
+  counter lower than its last value is a restart. This read publishes nothing.
+- A board that does not answer is tried again after 1 s, 2, 4 ... up to 60 s.
+  It does not make the reader reopen the port, so the input modules keep
+  their poll.
+- At the first good contact after a restart, each listed output gets:
+  - its **wanted** value if the board was gone no longer than
+    `restoreWithinMs` (15 min): the last command, even one whose write failed
+    while the board was down; with no command since the last report, the
+    reported value;
+  - else its `defaultState` (off); with none set it stays as the board came up.
+- Only outputs that differ are written. Outputs with no config (out0-out7 on
+  both boards, out12 on `relays00-15`) are never written. Then a full report
+  is published at once, so the features and the toggles below see the real
+  state.
+- `defaultState` is also the board's own power-up state (`def*` coils), so the
+  board starts right while the reader is down. They are checked at reader
+  start and written only where they differ.
+- Log line: `relays00-15 restarted (received packets ... -> ...), gone N ms:
+  wrote out9=true (last report), ...`.
+
+### The toggles
 
 - A toggle (`features/state.js`, used by `feature-toggle-on-feature-change`)
   computes from the last command until a status comes after it. It does not

@@ -44,20 +44,8 @@ const writeModbusMode = (val) => WRITE_MODBUS_MODE_MAP[val]
 const readLong = (lsb, msb) => msb << 16 | lsb
 const writeLong = (value) => [value & 0xFFFF, value >> 16]
 
-/**
- * @param {import('modbus-serial').ModbusRTU} client
- * @param {CONFIG} [config]
- * @param {STATE} [state]
- * @return {Promise<Object>}
- */
-async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = {}, state = {}, force = false) {
-  const recentReport = maxMsBetweenReports === 0 || ((Date.now() - (state.lastReport || 0)) < maxMsBetweenReports)
-  if (state.lastReport > 0 && recentReport && !force) {
-    return
-  }
-
-  state.lastReport = Date.now()
-
+// The full report: settings, packet counters and the 16 outputs.
+async function readReport (client) {
   let val = await client.readHoldingRegisters(0x0000, 2)
   const deviceVersionType = val.data[0]
   const switches = val.data[1]
@@ -95,6 +83,200 @@ async function read (client, { options: { maxMsBetweenReports = 1000 } = {} } = 
     incorrectPackets,
     sentPackets,
     outputs
+  }
+}
+
+/**
+ * A board with `options.restore` in its config gets the restore after a
+ * restart (see readWithRestore). A board without it is read as before: a full
+ * report every maxMsBetweenReports, nothing in between.
+ *
+ * @param {import('modbus-serial').ModbusRTU} client
+ * @param {CONFIG} [config]
+ * @param {STATE} [state]
+ * @return {Promise<Object>}
+ */
+async function read (client, config = {}, state = {}, force = false) {
+  const { options: { maxMsBetweenReports = 1000 } = {} } = config
+  if (config.options?.restore) {
+    return readWithRestore(client, config, state, maxMsBetweenReports)
+  }
+
+  const recentReport = maxMsBetweenReports === 0 || ((Date.now() - (state.lastReport || 0)) < maxMsBetweenReports)
+  if (state.lastReport > 0 && recentReport && !force) {
+    return
+  }
+
+  state.lastReport = Date.now()
+
+  return readReport(client)
+}
+
+// The board's 12 V supply is not on the UPS, so a mains dip restarts it and
+// its outputs come back in their power-up state (#2008). The board keeps no
+// record of a restart; its received-packets counter starts again near 0, so a
+// counter lower than its last value is a restart.
+const CHECK_INTERVAL_MS = 1000
+const RETRY_MIN_MS = 1000
+const RETRY_MAX_MS = 60000
+
+const OUTPUT_NAMES = Array.from({ length: 16 }, (_, i) => `out${i}`)
+
+// options.restore: {restoreWithinMs, defaultState, outputs: {outN: {...}}}.
+// The board-wide values apply to each listed output; an output's own object
+// overrides them. An output that is not listed is never written.
+function parseRestoreConfig (name, restore) {
+  const outputs = []
+  for (const [key, own] of Object.entries(restore.outputs || {})) {
+    const bit = OUTPUT_NAMES.indexOf(key)
+    if (bit < 0) throw new Error(`${name}: restore.outputs has an unknown output ${key} (out0 to out15)`)
+    const { restoreWithinMs, defaultState } = { restoreWithinMs: restore.restoreWithinMs, defaultState: restore.defaultState, ...own }
+    if (restoreWithinMs != null && !(Number.isFinite(restoreWithinMs) && restoreWithinMs >= 0)) {
+      throw new Error(`${name}: ${key} restoreWithinMs must be a number of ms, got ${restoreWithinMs}`)
+    }
+    if (defaultState != null && typeof defaultState !== 'boolean') {
+      throw new Error(`${name}: ${key} defaultState must be true or false, got ${defaultState}`)
+    }
+    outputs.push({ key, bit, restoreWithinMs, defaultState })
+  }
+  return outputs
+}
+
+const bitOf = (word, bit) => ((word >> bit) & 1) === 1
+
+// The received-packets counter, unsigned (readLong is signed from 2^31).
+async function readCounter (client) {
+  const { data } = await client.readInputRegisters(0x20, 2)
+  return ((data[1] << 16) | data[0]) >>> 0
+}
+
+/**
+ * Reads a board that has restore config. In the poll loop it is called on
+ * every pass, while index.js holds the bus:
+ *
+ * - about every CHECK_INTERVAL_MS it reads only the received-packets counter
+ *   (2 registers) and returns nothing, unless the counter fell (a restart);
+ * - the full report still comes every maxMsBetweenReports, and after a write;
+ * - after a restart it writes back the configured outputs (restoreOutputs)
+ *   and returns a full report at once;
+ * - a board that does not answer is tried again after 1 s, then 2, 4 ... up
+ *   to 60 s. These errors are logged here and not thrown, so they do not
+ *   count towards index.js's port reopen; only a closed port is thrown.
+ */
+async function readWithRestore (client, config, state, maxMsBetweenReports) {
+  const name = config.name || 'aspar-mod-16ro'
+  if (!state.restoreOutputs) state.restoreOutputs = parseRestoreConfig(name, config.options.restore)
+
+  const now = Date.now()
+  if (state.nextTryAt != null && now < state.nextTryAt) return
+  const reportDue = state.reportPending || !(state.lastReport > 0) || now - state.lastReport >= maxMsBetweenReports
+  const checkDue = state.lastCheck == null || now - state.lastCheck >= CHECK_INTERVAL_MS
+  if (!reportDue && !checkDue && !state.pendingRestore) return
+
+  try {
+    state.lastCheck = now
+    const counter = await readCounter(client)
+    const contactAt = Date.now()
+    if (state.failures > 0 && state.lastContact != null) {
+      console.log(`${name} answers again after ${contactAt - state.lastContact} ms`)
+    }
+    if (state.counter != null && counter < state.counter) {
+      // Gone from the last good contact before to this first one after.
+      state.pendingRestore = { from: state.counter, to: counter, goneMs: contactAt - state.lastContact }
+    }
+    state.counter = counter
+    state.lastContact = contactAt
+    state.failures = 0
+    state.nextTryAt = null
+
+    if (state.pendingRestore) {
+      await restoreOutputs(client, name, state)
+      state.pendingRestore = null
+      // the report after a restore is sent even if its first try fails
+      state.reportPending = true
+    } else if (!reportDue) {
+      return
+    }
+
+    let report = await readReport(client)
+    if (!state.defaultsChecked) {
+      report = await syncDefaults(client, name, state, report)
+    }
+    state.lastReport = Date.now()
+    state.reportPending = false
+    state.lastContact = state.lastReport
+    state.counter = report.receivedPackets >>> 0
+    state.reported = report.outputs
+    state.commands = {}
+    return report
+  } catch (e) {
+    if (e.name === 'PortNotOpenError') throw e
+    state.failures = (state.failures || 0) + 1
+    const delay = Math.min(RETRY_MIN_MS * 2 ** (state.failures - 1), RETRY_MAX_MS)
+    state.nextTryAt = Date.now() + delay
+    console.error(`${name} does not answer (${e.message}), try ${state.failures}, next try in ${delay} ms`)
+  }
+}
+
+// Each configured output gets its wanted value back if the board was gone no
+// longer than its restoreWithinMs, else its defaultState; with neither it is
+// left as the board came up. Only outputs that differ are written.
+async function restoreOutputs (client, name, state) {
+  const { from, to, goneMs } = state.pendingRestore
+  const { data: [outputs] } = await client.readInputRegisters(0x33, 1)
+  const written = []
+  const commands = state.commands || {}
+  for (const { key, bit, restoreWithinMs, defaultState } of state.restoreOutputs) {
+    let value
+    let why
+    if (restoreWithinMs != null && goneMs <= restoreWithinMs) {
+      if (key in commands) {
+        value = commands[key]
+        why = 'last command'
+      } else if (state.reported != null) {
+        value = bitOf(state.reported, bit)
+        why = 'last report'
+      }
+    }
+    if (value == null && defaultState != null) {
+      value = defaultState
+      why = restoreWithinMs == null ? 'defaultState'
+        : goneMs > restoreWithinMs ? `defaultState, gone longer than ${restoreWithinMs} ms`
+          : 'defaultState, no wanted value known'
+    }
+    if (value == null || bitOf(outputs, bit) === value) continue
+    await client.writeCoil(COIL_MAP[key], value)
+    written.push(`${key}=${value} (${why})`)
+  }
+  console.log(`${name} restarted (received packets ${from} -> ${to}), gone ${goneMs} ms: ` +
+    (written.length ? `wrote ${written.join(', ')}` : 'nothing to write, the outputs already match'))
+}
+
+// The board's own power-up state (def* coils, read back in register 0x0C) is
+// set from defaultState, so the board also starts right while the reader is
+// down. It is checked once, at the first full report: the board keeps these
+// settings in a memory that wears, so only coils that differ are written.
+// A failure here does not stop the report; the check is tried again at the
+// next full report.
+async function syncDefaults (client, name, state, report) {
+  let changed = false
+  try {
+    for (const { key, bit, defaultState } of state.restoreOutputs) {
+      if (defaultState == null || bitOf(report.defaultOutputState, bit) === defaultState) continue
+      const def = `def${bit}`
+      await client.writeCoil(COIL_MAP[def], defaultState)
+      console.log(`${name} power-up state: ${def} (${key}) ${!defaultState} -> ${defaultState}`)
+      changed = true
+    }
+    state.defaultsChecked = true
+    if (!changed) return report
+    const { data: [defaultOutputState] } = await client.readInputRegisters(0x0C, 1)
+    return { ...report, defaultOutputState }
+  } catch (e) {
+    if (e.name === 'PortNotOpenError') throw e
+    state.defaultsChecked = false
+    console.error(`${name} could not set the power-up state (${e.message}), trying again at the next full report`)
+    return report
   }
 }
 
@@ -192,6 +374,18 @@ const REGISTERS_MAP = {
  * @returns {Promise<void>}
  */
 async function write (client, values, config, state = {}) {
+  // The wanted value of each output, kept before the write so that a write
+  // that fails (the board is restarting) is what a restore writes back.
+  if (config?.options?.restore) {
+    const commands = state.commands = state.commands || {}
+    if ('outputs' in values) {
+      for (const [bit, key] of OUTPUT_NAMES.entries()) commands[key] = bitOf(values.outputs, bit)
+    }
+    for (const key of OUTPUT_NAMES) {
+      if (key in values) commands[key] = !!values[key]
+    }
+  }
+
   for (const key in COIL_MAP) {
     if (key in values) {
       await client.writeCoil(COIL_MAP[key], !!values[key])
