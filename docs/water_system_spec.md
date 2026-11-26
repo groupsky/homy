@@ -63,44 +63,71 @@ water_system:
     
     # Hot Water System
     boiler:
-      model: "Eldom FV20060S2"
-      capacity: "200L"
+      model: "Eldom FV20060S21"
+      capacity: "184L"  # net, from the rating plate read on 2026-11-19
+      rating_plate: "FV20060S21, 230V, 3000W, 0.8MPa, made 2018-11"
       location: {floor: 1, room: "service", elevation: "ground"}
       physical:
-        height: "140cm"
+        height: "143cm"  # total, maker's sheet
+        diameter: "60cm with 75mm insulation"
         type: "vertical_cylindrical"
         material: "enameled_steel"
         insulation: "polyurethane_75mm"
         max_pressure: "8 bar"
-        max_temperature: "95°C"
+        max_temperature: "75°C with the element"
+        standing_loss: "52W"
+        hot_water_40c: "229L from a full tank (EN 12897, solar coil off)"
+      # Hot water leaves through the highest side outlet (port 3).
+      # The socket on the top of the tank (port 4) is closed, as the label says.
+      #
+      # Port map, owner 2026-11-19. Numbers and heights are from the maker's sheet
+      # "FV 200-500 (I) S21" (BG, 2025), column FV20060S21, the 0 kW version:
+      # https://eldominvest.com/download/products/22207/FV_200-500-I-S21_0kW_BG_2025.pdf
+      # Ours has the 3 kW element in the flange too. Heights are from the bottom.
+      # Do not use the "FV 150-500S2" sheet: it is a different model.
+      ports:
+        - {no: 7,  use: "thermometer",                       height: "1170mm (H3)"}
+        - {no: 9,  use: "solar circuit (coil S1 inlet)",     height: "1170mm (H3)"}
+        - {no: 3,  use: "hot water outlet",                  height: "1170mm (H3)"}
+        - {no: 4,  use: "closed (top socket)",               height: "top of the tank"}
+        - {no: 11, use: "top sensor (coil S2 inlet port)",   height: "1065mm (HS2 + S2)"}
+        - {no: 2,  use: "recirculation inlet, pump not connected", height: "855mm (H2); 805mm on the older English sheet with the element"}
+        - {no: 8,  use: "bottom sensor (sensor socket)",     height: "about 470-530mm (scaled from the drawings)"}
+        - {no: 12, use: "not used (coil S2 outlet)",         height: "365mm (HS2)"}
+        - {no: 10, use: "solar circuit (coil S1 outlet)",    height: "260mm (HS1)"}
+        - {no: 1,  use: "cold inlet / drain (lowest)",       height: "210mm (H1)"}
+        - {no: 6,  use: "flange with the 3 kW element",      height: "centre about 250mm (scaled)"}
+      # Two parallel coils. The solar coil covers almost the whole height of the tank.
       serpentines:
-        upper:
-          volume: "1.79L" 
-          surface: "0.86m²"
-          purpose: "instant_heating"
-          connection: "unused"
-        lower:
-          volume: "4.2L"
-          surface: "0.35m²" 
-          purpose: "solar_accumulation"
+        s1:
+          volume: "4.3L"
+          surface: "0.90m²"
+          span: "260mm to 1170mm"
+          ports: "9 (inlet, top middle) and 10 (outlet, bottom left)"
+          purpose: "solar"
           connection: "solar_circuit"
+        s2:
+          volume: "3.2L"
+          surface: "0.67m²"
+          span: "365mm to 1065mm"
+          ports: "11 (inlet) and 12 (outlet)"
+          purpose: "second coil"
+          connection: "unused"
       electric_heater:
         power: "3kW"
         voltage: "230V 1Ph"
+        max_temperature: "75°C"  # English sheet "FV 200-500 S21": 230 min to 70 °C
         control_topic: "homy/features/relay/service_boiler_contactor/set"
         status_topic: "homy/features/relay/service_boiler_contactor/status"
         schedule: "sunset_to_nadir"
       sensors:
         bottom:
-          height: "45cm"
-          location: "inside_lower_serpentine_20cm"
+          height: "about 47cm"  # port 8, scaled from the drawings: 470-530mm
+          location: "sensor socket, port 8"
           mqtt_topic: "homy/features/sensor/temperature_boiler_low/status"
         top:
-          height: "107cm"
-          # Until 2026-11-06 this said "inside_lower_serpentine_20cm", a copy of the
-          # bottom sensor's line (#1911). Whether the top sensor reads the tank water
-          # or sits in the unused upper serpentine is not confirmed.
-          location: "not_confirmed"
+          height: "106.5cm"  # port 11, the S2 coil inlet port, used as a sensor socket
+          location: "port 11"
           mqtt_topic: "homy/features/sensor/temperature_boiler_high/status"
       monitoring:
         energy_topic: "/modbus/secondary/boiler/reading"
@@ -288,7 +315,7 @@ water_system:
     # Solar Heating Circuit
     solar_heating:
       source: "solar_panels"
-      path: "solar_panels → circulation_pump → boiler_lower_serpentine → expansion_tank"
+      path: "solar_panels → circulation_pump → boiler_solar_coil_s1 → expansion_tank"
       controller:
         type: "external_solar_controller"
         monitoring_only: true
