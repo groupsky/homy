@@ -202,6 +202,16 @@ async function readWithRestore (client, config, state, maxMsBetweenReports) {
     if (!state.defaultsChecked) {
       report = await syncDefaults(client, name, state, report)
     }
+    if (report.receivedPackets >>> 0 < counter) {
+      // The board restarted after the counter read: this report shows its
+      // power-up outputs. Keep what was known before, restore on the next pass.
+      const contactAt = Date.now()
+      state.pendingRestore = { from: counter, to: report.receivedPackets >>> 0, goneMs: contactAt - state.lastContact }
+      state.counter = report.receivedPackets >>> 0
+      state.lastContact = contactAt
+      state.reportPending = true
+      return
+    }
     state.lastReport = Date.now()
     state.reportPending = false
     state.lastContact = state.lastReport

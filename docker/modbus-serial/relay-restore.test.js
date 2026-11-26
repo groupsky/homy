@@ -158,6 +158,28 @@ describe('relay board restore in the dry-switches reader', () => {
     expect(boards[RELAYS00].writes).toEqual(['out13=true'])
   })
 
+  it('notices a restart that happens between the counter read and the report read', async () => {
+    const boards = {[RELAYS00]: fakeBoard(1 << 13), [RELAYS16]: fakeBoard()}
+    const reader = startReader({boards})
+    await reader.run(7 * MIN - 5000)
+    // the next report is due in about 5 s; the board restarts right after it answers the next counter read
+    const board = boards[RELAYS00]
+    const inputRegister = board.inputRegister
+    board.inputRegister = (r) => {
+      const value = inputRegister(r)
+      if (r === 0x21 && Date.now() - T0 >= 7 * MIN) {
+        board.restart()
+        board.inputRegister = inputRegister
+      }
+      return value
+    }
+    await reader.run(10000)
+    expect(board.writes).toEqual(['out13=true'])
+    expect(board.outputs).toBe(1 << 13)
+    // the power-up state is never published as the board's state
+    expect(reader.reports('relays00-15').every((r) => r.outputs === 1 << 13)).toBe(true)
+  })
+
   it('restores a command that failed while the board was down', async () => {
     const boards = {[RELAYS00]: fakeBoard(1 << 14), [RELAYS16]: fakeBoard()}
     const reader = startReader({boards})
