@@ -720,19 +720,25 @@ module.exports = (name, {
       // the top to the window's target, with the hysteresis below it.
       if (heatWindow && temperatureTop !== null) {
         if (heatWindow.reason === 'plan_day') dayOpenDate = localAt(now).date
+      }
+      // The evening plan heats only while hot water is missing: a stopped
+      // element starts when startBaths or more are missing, a running one
+      // runs until nothing is. With no plan (no fresh readings) the window
+      // heats to its limit as before. When nothing is missing, the comfort
+      // band below decides under comfortMin + hysteresis, so a run started
+      // by the comfort rule still goes on to 50 °C.
+      let planMet = false
+      if (planOn && heatWindow && temperatureTop !== null && temperatureTop < heatWindow.target) {
+        const plan = planAt(now)
+        const shortfall = plan ? plan.shortfallLitres : Infinity
+        planMet = !(shortfall > 0) || (!heaterOn() && shortfall < startLitres)
+        if (planMet && temperatureTop >= comfortMin + hysteresis) {
+          return { decision: false, reason: `${heatWindow.reason}_met` }
+        }
+      }
+      if (heatWindow && temperatureTop !== null && !planMet) {
         if (temperatureTop >= heatWindow.target) {
           return { decision: false, reason: `${heatWindow.reason}_reached` }
-        }
-        // The evening plan heats only while hot water is missing: a stopped
-        // element starts when startBaths or more are missing, a running one
-        // runs until nothing is. With no plan (no fresh readings) the window
-        // heats to its limit as before.
-        if (planOn) {
-          const plan = planAt(now)
-          const shortfall = plan ? plan.shortfallLitres : Infinity
-          if (!(shortfall > 0) || (!heaterOn() && shortfall < startLitres)) {
-            return { decision: false, reason: `${heatWindow.reason}_met` }
-          }
         }
         if (heaterOn() || windowArmed || temperatureTop < heatWindow.target - hysteresis) {
           return { decision: true, reason: heatWindow.reason }
@@ -1164,7 +1170,7 @@ module.exports = (name, {
       mqtt.subscribe(overrideSetTopic, (payload) => {
         const raw = payload !== null && typeof payload === 'object' ? payload.value : payload
         const now = Date.now()
-        if (raw === null || raw === undefined || raw === '' || raw === 'None') {
+        if (raw === null || raw === undefined || (typeof raw === 'string' && ['', 'None'].includes(raw.trim()))) {
           persistedCache.eveningOverride = null
         } else {
           const baths = typeof raw === 'string' ? Number(raw) : raw

@@ -129,7 +129,8 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
 12. In a plan window (`plan_night`: from the end of the hold to the end of the night zone;
     `plan_day`: from the planned start to the hold): top at or above the window's limit → OFF,
     `plan_night_reached` / `plan_day_reached`; nothing missing (a stopped element: less than
-    `startBaths` missing) → OFF, `plan_night_met` / `plan_day_met`; else ON, `plan_night` / `plan_day`,
+    `startBaths` missing) and the top at or over `comfortMin + hysteresis` → OFF, `plan_night_met` /
+    `plan_day_met` (under it: steps 13–14 decide); else ON, `plan_night` / `plan_day`,
     with the hysteresis below the limit. Without the plan: the fixed `dayTopUp` and night boost
     windows of #1911, with the reasons `day_top_up(_reached)` and `night_boost(_reached)`
 13. `top >= comfortMin + hysteresis` → OFF, `temperature_sufficient`
@@ -173,7 +174,11 @@ midnight: the night after midnight already heats for the coming evening.
 - What the tank cannot hold with the top at 55 °C (about 3.5 baths) is heated during the baths:
   then the window opens at 19:30, and the element runs once the top falls under the limit.
 - A stopped element starts only when `startBaths` (0.25) or more are missing; a running one runs
-  until nothing is missing or the top reaches the limit.
+  until nothing is missing or the top reaches the limit. When nothing is missing and the top is
+  under `comfortMin + hysteresis` (50 °C), the usual comfort band decides, so a comfort run still
+  goes on to 50 °C.
+- In the open day window each bath makes hot water missing again, so the element heats at day
+  price during the first baths too, up to the whole target of the evening.
 
 **Safety.** The plan adds no new path to the element. Its starts go through the same steps as
 before: old readings (`input_stale`), `maxSafe`, the night hold, `hotWaterLimit` (the plan limits
@@ -204,7 +209,8 @@ replace this balance.
 **"Бани довечера"** (Home Assistant number on the boiler device, 0–10 in steps of 0.5): a value
 replaces the need of this evening. The controller keeps it in the persistent cache with its date,
 publishes it retained on `homy/features/number/boiler_evening_baths/status`, and clears it at
-midnight (the number then shows unknown). 0 means no baths tonight (nobody at home). A value out of
+midnight (the number then shows unknown). 0 means no baths tonight (nobody at home); the margin
+still keeps one bath ready. A value out of
 range is refused and the old one stays.
 
 **Status** (`plan` in `homy/automation/boiler_controller/status`):

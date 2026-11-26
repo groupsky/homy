@@ -220,6 +220,19 @@ describe('boiler-controller evening plan (#1985)', () => {
       expect(day.relay()?.state ?? false).toBe(false)
     })
 
+    test('nothing missing in a window: the comfort band still runs to 50 °C, no flapping at 47 °C', () => {
+      const boiler = startAt(at(SATURDAY, '03:00'))
+      boiler.override(0) // nobody at home: the target is the 1-bath margin
+      boiler.temperatures({ top: 46.9, bottom: 45 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+      boiler.temperatures({ top: 47, bottom: 45 })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'hysteresis_zone_maintain_true' })
+      boiler.temperatures({ top: 50, bottom: 46 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'plan_night_met' })
+      boiler.temperatures({ top: 48, bottom: 46 })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'hysteresis_zone_maintain_false' })
+    })
+
     test('a half tank: heats at night price', () => {
       const boiler = startAt(at(MONDAY, '03:00'))
       boiler.temperatures({ top: 50, bottom: 30 })
