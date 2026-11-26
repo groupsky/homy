@@ -39,15 +39,60 @@ module.exports = {
         marginMinutes: 15,
         floor: 40
       },
-      // Evening draw (#1911): a big draw soon after the hold ends emptied the
-      // tank on many evenings. So the top is heated to 55 °C before the hold
-      // (19:30-21:00 in winter, 20:30-22:00 in summer, at day price) and again
-      // from the end of the hold to the end of the night zone. 55 °C is the
-      // limit while there is no mixing valve (#1473); `hotWaterLimit` caps
-      // these targets. A draw in the hold also starts the element (#1976).
+      // 55 °C is the limit at the top while there is no mixing valve (#1473):
+      // no automatic rule heats the top above `hotWaterLimit`, whatever its
+      // own target says. A draw in the hold also starts the element (#1976).
       hotWaterLimit: 55,
-      dayTopUp: { minutesBeforeHold: 90, target: 55 },
-      nightBoostTarget: 55,
+      // The evening plan (#1985) heats only the hot water the coming evening
+      // is missing. It replaces the fixed day top-up and night boost of #1911.
+      // See docker/automations/docs/boiler-controller.md, "Evening plan".
+      eveningPlan: {
+        // The plan = the need of the evening + this many baths (a back-test
+        // over 2024-01 to 2026-11: +1 bath was short on 1 evening in 5, by
+        // more than half a bath on 1 in 7).
+        marginBaths: 1,
+        // The evening baths usually start soon after this time. The day-price
+        // heating starts late enough to be done by then.
+        eveningStart: '19:30',
+        // The day-price heating starts this many minutes earlier than the
+        // model says, for a model that is a little slow.
+        startMarginMinutes: 15,
+        // Night limit: in the night zone (from the end of the hold to the end
+        // of the zone) the element heats the top up to this, at night price.
+        nightLimit: 55,
+        // Day limit: the day-price heating before the evening heats the top up
+        // to this. Both limits are capped by hotWaterLimit.
+        dayLimit: 55,
+        // A stopped element starts for the plan only when this many baths or
+        // more are missing (so it does not start for a few litres).
+        startBaths: 0.25,
+        // The evening use is measured from measureFrom to midnight with an
+        // energy balance on the tank model; standbyW is the tank's heat loss.
+        measureFrom: '18:00',
+        standbyW: 40,
+        // The element energy of the balance: the `tot` (kWh) counter of the
+        // boiler meter. Without fresh readings the model's element power
+        // is used.
+        boilerMeterTopic: '/modbus/secondary/boiler/reading',
+        // The need = the mean of the last `sameWeekdays` same weekdays within
+        // `historyDays`. With fewer, the season table below. An evening
+        // value over maxBaths is taken as a broken measurement.
+        sameWeekdays: 4,
+        historyDays: 56,
+        maxBaths: 15,
+        // Mean baths per evening (18:00-24:00) by season, Monday first, from
+        // 3 years of history (2023-11 to 2026-11).
+        bathsBySeason: [
+          { months: [11, 12, 1, 2, 3], baths: [2.4, 2.5, 2.6, 2.5, 1.8, 1.5, 2.8] }, // winter
+          { months: [4, 5, 9, 10], baths: [2.8, 2.8, 2.8, 2.8, 2.0, 2.1, 3.5] }, // spring, autumn
+          { months: [6, 7, 8], baths: [2.1, 2.0, 2.2, 1.9, 1.3, 1.7, 2.2] } // summer
+        ],
+        // The Home Assistant number "Бани довечера": a value replaces the need
+        // of this evening; it clears itself at midnight.
+        overrideSetTopic: `${featuresPrefix}/number/boiler_evening_baths/set`,
+        overrideStatusTopic: `${featuresPrefix}/number/boiler_evening_baths/status`,
+        overrideMaxBaths: 10
+      },
       // Start the element when the bottom reading falls 3 K within 10 min,
       // without waiting for it to go under emergencyMin. From 2026-10-20 to
       // 2026-11-05 every such fall with the element off was a real draw (the
@@ -67,7 +112,7 @@ module.exports = {
       maxLoadInputAgeMs: 10 * 60 * 1000, // newer reading than this or the input is ignored
       // Contactor feedback (#1912): the real state of the element. An ON the
       // controller did not send is kept until the top reaches the stop target
-      // in force (50 °C, 55 °C in the top-up and boost windows), for at most
+      // in force (50 °C, 55 °C in the plan windows), for at most
       // 2 h; only maxSafe, hotWaterLimit and old readings stop it earlier. After
       // an OFF it did not send, the controller waits 30 min before it starts
       // the element again.

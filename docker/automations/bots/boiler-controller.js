@@ -1,6 +1,7 @@
 const { watchInputAge, DEFAULT_MAX_INPUT_AGE_MS } = require('../lib/input-age')
 const telegramAlert = require('../lib/telegram-alert')
 const boilerTank = require('../lib/boiler-tank')
+const boilerPlan = require('../lib/boiler-plan')
 
 // The longest vacation_until: 60 days (#1756)
 const MAX_VACATION_UNTIL_MS = 60 * 24 * 60 * 60 * 1000
@@ -48,12 +49,14 @@ const tariffPeriods = ({ holdBeforeMinutes, marginMinutes, ...table }, dayTopUpM
   const place = tariffClock(table)
   return (ms) => {
     const at = place(ms)
-    if (!at) return { hold: false, dayTopUp: false, nightBoost: false }
+    if (!at) return { hold: false, dayTopUp: false, nightBoost: false, minutesToNightBoost: null }
     const { sinceZoneStart, zoneLength } = at
     return {
       hold: minutesMod(sinceZoneStart + holdBeforeMinutes) < holdBeforeMinutes + marginMinutes,
       dayTopUp: minutesMod(sinceZoneStart + holdBeforeMinutes + dayTopUpMinutes) < dayTopUpMinutes,
-      nightBoost: sinceZoneStart >= marginMinutes && sinceZoneStart < zoneLength
+      nightBoost: sinceZoneStart >= marginMinutes && sinceZoneStart < zoneLength,
+      // Minutes until the next night boost period starts (0 inside it)
+      minutesToNightBoost: minutesMod(marginMinutes - sinceZoneStart)
     }
   }
 }
@@ -147,6 +150,11 @@ module.exports = (name, {
   timeZone = 'Europe/Sofia',
   // The name of the boost button in the sentence
   boostButtonName = 'Загрей целия бойлер',
+  // The evening plan (#1985), off unless set; it needs `nightTariff`. When
+  // on, it replaces dayTopUp and nightBoostTarget: the element heats only
+  // the hot water the coming evening is missing. Fields: see
+  // config/automations/boiler-controller-config.js and the docs.
+  eveningPlan,
   telegramWebhookUrl,
   httpPost,
   verbose
@@ -156,10 +164,19 @@ module.exports = (name, {
     default: {
       controlMode: 'automatic',
       manualOverrideExpires: null,
-      externalOnSince: null
+      externalOnSince: null,
+      // The evening plan (#1985): the baths used per evening
+      // ({ 'YYYY-MM-DD': baths }) and the "Бани довечера" value
+      // ({ date, baths } or null).
+      eveningBaths: {},
+      eveningOverride: null
     },
     migrate: ({ version, defaultState, state }) => {
-      return state
+      return {
+        ...state,
+        eveningBaths: state.eveningBaths ?? defaultState.eveningBaths,
+        eveningOverride: state.eveningOverride ?? defaultState.eveningOverride
+      }
     }
   },
 
@@ -249,15 +266,27 @@ module.exports = (name, {
       Date.now() - startedAt < commandConfirmMs
 
     const capped = (target) => Number.isFinite(target) ? Math.min(target, hotWaterLimit) : null
-    const boostTarget = nightTariff ? capped(nightBoostTarget) : null
-    const topUpTarget = nightTariff && dayTopUp ? capped(dayTopUp.target) : null
+    // The evening plan (#1985). Its limits are capped like every other
+    // automatic target; without both limits it stays off.
+    const planNightLimit = nightTariff && eveningPlan ? capped(eveningPlan.nightLimit) : null
+    const planDayLimit = nightTariff && eveningPlan ? capped(eveningPlan.dayLimit) : null
+    const planOn = planNightLimit !== null && planDayLimit !== null
+    const boostTarget = nightTariff && !planOn ? capped(nightBoostTarget) : null
+    const topUpTarget = nightTariff && dayTopUp && !planOn ? capped(dayTopUp.target) : null
     const periodsAt = nightTariff
       ? tariffPeriods(nightTariff, topUpTarget === null ? 0 : dayTopUp.minutesBeforeHold)
       : () => ({ hold: false, dayTopUp: false, nightBoost: false })
 
-    // The top-up or boost in force at a moment, or null.
+    // The top-up or boost in force at a moment, or null. With the evening
+    // plan: the plan's night window (the night boost period) or its day
+    // window (from the planned start to the hold).
     const heatWindowAt = (ms) => {
       const periods = periodsAt(ms)
+      if (planOn) {
+        if (periods.nightBoost) return { reason: 'plan_night', target: planNightLimit }
+        if (planDayOpen(ms, periods)) return { reason: 'plan_day', target: planDayLimit }
+        return null
+      }
       if (periods.dayTopUp && topUpTarget !== null) return { reason: 'day_top_up', target: topUpTarget }
       if (periods.nightBoost && boostTarget !== null) return { reason: 'night_boost', target: boostTarget }
       return null
@@ -268,6 +297,115 @@ module.exports = (name, {
     // comes. After the target is reached once the usual hysteresis applies.
     let lastWindowReason = null
     let windowArmed = false
+
+    // The evening plan (#1985). The plan is for the evening of the local
+    // date: from midnight to midnight it plans that evening, so the night
+    // after midnight heats for the coming evening.
+    const {
+      marginBaths = 1,
+      eveningStart = '19:30',
+      startMarginMinutes = 15,
+      startBaths = 0.25,
+      measureFrom = '18:00',
+      standbyW = 40,
+      boilerMeterTopic,
+      sameWeekdays = 4,
+      historyDays = 56,
+      maxBaths = 15,
+      bathsBySeason,
+      overrideSetTopic,
+      overrideStatusTopic,
+      overrideMaxBaths = 10
+    } = eveningPlan || {}
+    const localAt = boilerPlan.localClock(timeZone)
+    const eveningStartMin = boilerPlan.minutesOfDay(eveningStart)
+    const measureFromMin = boilerPlan.minutesOfDay(measureFrom)
+    const startLitres = startBaths * bathLitres
+    const round1 = (x) => Math.round(x * 10) / 10
+    const round2 = (x) => Math.round(x * 100) / 100
+
+    // The stored history, or nothing when it is broken
+    const history = () => {
+      const h = persistedCache.eveningBaths
+      return h !== null && typeof h === 'object' && !Array.isArray(h) ? h : {}
+    }
+    const overrideFor = (date) => {
+      const o = persistedCache.eveningOverride
+      return o && o.date === date && boilerPlan.validBaths(o.baths, overrideMaxBaths) ? o.baths : null
+    }
+    // The need of the evening of `clock`: the "Бани довечера" value, the
+    // learned mean, or the season table. Never "no need": a broken history
+    // falls back to the table.
+    const needFor = (clock) => {
+      const override = overrideFor(clock.date)
+      if (override !== null) return { need: override, source: 'override' }
+      const learned = boilerPlan.learnedNeed(history(), clock.date, { count: sameWeekdays, maxDays: historyDays, maxBaths })
+      if (learned !== null) return { need: learned, source: 'history' }
+      const season = boilerPlan.seasonNeed(bathsBySeason, clock.month, clock.weekday)
+      if (season !== null) return { need: season, source: 'season' }
+      return { need: null, source: 'none' }
+    }
+
+    // The plan now: the target, the litres ready, the shortfall and the
+    // planned start of the day-price heating. Null while the boiler
+    // readings are old or missing. The model is slow, so its result is kept
+    // while its inputs stay the same.
+    let planMemo = { key: null, value: null }
+    const planAt = (ms) => {
+      if (!planOn) return null
+      const clock = localAt(ms)
+      const top = currentState.temperatureTop
+      const bottom = currentState.temperatureBottom
+      if (temperatures.isStale() || !Number.isFinite(top) || !Number.isFinite(bottom)) return null
+      const { need, source } = needFor(clock)
+      const key = [clock.date, top, bottom, need, source].join('|')
+      if (planMemo.key !== key) {
+        const cold = boilerTank.coldWaterAt(coldWaterByMonth, ms, timeZone)
+        const profile = boilerTank.gradualProfile(bottom, top, cold, tankModel)
+        const usable = boilerTank.usableLitres(profile, cold, bathTempC, tankModel)
+        // What the tank holds when the top is at the day limit all the way down
+        const capacity = boilerTank.usableLitres(boilerTank.gradualProfile(planDayLimit, planDayLimit, cold, tankModel), cold, bathTempC, tankModel)
+        // Without any need (a broken table) the plan fills the tank
+        const targetLitres = need === null ? capacity : (need + marginBaths) * bathLitres
+        const shortfallLitres = Math.max(0, targetLitres - usable)
+        // The day-price heating stores at most what the tank can hold; the
+        // rest is heated during the baths.
+        const dayLitres = Math.max(0, Math.min(targetLitres, capacity) - usable)
+        const heatMinutes = dayLitres > 0
+          ? boilerPlan.minutesToStore({ profile, cold, bathTempC, litres: usable + dayLitres, powerTable: elementPowerByTempKw, topLimit: planDayLimit, model: tankModel })
+          : 0
+        planMemo = {
+          key,
+          value: {
+            date: clock.date,
+            need,
+            needSource: source,
+            usable,
+            capacity,
+            targetLitres,
+            shortfallLitres,
+            heatMinutes,
+            // Local minutes of the day-price start, or null when no start is planned
+            plannedStartMin: shortfallLitres >= startLitres
+              ? (dayLitres > 0 ? eveningStartMin - heatMinutes - startMarginMinutes : eveningStartMin)
+              : null
+          }
+        }
+      }
+      return planMemo.value
+    }
+
+    // The day window opens at the planned start and then stays open until
+    // the hold, so a plan that moves a little later does not stop and start
+    // the element.
+    let dayOpenDate = null
+    const planDayOpen = (ms, periods) => {
+      if (periods.hold || periods.nightBoost) return false
+      const clock = localAt(ms)
+      if (dayOpenDate === clock.date) return true
+      const plan = planAt(ms)
+      return plan !== null && plan.plannedStartMin !== null && clock.minutes >= plan.plannedStartMin
+    }
 
     // Draw detection: the bottom readings of the last `drawWindowMinutes`.
     // The bottom sensor sits inside the lower serpentine, low in the tank,
@@ -581,8 +719,20 @@ module.exports = (name, {
       // Day-zone top-up before the hold and night-zone boost after it: heat
       // the top to the window's target, with the hysteresis below it.
       if (heatWindow && temperatureTop !== null) {
+        if (heatWindow.reason === 'plan_day') dayOpenDate = localAt(now).date
         if (temperatureTop >= heatWindow.target) {
           return { decision: false, reason: `${heatWindow.reason}_reached` }
+        }
+        // The evening plan heats only while hot water is missing: a stopped
+        // element starts when startBaths or more are missing, a running one
+        // runs until nothing is. With no plan (no fresh readings) the window
+        // heats to its limit as before.
+        if (planOn) {
+          const plan = planAt(now)
+          const shortfall = plan ? plan.shortfallLitres : Infinity
+          if (!(shortfall > 0) || (!heaterOn() && shortfall < startLitres)) {
+            return { decision: false, reason: `${heatWindow.reason}_met` }
+          }
         }
         if (heaterOn() || windowArmed || temperatureTop < heatWindow.target - hysteresis) {
           return { decision: true, reason: heatWindow.reason }
@@ -630,6 +780,143 @@ module.exports = (name, {
       }
     }
 
+    // The plan for the status (#1985): baths need, margin, target, ready,
+    // shortfall, the planned start and the last measured evening. nextStart:
+    // the time the plan lets the element heat next (now inside a plan
+    // window), or null when nothing is missing or there is no plan.
+    const planStatus = () => {
+      const now = Date.now()
+      const plan = planAt(now)
+      const clock = localAt(now)
+      const base = {
+        date: clock.date,
+        override: overrideFor(clock.date),
+        lastEvening
+      }
+      if (!plan) return { ...base, need: null, needSource: null, nextStart: null }
+      let nextStart = null
+      if (plan.shortfallLitres >= startLitres) {
+        const periods = periodsAt(now)
+        const window = heatWindowAt(now)
+        if (window) nextStart = now
+        else if (periods.hold && Number.isFinite(periods.minutesToNightBoost)) nextStart = now + periods.minutesToNightBoost * 60 * 1000
+        else if (plan.plannedStartMin !== null) nextStart = now + Math.max(0, plan.plannedStartMin - clock.minutes) * 60 * 1000
+      }
+      return {
+        ...base,
+        need: plan.need === null ? null : round1(plan.need),
+        needSource: plan.needSource,
+        marginBaths,
+        targetBaths: round1(plan.targetLitres / bathLitres),
+        bathsReady: round1(plan.usable / bathLitres),
+        capacityBaths: round1(plan.capacity / bathLitres),
+        shortfallBaths: round1(plan.shortfallLitres / bathLitres),
+        heatMinutes: plan.heatMinutes,
+        nextStart
+      }
+    }
+
+    // The evening use (#1985): from measureFrom to midnight, an energy
+    // balance on the tank model. The element energy is the boiler meter's
+    // counter, or the model's element power while the element runs. An
+    // evening with a gap (a restart, a stop of over 5 min), no fresh
+    // readings at either end, or a result out of range is not stored. Only
+    // the result is kept across restarts.
+    const MAX_TICK_GAP_MS = 5 * 60 * 1000
+    let evening = null // { date, startAt, start, cold, meterStart, estKwh, lastAt, broken }
+    let lastEvening = null // { date, baths, elementKwh, energySource } of the last stored evening
+    let meter = null // { tot, at }: the last boiler meter reading
+    const meterFresh = () => meter !== null && Date.now() - meter.at <= maxLoadInputAgeMs
+    const freshTemps = () => !temperatures.isStale() &&
+      Number.isFinite(currentState.temperatureTop) && Number.isFinite(currentState.temperatureBottom)
+    // The element's mean power now, from the model's water at the element
+    const elementKwNow = (cold) => {
+      const profile = boilerTank.gradualProfile(currentState.temperatureBottom, currentState.temperatureTop, cold, tankModel)
+      return boilerTank.elementPowerKw(elementPowerByTempKw, profile[tankModel.elementLayer])
+    }
+
+    const startEvening = (now, clock) => {
+      const cold = boilerTank.coldWaterAt(coldWaterByMonth, now, timeZone)
+      evening = {
+        date: clock.date,
+        startAt: now,
+        start: { top: currentState.temperatureTop, bottom: currentState.temperatureBottom },
+        cold,
+        meterStart: meterFresh() ? meter.tot : null,
+        estKwh: 0,
+        lastAt: now,
+        broken: freshTemps() ? null : 'no fresh temperature at the start'
+      }
+    }
+
+    const finishEvening = (rec, now, clock) => {
+      const skip = (why) => { if (verbose) console.log(`[${name}] evening ${rec.date} not stored: ${why}`) }
+      if (rec.broken) return skip(rec.broken)
+      if (now - rec.lastAt > MAX_TICK_GAP_MS || clock.minutes > 10) return skip('no reading at midnight')
+      if (!freshTemps()) return skip('no fresh temperature at the end')
+      const metered = Number.isFinite(rec.meterStart) && meterFresh() &&
+        meter.tot >= rec.meterStart && meter.tot - rec.meterStart < 24
+      const elementKwh = metered ? meter.tot - rec.meterStart : rec.estKwh
+      const baths = boilerPlan.eveningBaths({
+        start: rec.start,
+        end: { top: currentState.temperatureTop, bottom: currentState.temperatureBottom },
+        elementKwh,
+        hours: (now - rec.startAt) / 3600000,
+        standbyW,
+        cold: rec.cold,
+        bathLitres,
+        bathTempC,
+        model: tankModel
+      })
+      // A small negative result is a quiet evening within the model error
+      if (!Number.isFinite(baths) || baths < -0.5 || baths > maxBaths) return skip(`result out of range (${baths})`)
+      const value = round2(Math.max(0, baths))
+      // Keep the evenings the need can still use, and a little more
+      const keepFrom = boilerPlan.dayNumber(rec.date) - historyDays - 14
+      const kept = Object.fromEntries(Object.entries(history())
+        .filter(([date]) => (boilerPlan.dayNumber(date) ?? -Infinity) >= keepFrom))
+      persistedCache.eveningBaths = { ...kept, [rec.date]: value }
+      lastEvening = { date: rec.date, baths: value, elementKwh: round2(elementKwh), energySource: metered ? 'meter' : 'model' }
+      if (verbose) console.log(`[${name}] evening ${rec.date}: ${value} baths (element ${round2(elementKwh)} kWh, ${metered ? 'meter' : 'model'})`)
+    }
+
+    // "Бани довечера": the value and its date, retained for Home Assistant
+    const publishOverride = () => {
+      if (!overrideStatusTopic) return
+      const o = persistedCache.eveningOverride
+      mqtt.publish(overrideStatusTopic, { value: o ? o.baths : null, date: o ? o.date : null }, { retain: true })
+    }
+    // The value clears itself when its evening is over (at midnight)
+    const clearOldOverride = (clock) => {
+      const o = persistedCache.eveningOverride
+      if (o && o.date !== clock.date) {
+        persistedCache.eveningOverride = null
+        if (verbose) console.log(`[${name}] evening baths override for ${o.date} cleared`)
+        publishOverride()
+      }
+    }
+
+    // Once a minute: the evening measurement and the override clearing
+    const eveningTick = () => {
+      if (!planOn) return
+      const now = Date.now()
+      const clock = localAt(now)
+      if (evening && evening.date !== clock.date) {
+        finishEvening(evening, now, clock)
+        evening = null
+      }
+      if (evening) {
+        const dt = now - evening.lastAt
+        if (dt > MAX_TICK_GAP_MS) evening.broken = evening.broken || 'a gap in the measurement'
+        else if (heaterOn() && freshTemps()) evening.estKwh += elementKwNow(evening.cold) * dt / 3600000
+        evening.lastAt = now
+      } else if (clock.minutes >= measureFromMin && clock.minutes < measureFromMin + 5) {
+        // Only at the start of the evening: one started later would miss use
+        startEvening(now, clock)
+      }
+      clearOldOverride(clock)
+    }
+
     // The status for monitoring: heaterState is the real state of the element
     // (see heaterOn), contactorState the last contactor status (null: none
     // yet, or no feedback configured).
@@ -648,7 +935,8 @@ module.exports = (name, {
       },
       solarCirculation: currentState.solarCirculation,
       load: loadStatus(),
-      ...bathStatus()
+      ...bathStatus(),
+      ...(planOn && { plan: planStatus() })
     })
 
     const updateHeaterState = () => {
@@ -861,6 +1149,39 @@ module.exports = (name, {
       setTimeout(updateHeaterState, commandConfirmMs).unref?.()
     }
 
+    if (planOn && boilerMeterTopic) {
+      mqtt.subscribe(boilerMeterTopic, (payload) => {
+        const tot = payload?.tot
+        if (typeof tot !== 'number' || !Number.isFinite(tot)) return
+        meter = { tot, at: readingTime(payload) }
+      })
+    }
+
+    // "Бани довечера" (#1985): a number of baths for this evening, from 0 to
+    // overrideMaxBaths, as a number, a text or { value }. An empty value
+    // clears it. It only changes the need, never the limits.
+    if (planOn && overrideSetTopic) {
+      mqtt.subscribe(overrideSetTopic, (payload) => {
+        const raw = payload !== null && typeof payload === 'object' ? payload.value : payload
+        const now = Date.now()
+        if (raw === null || raw === undefined || raw === '' || raw === 'None') {
+          persistedCache.eveningOverride = null
+        } else {
+          const baths = typeof raw === 'string' ? Number(raw) : raw
+          if (!boilerPlan.validBaths(baths, overrideMaxBaths)) {
+            console.log(`[${name}] evening baths refused: a number from 0 to ${overrideMaxBaths} (got ${JSON.stringify(raw)?.slice(0, 64)})`)
+            publishOverride()
+            return
+          }
+          persistedCache.eveningOverride = { date: localAt(now).date, baths: round1(baths) }
+        }
+        if (verbose) console.log(`[${name}] evening baths override: ${JSON.stringify(persistedCache.eveningOverride)}`)
+        publishOverride()
+        updateHeaterState()
+        mqtt.publish(finalAutomationStatusTopic, automationStatus())
+      })
+    }
+
     // Control mode topic
     mqtt.subscribe(controlModeTopic, (payload) => {
       try {
@@ -972,6 +1293,15 @@ module.exports = (name, {
 
     // Initial decision and status
     lastGateKey = gateKey()
+    if (planOn) {
+      clearOldOverride(localAt(Date.now()))
+      publishOverride()
+      // A plan window opens on time without a new reading
+      setInterval(() => {
+        eveningTick()
+        updateHeaterState()
+      }, 60 * 1000).unref?.()
+    }
     updateHeaterState()
     publishControlModeStatus()
 
@@ -1018,6 +1348,7 @@ module.exports = (name, {
         boostBottomTarget,
         boostTopLimit,
         nightBoostTarget: boostTarget,
+        eveningPlan: planOn ? eveningPlan : null,
         dayTopUp: topUpTarget === null ? null : { minutesBeforeHold: dayTopUp.minutesBeforeHold, target: topUpTarget },
         drawDropK,
         drawWindowMinutes,

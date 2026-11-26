@@ -2,8 +2,14 @@ const { describe, test, expect, jest, afterEach } = require('@jest/globals')
 const path = require('path')
 
 // The committed bot config, so these tests check the live topics and limits.
-const CONFIG = require(path.resolve(__dirname, '../../../config/automations/boiler-controller-config.js'))
-  .bots.boilerController
+// A few tests use the fixed day top-up of #1911, which runs when the evening
+// plan (#1985) is off; they keep the values it had.
+const CONFIG = {
+  ...require(path.resolve(__dirname, '../../../config/automations/boiler-controller-config.js')).bots.boilerController,
+  eveningPlan: undefined,
+  dayTopUp: { minutesBeforeHold: 90, target: 55 },
+  nightBoostTarget: 55
+}
 
 const MIN = 60 * 1000
 

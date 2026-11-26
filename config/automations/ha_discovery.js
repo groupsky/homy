@@ -173,6 +173,38 @@ const haText = (
   }
 })
 
+// A number box. Home Assistant sends the number as plain text, so the
+// command template wraps it as JSON: {"value": 2.5}. The bot that owns it
+// publishes {"value": ...} as status; a null value shows as unknown (the
+// default payload_reset of an MQTT number is "None").
+const haNumber = (
+  {
+    name,
+    feature_type,
+    feature,
+    config
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          command_topic: `${featuresPrefix}/${feature_type}/${feature}/set`,
+          command_template: `{"value": {{ value }}, "_src": "ha"}`,
+          state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
+          value_template: `{{ value_json.value if value_json.value is not none else 'None' }}`,
+          unique_id: `homy_${feature_type}_${feature}`,
+          ...config,
+          ...(config.object_id && { default_entity_id: `number.${config.object_id}` })
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/number/${feature}/config`, retain: true } }
+  }
+})
+
 const haAutomationSwitch = (
   {
     name,
@@ -1086,6 +1118,26 @@ const config = {
         json_attributes_topic: `homy/automation/boiler_controller/status`,
         json_attributes_template: '{{ {"bathsReady": value_json.bathsReady, "usableLitres": value_json.usableLitres, "minutesToNextBath": value_json.minutesToNextBath, "boostMinutesToNextBath": value_json.boostMinutesToNextBath, "bathInputs": value_json.bathInputs} | tojson }}'
       },
+    }),
+
+    // "Бани довечера" (#1985): the baths of this evening, set by hand. It
+    // replaces the learned need of the boiler controller's evening plan for
+    // this evening only; the controller clears it at midnight.
+    ...haNumber({
+      name: 'boilerEveningBaths',
+      feature_type: 'number',
+      feature: 'boiler_evening_baths',
+      config: {
+        name: 'Бани довечера',
+        device: devices.boiler,
+        object_id: 'boiler_evening_baths',
+        icon: 'mdi:shower',
+        min: 0,
+        max: 10,
+        step: 0.5,
+        mode: 'box',
+        unit_of_measurement: 'бани',
+      }
     }),
 
     // The result of the last mode command as a short Bulgarian sentence, so

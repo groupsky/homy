@@ -1,10 +1,19 @@
 const { describe, test, expect, jest, afterEach } = require('@jest/globals')
 const path = require('path')
 
-// The committed bot config, so these tests check the live windows, targets
-// and draw-detection values (#1911).
-const CONFIG = require(path.resolve(__dirname, '../../../config/automations/boiler-controller-config.js'))
+// The committed bot config, so these tests check the live limits and
+// draw-detection values (#1911).
+const COMMITTED = require(path.resolve(__dirname, '../../../config/automations/boiler-controller-config.js'))
   .bots.boilerController
+// The fixed day top-up and night boost of #1911 run when the evening plan
+// (#1985) is off. These tests check them with the values they had; the plan
+// itself is tested in boiler-controller-evening-plan.test.js.
+const CONFIG = {
+  ...COMMITTED,
+  eveningPlan: undefined,
+  dayTopUp: { minutesBeforeHold: 90, target: 55 },
+  nightBoostTarget: 55
+}
 
 // Times are local wall-clock times with their offset written out: +02:00 is
 // winter time (EET) and +03:00 is summer time (EEST) in Europe/Sofia.
@@ -67,9 +76,9 @@ describe('boiler-controller evening draw rules (#1911)', () => {
   })
 
   test('the committed config keeps 55 °C as the limit', () => {
-    expect(CONFIG.hotWaterLimit).toBe(55)
-    expect(CONFIG.nightBoostTarget).toBeLessThanOrEqual(55)
-    expect(CONFIG.dayTopUp.target).toBeLessThanOrEqual(55)
+    expect(COMMITTED.hotWaterLimit).toBe(55)
+    expect(COMMITTED.eveningPlan.nightLimit).toBeLessThanOrEqual(55)
+    expect(COMMITTED.eveningPlan.dayLimit).toBeLessThanOrEqual(55)
   })
 
   describe('day-zone top-up before the hold', () => {
