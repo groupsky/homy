@@ -142,7 +142,8 @@ hold and with a load gate closed, reason `manual_boost`. It stops when the top r
 after `boostDurationMs` (2 h), whichever is first, and the mode then goes back to `automatic` by itself. `maxSafe`
 and old input (`input_stale`) stop it earlier; old input does not end the mode, so it heats again when the
 readings come back within the 2 h. A second press while it runs starts the 2 h again. The mode select shows
-`boost` while it runs.
+`boost` while it runs. With the top already at or above `hotWaterLimit` a `boost` is refused (#1975): the boost
+would end at once, so the mode and its end time stay as they were, and `lastCommand` says why (see below).
 
 `manual_on` keeps the mode for `manualOverrideExpiry` (24 h), but no longer heats without a limit (#1912): at
 `hotWaterLimit` (55 °C) the element goes OFF, reason `manual_on_limit_reached (expires: …)`, and it starts
@@ -155,6 +156,33 @@ last reading.
 automatic. `until` must be in the future and at most 60 days ahead. Otherwise the command is refused and logged, and the
 mode stays. The `away-mode` bot uses it; see [away-mode.md](away-mode.md). A pick of `vacation_until` in Home Assistant
 has no `until`, so it is refused.
+
+#### Command result: `lastCommand`
+
+Every mode command gets a result (#1975). It goes out with the mode status on
+`homy/features/control_mode/boiler_controller/status`, so any client that sends a command can read it:
+
+```json
+{
+  "mode": "automatic",
+  "manualOverrideExpires": null,
+  "lastCommand": {"mode": "boost", "result": "refused", "reason": "top_at_limit", "top": 56.2, "limit": 55, "at": 1795633440000}
+}
+```
+
+- `mode`: the mode in the command (cut to 64 characters; `null` when the command had no mode text).
+- `result`: `applied` (the mode was set) or `refused` (the mode and its end time stay as they were).
+- `reason`:
+  - `ok`: applied, nothing to add.
+  - `top_at_limit`: the top is at or above `hotWaterLimit`. With `refused`, a `boost`. With `applied`, a
+    `manual_on`: the mode is set, but the element heats only once the top falls under the limit.
+  - `invalid_until`: refused, a `vacation_until` without a valid `until`.
+  - `unknown_mode`: refused, a mode that is not in the list above.
+- `top`: the last top reading in °C when the command came (`null` before the first one); `limit`: `hotWaterLimit`.
+- `at`: the time of the command, in ms.
+
+The result stays in the status until the next command; later statuses repeat it. It is kept in memory only, so
+after a restart it is `null` until the next command.
 
 The highest top the element heats to is what makes `max(t2)` a usable solar-contribution signal: a
 day whose top temperature never exceeds it got all of its heat from the immersion heater. That is the
@@ -273,6 +301,8 @@ Details:
 ### Controls
 - **Режим на управление** (select): the controller's mode, see [Control modes](#control-modes).
 - **Загрей до 55 °C** (button): sends `{"mode": "boost"}` to the mode topic.
+- **Последна команда** (sensor, #1975): the `lastCommand` result as a short Bulgarian sentence, for example
+  "Загряването не започна: горе е 56.2 °C, границата е 55 °C." Its attributes are the fields of `lastCommand`.
 - **Контактор**: read only since #1912 (a binary sensor; it was a switch). The switch started the
   element without the controller, and the controller then stopped it. The empty retained config of
   `haBoilerContactorSwitchRemoved` (`config/automations/config.js`) removes the old switch entity.
