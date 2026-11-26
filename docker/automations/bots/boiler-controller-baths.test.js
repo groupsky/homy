@@ -134,8 +134,9 @@ describe('boiler-controller baths ready (#1984)', () => {
     c.temperatures({ top: 55, bottom: 40 })
     jest.advanceTimersByTime(STARTUP)
     expect(c.status().bathsReady).not.toBeNull()
-    // No reading for longer than maxInputAgeMs
-    jest.advanceTimersByTime(30 * MIN)
+    // No reading for longer than maxInputAgeMs (10 min), before the next
+    // heartbeat: the status that marks the readings old carries no number
+    jest.advanceTimersByTime(11 * MIN)
     const s = c.status()
     expect(s.reason).toBe('input_stale')
     expect(s).toMatchObject(NONE)
