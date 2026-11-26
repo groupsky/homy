@@ -145,8 +145,13 @@
                     "name": "Дистанционен старт"
                   },
                   {
-                    "entity": "sensor.oven_cooking_oven_status_cavity_001_currenttemperature",
+                    "entity": "sensor.oven_cavity_temperature_now",
                     "name": "Температура сега"
+                  },
+                  {
+                    "entity": "sensor.oven_cavity_temperature_last",
+                    "name": "Последна температура",
+                    "secondary_info": "last-updated"
                   },
                   {
                     "entity": "sensor.oven_remaining_time",

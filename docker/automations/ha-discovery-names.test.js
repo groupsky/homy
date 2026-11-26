@@ -33,7 +33,9 @@ const identity = (bots) => Object.fromEntries(Object.entries(bots).map(([key, bo
 // it the identity still hashed to ba121c52…f56c9.
 // Changed on purpose again (#1955): the leaving-home check switch was added.
 // Without it the identity still hashed to 8064950a…a110.
-const BASELINE_SHA256 = 'b0fde0e10152286401201d266335f5a9ef1e4432a5116bba94b1564134a67ed9'
+// Changed on purpose again (#1975): the boiler last command sensor was
+// added. Without it the identity still hashed to b0fde0e1…7ed9.
+const BASELINE_SHA256 = '3f3d847b1a14a531eb1130704fc8f72ac6a38d53e668eb113e625fefb926f8b3'
 const canonical = (ids) => JSON.stringify(Object.keys(ids).sort().map((k) => [k, ids[k]]))
 const sha256 = (text) => require('crypto').createHash('sha256').update(text).digest('hex')
 

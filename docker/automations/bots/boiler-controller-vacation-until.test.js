@@ -41,7 +41,7 @@ describe('boiler-controller vacation_until mode (#1756)', () => {
 
     expect(persistedCache.controlMode).toBe('vacation_until')
     expect(persistedCache.manualOverrideExpires).toBe(NOW + 5 * DAY)
-    expect(lastStatus()).toEqual({ mode: 'vacation_until', manualOverrideExpires: NOW + 5 * DAY })
+    expect(lastStatus()).toMatchObject({ mode: 'vacation_until', manualOverrideExpires: NOW + 5 * DAY })
     expect(lastRelay()).toMatchObject({ state: false })
     expect(lastRelay().reason).toMatch(/^vacation_until/)
   })

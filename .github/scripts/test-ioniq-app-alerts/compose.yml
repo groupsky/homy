@@ -8,7 +8,7 @@ services:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
   influxdb:
-    image: ghcr.io/groupsky/homy/influxdb:1.13.1-alpine
+    image: ghcr.io/groupsky/homy/influxdb:1.13.2-alpine
     environment:
       - INFLUXDB_HTTP_AUTH_ENABLED=false
 

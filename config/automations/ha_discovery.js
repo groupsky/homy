@@ -1067,6 +1067,37 @@ const config = {
       },
     }),
 
+    // The result of the last mode command as a short Bulgarian sentence, so
+    // a refused boost or a manual_on that cannot heat yet says why (#1975).
+    // The fields of lastCommand are the attributes.
+    ...haSensor({
+      name: 'boilerControllerLastCommand',
+      feature: 'boiler_controller_last_command',
+      type: null,
+      config: {
+        name: 'Последна команда',
+        device: devices.boiler,
+        object_id: 'boiler_controller_last_command',
+        unique_id: 'homy_boiler_controller_last_command',
+        icon: 'mdi:message-reply-text',
+        state_topic: `${featuresPrefix}/control_mode/boiler_controller/status`,
+        value_template: [
+          '{%- set c = value_json.lastCommand -%}',
+          "{%- set modes = {'automatic': 'автоматичен режим', 'boost': 'загряване до границата', 'manual_on': 'ръчно включен', 'manual_off': 'ръчно изключен', 'vacation_3d': 'отпуска 3 дни', 'vacation_5d': 'отпуска 5 дни', 'vacation_7d': 'отпуска 7 дни', 'vacation_10d': 'отпуска 10 дни', 'vacation_14d': 'отпуска 14 дни', 'vacation_until': 'отпуска до дата'} -%}",
+          "{%- if not c -%}Още няма команда.",
+          "{%- elif c.result == 'refused' and c.reason == 'top_at_limit' -%}Загряването не започна: горе е {{ c.top }} °C, границата е {{ c.limit }} °C.",
+          "{%- elif c.result == 'refused' and c.reason == 'invalid_until' -%}Отпуската не започна: няма валиден час за край.",
+          "{%- elif c.result == 'refused' and c.reason == 'unknown_mode' -%}Командата не е приета: непознат режим.",
+          "{%- elif c.result == 'refused' -%}Командата не е приета.",
+          "{%- elif c.reason == 'top_at_limit' -%}Ръчно включен, но горе е {{ c.top }} °C, границата е {{ c.limit }} °C. Ще грее, когато горе падне под границата.",
+          "{%- else -%}Прието: {{ modes.get(c.mode, c.mode) }}.",
+          '{%- endif -%}'
+        ].join(''),
+        json_attributes_topic: `${featuresPrefix}/control_mode/boiler_controller/status`,
+        json_attributes_template: '{{ (value_json.lastCommand or {}) | tojson }}'
+      },
+    }),
+
     // Automation control switches
     ...haAutomationSwitch({
       name: 'boilerControllerAutomation',
