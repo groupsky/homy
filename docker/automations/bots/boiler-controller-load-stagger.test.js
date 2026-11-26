@@ -62,15 +62,15 @@ const startAt = (localIso, {
       deliver(config.temperatureBottomTopic, { state: bottom, _tz: Date.now() })
       deliver(config.temperatureTopTopic, { state: top, _tz: Date.now() })
     },
-    mainPower: (total_p, _tz = Date.now()) => deliver(config.mainPowerTopic, { total_p, _tz }),
-    dishwasher: (p, _tz = Date.now()) => deliver(config.dishwasherTopic, { p, _tz }),
+    // A main meter reading: `ac` is phase A's current (A), `total_p` the house power (W).
+    phaseA: (ac, _tz = Date.now(), totalP = 1000) => deliver(config.mainMeterTopic, { ac, total_p: totalP, _tz }),
+    deliverTo: deliver,
     // Advances the clock in 1 s steps, sending the readings a meter would send
     // and a fresh temperature every 30 s (the sensors report regularly).
-    run: (ms, { main, dish, top, bottom = 35 } = {}) => {
+    run: (ms, { main, total, top, bottom = 35 } = {}) => {
       for (let elapsed = 0; elapsed < ms; elapsed += 1000) {
         jest.setSystemTime(Date.now() + 1000)
-        if (main != null) boiler.mainPower(typeof main === 'function' ? main(elapsed) : main)
-        if (dish != null) boiler.dishwasher(dish)
+        if (main != null) boiler.phaseA(main, Date.now(), total)
         if (top != null && elapsed % 30000 === 0) boiler.temperatures({ top, bottom })
       }
     },
@@ -96,142 +96,131 @@ describe('boiler-controller load stagger', () => {
     jest.useRealTimers()
   })
 
-  test('the committed config sets both topics and the limits', () => {
-    expect(CONFIG.dishwasherTopic).toBe('/modbus/secondary/dishwasher/reading')
-    expect(CONFIG.mainPowerTopic).toBe('/modbus/main/main/reading')
+  test('the committed config sets the topic and the limits', () => {
+    expect(CONFIG.mainMeterTopic).toBe('/modbus/main/main/reading')
     expect(CONFIG).toMatchObject({
-      dishwasherOnW: 10,
-      dishwasherHoldMs: 10 * MIN,
-      mainPowerCapW: 6000,
-      mainPowerMeanMs: 5 * MIN,
+      phaseLimitA: 32,
+      elementCurrentA: 12.5,
+      phaseMeanMs: 5 * MIN,
       maxLoadInputAgeMs: 10 * MIN
     })
   })
 
-  describe('dishwasher gate', () => {
-    test('the element does not start while the dishwasher shows load', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(1200)
-      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
-    })
-
-    test('a pause under 10 minutes still blocks; after 10 minutes idle the element starts', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(1200)
-      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      boiler.run(9 * MIN, { dish: 2, top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
-      boiler.run(1 * MIN + 2000, { dish: 2, top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
-    })
-
-    test('a reading at exactly the on threshold is not load', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(10)
-      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: true })
-    })
-
-    test('an old dishwasher reading counts as not running', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(1200, Date.now() - 11 * MIN)
-      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
-    })
-
-    test('a reading without a numeric power is ignored', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(undefined)
-      boiler.dishwasher('1200')
-      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: true })
-    })
+  test('the dishwasher and the house power settings are gone', () => {
+    for (const key of ['dishwasherTopic', 'dishwasherOnW', 'dishwasherHoldMs', 'mainPowerTopic', 'mainPowerCapW', 'mainPowerMeanMs']) {
+      expect(CONFIG).not.toHaveProperty(key)
+    }
   })
 
-  describe('main power cap', () => {
-    test('no start while the 5-minute mean is at or above 6 kW; start when it drops under', () => {
+  test('a running dishwasher does not hold back a start', () => {
+    // The old dishwasher topic is not read at all.
+    const boiler = startAt(AFTER_HOLD, { config: { ...CONFIG, dishwasherTopic: '/modbus/secondary/dishwasher/reading' } })
+    expect(() => boiler.deliverTo('/modbus/secondary/dishwasher/reading', { p: 1200 })).toThrow(/no subscription/)
+    boiler.run(5 * MIN, { main: 5, top: COLD_ENOUGH_TO_HEAT })
+    expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+  })
+
+  describe('phase A gate', () => {
+    test('no start while the 5-minute mean + 12.5 A is at or over 32 A; start when it falls under', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.run(5 * MIN, { main: 6000, top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
-      // The mean falls under 6 kW once enough of the window holds lower readings.
-      boiler.run(2.6 * MIN, { main: 3000, top: COLD_ENOUGH_TO_HEAT })
+      boiler.run(5 * MIN, { main: 25, top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
+      // The mean falls under 19.5 A once enough of the window holds lower
+      // readings: after about 110 s of 10 A.
+      boiler.run(1 * MIN, { main: 10, top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
+      boiler.run(1 * MIN, { main: 10, top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
     })
 
-    test('a short spike does not block while the mean stays under the cap', () => {
+    test('a mean exactly at the limit (19.5 + 12.5 = 32 A) waits', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.run(4 * MIN, { main: 2000, top: COLD_ENOUGH_TO_HEAT })
-      boiler.run(30 * 1000, { main: 9000, top: COLD_ENOUGH_TO_HEAT })
-      boiler.run(10 * 1000, { main: 2000, top: COLD_ENOUGH_TO_HEAT })
+      boiler.run(5 * MIN, { main: 19.5, top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
+      expect(boiler.status().load).toEqual({ phaseAMeanA: 19.5, capIgnored: false })
+    })
+
+    test('a mean just under the limit does not block', () => {
+      const boiler = startAt(AFTER_HOLD)
+      boiler.run(5 * MIN, { main: 19.4, top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+    })
+
+    test('the 6 kW house cap is gone: high house power with phase A low does not block', () => {
+      const boiler = startAt(AFTER_HOLD)
+      boiler.run(5 * MIN, { main: 8, total: 9000, top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+    })
+
+    test('a short spike does not block while the mean stays under the limit', () => {
+      const boiler = startAt(AFTER_HOLD)
+      boiler.run(4 * MIN, { main: 8, top: COLD_ENOUGH_TO_HEAT })
+      boiler.run(30 * 1000, { main: 30, top: COLD_ENOUGH_TO_HEAT })
+      boiler.run(10 * 1000, { main: 8, top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
     })
 
     test('the mean uses only the last 5 minutes', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.run(2 * MIN, { main: 9000 })
-      boiler.run(5 * MIN, { main: 1000, top: COLD_ENOUGH_TO_HEAT })
+      boiler.run(2 * MIN, { main: 30 })
+      boiler.run(5 * MIN, { main: 5, top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true })
     })
 
-    test('a short silence keeps the cap; a long silence ignores it', () => {
+    test('a short silence keeps the gate; a long silence ignores it', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.run(5 * MIN, { main: 6500 })
+      boiler.run(5 * MIN, { main: 25 })
       boiler.run(6 * MIN, {})
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
       boiler.run(4 * MIN + 2000, {})
-      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
-    })
-
-    test('a _tz in the future counts as now, so the reading still ages out', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.mainPower(9000, Date.now() + 60 * MIN)
-      boiler.dishwasher(1200, Date.now() + 60 * MIN)
-      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay().reason).toBe('load_wait_dishwasher')
-      boiler.run(10 * MIN + 2000, { top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: true })
-    })
-
-    test('an old main reading (over 10 minutes) ignores the cap', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.mainPower(9000, Date.now() - 11 * MIN)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
       expect(boiler.status().load).toMatchObject({ capIgnored: true })
     })
 
-    test('no main reading at all ignores the cap', () => {
+    test('a _tz in the future counts as now, so the reading still ages out', () => {
       const boiler = startAt(AFTER_HOLD)
+      boiler.phaseA(30, Date.now() + 60 * MIN)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay().reason).toBe('load_wait_phase_a')
+      boiler.run(10 * MIN + 2000, { top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true })
     })
 
-    test('a reading without a numeric total_p is ignored', () => {
+    test('an old phase reading (over 10 minutes) never blocks', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.mainPower(undefined)
-      boiler.mainPower('9000')
+      boiler.phaseA(30, Date.now() - 11 * MIN)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: true })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+      expect(boiler.status().load).toMatchObject({ capIgnored: true })
     })
 
-    test('the dishwasher reason comes first when both apply', () => {
+    test('no phase reading at all never blocks', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.mainPower(9000)
-      boiler.dishwasher(1200)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+      expect(boiler.status().load).toEqual({ phaseAMeanA: null, capIgnored: true })
+    })
+
+    test('a reading without a numeric ac is ignored', () => {
+      const boiler = startAt(AFTER_HOLD)
+      boiler.phaseA(undefined)
+      boiler.phaseA('30')
+      boiler.phaseA(NaN)
+      boiler.deliverTo(CONFIG.mainMeterTopic, null)
+      boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
+      expect(boiler.relay()).toMatchObject({ state: true })
+      expect(boiler.status().load).toEqual({ phaseAMeanA: null, capIgnored: true })
     })
   })
 
   describe('a running element', () => {
-    test('is not stopped when the cap is exceeded or the dishwasher starts', () => {
+    test('is not stopped when phase A is high', () => {
       const boiler = startAt(AFTER_HOLD)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true })
-      boiler.run(6 * MIN, { main: 9000, dish: 1200, top: COLD_ENOUGH_TO_HEAT })
+      boiler.run(6 * MIN, { main: 31, top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
     })
   })
@@ -239,52 +228,57 @@ describe('boiler-controller load stagger', () => {
   describe('which rules are gated', () => {
     test('the bottom-cold start waits', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(1200)
+      boiler.run(5 * MIN, { main: 25 })
       boiler.temperatures({ top: 60, bottom: 25 })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
-    })
-
-    test('the bottom-cold start waits for the cap too', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.run(5 * MIN, { main: 8000 })
-      boiler.temperatures({ top: 60, bottom: 25 })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
     })
 
     test('the floor heating inside the night hold waits', () => {
       const boiler = startAt('2026-11-02T21:30:00+02:00')
-      boiler.dishwasher(1200)
+      boiler.phaseA(25)
       boiler.temperatures({ top: 38 })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
     })
 
     test('the top-cold emergency is never gated', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.run(5 * MIN, { main: 9000 })
-      boiler.dishwasher(1200)
+      boiler.run(5 * MIN, { main: 31 })
       boiler.temperatures({ top: 25 })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'emergency_heating_top_cold' })
     })
 
     test('the overheat shut-off is never gated', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(1200)
+      boiler.phaseA(31)
       boiler.temperatures({ top: 90 })
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'safety_shutoff_overheated' })
     })
 
     test('manual on is not gated', () => {
       const boiler = startAt(AFTER_HOLD, { controlMode: 'manual_on' })
-      boiler.dishwasher(1200)
-      boiler.mainPower(9000)
+      boiler.phaseA(31)
       boiler.temperatures({ top: 50 })
       expect(boiler.relay()).toMatchObject({ state: true })
       expect(boiler.relay().reason).toMatch(/^manual_on/)
     })
 
-    test('vacation mode is not changed', () => {
+    test('boost is not gated', () => {
+      const boiler = startAt(AFTER_HOLD)
+      boiler.phaseA(31)
+      boiler.temperatures({ top: 50 })
+      boiler.mode('boost')
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })
+    })
+
+    test('manual off and vacation mode are not changed', () => {
+      const off = startAt(AFTER_HOLD, { controlMode: 'manual_off' })
+      off.phaseA(31)
+      off.temperatures({ top: 45 })
+      expect(off.relay().state).toBe(false)
+      expect(off.relay().reason).toMatch(/^manual_off/)
+
       const boiler = startAt(AFTER_HOLD, { controlMode: 'vacation_3d' })
-      boiler.dishwasher(1200)
+      boiler.phaseA(31)
       boiler.temperatures({ top: 25 })
       expect(boiler.relay().reason).toMatch(/^vacation_3d/)
       expect(boiler.relay().state).toBe(false)
@@ -294,26 +288,25 @@ describe('boiler-controller load stagger', () => {
   describe('re-evaluation', () => {
     test('a gate that opens starts the element on the reading that opens it', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(1200, Date.now() - 5 * MIN)
+      boiler.phaseA(30, Date.now() - 5 * MIN)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
-      expect(boiler.relay().reason).toBe('load_wait_dishwasher')
-      // No new temperature arrives: only power readings and the clock move.
+      expect(boiler.relay().reason).toBe('load_wait_phase_a')
+      // No new temperature arrives: only meter readings and the clock move.
       for (let i = 0; i < 5 * 60 + 2; i++) {
         jest.setSystemTime(Date.now() + 1000)
-        boiler.dishwasher(0)
+        boiler.phaseA(5)
       }
       expect(boiler.relay()).toMatchObject({ state: true })
     })
 
     test('readings that do not change the gate state publish nothing', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.dishwasher(1200)
+      boiler.phaseA(25)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
       const count = boiler.relayCount()
       for (let i = 0; i < 60; i++) {
         jest.setSystemTime(Date.now() + 1000)
-        boiler.dishwasher(1300)
-        boiler.mainPower(1000)
+        boiler.phaseA(26)
       }
       expect(boiler.relayCount()).toBe(count)
     })
@@ -339,41 +332,35 @@ describe('boiler-controller load stagger', () => {
   })
 
   describe('status', () => {
-    test('publishes the load inputs with the existing fields unchanged', () => {
+    test('publishes phaseAMeanA and capIgnored with the existing fields unchanged', () => {
       const boiler = startAt(AFTER_HOLD)
-      boiler.mainPower(2000.4)
-      boiler.mainPower(3000)
-      boiler.dishwasher(1200)
+      boiler.phaseA(20.04)
+      boiler.phaseA(21)
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.status()).toMatchObject({
         heaterState: false,
-        reason: 'load_wait_dishwasher',
+        reason: 'load_wait_phase_a',
         controlMode: 'automatic',
         solarCirculation: false,
-        temperatures: { top: COLD_ENOUGH_TO_HEAT, bottom: 35 },
-        load: { mainPowerMeanW: 2500, dishwasherRunning: true, capIgnored: false }
+        temperatures: { top: COLD_ENOUGH_TO_HEAT, bottom: 35 }
       })
-    })
-
-    test('reports no mean and an ignored cap without main readings', () => {
-      const boiler = startAt(AFTER_HOLD)
-      boiler.temperatures({ top: 55 })
-      expect(boiler.status().load).toEqual({ mainPowerMeanW: null, dishwasherRunning: false, capIgnored: true })
+      expect(boiler.status().load).toEqual({ phaseAMeanA: 20.5, capIgnored: false })
     })
   })
 
-  describe('without topics', () => {
-    test('the gates are off', () => {
-      const { dishwasherTopic, mainPowerTopic, ...rest } = CONFIG
+  describe('without the topic', () => {
+    test('the gate is off', () => {
+      const { mainMeterTopic, ...rest } = CONFIG
       const boiler = startAt(AFTER_HOLD, { config: rest })
       boiler.temperatures({ top: COLD_ENOUGH_TO_HEAT })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
+      expect(boiler.status().load).toEqual({ phaseAMeanA: null, capIgnored: true })
     })
   })
 })
 
 // Contactor feedback (#1912): on 2026-11-05 a contactor ON from Home Assistant
-// was stopped 23 min later by the dishwasher gate, because the controller took
+// was stopped 23 min later by the old dishwasher gate, because the controller took
 // its own last command as the state of the element.
 describe('boiler-controller contactor feedback (#1912)', () => {
   afterEach(() => {
@@ -399,7 +386,7 @@ describe('boiler-controller contactor feedback (#1912)', () => {
   })
 
   describe('outside ON', () => {
-    test('the 2026-11-05 case: kept through a dishwasher run, with its own reason', () => {
+    test('the 2026-11-05 case: kept while phase A is high, with its own reason', () => {
       const boiler = startAt(DAY)
       boiler.temperatures({ top: IN_BAND })
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'hysteresis_zone_maintain_false' })
@@ -408,9 +395,9 @@ describe('boiler-controller contactor feedback (#1912)', () => {
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
       expect(boiler.status()).toMatchObject({ heaterState: true, contactorState: true, reason: 'external_on' })
 
-      boiler.dishwasher(1200)
+      boiler.phaseA(30)
       boiler.temperatures({ top: 46.9 })
-      boiler.run(20 * MIN, { dish: 1200, top: 46.9 })
+      boiler.run(20 * MIN, { main: 30, top: 46.9 })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'external_on' })
     })
 
@@ -518,14 +505,13 @@ describe('boiler-controller contactor feedback (#1912)', () => {
   })
 
   describe('the gates and a running element', () => {
-    test('a running element is never stopped by the dishwasher or the main power', () => {
+    test('a running element is never stopped by the phase A gate', () => {
       const boiler = startAt(DAY)
       boiler.temperatures({ top: IN_BAND })
       boiler.contactor(true)
       // The outside ON runs out after 2 h; the element is still on.
       boiler.run(121 * MIN, { top: IN_BAND })
-      boiler.dishwasher(1200)
-      boiler.mainPower(9000)
+      boiler.phaseA(30)
       boiler.temperatures({ top: 46.9 })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'comfort_heating_insufficient' })
     })
@@ -630,10 +616,9 @@ describe('boiler-controller contactor feedback (#1912)', () => {
   })
 
   describe('boost mode', () => {
-    test('starts at once in the night hold with the dishwasher running, and goes back to automatic when the bottom is at 50 °C', () => {
+    test('starts at once in the night hold with phase A high, and goes back to automatic when the bottom is at 50 °C', () => {
       const boiler = startAt(IN_HOLD)
-      boiler.dishwasher(1200)
-      boiler.mainPower(9000)
+      boiler.phaseA(30)
       boiler.temperatures({ top: 50 })
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
 

@@ -68,8 +68,8 @@ homy/features/relay/solar_heater_electric_heater/status # Solar controller elect
 The heater is **threshold-based**, with time rules around the night tariff zone: it does not heat in
 the hour before the zone (see [Night tariff hold](#night-tariff-hold)), and it heats the top to 55 °C
 just before that hour and in the night zone (see [Evening draw](#evening-draw-top-up-boost-and-start-on-a-draw)).
-It starts at once when a hot-water draw begins, also in the night tariff hold (#1976). It does not start while the
-dishwasher runs or the house load is high (see [Load stagger](#load-stagger)); a draw skips only the dishwasher wait (#1986). The legacy `boilerOnSchedule`
+It starts at once when a hot-water draw begins, also in the night tariff hold (#1976). It does not start while
+phase A, the element's phase, has no room for it (see [Load stagger](#load-stagger), #1987). The legacy `boilerOnSchedule`
 `solar-emitter` bot (ON at golden hour, OFF at nadir) was removed in `11ed714` and no longer exists.
 
 - **Type:** `boiler-controller` (`docker/automations/bots/boiler-controller.js`)
@@ -133,9 +133,8 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)); a
 
 Steps 3-14 are the automatic rules; "the element is on" in them is the real contactor state.
 After the rules, a start while the element is off waits when a [load stagger](#load-stagger) gate
-is closed (`load_wait_dishwasher` or `load_wait_main_power`), except `emergency_heating_top_cold`.
-So the gates apply to the top-up, the boost and the draw start too; the draw start skips only the
-dishwasher gate (#1986).
+is closed (`load_wait_phase_a`), except `emergency_heating_top_cold`.
+So the gate applies to the top-up, the boost and the draw start too.
 
 ### Control modes
 
@@ -272,7 +271,7 @@ the draw began, on `emergency_heating_bottom_cold` (#1911). Three rules fix this
   `emergencyMin`. It heats until the top reaches the target in force: 55 °C in the top-up and the
   boost, else `comfortMin + hysteresis` (50 °C). A draw seen while the top is still at that target
   waits: the element starts when the top falls under it. A draw that has not started the element
-  within `drawLatchMinutes` (30) is dropped, for example when the load gates held it back. So in the
+  within `drawLatchMinutes` (30) is dropped, for example when the load gate held it back. So in the
   day zone the rule starts the element only while the top is under 50 °C (before, it waited for 47 °C
   or a bottom under 30 °C). The bottom sensor sits low in the tank, near the cold inlet, where the cold inflow
   shows first. A new detection needs a new fall of 3 K from the reading that fired the last one. A
@@ -289,9 +288,9 @@ Details:
   on 2026-11-16 the element gave 0 kWh from 21:00 to 22:00 and the top fell to 19.8 °C. Now a draw in the
   hold starts the element and heats the top to the draw target (`comfortMin + hysteresis`, 50 °C), then
   the hold applies again. A draw seen with the top still at the target waits, as outside the hold. The
-  house-load cap applies; the dishwasher gate does not (#1986). Other starts still wait for the end of the hold; the night boost starts then.
-- **Load gates** apply to all three starts, like every automatic start except
-  `emergency_heating_top_cold`. The draw start skips the dishwasher gate (#1986).
+  phase A gate applies. Other starts still wait for the end of the hold; the night boost starts then.
+- **The load gate** applies to all three starts, like every automatic start except
+  `emergency_heating_top_cold`.
 - **Zone change days**: the windows follow the month's zone. On 1 April and 1 November the night
   that began the evening before is read with the new table, so the boost of that one night ends an
   hour late (1 April) or early (1 November).
@@ -374,65 +373,80 @@ element. Plan for one night (T is the night zone start: 22:00 in winter, 23:00 i
 |---|---|---|
 | T | Car charging starts | By hand (see below) |
 | T + 0:15 | Element may start | The night hold margin (`nightTariff.marginMinutes`, 15) |
-| T + 3:00 | Dishwasher starts | By hand: the dishwasher's delay timer |
+| Any time in the night zone | Dishwasher | By hand: the dishwasher's delay timer (it is on another phase) |
 | All night | Heat pump | Runs on its own |
 
-**Two gates.** The element does not **start** when:
+**The limit is per phase** (#1987). The house has a 3-pole 32 A breaker in front of its busbar, so
+each phase may carry 32 A. There is no known limit for the whole house. The element is on
+**phase A**; the dishwasher is on **phase C**. So the dishwasher does not change the room on phase A,
+and holding the element back for it only cost hot water.
 
-- **Dishwasher:** the dishwasher meter showed more than `dishwasherOnW` (10 W) in the last
-  `dishwasherHoldMs` (10 min). A cycle has pauses with almost no power. A short pause does not mean
-  the cycle is over.
-- **House load:** the mean of the main meter readings in the `mainPowerMeanMs` (5 min) up to the newest
-  reading is at or above `mainPowerCapW` (6000 W). 6 kW is a choice, because the size of the main breaker is not
-  known. A short spike does not block when the mean stays under the cap.
+Data of 12 months (2025-11-20 to 2026-11-20, 1-minute means of the main meter):
 
-When both apply, the reason is `load_wait_dishwasher`. When only the cap applies, it is
-`load_wait_main_power`. A draw start (`draw_heating`) skips the dishwasher gate, so for a draw the
-reason is `load_wait_main_power` when the cap applies, also while the dishwasher runs. The bot decides again when a reading changes a gate, so the element starts
-soon after the load is gone.
+- The highest 1-minute phase currents: A 29.7 A, B 32.1 A, C 23.5 A.
+- While the element and the dishwasher ran together: phase A at most 28.0 A, phase C at most 21.6 A.
+- The element never pushed phase A to 32 A. In the 9 minutes phase A was at 28.8 A (90 %) or more,
+  the element had started while phase A was low, and the oven came on later. A start gate cannot
+  catch that case, and it stayed under the limit.
 
-**The gates only block a start.** An element that is on is never switched off by them, whoever
+The 565 element starts of that year, with each gate checked on the 5–10 minutes before the start, as
+if it had been live all year (the wait is the time until the gate opens):
+
+| Gate | Starts held | Wait in all | Median / longest wait | 18:00–23:00 |
+|---|---|---|---|---|
+| Dishwasher (removed) | 95 | 86.2 h | 54 / 169 min | 42 starts, 42.0 h |
+| House mean 6 kW (removed) | 7 | 0.5 h | 3 / 11 min | 5 starts, 0.5 h |
+| Both together (before #1987) | 98 | 86.4 h | 53 / 169 min | 43 starts, 42.1 h |
+| **Phase A: mean + 12.5 A ≥ 32 A** | **0** | 0 | – | 0 |
+| Phase A, at 28.8 A (90 %) | 1 | 1 min | – | 1 |
+
+An evening wait was about 59 minutes on average. At about 2 kW that is about 2 kWh, close to one
+shower.
+
+**One gate: phase A.** The element does not **start** while the mean of phase A's current (`ac` on
+the main meter reading) over `phaseMeanMs` (5 min) up to the newest reading, plus `elementCurrentA`
+(12.5 A, the element's own current), is at or over `phaseLimitA` (32 A). That is a mean of 19.5 A or
+more. The reason is `load_wait_phase_a`. A short spike does not block when the mean stays under the
+limit. The bot decides again when a reading opens or closes the gate, so the element starts soon
+after the load falls.
+
+**The gate only blocks a start.** An element that is on is never switched off by it, whoever
 turned it on: the bot reads the real contactor state (#1912, see [Contactor feedback](#contactor-feedback)). The
-element itself adds about 2.9 kW to the main power. If the cap could stop it, it would switch on
+element itself adds about 12.5 A (2.9 kW) to phase A. If the gate could stop it, it would switch on
 and off.
 
 **Gated rules** (when the element is off and the rule would switch it on):
 `emergency_heating_bottom_cold`, the floor heating inside the night hold,
-`comfort_heating_insufficient`, `solar_insufficient_boost_needed`, and any other automatic start.
+`comfort_heating_insufficient`, `solar_insufficient_boost_needed`, `draw_heating`, the day top-up,
+the night boost, and any other automatic start.
 **Never gated:** `emergency_heating_top_cold` (the real low-top emergency),
-`safety_shutoff_overheated`, and the manual and vacation modes.
+`safety_shutoff_overheated`, boost, and the manual and vacation modes. The safety checks
+(`maxSafe`, old temperatures, the top limits) come before the gate.
 
-**A draw skips the dishwasher gate** (#1986). `draw_heating` starts the element while the
-dishwasher runs, also in the night hold. The house-load cap still applies to it. Why: a draw empties
-the tank now, and waiting for the dishwasher let the top fall far (2026-11-14: 29.7 °C, the top-cold
-emergency fired; 2026-11-16: 19.8 °C, while the draw waited for the dishwasher in the hold). The
-element and the dishwasher are on different phases, so the dishwasher gate does not protect a
-phase; the cap still limits the whole house load. Every other gated rule keeps the dishwasher gate.
+**Missing data never blocks.** If there is no phase reading, or the newest is older than
+`maxLoadInputAgeMs` (10 min, by the message's `_tz`), the gate is ignored (`capIgnored: true`). A
+reading without a number in `ac` is ignored. Only the start offset still applies.
 
-**Missing data never blocks.** If the newest main power reading is older than `maxLoadInputAgeMs`
-(10 min, by the message's `_tz`), the cap is ignored. An old dishwasher reading counts as "not
-running". A reading without a number is ignored. Only the start offset still applies.
-
-**Status.** The status message has `load: { mainPowerMeanW, dishwasherRunning, capIgnored }`. The
-mean is in whole watts, or `null` when there is no recent reading.
+**Status.** The status message has `load: { phaseAMeanA, capIgnored }`. The mean is in amperes with
+one decimal, or `null` when there is no reading in the window.
 
 **Hand settings** (homy cannot do these):
 
 - Car charger: homy has no control of it and it has no timer of its own (it has a meter only). Use
   the car's scheduled charging, if it has one, to start at T or later.
-- Dishwasher: set its delay timer so it starts at about T + 3:00.
+- Dishwasher: it may start any time in the night zone. It is on phase C, so it does not hold back
+  the element.
 
-**To change the values**, edit `dishwasherOnW`, `dishwasherHoldMs`, `mainPowerCapW`,
-`mainPowerMeanMs` and `maxLoadInputAgeMs` in `config/automations/boiler-controller-config.js`. The
-inputs are the topics `dishwasherTopic` (field `p`) and `mainPowerTopic` (field `total_p`). Without
-the topics the gates are off. The tests are in
-`docker/automations/bots/boiler-controller-load-stagger.test.js`.
+**To change the values**, edit `phaseLimitA`, `elementCurrentA`, `phaseMeanMs` and
+`maxLoadInputAgeMs` in `config/automations/boiler-controller-config.js`. The input is the topic
+`mainMeterTopic` (field `ac`, phase A's current in A). Without the topic the gate is off. The tests
+are in `docker/automations/bots/boiler-controller-load-stagger.test.js`.
 
 ### Contactor feedback
 
 On 2026-11-05 the contactor was turned on from the Home Assistant switch while hot water was being
 used. The bot took its own last command ("off") as the state, so 23 minutes later the dishwasher gate
-"held back a start" and switched the element off, while the tank emptied (#1912). Since then the bot
+(removed in #1987) "held back a start" and switched the element off, while the tank emptied (#1912). Since then the bot
 reads `contactorStatusTopic` and uses it as the state of the element.
 
 **Own commands.** Each command the bot sends comes back on the status topic. A change that matches a
