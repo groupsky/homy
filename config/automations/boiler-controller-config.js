@@ -85,6 +85,45 @@ module.exports = {
       boostBottomTarget: 50,
       boostTopLimit: 60,
       boostDurationMs: 2 * 60 * 60 * 1000,
+      // Baths ready (#1984): the status says how many baths the tank holds
+      // now and the minutes to one more. Only computed and published; no
+      // heating rule uses it. A bath is one shower: 65 L of 40 °C water at
+      // the tap (single draws: middle half 45-95 L).
+      bathLitres: 65,
+      bathTempC: 40,
+      // Cold water °C by month, January first: the lowest bottom reading in
+      // that month over three years (2023-11 to 2026-11). The real cold water
+      // may be a little colder.
+      coldWaterByMonth: [11.6, 9.8, 13.3, 12.9, 17.2, 19.9, 23.0, 23.9, 19.1, 17.1, 14.6, 13.1],
+      // The element's mean power while the controller asks for heat, by the
+      // water temperature at the element (it cuts out and cycles by itself
+      // as the water warms). The first row with the temperature under
+      // `belowC` counts; the last row has no limit.
+      elementPowerByTempKw: [
+        { belowC: 30, kw: 2.6 },
+        { belowC: 35, kw: 2.1 },
+        { belowC: 40, kw: 1.55 },
+        { belowC: 45, kw: 1.05 },
+        { kw: 0.75 }
+      ],
+      // The tank model: 184 L in 16 layers of 11.5 L over 1157 mm of water.
+      // Outlet in layer 14, element in layer 1 (layer 0 is the bottom),
+      // sensors 371 mm and 915 mm above the inside bottom. The cold inlet
+      // water mixes into the lowest layers (share of layer j:
+      // exp(-j / inletMixLayers)). maxTopC ends the heating simulation.
+      tankModel: {
+        litres: 184,
+        layers: 16,
+        heightMm: 1157,
+        outletLayer: 14,
+        elementLayer: 1,
+        bottomSensorMm: 371,
+        topSensorMm: 915,
+        inletMixLayers: 1.07,
+        maxTopC: 75
+      },
+      timeZone: 'Europe/Sofia', // the month of coldWaterByMonth
+      boostButtonName: 'Загрей целия бойлер', // the button below, in the sentence
       verbose: true
     }
   },

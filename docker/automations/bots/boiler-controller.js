@@ -1,5 +1,6 @@
 const { watchInputAge, DEFAULT_MAX_INPUT_AGE_MS } = require('../lib/input-age')
 const telegramAlert = require('../lib/telegram-alert')
+const boilerTank = require('../lib/boiler-tank')
 
 // The longest vacation_until: 60 days (#1756)
 const MAX_VACATION_UNTIL_MS = 60 * 24 * 60 * 60 * 1000
@@ -125,6 +126,27 @@ module.exports = (name, {
   commandConfirmMs = 60 * 1000,
   // When the first status goes out after start
   startupStatusDelayMs = 10 * 1000,
+  // Baths ready (#1984), only computed and published, never used to switch
+  // the element. A bath is bathLitres of water at bathTempC at the tap.
+  bathLitres = 65,
+  bathTempC = 40,
+  // Cold water °C by month, January first
+  coldWaterByMonth = [11.6, 9.8, 13.3, 12.9, 17.2, 19.9, 23.0, 23.9, 19.1, 17.1, 14.6, 13.1],
+  // Mean element power (kW) by the water temperature at the element: the
+  // first row with the temperature under `belowC`; the last row has none.
+  elementPowerByTempKw = [
+    { belowC: 30, kw: 2.6 },
+    { belowC: 35, kw: 2.1 },
+    { belowC: 40, kw: 1.55 },
+    { belowC: 45, kw: 1.05 },
+    { kw: 0.75 }
+  ],
+  // The layer geometry of the tank model; see lib/boiler-tank.js
+  tankModel = boilerTank.DEFAULT_TANK,
+  // The month of the cold water table is taken on this wall clock
+  timeZone = 'Europe/Sofia',
+  // The name of the boost button in the sentence
+  boostButtonName = 'Загрей целия бойлер',
   telegramWebhookUrl,
   httpPost,
   verbose
@@ -580,6 +602,34 @@ module.exports = (name, {
       }
     }
 
+    // Baths ready and minutes to one more (#1984). Old or missing top or
+    // bottom readings give no number at all, never an old one.
+    const bathStatus = () => {
+      const top = currentState.temperatureTop
+      const bottom = currentState.temperatureBottom
+      const fresh = !temperatures.isStale() && Number.isFinite(top) && Number.isFinite(bottom)
+      const cold = boilerTank.coldWaterAt(coldWaterByMonth, Date.now(), timeZone)
+      const heating = heaterOn()
+      const estimate = fresh
+        ? boilerTank.bathEstimate({
+          top,
+          bottom,
+          cold,
+          heating,
+          boostAllowed: boostLimitReason(top, bottom) === null,
+          bathLitres,
+          bathTempC,
+          elementPowerByTempKw,
+          tank: tankModel
+        })
+        : boilerTank.bathEstimate({})
+      return {
+        ...estimate,
+        bathText: boilerTank.bathSentence(estimate, boostButtonName),
+        bathInputs: estimate.bathsReady === null ? null : { top, bottom, cold }
+      }
+    }
+
     // The status for monitoring: heaterState is the real state of the element
     // (see heaterOn), contactorState the last contactor status (null: none
     // yet, or no feedback configured).
@@ -597,7 +647,8 @@ module.exports = (name, {
         ambient: currentState.ambientTemperature
       },
       solarCirculation: currentState.solarCirculation,
-      load: loadStatus()
+      load: loadStatus(),
+      ...bathStatus()
     })
 
     const updateHeaterState = () => {

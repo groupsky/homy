@@ -1068,6 +1068,26 @@ const config = {
       },
     }),
 
+    // Baths ready now and the minutes to one more, as a short Bulgarian
+    // sentence that the controller writes (#1984). Unknown while the boiler
+    // readings are old or missing: the controller then sends no sentence.
+    ...haSensor({
+      name: 'boilerBathsReady',
+      feature: 'boiler_baths_ready',
+      type: null,
+      config: {
+        name: 'Готова вода',
+        device: devices.boiler,
+        object_id: 'boiler_baths_ready',
+        unique_id: 'homy_boiler_baths_ready',
+        icon: 'mdi:shower-head',
+        state_topic: `homy/automation/boiler_controller/status`,
+        value_template: '{{ value_json.bathText if value_json.bathText else None }}',
+        json_attributes_topic: `homy/automation/boiler_controller/status`,
+        json_attributes_template: '{{ {"bathsReady": value_json.bathsReady, "usableLitres": value_json.usableLitres, "minutesToNextBath": value_json.minutesToNextBath, "boostMinutesToNextBath": value_json.boostMinutesToNextBath, "bathInputs": value_json.bathInputs} | tojson }}'
+      },
+    }),
+
     // The result of the last mode command as a short Bulgarian sentence, so
     // a refused boost or a manual_on that cannot heat yet says why (#1975).
     // The fields of lastCommand are the attributes.

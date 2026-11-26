@@ -310,6 +310,82 @@ Details:
 - Tests: `docker/automations/bots/boiler-controller-evening-draw.test.js` and
   `boiler-controller-whole-tank.test.js` (#1976), which read the committed config.
 
+### Baths ready (#1984)
+
+The status says how much hot water the tank holds, in baths. A **bath** is one shower: `bathLitres`
+(65 L) of water at `bathTempC` (40 °C) at the tap. Single draws in three years of one-minute history
+(2023-11 to 2026-11) were mostly 45–95 L (the middle half). One bath is
+`65 × 1.163 × (40 − cold) / 1000` kWh: about 2.0 kWh in winter (cold water 12–15 °C) and 1.3 kWh in
+summer (23 °C). These numbers are only computed and published: no heating rule, target or hold uses
+them, and they never send a relay command.
+
+**Model** (`docker/automations/lib/boiler-tank.js`, the "gradual profile"):
+
+1. The tank (`tankModel`): 184 L in 16 horizontal layers of 11.5 L over 1157 mm of water. The outlet
+   is in layer 14 (the layer above it is not drawn off), the element in layer 1, the bottom sensor
+   371 mm and the top sensor 915 mm above the inside bottom.
+2. Profile: a straight line through the two sensor readings, extended down to the bottom (never
+   colder than the cold water and never hotter than the hotter reading); above the top sensor, the
+   top reading.
+3. Usable water: a draw is simulated in 6 L steps until the outlet layer is under 40 °C. Each step
+   counts `6 × (outlet − cold) / (40 − cold)` litres at the tap. In each step the water moves up
+   towards the outlet, and the cold water mixes into the lowest layers (layer j takes the share
+   `exp(-j / 1.07)`, fitted from the data).
+4. Minutes to one more bath: every 5 minutes the element adds `power × 5 min` to its layer, and
+   any layer warmer than the one above mixes with it (warm water rises). This repeats until the
+   usable water has grown by one bath; no number after 10 h, or when the top layer reaches 75 °C.
+5. Element power (`elementPowerByTempKw`): the mean power while the controller asks for heat, by the
+   water temperature at the element. The element cuts out and cycles by itself as the water warms:
+   under 30 °C 2.6 kW, 30–35 °C 2.1 kW, 35–40 °C 1.55 kW, 40–45 °C 1.05 kW, over 45 °C 0.75 kW.
+6. Cold water (`coldWaterByMonth`, January first, °C): 11.6, 9.8, 13.3, 12.9, 17.2, 19.9, 23.0, 23.9,
+   19.1, 17.1, 14.6, 13.1. This is the lowest bottom reading of that month over three years; the
+   month is read on the `timeZone` wall clock.
+
+Examples (cold water 13 °C):
+
+| top °C | bottom °C | usable | baths | one more bath with the element on |
+|---|---|---|---|---|
+| 65 | 10 | 104 L | 1.6 | ~85 min |
+| 55 | 25 | 90 L | 1.4 | ~75 min |
+| 55 | 45 | 172 L | 2.6 | ~125 min |
+| 55 | 55 | 229 L | 3.5 | ~160 min |
+| 60 | 60 | 262 L | 4.0 | ~160 min |
+
+So one more bath takes about 60–95 min with a cold bottom and 2–2.5 h with a warm bottom. Boost does
+not make the element stronger, it only starts it now: the boost number is the same as the number
+with the element on.
+
+**Status fields** on `homy/automation/boiler_controller/status`:
+
+| field | meaning |
+|---|---|
+| `bathsReady` | usable litres ÷ `bathLitres`, one decimal |
+| `usableLitres` | litres of 40 °C water at the tap, whole litres |
+| `minutesToNextBath` | minutes to one more bath while the element runs; `null` when it does not run |
+| `boostMinutesToNextBath` | the same if a boost started the element now; `null` while the element runs, or when a boost would be refused (top at `boostTopLimit`, or bottom at `boostBottomTarget`) |
+| `bathInputs` | `{ top, bottom, cold }`: the values the numbers come from |
+| `bathText` | the Bulgarian sentence of the Home Assistant sensor |
+
+With old (see [Old input](#old-input)) or missing top or bottom readings, all these fields are `null`:
+never an old number. The numbers go out with every status: on each decision change and with the
+15-minute heartbeat, so they can be up to 15 minutes old. `automation-events-processor` does not write
+them to InfluxDB: it reads only its own named fields.
+
+**Limits.**
+
+- Compared with a full 16-layer model fitted to the same history (sensor error 0.8–2.8 K by month),
+  the gradual profile is off by 9 L (0.14 baths) on the mean, and says 8 L more on average.
+- Only two sensors: the shape between and below them is a guess. The bottom sensor sits in the
+  solar coil; while the solar pump runs it reads the coil, so the count is less exact then.
+- The cold water table is the lowest bottom reading of a month; the real cold water may be a little
+  colder, which gives a little less water than the model says.
+- The minutes assume nothing is drawn while the element heats, and the solar coil adds nothing.
+- A flow meter on the cold inlet is planned. It can give the drawn litres instead of this estimate;
+  `bathEstimate` in `lib/boiler-tank.js` is the one function to change for that.
+
+Tests: `docker/automations/lib/boiler-tank.test.js` (the table above, the sentence) and
+`docker/automations/bots/boiler-controller-baths.test.js` (the status, old and missing readings).
+
 ### Solar System (External Controller)
 - **External solar controller** manages solar heating logic independently
 - **Circulation pump** controlled directly by external controller
@@ -329,6 +405,11 @@ Details:
 - **Режим на управление** (select): the controller's mode, see [Control modes](#control-modes).
 - **Загрей целия бойлер** (button, "Загрей до 55 °C" before #1976): sends `{"mode": "boost"}` to the mode
   topic. The entity id stays `button.boiler_boost`.
+- **Готова вода** (sensor, #1984): `bathText` from the status, for example "Готови: 2 бани. С „Загрей
+  целия бойлер“ още една след ~35 мин." (element off, a boost would start it), "Готови: 1,5 бани. Още
+  една след ~40 мин." (element on) or "Готови: 3,5 бани." (element off, a boost would be refused). It
+  is unknown while the readings are old or missing. Its attributes are the numbers; see
+  [Baths ready](#baths-ready-1984).
 - **Последна команда** (sensor, #1975): the `lastCommand` result as a short Bulgarian sentence, for example
   "Загряването не започна: долу е 50.4 °C, целта е 50 °C." Its attributes are the fields of `lastCommand`.
 - **Контактор**: read only since #1912 (a binary sensor; it was a switch). The switch started the
