@@ -74,6 +74,7 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
     published: undefined,
     raw: undefined,
     inDip: false,
+    lastGood: undefined,
     before: undefined,
     seenChange: false,
     candidate: null,
@@ -144,6 +145,9 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
   const isDipStart = (module, value) =>
     value === 0 || (module.published !== undefined && countBits(value ^ module.published) >= minChangedBits)
 
+  // True when the module gave a good read in the last `maxHoldMs`.
+  const answers = (module, now) => module.lastGood !== undefined && now - module.lastGood < maxHoldMs
+
   const startDip = (module, entry, device, now) => {
     const first = !dip
     if (first) dip = { startTz: now, readings: [], lastLog: now, real: false, held: [] }
@@ -158,7 +162,8 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
     if (entry.inputs === 0) markReal()
     else hold(entry, device)
     for (const m of modules.values()) {
-      if (m.inDip) continue
+      // A module with no recent good read would keep a false dip open for ever.
+      if (m.inDip || (m !== module && !answers(m, now))) continue
       m.inDip = true
       m.deferred = null
       m.before = m.published
@@ -191,11 +196,31 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
       hold(entry, device)
     }
     if (others) return
+    finishDip(now)
+  }
+
+  // Called when no module is in the dip any more.
+  function finishDip (now) {
     settle()
     log(`power dip end after ${now - dip.startTz} ms: ${[...modules.values()]
       .map((m) => `${m.name} ${hex(m.published)} (before ${hex(m.before)})`).join(', ')}, ${dip.readings.length} readings held`)
     publishEvent(event('end', now))
     dip = null
+  }
+
+  // A module that stopped answering must not keep a dip open: after
+  // `maxHoldMs` with no good read it leaves the dip, and the dip ends when
+  // no other module is in it (a false dip then publishes what it held).
+  const expireSilent = (now) => {
+    if (!dip) return
+    let left = false
+    for (const m of modules.values()) {
+      if (m.inDip && !answers(m, now)) {
+        m.inDip = false
+        left = true
+      }
+    }
+    if (left && ![...modules.values()].some((m) => m.inDip)) finishDip(now)
   }
 
   const readInDip = (module, value, previous, entry, device, now) => {
@@ -278,6 +303,8 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
       const value = val != null ? val.inputs : module.raw
       if (value === undefined) return
       module.raw = value
+      module.lastGood = now
+      expireSilent(now)
       // Every published reading is a full one, also when the driver had
       // nothing new: the end of a dip publishes the current value.
       const entry = val != null ? Object.assign(val, meta) : null
@@ -292,6 +319,7 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
 
     /** A failed read: it neither confirms a held change nor ends a dip. */
     onReadError (device, now) {
+      expireSilent(now)
       release(now)
       logIfLong(now)
     },

@@ -238,6 +238,31 @@ describe('power dip guard in the dry-switches reader', () => {
     expect(reader.events()).toEqual([])
   })
 
+  it('does not keep a false dip open for a module that never answers', async () => {
+    const reader = startReader({
+      di1: timeline(0xffa8001f, [[DIP, 0xffa80018], [DIP + 20000, 0xffa80019]]),
+      di2: () => 'timeout',
+    })
+    // maxHoldMs is 10 s; the reader's reconnect pauses make the reads rare
+    await reader.run(DIP + 16000)
+    // the 3-bit change is not lost
+    expect(reader.inputs('mbsl32di1')).toEqual([0xffa8001f, 0xffa80018])
+    await reader.run(15000)
+    // a later 1-bit change is published again (not held for ever)
+    expect(reader.inputs('mbsl32di1')).toEqual([0xffa8001f, 0xffa80018, 0xffa80019])
+    expect(reader.readings('mbsl32di1').every((p) => p.at - (p._tz - T0) < 12000)).toBe(true)
+  })
+
+  it('ends a false dip when the other module stops answering during it', async () => {
+    const reader = startReader({
+      di1: timeline(0xffa8001f, [[DIP, 0xffa80018], [DIP + 20000, 0xffa80019]]),
+      di2: timeline(0x00302c93, [[DIP - 5, 'timeout']]),
+    })
+    await reader.run(DIP + 40000)
+    expect(reader.inputs('mbsl32di1')).toEqual([0xffa8001f, 0xffa80018, 0xffa80019])
+    expect(reader.readings('mbsl32di1').every((p) => p.at - (p._tz - T0) < 20000)).toBe(true)
+  })
+
   it('publishes a single switch change after at most one extra poll pass', async () => {
     const reader = startReader({
       di1: timeline(0xffa8001f, [[DIP, 0xffa8001e], [DIP + 500, 0xffa8001f]]),
