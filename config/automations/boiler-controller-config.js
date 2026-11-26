@@ -44,7 +44,7 @@ module.exports = {
       // (19:30-21:00 in winter, 20:30-22:00 in summer, at day price) and again
       // from the end of the hold to the end of the night zone. 55 °C is the
       // limit while there is no mixing valve (#1473); `hotWaterLimit` caps
-      // these targets.
+      // these targets. A draw in the hold also starts the element (#1976).
       hotWaterLimit: 55,
       dayTopUp: { minutesBeforeHold: 90, target: 55 },
       nightBoostTarget: 55,
@@ -74,8 +74,16 @@ module.exports = {
       contactorStatusTopic: `${featuresPrefix}/relay/service_boiler_contactor/status`,
       externalOnMaxMs: 2 * 60 * 60 * 1000,
       externalOffHoldMs: 30 * 60 * 1000,
-      // The `boost` mode (the Home Assistant button "Загрей до 55 °C") heats the
-      // top to hotWaterLimit now, for at most 2 h, then goes back to automatic.
+      // The `boost` mode (the Home Assistant button "Загрей целия бойлер") and
+      // `manual_on` heat the whole tank (#1976): they heat until the bottom
+      // reaches `boostBottomTarget` and stop when the top reaches
+      // `boostTopLimit`. The top may get hotter than the 55 °C of the
+      // automatic rules, so only a person starts it; 60 °C is the hard cap at
+      // the top. Boost runs at most 2 h, then goes back to automatic. The
+      // bottom sensor sits in the solar coil: while the solar pump runs it
+      // reads the coil, so a boost may end early then.
+      boostBottomTarget: 50,
+      boostTopLimit: 60,
       boostDurationMs: 2 * 60 * 60 * 1000,
       verbose: true
     }

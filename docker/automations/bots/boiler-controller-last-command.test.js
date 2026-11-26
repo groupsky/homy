@@ -51,7 +51,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
   })
 
   describe('boost', () => {
-    test.each([55, 56.2])('is refused with the top at %s °C: the mode does not change', (value) => {
+    test.each([60, 61.5])('is refused with the top at %s °C: the mode does not change', (value) => {
       start()
       top(value)
       const relayBefore = lastRelay()
@@ -63,7 +63,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
       expect(lastStatus()).toEqual({
         mode: 'automatic',
         manualOverrideExpires: null,
-        lastCommand: { mode: 'boost', result: 'refused', reason: 'top_at_limit', top: value, limit: 55, at: NOW }
+        lastCommand: { mode: 'boost', result: 'refused', reason: 'top_at_limit', top: value, bottom: null, limit: 60, bottomTarget: 50, at: NOW }
       })
       // One status, one result, and no new heater command
       expect(statuses().length).toBe(from + 1)
@@ -75,7 +75,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
       top(50)
       command('manual_off')
       const expires = persistedCache.manualOverrideExpires
-      top(56)
+      top(60)
       command('boost')
 
       expect(persistedCache).toMatchObject({ controlMode: 'manual_off', manualOverrideExpires: expires })
@@ -88,14 +88,14 @@ describe('boiler-controller lastCommand (#1975)', () => {
 
     test('is applied under the limit and heats', () => {
       start()
-      top(54.9)
+      top(59.9)
       const from = statuses().length
       command('boost')
 
       expect(persistedCache.controlMode).toBe('boost')
       expect(lastRelay()).toMatchObject({ state: true, reason: 'manual_boost' })
       expect(resultsSince(from)).toEqual([
-        { mode: 'boost', result: 'applied', reason: 'ok', top: 54.9, limit: 55, at: NOW }
+        { mode: 'boost', result: 'applied', reason: 'ok', top: 59.9, bottom: null, limit: 60, bottomTarget: 50, at: NOW }
       ])
       expect(lastStatus()).toMatchObject({ mode: 'boost', manualOverrideExpires: NOW + 2 * HOUR })
     })
@@ -105,7 +105,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
       command('boost')
 
       expect(persistedCache.controlMode).toBe('boost')
-      expect(lastStatus().lastCommand).toEqual({ mode: 'boost', result: 'applied', reason: 'ok', top: null, limit: 55, at: NOW })
+      expect(lastStatus().lastCommand).toEqual({ mode: 'boost', result: 'applied', reason: 'ok', top: null, bottom: null, limit: 60, bottomTarget: 50, at: NOW })
     })
 
     test('the result stays when the boost ends at the limit later', () => {
@@ -113,7 +113,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
       top(50)
       command('boost')
       jest.advanceTimersByTime(60 * 1000)
-      top(55)
+      top(60)
 
       expect(lastStatus().mode).toBe('automatic')
       expect(lastStatus().lastCommand).toMatchObject({ mode: 'boost', result: 'applied', at: NOW })
@@ -123,7 +123,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
   describe('manual_on', () => {
     test('at the limit is applied, with reason top_at_limit; the element stays off', () => {
       start()
-      top(56.1)
+      top(60.1)
       const from = statuses().length
       command('manual_on')
 
@@ -131,7 +131,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
       expect(lastRelay()).toMatchObject({ state: false })
       expect(lastRelay().reason).toMatch(/^manual_on_limit_reached/)
       expect(resultsSince(from)).toEqual([
-        { mode: 'manual_on', result: 'applied', reason: 'top_at_limit', top: 56.1, limit: 55, at: NOW }
+        { mode: 'manual_on', result: 'applied', reason: 'top_at_limit', top: 60.1, bottom: null, limit: 60, bottomTarget: 50, at: NOW }
       ])
     })
 
@@ -141,17 +141,17 @@ describe('boiler-controller lastCommand (#1975)', () => {
       command({ mode: 'manual_on', duration: HOUR })
 
       expect(lastRelay()).toMatchObject({ state: true })
-      expect(lastStatus().lastCommand).toEqual({ mode: 'manual_on', result: 'applied', reason: 'ok', top: 43, limit: 55, at: NOW })
+      expect(lastStatus().lastCommand).toEqual({ mode: 'manual_on', result: 'applied', reason: 'ok', top: 43, bottom: null, limit: 60, bottomTarget: 50, at: NOW })
     })
   })
 
   test.each(['automatic', 'manual_off', 'vacation_3d'])('%s is applied with reason ok, even at the limit', (mode) => {
     start()
-    top(56)
+    top(60)
     command(mode)
 
     expect(persistedCache.controlMode).toBe(mode)
-    expect(lastStatus().lastCommand).toEqual({ mode, result: 'applied', reason: 'ok', top: 56, limit: 55, at: NOW })
+    expect(lastStatus().lastCommand).toEqual({ mode, result: 'applied', reason: 'ok', top: 60, bottom: null, limit: 60, bottomTarget: 50, at: NOW })
   })
 
   test('vacation_until with a valid time is applied', () => {
@@ -177,7 +177,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
     expect(statuses().length).toBe(from + 1)
     expect(lastStatus()).toMatchObject({
       mode: 'manual_off',
-      lastCommand: { mode: 'vacation_until', result: 'refused', reason: 'invalid_until', top: 50, limit: 55, at: NOW }
+      lastCommand: { mode: 'vacation_until', result: 'refused', reason: 'invalid_until', top: 50, bottom: null, limit: 60, bottomTarget: 50, at: NOW }
     })
   })
 
@@ -197,7 +197,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
     expect(lastStatus()).toEqual({
       mode: 'automatic',
       manualOverrideExpires: null,
-      lastCommand: { mode, result: 'refused', reason: 'unknown_mode', top: 50, limit: 55, at: NOW }
+      lastCommand: { mode, result: 'refused', reason: 'unknown_mode', top: 50, bottom: null, limit: 60, bottomTarget: 50, at: NOW }
     })
   })
 
@@ -209,7 +209,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
 
   test('the result goes out with later statuses', () => {
     start()
-    top(56)
+    top(60)
     command('boost')
     const result = lastStatus().lastCommand
     jest.advanceTimersByTime(10 * 60 * 1000)
@@ -235,7 +235,7 @@ describe('Home Assistant sensor for the last mode command (#1975)', () => {
       default_entity_id: 'sensor.boiler_controller_last_command'
     })
     // A sentence for each result and reason
-    for (const word of ['refused', 'top_at_limit', 'invalid_until', 'unknown_mode']) {
+    for (const word of ['refused', 'top_at_limit', 'bottom_at_target', 'invalid_until', 'unknown_mode']) {
       expect(payload.value_template).toContain(word)
     }
   })

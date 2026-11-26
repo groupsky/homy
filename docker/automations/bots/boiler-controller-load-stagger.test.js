@@ -630,7 +630,7 @@ describe('boiler-controller contactor feedback (#1912)', () => {
   })
 
   describe('boost mode', () => {
-    test('starts at once in the night hold with the dishwasher running, and goes back to automatic at 55 °C', () => {
+    test('starts at once in the night hold with the dishwasher running, and goes back to automatic when the bottom is at 50 °C', () => {
       const boiler = startAt(IN_HOLD)
       boiler.dishwasher(1200)
       boiler.mainPower(9000)
@@ -641,9 +641,9 @@ describe('boiler-controller contactor feedback (#1912)', () => {
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })
       expect(boiler.modeStatus()).toMatchObject({ mode: 'boost', manualOverrideExpires: Date.now() + 120 * MIN })
 
-      boiler.temperatures({ top: 54.9 })
+      boiler.temperatures({ top: 58, bottom: 49.9 })
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })
-      boiler.temperatures({ top: 55 })
+      boiler.temperatures({ top: 58, bottom: 50 })
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
       expect(boiler.modeStatus()).toMatchObject({ mode: 'automatic', manualOverrideExpires: null })
     })
@@ -678,17 +678,17 @@ describe('boiler-controller contactor feedback (#1912)', () => {
   })
 
   describe('manual_on mode', () => {
-    test('stops at 55 °C and starts again under 52 °C; the mode stays', () => {
+    test('stops at 60 °C at the top and starts again under 57 °C; the mode stays (#1976)', () => {
       const boiler = startAt(DAY, { controlMode: 'manual_on' })
       boiler.temperatures({ top: 50 })
       expect(boiler.relay().state).toBe(true)
       expect(boiler.relay().reason).toMatch(/^manual_on \(/)
-      boiler.temperatures({ top: 55 })
+      boiler.temperatures({ top: 60 })
       expect(boiler.relay().state).toBe(false)
       expect(boiler.relay().reason).toMatch(/^manual_on_limit_reached/)
-      boiler.temperatures({ top: 52 })
+      boiler.temperatures({ top: 57 })
       expect(boiler.relay().state).toBe(false)
-      boiler.temperatures({ top: 51.9 })
+      boiler.temperatures({ top: 56.9 })
       expect(boiler.relay().state).toBe(true)
       expect(boiler.relay().reason).toMatch(/^manual_on \(/)
       expect(boiler.modeStatus().mode).toBe('manual_on')
