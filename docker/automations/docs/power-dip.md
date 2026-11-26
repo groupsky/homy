@@ -38,7 +38,13 @@ publishes every reading at once, as before.
 - A real change of 3 or more inputs at once (a palm on a 3-gang plate) is
   taken as a dip and is published after `stableMs`: late, not lost. If the
   inputs go back to the value from before within that time (3 buttons
-  pressed and let go together), the press is not published.
+  pressed and let go together), the press and the release are still
+  published, late and in order.
+- **False dip** (no module read 0 during the dip; a real dip always reads
+  `inputs: 0` within about 40 ms): when it ends, the changes held or
+  collected during it are published late, in read order, each with its own
+  `_tz`. A false dip may only delay a change, never drop it. In a real dip
+  (a module read 0) they are not published.
 - **Dip event** on `/modbus/dry-switches/power-dip/reading`:
   `{state: 'start' | 'end', _tz, durationMs, readings}`, with up to 20 held
   raw readings. mqtt-influx stores it in measurement `power_dip`. The held

@@ -302,6 +302,9 @@ the listed devices, also failed ones and ones with no change, to
 - a dip event `{state, _tz, durationMs, readings}` goes to
   `/modbus/dry-switches/power-dip/reading` (not to the reader's own
   `influxdb` integration; mqtt-influx stores it as `power_dip`);
+- a false dip (no module read 0) only delays: when it ends, the held changes
+  are published late, in read order, each with its own `_tz`; in a real dip
+  (a module read 0) they are dropped;
 - held dip readings are only in the dip event, not in the raw archives;
 - a listed module that never answers delays the other's changes by `stableMs`,
   and no change is held longer than `maxHoldMs` (10 s);
