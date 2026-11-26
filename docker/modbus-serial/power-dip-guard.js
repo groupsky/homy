@@ -16,7 +16,10 @@
  *   confirmed it, the others are waited for at most `stableMs`. No change
  *   is held longer than `maxHoldMs`.
  *   The change keeps its own `_tz`.
- * - During a dip nothing is published for any guarded module.
+ * - During a dip nothing is published for any guarded module. If no module
+ *   read 0 by the end (a false dip), the held and collected changes are then
+ *   published late, in read order, each with its own `_tz`: a false dip may
+ *   only delay a change, never drop it.
  * - Dip end, per module: the reading equals the value from before the dip
  *   (after the module showed a change), or a non-zero reading has not
  *   changed for `stableMs`. A reading of 0 never ends a dip, and a failed
@@ -74,11 +77,16 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
     before: undefined,
     seenChange: false,
     candidate: null,
+    deferred: null,
   }]))
 
   // Held changes in read order: {entry, device, heldAt, waitFor: Set of names}
   let queue = []
-  // The running dip: {startTz, readings, lastLog}, or null
+  // The running dip: {startTz, readings, lastLog, real, held}, or null.
+  // `real` is set when any module read 0 (a real dip always does); `held` are
+  // the changes of the dip in read order, [{entry, device}], kept until the
+  // dip is known to be real (then dropped) or ends as a false one (then
+  // published late).
   let dip = null
 
   const publish = (module, entry, device) => {
@@ -89,6 +97,34 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
   const describe = () => [...modules.values()]
     .map((m) => `${m.name} ${hex(m.inDip ? m.before : m.published)} -> ${hex(m.raw)}`)
     .join(', ')
+
+  const hold = (entry, device) => {
+    if (!dip.real) dip.held.push({ entry, device })
+  }
+
+  const markReal = () => {
+    dip.real = true
+    dip.held = []
+  }
+
+  // A false dip (no module read 0) may only delay a change, never drop it.
+  // Called when the last module ended: `dip.real` is final now.
+  const settle = () => {
+    if (dip.real) {
+      // A module that ended before the dip turned out real gets its current
+      // value back, once, if it is not the value last published for it.
+      for (const m of modules.values()) {
+        if (m.deferred && m.deferred.entry.inputs !== m.published) publish(m, m.deferred.entry, m.deferred.device)
+      }
+    } else {
+      for (const { entry, device } of dip.held) {
+        const m = modules.get(device.name)
+        if (entry.inputs !== m.published) publish(m, entry, device)
+      }
+    }
+    dip.held = []
+    for (const m of modules.values()) m.deferred = null
+  }
 
   const addReading = (entry) => {
     if (dip.readings.length < maxReadings) {
@@ -108,16 +144,23 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
   const isDipStart = (module, value) =>
     value === 0 || (module.published !== undefined && countBits(value ^ module.published) >= minChangedBits)
 
-  const startDip = (module, entry, now) => {
+  const startDip = (module, entry, device, now) => {
     const first = !dip
-    if (first) dip = { startTz: now, readings: [], lastLog: now }
-    // Changes still held are part of the dip: they are never published as such.
-    for (const held of queue) addReading(held.entry)
+    if (first) dip = { startTz: now, readings: [], lastLog: now, real: false, held: [] }
+    // Changes still held are part of the dip. They are published late only if
+    // the dip ends with no module reading 0 (a false dip).
+    for (const held of queue) {
+      addReading(held.entry)
+      hold(held.entry, held.device)
+    }
     queue = []
     addReading(entry)
+    if (entry.inputs === 0) markReal()
+    else hold(entry, device)
     for (const m of modules.values()) {
       if (m.inDip) continue
       m.inDip = true
+      m.deferred = null
       m.before = m.published
       m.seenChange = false
       m.candidate = m.raw ? { value: m.raw, since: now } : null
@@ -134,8 +177,21 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
 
   const endModule = (module, entry, device, now) => {
     module.inDip = false
-    publish(module, entry, device)
-    if ([...modules.values()].some((m) => m.inDip)) return
+    const others = [...modules.values()].some((m) => m.inDip)
+    if (!dip.real && others) {
+      // Not known to be real yet: keep the ending reading with the held ones.
+      module.deferred = { entry, device }
+      if (!dip.held.some((h) => h.entry === entry)) hold(entry, device)
+      return
+    }
+    if (dip.real) {
+      publish(module, entry, device)
+    } else {
+      module.deferred = { entry, device }
+      hold(entry, device)
+    }
+    if (others) return
+    settle()
     log(`power dip end after ${now - dip.startTz} ms: ${[...modules.values()]
       .map((m) => `${m.name} ${hex(m.published)} (before ${hex(m.before)})`).join(', ')}, ${dip.readings.length} readings held`)
     publishEvent(event('end', now))
@@ -144,7 +200,11 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
 
   const readInDip = (module, value, previous, entry, device, now) => {
     // Only a new value is kept for the dip event, not the driver's periodic report.
-    if (value !== previous) addReading(entry)
+    if (value !== previous) {
+      addReading(entry)
+      if (value === 0) markReal()
+      else hold(entry, device)
+    }
     if (value !== module.before) module.seenChange = true
     if (!module.candidate || module.candidate.value !== value) {
       module.candidate = value !== 0 ? { value, since: now } : null
@@ -155,8 +215,17 @@ function createPowerDipGuard (config, { publishReading, publishEvent, log = cons
   }
 
   const readNormal = (module, value, entry, device, now) => {
+    if (dip && !dip.real && module.deferred && value !== 0) {
+      // This module ended its part of a dip that is not over: keep the order.
+      // A 0 is not held: it goes on to isDipStart, which makes the dip real.
+      if (entry) {
+        hold(entry, device)
+        module.deferred = { entry, device }
+      }
+      return
+    }
     if (entry && isDipStart(module, value)) {
-      startDip(module, entry, now)
+      startDip(module, entry, device, now)
       return
     }
     // A good read with no dip start confirms the changes held before it.
