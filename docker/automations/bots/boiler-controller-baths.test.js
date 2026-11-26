@@ -34,8 +34,13 @@ const startAt = (localIso) => {
     mqtt,
     persistedCache: { controlMode: 'automatic', manualOverrideExpires: null }
   })
-  subscriptions.get(CONFIG.contactorStatusTopic)({ state: false })
-  const deliver = (topic, payload) => subscriptions.get(topic)(payload)
+  const deliver = (topic, payload) => {
+    const callback = subscriptions.get(topic)
+    if (typeof callback !== 'function') throw new Error(`no subscription for ${topic}`)
+    callback(payload)
+  }
+  // The contactor status is retained, so it comes at once after the start.
+  deliver(CONFIG.contactorStatusTopic, { state: false })
   return {
     temperatures: ({ top, bottom }) => {
       deliver(CONFIG.temperatureBottomTopic, { state: bottom })
