@@ -92,6 +92,19 @@ describe('influxdb close', () => {
     expect(bodies[0]).toContain('v=230')
   })
 
+  it('closes at once after a point with no fields, which the client drops', async () => {
+    const {publish, close} = create()
+
+    publish({device: 'main', _type: 'sdm630', _addr: 1, _tz: 1700000000000, _ms: 5})
+    const result = await Promise.race([
+      close().then(() => 'closed', (e) => `rejected: ${e.message}`),
+      new Promise((resolve) => setTimeout(() => resolve('still waiting'), 1000)),
+    ])
+
+    expect(result).toBe('closed')
+    expect(bodies).toHaveLength(0)
+  })
+
   it('sends a point that waits for a retry', async () => {
     statuses = [503, 204]
     const {publish, close} = create()

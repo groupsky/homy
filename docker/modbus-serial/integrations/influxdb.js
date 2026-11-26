@@ -97,6 +97,9 @@ module.exports = ({
     // bytes became 12 fields _id.buffer.0 to _id.buffer.11 (#1778).
     mapObject('', entry, point, ['device', '_type', '_addr', '_ms', '_tz', '_id'])
 
+    // The client drops a point with no fields without any callback, so it
+    // is not counted: close() would wait for it until the deadline.
+    if (!point.toLineProtocol()) return
     published++
     writeApi.writePoint(point)
   }
