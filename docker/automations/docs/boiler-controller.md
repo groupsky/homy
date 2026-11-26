@@ -134,7 +134,8 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
 Steps 3-14 are the automatic rules; "the element is on" in them is the real contactor state.
 After the rules, a start while the element is off waits when a [load stagger](#load-stagger) gate
 is closed (`load_wait_dishwasher` or `load_wait_main_power`), except `emergency_heating_top_cold`.
-So the gates apply to the top-up, the boost and the draw start too.
+So the gates apply to the top-up, the boost and the draw start too; the draw start skips only the
+dishwasher gate (#1986).
 
 ### Control modes
 
@@ -288,9 +289,9 @@ Details:
   on 2026-11-16 the element gave 0 kWh from 21:00 to 22:00 and the top fell to 19.8 °C. Now a draw in the
   hold starts the element and heats the top to the draw target (`comfortMin + hysteresis`, 50 °C), then
   the hold applies again. A draw seen with the top still at the target waits, as outside the hold. The
-  load gates apply. Other starts still wait for the end of the hold; the night boost starts then.
+  house-load cap applies; the dishwasher gate does not (#1986). Other starts still wait for the end of the hold; the night boost starts then.
 - **Load gates** apply to all three starts, like every automatic start except
-  `emergency_heating_top_cold`.
+  `emergency_heating_top_cold`. The draw start skips the dishwasher gate (#1986).
 - **Zone change days**: the windows follow the month's zone. On 1 April and 1 November the night
   that began the evening before is read with the new table, so the boost of that one night ends an
   hour late (1 April) or early (1 November).
@@ -386,7 +387,8 @@ element. Plan for one night (T is the night zone start: 22:00 in winter, 23:00 i
   known. A short spike does not block when the mean stays under the cap.
 
 When both apply, the reason is `load_wait_dishwasher`. When only the cap applies, it is
-`load_wait_main_power`. The bot decides again when a reading changes a gate, so the element starts
+`load_wait_main_power`. A draw start (`draw_heating`) skips the dishwasher gate, so for a draw the
+reason is `load_wait_main_power` when the cap applies, also while the dishwasher runs. The bot decides again when a reading changes a gate, so the element starts
 soon after the load is gone.
 
 **The gates only block a start.** An element that is on is never switched off by them, whoever
@@ -399,6 +401,13 @@ and off.
 `comfort_heating_insufficient`, `solar_insufficient_boost_needed`, and any other automatic start.
 **Never gated:** `emergency_heating_top_cold` (the real low-top emergency),
 `safety_shutoff_overheated`, and the manual and vacation modes.
+
+**A draw skips the dishwasher gate** (#1986). `draw_heating` starts the element while the
+dishwasher runs, also in the night hold. The house-load cap still applies to it. Why: a draw empties
+the tank now, and waiting for the dishwasher let the top fall far (2026-11-14: 29.7 °C, the top-cold
+emergency fired; 2026-11-16: 19.8 °C, while the draw waited for the dishwasher in the hold). The
+element and the dishwasher are on different phases, so the dishwasher gate does not protect a
+phase; the cap still limits the whole house load. Every other gated rule keeps the dishwasher gate.
 
 **Missing data never blocks.** If the newest main power reading is older than `maxLoadInputAgeMs`
 (10 min, by the message's `_tz`), the cap is ignored. An old dishwasher reading counts as "not

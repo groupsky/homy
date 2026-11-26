@@ -313,13 +313,19 @@ module.exports = (name, {
     // low-top emergency; the overheat shut-off and the manual and vacation
     // modes never reach the gate (they are not starts by an automatic rule).
     const LOAD_EXEMPT_REASONS = ['emergency_heating_top_cold']
+    // Reasons that skip only the dishwasher gate; the cap still applies. A draw
+    // empties the tank now, and the element and the dishwasher are on
+    // different phases (#1986).
+    const DISHWASHER_EXEMPT_REASONS = ['draw_heating']
 
     // The one place the gates apply: an automatic rule that would switch the
     // element on while it is off. A running element is never stopped here.
     const gateStart = (result) => {
       if (!result.decision || heaterOn() || LOAD_EXEMPT_REASONS.includes(result.reason)) return result
       const { dishwasherRunning, capExceeded } = loadInputs()
-      if (dishwasherRunning) return { decision: false, reason: 'load_wait_dishwasher' }
+      if (dishwasherRunning && !DISHWASHER_EXEMPT_REASONS.includes(result.reason)) {
+        return { decision: false, reason: 'load_wait_dishwasher' }
+      }
       if (capExceeded) return { decision: false, reason: 'load_wait_main_power' }
       return result
     }
@@ -523,7 +529,7 @@ module.exports = (name, {
       // element tops the tank up in the cheaper night zone instead. A top
       // under the floor still heats, up to the floor plus the hysteresis.
       // A draw in the hold still starts the element (#1976): the evening
-      // baths fall in the hold. The load gates apply to it.
+      // baths fall in the hold. The cap applies to it, the dishwasher gate does not (#1986).
       const holdFrom = nightTariff && nightTariff.floor + (heaterOn() ? hysteresis : 0)
       if (temperatureTop !== null && periodsAt(now).hold && temperatureTop >= holdFrom) {
         if (drawStart) return { decision: true, reason: 'draw_heating' }
@@ -551,7 +557,7 @@ module.exports = (name, {
       }
 
       // Start on a draw, before the top cools: the element is then already
-      // running while the tank empties (#1911). The load gates apply.
+      // running while the tank empties (#1911). The cap applies, the dishwasher gate does not (#1986).
       if (drawStart) {
         return { decision: true, reason: 'draw_heating' }
       }

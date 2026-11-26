@@ -96,11 +96,28 @@ describe('boiler-controller: heat during the evening baths and the whole tank (#
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
     })
 
-    test('the dishwasher gate holds it back', () => {
+    // A draw skips the dishwasher gate (#1986): the 2026-11-16 case.
+    test('starts while the dishwasher runs', () => {
       const boiler = startAt(IN_HOLD)
       boiler.dishwasher(1200)
       boiler.temperatures({ top: 48, bottom: 45 })
       draw(boiler, 48)
+      expect(boiler.relay()).toMatchObject({ state: true, reason: 'draw_heating' })
+    })
+
+    test('waits for the cap while the dishwasher runs', () => {
+      const boiler = startAt(IN_HOLD)
+      boiler.dishwasher(1200)
+      boiler.mainPower(9000)
+      boiler.temperatures({ top: 48, bottom: 45 })
+      draw(boiler, 48)
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
+    })
+
+    test('without a draw, the dishwasher still holds back the floor heating in the hold', () => {
+      const boiler = startAt(IN_HOLD)
+      boiler.dishwasher(1200)
+      boiler.temperatures({ top: 38, bottom: 37 })
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
     })
 
