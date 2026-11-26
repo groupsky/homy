@@ -99,14 +99,13 @@ module.exports = (name, {
   drawWindowMinutes = 10,
   // A draw that has not started the element within this time is dropped.
   drawLatchMinutes = 30,
-  // Load stagger: the element does not start while the dishwasher runs or the
-  // main meter's recent mean power is high. Both gates are off without topics.
-  dishwasherTopic,
-  mainPowerTopic,
-  dishwasherOnW = 10,
-  dishwasherHoldMs = 10 * 60 * 1000,
-  mainPowerCapW = 6000,
-  mainPowerMeanMs = 5 * 60 * 1000,
+  // Load gate (#1987): the element does not start while phase A's recent mean
+  // current plus the element's own current is at or over the phase limit.
+  // The element is on phase A. The gate is off without the topic.
+  mainMeterTopic,
+  phaseLimitA = 32,
+  elementCurrentA = 12.5,
+  phaseMeanMs = 5 * 60 * 1000,
   maxLoadInputAgeMs = 10 * 60 * 1000,
   maxInputAgeMs = DEFAULT_MAX_INPUT_AGE_MS,
   // Contactor feedback (#1912): the contactor status topic gives the real
@@ -279,63 +278,46 @@ module.exports = (name, {
     // Load inputs. Times are the message's own `_tz` (the time of the reading),
     // or now when it has none. A time in the future counts as now. A reading without a numeric field is ignored.
     const readingTime = (payload) => typeof payload?._tz === 'number' ? Math.min(payload._tz, Date.now()) : Date.now()
-    let mainReadings = [] // { at, watts } within the mean window
-    let newestMainAt = null
-    let lastDishwasherLoadAt = null
-    let newestDishwasherAt = null
+    let phaseReadings = [] // { at, amps } of phase A within the mean window
+    let newestPhaseAt = null
 
     const loadInputs = () => {
       const now = Date.now()
       // The window ends at the newest reading, so a short silence keeps the mean.
-      if (newestMainAt !== null) mainReadings = mainReadings.filter(({ at }) => at >= newestMainAt - mainPowerMeanMs)
+      if (newestPhaseAt !== null) phaseReadings = phaseReadings.filter(({ at }) => at >= newestPhaseAt - phaseMeanMs)
       // Ignored when there is no reading or the newest is too old: a dead meter must not block.
-      const capIgnored = !mainPowerTopic || newestMainAt === null ||
-        now - newestMainAt > maxLoadInputAgeMs
-      const mean = mainReadings.length
-        ? mainReadings.reduce((sum, { watts }) => sum + watts, 0) / mainReadings.length
+      const capIgnored = !mainMeterTopic || newestPhaseAt === null ||
+        now - newestPhaseAt > maxLoadInputAgeMs
+      const mean = phaseReadings.length
+        ? phaseReadings.reduce((sum, { amps }) => sum + amps, 0) / phaseReadings.length
         : null
-      const dishwasherRunning = Boolean(dishwasherTopic) && newestDishwasherAt !== null &&
-        now - newestDishwasherAt <= maxLoadInputAgeMs &&
-        lastDishwasherLoadAt !== null && now - lastDishwasherLoadAt <= dishwasherHoldMs
       return {
-        mainPowerMeanW: mean === null ? null : Math.round(mean),
-        dishwasherRunning,
+        phaseAMeanA: mean === null ? null : Math.round(mean * 10) / 10,
         capIgnored,
-        capExceeded: !capIgnored && mean >= mainPowerCapW
+        capExceeded: !capIgnored && mean !== null && mean + elementCurrentA >= phaseLimitA
       }
     }
     const loadStatus = () => {
-      const { mainPowerMeanW, dishwasherRunning, capIgnored } = loadInputs()
-      return { mainPowerMeanW, dishwasherRunning, capIgnored }
+      const { phaseAMeanA, capIgnored } = loadInputs()
+      return { phaseAMeanA, capIgnored }
     }
 
     // Reasons that must start the element whatever the load. Only the real
     // low-top emergency; the overheat shut-off and the manual and vacation
     // modes never reach the gate (they are not starts by an automatic rule).
     const LOAD_EXEMPT_REASONS = ['emergency_heating_top_cold']
-    // Reasons that skip only the dishwasher gate; the cap still applies. A draw
-    // empties the tank now, and the element and the dishwasher are on
-    // different phases (#1986).
-    const DISHWASHER_EXEMPT_REASONS = ['draw_heating']
 
-    // The one place the gates apply: an automatic rule that would switch the
+    // The one place the gate applies: an automatic rule that would switch the
     // element on while it is off. A running element is never stopped here.
     const gateStart = (result) => {
       if (!result.decision || heaterOn() || LOAD_EXEMPT_REASONS.includes(result.reason)) return result
-      const { dishwasherRunning, capExceeded } = loadInputs()
-      if (dishwasherRunning && !DISHWASHER_EXEMPT_REASONS.includes(result.reason)) {
-        return { decision: false, reason: 'load_wait_dishwasher' }
-      }
-      if (capExceeded) return { decision: false, reason: 'load_wait_main_power' }
+      if (loadInputs().capExceeded) return { decision: false, reason: 'load_wait_phase_a' }
       return result
     }
 
-    // Decide again only when a load reading changes which gate blocks.
+    // Decide again only when a load reading opens or closes the gate.
     let lastGateKey = null
-    const gateKey = () => {
-      const { dishwasherRunning, capExceeded } = loadInputs()
-      return `${dishwasherRunning}/${capExceeded}`
-    }
+    const gateKey = () => String(loadInputs().capExceeded)
     const loadChanged = () => {
       const key = gateKey()
       if (key === lastGateKey) return
@@ -418,7 +400,7 @@ module.exports = (name, {
       if (externalOff) return { decision: false, reason: 'external_off' }
 
       // An outside ON is kept until the top reaches the stop target in force,
-      // for at most externalOnMaxMs. The night hold, the load gates and the
+      // for at most externalOnMaxMs. The night hold, the load gate and the
       // modes do not stop it; only maxSafe, hotWaterLimit and old inputs do.
       if (externalOn) {
         const target = heatWindowAt(now)?.target ?? comfortMin + hysteresis
@@ -442,7 +424,7 @@ module.exports = (name, {
       }
 
       // boost: heat the whole tank now, whatever the night hold and the load
-      // gates say (#1976): until the bottom reaches boostBottomTarget, but
+      // gate says (#1976): until the bottom reaches boostBottomTarget, but
       // never the top to boostTopLimit; then go back to automatic. Old
       // readings and maxSafe stop it first.
       if (mode === 'boost') {
@@ -517,7 +499,7 @@ module.exports = (name, {
       // A draw ends when the element has heated the top to the target. A draw
       // seen while the top is still at the target waits for the top to fall
       // under it (the top is the last to cool), but at most drawLatchMinutes
-      // while the element is off: a start the load gates held back that long
+      // while the element is off: a start the load gate held back that long
       // is not a draw start any more.
       if (drawSeenAt !== null && temperatureTop !== null) {
         if (heaterOn() && temperatureTop >= target) drawSeenAt = null
@@ -529,7 +511,7 @@ module.exports = (name, {
       // element tops the tank up in the cheaper night zone instead. A top
       // under the floor still heats, up to the floor plus the hysteresis.
       // A draw in the hold still starts the element (#1976): the evening
-      // baths fall in the hold. The cap applies to it, the dishwasher gate does not (#1986).
+      // baths fall in the hold. The phase A gate applies to it (#1987).
       const holdFrom = nightTariff && nightTariff.floor + (heaterOn() ? hysteresis : 0)
       if (temperatureTop !== null && periodsAt(now).hold && temperatureTop >= holdFrom) {
         if (drawStart) return { decision: true, reason: 'draw_heating' }
@@ -557,7 +539,7 @@ module.exports = (name, {
       }
 
       // Start on a draw, before the top cools: the element is then already
-      // running while the tank empties (#1911). The cap applies, the dishwasher gate does not (#1986).
+      // running while the tank empties (#1911). The phase A gate applies (#1987).
       if (drawStart) {
         return { decision: true, reason: 'draw_heating' }
       }
@@ -740,30 +722,18 @@ module.exports = (name, {
       }
     })
 
-    if (mainPowerTopic) {
-      mqtt.subscribe(mainPowerTopic, (payload) => {
-        const watts = payload?.total_p
-        if (typeof watts !== 'number' || isNaN(watts)) return
+    if (mainMeterTopic) {
+      mqtt.subscribe(mainMeterTopic, (payload) => {
+        const amps = payload?.ac
+        if (typeof amps !== 'number' || !Number.isFinite(amps)) return
         const at = readingTime(payload)
-        mainReadings.push({ at, watts })
-        newestMainAt = Math.max(newestMainAt ?? at, at)
+        phaseReadings.push({ at, amps })
+        newestPhaseAt = Math.max(newestPhaseAt ?? at, at)
         loadChanged()
       })
+      // A reading that gets too old opens the gate with no new reading; look every 30 s.
+      setInterval(loadChanged, 30 * 1000).unref?.()
     }
-
-    if (dishwasherTopic) {
-      mqtt.subscribe(dishwasherTopic, (payload) => {
-        const watts = payload?.p
-        if (typeof watts !== 'number' || isNaN(watts)) return
-        const at = readingTime(payload)
-        newestDishwasherAt = Math.max(newestDishwasherAt ?? at, at)
-        if (watts > dishwasherOnW) lastDishwasherLoadAt = Math.max(lastDishwasherLoadAt ?? at, at)
-        loadChanged()
-      })
-    }
-
-    // A hold or a window that runs out needs no new reading; look every 30 s.
-    if (mainPowerTopic || dishwasherTopic) setInterval(loadChanged, 30 * 1000).unref?.()
 
     if (contactorStatusTopic) {
       mqtt.subscribe(contactorStatusTopic, (payload) => {
@@ -977,8 +947,9 @@ module.exports = (name, {
         drawDropK,
         drawWindowMinutes,
         drawLatchMinutes,
-        dishwasherTopic,
-        mainPowerTopic,
+        mainMeterTopic,
+        phaseLimitA,
+        elementCurrentA,
         contactorStatusTopic,
         externalOnMaxMs: externalOnMaxMs / 60000 + ' minutes',
         externalOffHoldMs: externalOffHoldMs / 60000 + ' minutes',

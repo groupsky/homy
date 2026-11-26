@@ -53,8 +53,8 @@ const startAt = (localIso, { config = CONFIG, controlMode = 'automatic' } = {}) 
         boiler.temperatures(temperatures)
       }
     },
-    mainPower: (total_p) => deliver(config.mainPowerTopic, { total_p, _tz: Date.now() }),
-    dishwasher: (p) => deliver(config.dishwasherTopic, { p, _tz: Date.now() }),
+    // Phase A's current (A) on the main meter reading.
+    phaseA: (ac) => deliver(config.mainMeterTopic, { ac, _tz: Date.now() }),
     at: (localIso) => jest.setSystemTime(new Date(localIso)),
     mode: (payload) => deliver(config.controlModeTopic, payload),
     relay: () => published.filter(m => m.topic === config.boilerRelayTopic).at(-1).payload,
@@ -96,37 +96,27 @@ describe('boiler-controller: heat during the evening baths and the whole tank (#
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_tariff_hold' })
     })
 
-    // A draw skips the dishwasher gate (#1986): the 2026-11-16 case.
-    test('starts while the dishwasher runs', () => {
+    test('starts while phase A has room', () => {
       const boiler = startAt(IN_HOLD)
-      boiler.dishwasher(1200)
+      boiler.phaseA(15)
       boiler.temperatures({ top: 48, bottom: 45 })
       draw(boiler, 48)
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'draw_heating' })
     })
 
-    test('waits for the cap while the dishwasher runs', () => {
+    test('the phase A gate holds it back', () => {
       const boiler = startAt(IN_HOLD)
-      boiler.dishwasher(1200)
-      boiler.mainPower(9000)
+      boiler.phaseA(25)
       boiler.temperatures({ top: 48, bottom: 45 })
       draw(boiler, 48)
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
     })
 
-    test('without a draw, the dishwasher still holds back the floor heating in the hold', () => {
+    test('without a draw, a high phase A holds back the floor heating in the hold', () => {
       const boiler = startAt(IN_HOLD)
-      boiler.dishwasher(1200)
+      boiler.phaseA(25)
       boiler.temperatures({ top: 38, bottom: 37 })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
-    })
-
-    test('the main power gate holds it back', () => {
-      const boiler = startAt(IN_HOLD)
-      boiler.mainPower(9000)
-      boiler.temperatures({ top: 48, bottom: 45 })
-      draw(boiler, 48)
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
     })
 
     test('with the top at the draw target it waits; the hold stays', () => {
@@ -181,10 +171,9 @@ describe('boiler-controller: heat during the evening baths and the whole tank (#
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'temperature_sufficient' })
     })
 
-    test('ignores the night hold and the load gates', () => {
+    test('ignores the night hold and the load gate', () => {
       const boiler = startAt(IN_HOLD)
-      boiler.dishwasher(1200)
-      boiler.mainPower(9000)
+      boiler.phaseA(30)
       boiler.temperatures({ top: 56, bottom: 44 })
       boiler.mode('boost')
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'manual_boost' })

@@ -55,15 +55,14 @@ module.exports = {
       // emptied it came 2-51 min (mostly 15-20 min) before the old start.
       drawDropK: 3,
       drawWindowMinutes: 10,
-      // Load stagger: the element does not START while the dishwasher runs or
-      // the main meter's recent mean power is high. A running element is never
-      // stopped by these, and without the two topics the gates are off.
-      dishwasherTopic: '/modbus/secondary/dishwasher/reading', // field `p` (W)
-      mainPowerTopic: '/modbus/main/main/reading', // field `total_p` (W)
-      dishwasherOnW: 10, // a reading above this is load
-      dishwasherHoldMs: 10 * 60 * 1000, // load this recently counts as running (cycles pause)
-      mainPowerCapW: 6000, // no start at or above this mean (a choice: the main breaker size is not known)
-      mainPowerMeanMs: 5 * 60 * 1000, // window of the mean
+      // Load gate (#1987): the element (on phase A) does not START while phase
+      // A's recent mean current plus the element's current is at or over the
+      // phase limit. A running element is never stopped by it, and without the
+      // topic the gate is off.
+      mainMeterTopic: '/modbus/main/main/reading', // field `ac` (A), phase A current
+      phaseLimitA: 32, // the 3-pole 32 A breaker in front of the house
+      elementCurrentA: 12.5, // the element's own current
+      phaseMeanMs: 5 * 60 * 1000, // window of the mean
       maxLoadInputAgeMs: 10 * 60 * 1000, // newer reading than this or the input is ignored
       // Contactor feedback (#1912): the real state of the element. An ON the
       // controller did not send is kept until the top reaches the stop target

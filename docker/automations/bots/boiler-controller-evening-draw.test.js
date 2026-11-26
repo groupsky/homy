@@ -48,8 +48,8 @@ const startAt = (localIso, config = CONFIG) => {
       lastTop = top
       deliver(config.temperatureTopTopic, { state: top })
     },
-    dishwasher: (p) => deliver(config.dishwasherTopic, { p }),
-    mainPower: (watts) => deliver(config.mainPowerTopic, { total_p: watts }),
+    // Phase A's current (A) on the main meter reading.
+    phaseA: (ac) => deliver(config.mainMeterTopic, { ac }),
     mode: (mode) => deliver(config.controlModeTopic, mode),
     at: (localIso) => jest.setSystemTime(new Date(localIso)),
     relay: () => published.filter(m => m.topic === config.boilerRelayTopic).at(-1).payload
@@ -122,11 +122,11 @@ describe('boiler-controller evening draw rules (#1911)', () => {
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'day_top_up' })
     })
 
-    test('the load gates apply to its start', () => {
+    test('the load gate applies to its start', () => {
       const boiler = startAt('2026-11-02T19:30:00+02:00')
-      boiler.dishwasher(1500)
+      boiler.phaseA(25)
       boiler.temperatures({ top: 49 })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
     })
   })
 
@@ -320,15 +320,15 @@ describe('boiler-controller evening draw rules (#1911)', () => {
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'night_boost_reached' })
     })
 
-    test('a start the load gates hold back for over 30 min is dropped', () => {
+    test('a start the load gate holds back for over 30 min is dropped', () => {
       const boiler = startAt('2026-11-02T14:00:00+02:00')
-      boiler.mainPower(9000)
+      boiler.phaseA(25)
       boiler.temperatures({ top: 48.5, bottom: 47 })
       fall(boiler, '2026-11-02T14:00:00+02:00', 47, 3, 1)
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
-      // The house load falls; 35 min after the draw the gate opens.
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
+      // Phase A's load falls; 35 min after the draw the gate opens.
       boiler.at('2026-11-02T14:35:00+02:00')
-      boiler.mainPower(1000)
+      boiler.phaseA(5)
       boiler.bottom(44)
       boiler.top(48.4)
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'hysteresis_zone_maintain_false' })
@@ -347,32 +347,30 @@ describe('boiler-controller evening draw rules (#1911)', () => {
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'night_boost' })
     })
 
-    // A draw skips the dishwasher gate; the cap still applies (#1986).
-    test('starts while the dishwasher runs', () => {
+    // The phase A gate applies to a draw start (#1987).
+    test('starts while phase A has room', () => {
       const boiler = startAt('2026-11-02T14:00:00+02:00')
-      boiler.dishwasher(1500)
-      boiler.mainPower(3000)
+      boiler.phaseA(19)
       boiler.temperatures({ top: 48.5, bottom: 47 })
       fall(boiler, '2026-11-02T14:00:00+02:00', 47, 3, 1)
       expect(boiler.relay()).toMatchObject({ state: true, reason: 'draw_heating' })
     })
 
-    test('waits for the cap, also while the dishwasher runs', () => {
+    test('waits while phase A + 12.5 A is at or over 32 A', () => {
       const boiler = startAt('2026-11-02T14:00:00+02:00')
-      boiler.dishwasher(1500)
-      boiler.mainPower(6000)
+      boiler.phaseA(19.5)
       boiler.temperatures({ top: 48.5, bottom: 47 })
       fall(boiler, '2026-11-02T14:00:00+02:00', 47, 3, 1)
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_main_power' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
     })
 
-    test('the comfort rule keeps the dishwasher gate, also while a draw is seen', () => {
+    test('the comfort rule waits for the gate too, also while a draw is seen', () => {
       const boiler = startAt('2026-11-02T14:00:00+02:00')
-      boiler.dishwasher(1500)
+      boiler.phaseA(25)
       boiler.temperatures({ top: 46, bottom: 47 })
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
       fall(boiler, '2026-11-02T14:00:00+02:00', 47, 3, 1)
-      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_dishwasher' })
+      expect(boiler.relay()).toMatchObject({ state: false, reason: 'load_wait_phase_a' })
     })
 
     test('a manual mode clears a draw seen before it', () => {
