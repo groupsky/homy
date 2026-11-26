@@ -69,7 +69,7 @@ The heater is **threshold-based**, with time rules around the night tariff zone:
 the hour before the zone (see [Night tariff hold](#night-tariff-hold)), and it heats the top to 55 °C
 just before that hour and in the night zone (see [Evening draw](#evening-draw-top-up-boost-and-start-on-a-draw)).
 It starts at once when a hot-water draw begins, also in the night tariff hold (#1976). It does not start while the
-dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). The legacy `boilerOnSchedule`
+dishwasher runs or the house load is high (see [Load stagger](#load-stagger)); a draw skips only the dishwasher wait (#1986). The legacy `boilerOnSchedule`
 `solar-emitter` bot (ON at golden hour, OFF at nadir) was removed in `11ed714` and no longer exists.
 
 - **Type:** `boiler-controller` (`docker/automations/bots/boiler-controller.js`)
