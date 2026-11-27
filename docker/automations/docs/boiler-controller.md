@@ -93,7 +93,8 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
 | `nightTariff.floor` | 40 °C | The night tariff hold does not apply below this (until 43 °C once on) |
 | `hotWaterLimit` | 55 °C | The automatic top-up, night boost and draw rules never heat the top above this (no mixing valve, #1473) |
 | `boostBottomTarget` | 50 °C | `boost` and `manual_on` heat until the bottom is at this (#1976) |
-| `boostTopLimit` | 60 °C | `boost` and `manual_on` never heat the top to this (#1976) |
+| `boostTopLimit` | 60 °C | `boost` never heats the top to this (#1976) |
+| `manualOnTopLimit` | 55 °C | `manual_on` never heats the top to this. It can run 24 h, so it keeps the old limit until a mixing valve is fitted (#1473) |
 | `dayTopUp` | 90 min, 55 °C | Heat the top to 55 °C in the 90 min before the hold (19:30–21:00 winter, 20:30–22:00 summer) |
 | `nightBoostTarget` | 55 °C | Heat the top to 55 °C from the end of the hold to the end of the night zone |
 | `drawDropK` / `drawWindowMinutes` | 3 K / 10 min | A fall of the bottom reading this big this fast is a draw: start the element |
@@ -112,7 +113,7 @@ dishwasher runs or the house load is high (see [Load stagger](#load-stagger)). T
    ON, `external_on`, until it ends (see [Contactor feedback](#contactor-feedback))
 2. A mode (see [Control modes](#control-modes)): `boost` → ON, `manual_boost`, until the bottom reaches
    `boostBottomTarget` or the top `boostTopLimit` (then `automatic` and the rules below); `manual_on` → ON
-   with the same limits;
+   until the bottom reaches `boostBottomTarget` or the top `manualOnTopLimit`;
    `manual_off` / `vacation_*` → OFF
 3. Boiler top or bottom temperature older than `maxInputAgeMs` → OFF, `input_stale` (see
    [Old input](#old-input))
@@ -157,11 +158,12 @@ the element ran by hand from 20:20 to 22:45 (5.1 kWh): the bottom rose from 41 �
 over 52 °C through the baths. The top may reach up to 60 °C in a boost, above the 55 °C of the automatic rules
 (there is no mixing valve, #1473); a person chooses it, and 60 °C is the hard cap.
 
-`manual_on` keeps the mode for `manualOverrideExpiry` (24 h) and uses the same two limits (#1976): it heats
-while the bottom is under `boostBottomTarget` (50 °C), and goes OFF when the bottom reaches it or the top
-reaches `boostTopLimit` (60 °C), reason `manual_on_limit_reached (expires: …)`. Once off, it starts again when
-the bottom is under `boostBottomTarget - hysteresis` (47 °C) and the top under `boostTopLimit - hysteresis`
-(57 °C). A missing reading does not block it. `top >= maxSafe` is OFF, `safety_shutoff_overheated`. As before
+`manual_on` keeps the mode for `manualOverrideExpiry` (24 h). It has the same bottom limit as `boost`, but a lower
+top limit (#1976): without a mixing valve (#1473), tap water above 55 °C can scald, and `manual_on` can run for
+24 h. It heats while the bottom is under `boostBottomTarget` (50 °C), and goes OFF when the bottom reaches it or
+the top reaches `manualOnTopLimit` (55 °C), reason `manual_on_limit_reached (expires: …)`. Once off, it starts again when
+the bottom is under `boostBottomTarget - hysteresis` (47 °C) and the top under `manualOnTopLimit - hysteresis`
+(52 °C). A missing reading does not block it. `top >= maxSafe` is OFF, `safety_shutoff_overheated`. As before
 (#1743), old input does not stop `manual_on`; the limits then use the last reading.
 
 **The bottom sensor sits inside the solar coil** (see [Temperature Sensors](#temperature-sensors)). While the
@@ -191,14 +193,15 @@ Every mode command gets a result (#1975). It goes out with the mode status on
 - `result`: `applied` (the mode was set) or `refused` (the mode and its end time stay as they were).
 - `reason`:
   - `ok`: applied, nothing to add.
-  - `top_at_limit`: the top is at or above `boostTopLimit`. With `refused`, a `boost`. With `applied`, a
+  - `top_at_limit`: the top is at or above the top limit of the mode (`boostTopLimit` for `boost`,
+    `manualOnTopLimit` for `manual_on`). With `refused`, a `boost`. With `applied`, a
     `manual_on`: the mode is set, but the element heats only once the top falls under the limit.
   - `bottom_at_target`: the bottom is at or above `boostBottomTarget` (and the top is under its limit). With
     `refused`, a `boost`. With `applied`, a `manual_on` that heats only once the bottom falls.
   - `invalid_until`: refused, a `vacation_until` without a valid `until`.
   - `unknown_mode`: refused, a mode that is not in the list above.
 - `top` and `bottom`: the last top and bottom readings in °C when the command came (`null` before the first
-  one); `limit`: `boostTopLimit` (it was `hotWaterLimit` before #1976); `bottomTarget`: `boostBottomTarget`.
+  one); `limit`: the top limit of the mode in the command (`boostTopLimit`, or `manualOnTopLimit` for `manual_on`); `bottomTarget`: `boostBottomTarget`.
 - `at`: the time of the command, in ms.
 
 The result stays in the status until the next command; later statuses repeat it. It is kept in memory only, so
@@ -209,7 +212,7 @@ day whose top temperature never exceeds it got all of its heat from the immersio
 basis of the `boiler-solar-no-contribution` alert. That limit was 50 °C (step 12) until #1911 and is
 55 °C (`hotWaterLimit`) since; the alert thresholds moved with it — see
 `config/grafana/dashboards/BOILER_CONTROLLER_README.md`. **If `hotWaterLimit` goes up (after a mixing
-valve is fitted), move the two solar alert limits up too.** A `boost` or `manual_on` can heat the top up to
+valve is fitted), move the two solar alert limits up too.** A `boost` can heat the top up to
 `boostTopLimit` (60 °C) since #1976, so on a day with one of them `boiler-solar-no-contribution` may stay
 quiet though the sun gave nothing. Those are rare, manual days.
 
@@ -296,8 +299,9 @@ Details:
   hour late (1 April) or early (1 November).
 - **55 °C limit**: there is no thermostatic mixing valve (#1473), so water at the tank top reaches
   the taps unmixed. `hotWaterLimit` (55 °C) caps the targets of all three rules, whatever their own
-  values. Do not raise it before a valve is fitted. Only `boost` and `manual_on`, which a person
-  starts, may heat the top up to `boostTopLimit` (60 °C); the owner chose this on 2026-11-19 (#1976). `maxSafe` (85 °C) and the emergency rules are
+  values. Do not raise it before a valve is fitted. Only `boost`, which a person
+  starts and which runs at most 2 h, may heat the top up to `boostTopLimit` (60 °C); `manual_on` (up to 24 h) keeps
+  55 °C (`manualOnTopLimit`) until a mixing valve is fitted. The owner chose this on 2026-11-19 and 2026-11-27 (#1976). `maxSafe` (85 °C) and the emergency rules are
   unchanged.
 - **Why 3 K in 10 min** (data of 2026-10-20 to 2026-11-05, one-minute means of the bottom reading):
   every fall of 3 K within 10 minutes with the element off was a real draw, after which the bottom

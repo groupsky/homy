@@ -123,7 +123,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
   describe('manual_on', () => {
     test('at the limit is applied, with reason top_at_limit; the element stays off', () => {
       start()
-      top(60.1)
+      top(55.1)
       const from = statuses().length
       command('manual_on')
 
@@ -131,7 +131,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
       expect(lastRelay()).toMatchObject({ state: false })
       expect(lastRelay().reason).toMatch(/^manual_on_limit_reached/)
       expect(resultsSince(from)).toEqual([
-        { mode: 'manual_on', result: 'applied', reason: 'top_at_limit', top: 60.1, bottom: null, limit: 60, bottomTarget: 50, at: NOW }
+        { mode: 'manual_on', result: 'applied', reason: 'top_at_limit', top: 55.1, bottom: null, limit: 55, bottomTarget: 50, at: NOW }
       ])
     })
 
@@ -141,7 +141,7 @@ describe('boiler-controller lastCommand (#1975)', () => {
       command({ mode: 'manual_on', duration: HOUR })
 
       expect(lastRelay()).toMatchObject({ state: true })
-      expect(lastStatus().lastCommand).toEqual({ mode: 'manual_on', result: 'applied', reason: 'ok', top: 43, bottom: null, limit: 60, bottomTarget: 50, at: NOW })
+      expect(lastStatus().lastCommand).toEqual({ mode: 'manual_on', result: 'applied', reason: 'ok', top: 43, bottom: null, limit: 55, bottomTarget: 50, at: NOW })
     })
   })
 

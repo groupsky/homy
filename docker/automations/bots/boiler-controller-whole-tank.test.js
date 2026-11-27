@@ -70,7 +70,7 @@ describe('boiler-controller: heat during the evening baths and the whole tank (#
   })
 
   test('the committed config has the boost limits; the automatic rules keep 55 °C', () => {
-    expect(CONFIG).toMatchObject({ boostBottomTarget: 50, boostTopLimit: 60, hotWaterLimit: 55 })
+    expect(CONFIG).toMatchObject({ boostBottomTarget: 50, boostTopLimit: 60, manualOnTopLimit: 55, hotWaterLimit: 55 })
     expect(CONFIG.boostTopLimit).toBeLessThan(CONFIG.maxSafe)
   })
 
@@ -225,33 +225,43 @@ describe('boiler-controller: heat during the evening baths and the whole tank (#
     })
   })
 
-  describe('manual_on uses the same limits', () => {
+  describe('manual_on keeps the 55 °C top limit until a mixing valve is fitted', () => {
     test('heats while the bottom is under 50 °C; starts again under 47 °C', () => {
       const boiler = startAt(DAY, { controlMode: 'manual_on' })
-      boiler.temperatures({ top: 56.2, bottom: 43 })
+      boiler.temperatures({ top: 54.5, bottom: 43 })
       expect(boiler.relay().state).toBe(true)
       expect(boiler.relay().reason).toMatch(/^manual_on \(/)
-      boiler.temperatures({ top: 58, bottom: 50 })
+      boiler.temperatures({ top: 54, bottom: 50 })
       expect(boiler.relay().state).toBe(false)
       expect(boiler.relay().reason).toMatch(/^manual_on_limit_reached/)
-      boiler.temperatures({ top: 55, bottom: 47 })
+      boiler.temperatures({ top: 50, bottom: 47 })
       expect(boiler.relay().state).toBe(false)
-      boiler.temperatures({ top: 55, bottom: 46.9 })
+      boiler.temperatures({ top: 50, bottom: 46.9 })
       expect(boiler.relay().state).toBe(true)
       expect(boiler.modeStatus().mode).toBe('manual_on')
     })
 
-    test('never above 60 °C at the top; starts again under 57 °C', () => {
+    test('never above 55 °C at the top; starts again under 52 °C', () => {
       const boiler = startAt(DAY, { controlMode: 'manual_on' })
-      boiler.temperatures({ top: 59.9, bottom: 40 })
+      boiler.temperatures({ top: 54.9, bottom: 40 })
       expect(boiler.relay().state).toBe(true)
-      boiler.temperatures({ top: 60, bottom: 40 })
+      boiler.temperatures({ top: 55, bottom: 40 })
       expect(boiler.relay().state).toBe(false)
       expect(boiler.relay().reason).toMatch(/^manual_on_limit_reached/)
-      boiler.temperatures({ top: 57, bottom: 40 })
+      boiler.temperatures({ top: 52, bottom: 40 })
       expect(boiler.relay().state).toBe(false)
-      boiler.temperatures({ top: 56.9, bottom: 40 })
+      boiler.temperatures({ top: 51.9, bottom: 40 })
       expect(boiler.relay().state).toBe(true)
+    })
+
+    test('a manual_on command with the top at 56 °C is applied with reason top_at_limit and the 55 °C limit', () => {
+      const boiler = startAt(DAY)
+      boiler.temperatures({ top: 56, bottom: 40 })
+      boiler.mode('manual_on')
+      expect(boiler.relay().state).toBe(false)
+      expect(boiler.modeStatus().lastCommand).toMatchObject({
+        mode: 'manual_on', result: 'applied', reason: 'top_at_limit', top: 56, bottom: 40, limit: 55
+      })
     })
 
     test('maxSafe stops it', () => {

@@ -678,17 +678,17 @@ describe('boiler-controller contactor feedback (#1912)', () => {
   })
 
   describe('manual_on mode', () => {
-    test('stops at 60 °C at the top and starts again under 57 °C; the mode stays (#1976)', () => {
+    test('stops at 55 °C at the top and starts again under 52 °C; the mode stays (#1976)', () => {
       const boiler = startAt(DAY, { controlMode: 'manual_on' })
       boiler.temperatures({ top: 50 })
       expect(boiler.relay().state).toBe(true)
       expect(boiler.relay().reason).toMatch(/^manual_on \(/)
-      boiler.temperatures({ top: 60 })
+      boiler.temperatures({ top: 55 })
       expect(boiler.relay().state).toBe(false)
       expect(boiler.relay().reason).toMatch(/^manual_on_limit_reached/)
-      boiler.temperatures({ top: 57 })
+      boiler.temperatures({ top: 52 })
       expect(boiler.relay().state).toBe(false)
-      boiler.temperatures({ top: 56.9 })
+      boiler.temperatures({ top: 51.9 })
       expect(boiler.relay().state).toBe(true)
       expect(boiler.relay().reason).toMatch(/^manual_on \(/)
       expect(boiler.modeStatus().mode).toBe('manual_on')

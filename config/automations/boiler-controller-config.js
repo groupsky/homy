@@ -77,13 +77,16 @@ module.exports = {
       // The `boost` mode (the Home Assistant button "Загрей целия бойлер") and
       // `manual_on` heat the whole tank (#1976): they heat until the bottom
       // reaches `boostBottomTarget` and stop when the top reaches
-      // `boostTopLimit`. The top may get hotter than the 55 °C of the
-      // automatic rules, so only a person starts it; 60 °C is the hard cap at
-      // the top. Boost runs at most 2 h, then goes back to automatic. The
+      // the top limit of the mode. The top may get hotter than the 55 °C of
+      // the automatic rules, so only a person starts it. `boost` may heat the
+      // top to `boostTopLimit` (60 °C); it runs at most 2 h, then goes back to
+      // automatic. `manual_on` can run up to 24 h, so it keeps 55 °C
+      // (`manualOnTopLimit`) until a mixing valve is fitted (#1473). The
       // bottom sensor sits in the solar coil: while the solar pump runs it
       // reads the coil, so a boost may end early then.
       boostBottomTarget: 50,
       boostTopLimit: 60,
+      manualOnTopLimit: 55,
       boostDurationMs: 2 * 60 * 60 * 1000,
       verbose: true
     }

@@ -82,9 +82,12 @@ module.exports = (name, {
   hotWaterLimit = 55,
   // The `boost` and `manual_on` modes heat the whole tank (#1976): they heat
   // while the bottom is under boostBottomTarget, and never let the top reach
-  // boostTopLimit. Both in °C.
+  // their top limit. `boost` runs at most 2 h and may heat the top to
+  // boostTopLimit. `manual_on` can run up to 24 h, so it keeps the old top
+  // limit manualOnTopLimit until a mixing valve is fitted (#1473). All in °C.
   boostBottomTarget = 50,
   boostTopLimit = 60,
+  manualOnTopLimit = 55,
   // Night tariff extras (#1911), all off unless set; they need `nightTariff`.
   // nightBoostTarget: from the end of the hold to the end of the night zone,
   // heat the top to this (°C).
@@ -348,8 +351,10 @@ module.exports = (name, {
     // Keeps the result of a mode command for the mode status (#1975), so
     // any client that sends a command can see what became of it and why.
     // result: 'applied' or 'refused'. reason: 'ok', 'top_at_limit' (the top
-    // is at or above boostTopLimit), 'bottom_at_target' (the bottom is at or
+    // is at or above the top limit of the mode: boostTopLimit, or
+    // manualOnTopLimit for manual_on), 'bottom_at_target' (the bottom is at or
     // above boostBottomTarget), 'invalid_until' or 'unknown_mode'.
+    const topLimitOf = (mode) => mode === 'manual_on' ? manualOnTopLimit : boostTopLimit
     const commandResult = (mode, result, reason) => {
       currentState.lastCommand = {
         // A mode that is not a text is not kept; a long one is cut
@@ -358,7 +363,7 @@ module.exports = (name, {
         reason,
         top: currentState.temperatureTop,
         bottom: currentState.temperatureBottom,
-        limit: boostTopLimit,
+        limit: topLimitOf(mode),
         bottomTarget: boostBottomTarget,
         at: Date.now()
       }
@@ -382,10 +387,10 @@ module.exports = (name, {
       if (verbose) console.log(`[${name}] outside ON ends: ${why}`)
     }
 
-    // Why boost and manual_on cannot heat now (#1976), or null: the top at
-    // boostTopLimit wins over the bottom at boostBottomTarget.
-    const boostLimitReason = (top, bottom) => {
-      if (top !== null && top >= boostTopLimit) return 'top_at_limit'
+    // Why boost or manual_on cannot heat now (#1976), or null: the top at the
+    // limit of the mode wins over the bottom at boostBottomTarget.
+    const boostLimitReason = (mode, top, bottom) => {
+      if (top !== null && top >= topLimitOf(mode)) return 'top_at_limit'
       if (bottom !== null && bottom >= boostBottomTarget) return 'bottom_at_target'
       return null
     }
@@ -441,19 +446,20 @@ module.exports = (name, {
       // readings and maxSafe stop it first.
       if (mode === 'boost') {
         if (stale) return { decision: false, reason: 'input_stale' }
-        const done = overheated ? 'top_at_max_safe' : boostLimitReason(top, bottom)
+        const done = overheated ? 'top_at_max_safe' : boostLimitReason('boost', top, bottom)
         if (!done) return { decision: true, reason: 'manual_boost' }
         backToAutomatic(`boost done (${done}): top ${top}°C, bottom ${bottom}°C`)
       }
 
       if (mode === 'manual_on') {
-        // The same limits as boost (#1976): on while the bottom is under
-        // boostBottomTarget, never with the top at boostTopLimit or maxSafe.
+        // Like boost (#1976): on while the bottom is under boostBottomTarget,
+        // but never with the top at manualOnTopLimit (55 °C: it can run 24 h
+        // and there is no mixing valve yet, #1473) or maxSafe.
         // Once off it starts again when both are hysteresis under them. Old
         // readings do not stop it (#1743): the limits use the last reading.
         if (overheated) return { decision: false, reason: 'safety_shutoff_overheated' }
         const band = heaterOn() ? 0 : hysteresis
-        if ((top !== null && top >= boostTopLimit - band) || (bottom !== null && bottom >= boostBottomTarget - band)) {
+        if ((top !== null && top >= manualOnTopLimit - band) || (bottom !== null && bottom >= boostBottomTarget - band)) {
           return { decision: false, reason: `manual_on_limit_reached${expires}` }
         }
         return { decision: true, reason: `manual_on${expires}` }
@@ -861,13 +867,13 @@ module.exports = (name, {
         if (validModes.includes(newMode)) {
           const top = currentState.temperatureTop
           const bottom = currentState.temperatureBottom
-          const limitReason = boostLimitReason(top, bottom)
+          const limitReason = boostLimitReason(newMode, top, bottom)
           // A boost ends when the bottom reaches boostBottomTarget or the top
           // boostTopLimit. Already there, it would end at once, so it is
           // refused and the mode and its end time stay as they were (#1975,
           // #1976).
           if (newMode === 'boost' && limitReason) {
-            console.log(`[${name}] boost refused (${limitReason}): top ${top}°C (limit ${boostTopLimit}°C), bottom ${bottom}°C (target ${boostBottomTarget}°C)`)
+            console.log(`[${name}] boost refused (${limitReason}): top ${top}°C (limit ${topLimitOf(newMode)}°C), bottom ${bottom}°C (target ${boostBottomTarget}°C)`)
             refuseCommand(newMode, limitReason)
             return
           }
@@ -966,6 +972,7 @@ module.exports = (name, {
         hotWaterLimit,
         boostBottomTarget,
         boostTopLimit,
+        manualOnTopLimit,
         nightBoostTarget: boostTarget,
         dayTopUp: topUpTarget === null ? null : { minutesBeforeHold: dayTopUp.minutesBeforeHold, target: topUpTarget },
         drawDropK,
