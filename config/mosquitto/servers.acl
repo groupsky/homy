@@ -20,14 +20,15 @@ topic read z2m/house1/#
 
 # The living room media volume: publishes the state, reads the commands.
 user fleet-media-volume
-topic readwrite homy/media/living/volume/state
+topic write homy/media/living/volume/state
 topic read homy/media/living/volume/command
 
 # Values made from the oven's readings, with their HA discovery and its will
-# (homeconnect/oven/derived/status).
+# (homeconnect/oven/derived/status). Its deploy check reads a derived value
+# back, so derived/# is readwrite.
 user fleet-homeconnect-derived
 topic readwrite homeconnect/oven/derived/#
-topic readwrite homeassistant/sensor/homeconnect_oven_derived/#
+topic write homeassistant/sensor/homeconnect_oven_derived/#
 topic read homeconnect/oven/LWT
 topic read homeconnect/oven/state/bsh_common_status_operationstate
 topic read homeconnect/oven/state/cooking_oven_status_cavity_001_currenttemperature

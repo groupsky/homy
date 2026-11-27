@@ -175,12 +175,17 @@ cannot_read fleet-zigbee-availability homy/other/state
 can_write fleet-media-volume homy/media/living/volume/state
 can_read fleet-media-volume homy/media/living/volume/command
 cannot_write fleet-media-volume homy/media/living/volume/command
+cannot_read fleet-media-volume homy/media/living/volume/state
 cannot_read fleet-media-volume homy/other/state
 
 can_write fleet-homeconnect-derived homeconnect/oven/derived/status
 can_write fleet-homeconnect-derived homeassistant/sensor/homeconnect_oven_derived/x/config
 can_read fleet-homeconnect-derived homeconnect/oven/LWT
 can_read fleet-homeconnect-derived /modbus/secondary/oven/reading
+can_read fleet-homeconnect-derived homeconnect/oven/state/bsh_common_status_operationstate
+can_read fleet-homeconnect-derived homeconnect/oven/state/cooking_oven_status_cavity_001_currenttemperature
+can_read fleet-homeconnect-derived homeconnect/oven/derived/cavity_temperature
+cannot_read fleet-homeconnect-derived homeassistant/sensor/homeconnect_oven_derived/x/config
 cannot_write fleet-homeconnect-derived homeconnect/oven/state/bsh_common_status_operationstate
 cannot_write fleet-homeconnect-derived homeassistant/sensor/other/config
 cannot_read fleet-homeconnect-derived homeconnect/oven/state/other
@@ -206,7 +211,7 @@ log "ok: g: a server login is refused on 1884"
 ROOT="$HERE/../../.."
 ports=$(docker compose -f "$ROOT/docker-compose.yml" --env-file "$ROOT/example.env" \
   config --no-interpolate --format json 2>/dev/null |
-  jq -r '[.services.broker.ports[] | "\(.host_ip // "any"):\(.published)"] | sort | join(" ")')
-is "$ports" "any:1883 any:1884 any:1885" "h: the broker publishes 1883, 1884 and 1885"
+  jq -r '[.services.broker.ports[] | "\(.host_ip // "any"):\(.published):\(.target)"] | sort | join(" ")')
+is "$ports" "any:1883:1883 any:1884:1884 any:1885:1885" "h: the broker publishes 1883, 1884 and 1885"
 
 log "PASS"

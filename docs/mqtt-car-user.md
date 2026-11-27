@@ -35,7 +35,7 @@ client.
 | `fleet-relay`, `fleet-relay-check` | `fleet-relay` | 1885 | nothing | `fleet/#` |
 | `fleet-zigbee-availability-<pid>` | `fleet-zigbee-availability` | 1885 | nothing | `z2m/house1/#` |
 | `fleet-media-volume` | `fleet-media-volume` | 1885 | `homy/media/living/volume/state` | `homy/media/living/volume/command` |
-| `fleet-homeconnect-derived`, `fleet-homeconnect-derived-check` | `fleet-homeconnect-derived` | 1885 | `homeconnect/oven/derived/#` (with its will `homeconnect/oven/derived/status`), `homeassistant/sensor/homeconnect_oven_derived/#` | `homeconnect/oven/LWT`, two `homeconnect/oven/state/...` values, `/modbus/secondary/oven/reading` |
+| `fleet-homeconnect-derived`, `fleet-homeconnect-derived-check` | `fleet-homeconnect-derived` | 1885 | `homeconnect/oven/derived/#` (with its will `homeconnect/oven/derived/status`), `homeassistant/sensor/homeconnect_oven_derived/#` | `homeconnect/oven/LWT`, `homeconnect/oven/state/bsh_common_status_operationstate`, `homeconnect/oven/state/cooking_oven_status_cavity_001_currenttemperature`, its own `homeconnect/oven/derived/#` (its deploy check reads a value back), `/modbus/secondary/oven/reading` |
 | `fleet-fully-metrics`, `fleet-fully-metrics-check` | `fleet-fully-metrics` | 1885 | nothing | `fully/#` |
 
 The clients that run on routy itself may stay on `127.0.0.1:1883` without a
