@@ -14,8 +14,8 @@
 #      can log in on 1884 or 1885;
 #   g. each server user on 1885 can do its own topics and nothing else; no
 #      login, a wrong password and the car's login are refused on 1885;
-#   h. docker-compose.yml publishes 1883 on 127.0.0.1 only, so the published
-#      ports outside routy all need a login.
+#   h. docker-compose.yml publishes 1883, 1884 and 1885 (1883 stays open
+#      until #2018).
 # The broker drops a publish the ACL denies without an error, so every check
 # reads a retained message back.
 #
@@ -207,6 +207,6 @@ ROOT="$HERE/../../.."
 ports=$(docker compose -f "$ROOT/docker-compose.yml" --env-file "$ROOT/example.env" \
   config --no-interpolate --format json 2>/dev/null |
   jq -r '[.services.broker.ports[] | "\(.host_ip // "any"):\(.published)"] | sort | join(" ")')
-is "$ports" "127.0.0.1:1883 any:1884 any:1885" "h: 1883 is published on 127.0.0.1 only"
+is "$ports" "any:1883 any:1884 any:1885" "h: the broker publishes 1883, 1884 and 1885"
 
 log "PASS"

@@ -10,11 +10,12 @@ its own settings (`per_listener_settings true`):
 
 | Port | Login | Rights | Published on routy | Used by |
 |---|---|---|---|---|
-| 1883 | none (anonymous) | everything | on `127.0.0.1` only | every service on the docker networks (`broker:1883`), and tools on routy itself (`127.0.0.1:1883`) |
+| 1883 | none (anonymous) | everything | yes (closing it to the outside is #2018) | every service on the docker networks (`broker:1883`), and the clients that have not moved to 1884 or 1885 yet |
 | 1884 | required, `passwd` | only what `config/mosquitto/car.acl` gives | yes | the car app |
 | 1885 | required, `servers.passwd` | only what `config/mosquitto/servers.acl` gives | yes | the server clients outside docker (#1964) |
 
-So no port that is open to the outside is anonymous (#1964).
+Port 1883 stays open and anonymous for now. #2018 publishes it on routy's
+`127.0.0.1` only, after the clients outside routy log in on 1884 or 1885.
 
 On 1884 the broker uses the user name as the client id. On 1885 it does
 not: the fleet checkers share one user and can run at the same time, each
@@ -31,18 +32,17 @@ client.
 |---|---|---|---|---|
 | `ioniq-logger` (the car app) | `ioniq` | 1884 | see `car.acl` | see `car.acl` |
 | `fleet-<pid>` (the fleet checkers on the hosts other than routy) | `fleet-checker` | 1885 | `fleet/<host>/alert`, `fleet/<host>/influx`, `fleet/<host>/health` | nothing |
-| `fleet-relay`, `fleet-relay-check` | `fleet-relay` | 1885, or `127.0.0.1:1883` on routy | nothing | `fleet/#` |
-| `fleet-zigbee-availability-<pid>` | `fleet-zigbee-availability` | 1885, or `127.0.0.1:1883` on routy | nothing | `z2m/house1/#` |
+| `fleet-relay`, `fleet-relay-check` | `fleet-relay` | 1885 | nothing | `fleet/#` |
+| `fleet-zigbee-availability-<pid>` | `fleet-zigbee-availability` | 1885 | nothing | `z2m/house1/#` |
 | `fleet-media-volume` | `fleet-media-volume` | 1885 | `homy/media/living/volume/state` | `homy/media/living/volume/command` |
-| `fleet-homeconnect-derived`, `fleet-homeconnect-derived-check` | `fleet-homeconnect-derived` | 1885, or `127.0.0.1:1883` on routy | `homeconnect/oven/derived/#` (with its will `homeconnect/oven/derived/status`), `homeassistant/sensor/homeconnect_oven_derived/#` | `homeconnect/oven/LWT`, two `homeconnect/oven/state/...` values, `/modbus/secondary/oven/reading` |
-| `fleet-fully-metrics`, `fleet-fully-metrics-check` | `fleet-fully-metrics` | 1885, or `127.0.0.1:1883` on routy | nothing | `fully/#` |
+| `fleet-homeconnect-derived`, `fleet-homeconnect-derived-check` | `fleet-homeconnect-derived` | 1885 | `homeconnect/oven/derived/#` (with its will `homeconnect/oven/derived/status`), `homeassistant/sensor/homeconnect_oven_derived/#` | `homeconnect/oven/LWT`, two `homeconnect/oven/state/...` values, `/modbus/secondary/oven/reading` |
+| `fleet-fully-metrics`, `fleet-fully-metrics-check` | `fleet-fully-metrics` | 1885 | nothing | `fully/#` |
 
 The clients that run on routy itself may stay on `127.0.0.1:1883` without a
-login, but only on the address `127.0.0.1`: routy's own name or tailnet
-address no longer reaches 1883. Their users are there for when they move.
+login, also after #2018. Their users are there for when they move.
 Client ids are shared by all listeners, so a client must not use the same id
 on two ports at once (the second one pushes the first off). The others must move to
-1884 or 1885 with a login: after the deploy, the outside cannot reach 1883.
+1884 or 1885 with a login before #2018 closes 1883 to the outside.
 A user on 1885 that `servers.acl` does not name may do nothing.
 
 ## What the car user may do (`car.acl`)

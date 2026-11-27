@@ -101,9 +101,7 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      # Anonymous: on routy itself only, not to the outside (#1964). The
-      # services on the docker networks use broker:1883 and do not need it.
-      - "127.0.0.1:1883:1883"
+      - "1883:1883"
       # Login only, for the car app (#1962).
       - "1884:1884"
       # Login only, for the server clients outside docker (#1964).
