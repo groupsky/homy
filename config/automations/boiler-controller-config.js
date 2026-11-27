@@ -48,6 +48,55 @@ module.exports = {
       hotWaterLimit: 55,
       dayTopUp: { minutesBeforeHold: 90, target: 55 },
       nightBoostTarget: 55,
+      // The evening plan (#1985) heats only the hot water the coming evening
+      // is missing.
+      eveningPlan: {
+        // The plan = the need of the evening + this many baths (a back-test
+        // over 2024-01 to 2026-11: +1 bath was short on 1 evening in 5, by
+        // more than half a bath on 1 in 7).
+        marginBaths: 1,
+        // The evening baths usually start soon after this time. The day-price
+        // heating starts late enough to be done by then.
+        eveningStart: '19:30',
+        // The day-price heating starts this many minutes earlier than the
+        // model says, for a model that is a little slow.
+        startMarginMinutes: 15,
+        // Night limit: in the night zone (from the end of the hold to the end
+        // of the zone) the element heats the top up to this, at night price.
+        nightLimit: 55,
+        // Day limit: the day-price heating before the evening heats the top up
+        // to this. Both limits are capped by hotWaterLimit.
+        dayLimit: 55,
+        // A stopped element starts for the plan only when this many baths or
+        // more are missing (so it does not start for a few litres).
+        startBaths: 0.25,
+        // The evening use is measured from measureFrom to midnight with an
+        // energy balance on the tank model; standbyW is the tank's heat loss.
+        measureFrom: '18:00',
+        standbyW: 40,
+        // The element energy of the balance: the `tot` (kWh) counter of the
+        // boiler meter. Without fresh readings the model's element power
+        // is used.
+        boilerMeterTopic: '/modbus/secondary/boiler/reading',
+        // The need = the mean of the last `sameWeekdays` same weekdays within
+        // `historyDays`. With fewer, the season table below. An evening
+        // value over maxBaths is taken as a broken measurement.
+        sameWeekdays: 4,
+        historyDays: 56,
+        maxBaths: 15,
+        // Mean baths per evening (18:00-24:00) by season, Monday first, from
+        // 3 years of history (2023-11 to 2026-11).
+        bathsBySeason: [
+          { months: [11, 12, 1, 2, 3], baths: [2.4, 2.5, 2.6, 2.5, 1.8, 1.5, 2.8] }, // winter
+          { months: [4, 5, 9, 10], baths: [2.8, 2.8, 2.8, 2.8, 2.0, 2.1, 3.5] }, // spring, autumn
+          { months: [6, 7, 8], baths: [2.1, 2.0, 2.2, 1.9, 1.3, 1.7, 2.2] } // summer
+        ],
+        // The Home Assistant number "Бани довечера": a value replaces the need
+        // of this evening; it clears itself at midnight.
+        overrideSetTopic: `${featuresPrefix}/number/boiler_evening_baths/set`,
+        overrideStatusTopic: `${featuresPrefix}/number/boiler_evening_baths/status`,
+        overrideMaxBaths: 10
+      },
       // Start the element when the bottom reading falls 3 K within 10 min,
       // without waiting for it to go under emergencyMin. From 2026-10-20 to
       // 2026-11-05 every such fall with the element off was a real draw (the
@@ -77,6 +126,43 @@ module.exports = {
       // The `boost` mode (the Home Assistant button "Загрей до 55 °C") heats the
       // top to hotWaterLimit now, for at most 2 h, then goes back to automatic.
       boostDurationMs: 2 * 60 * 60 * 1000,
+      // Baths ready (#1984): the status says how many baths the tank holds
+      // now and the minutes to one more. Only computed and published; no
+      // heating rule uses it. A bath is one shower: 65 L of 40 °C water at
+      // the tap (single draws: middle half 45-95 L).
+      bathLitres: 65,
+      bathTempC: 40,
+      // Cold water °C by month, January first: the lowest bottom reading in
+      // that month over three years (2023-11 to 2026-11). The real cold water
+      // may be a little colder.
+      coldWaterByMonth: [11.6, 9.8, 13.3, 12.9, 17.2, 19.9, 23.0, 23.9, 19.1, 17.1, 14.6, 13.1],
+      // The element's mean power while the controller asks for heat, by the
+      // water temperature at the element (it cuts out and cycles by itself
+      // as the water warms). The first row with the temperature under
+      // `belowC` counts; the last row has no limit.
+      elementPowerByTempKw: [
+        { belowC: 30, kw: 2.6 },
+        { belowC: 35, kw: 2.1 },
+        { belowC: 40, kw: 1.55 },
+        { belowC: 45, kw: 1.05 },
+        { kw: 0.75 }
+      ],
+      // The tank model: 184 L in 16 layers of 11.5 L over 1157 mm of water.
+      // Outlet in layer 14, element in layer 1 (layer 0 is the bottom),
+      // sensors 371 mm and 915 mm above the inside bottom. The cold inlet
+      // water mixes into the lowest layers (share of layer j:
+      // exp(-j / inletMixLayers)). maxTopC ends the heating simulation.
+      tankModel: {
+        litres: 184,
+        layers: 16,
+        heightMm: 1157,
+        outletLayer: 14,
+        elementLayer: 1,
+        bottomSensorMm: 371,
+        topSensorMm: 915,
+        inletMixLayers: 1.07,
+        maxTopC: 75
+      },
       verbose: true
     }
   },
