@@ -149,7 +149,9 @@ module.exports = (name, {
       controlMode: 'automatic',
       manualOverrideExpires: null,
       lastDecision: null,
-      lastDecisionReason: null
+      lastDecisionReason: null,
+      // The result of the last mode command (#1975), in memory only
+      lastCommand: null
     }
 
     // Load persistent state from cache
@@ -333,8 +335,29 @@ module.exports = (name, {
     const publishControlModeStatus = () => {
       mqtt.publish(finalControlModeStatusTopic, {
         mode: currentState.controlMode,
-        manualOverrideExpires: currentState.manualOverrideExpires
+        manualOverrideExpires: currentState.manualOverrideExpires,
+        lastCommand: currentState.lastCommand
       })
+    }
+
+    // Keeps the result of a mode command for the mode status (#1975), so
+    // any client that sends a command can see what became of it and why.
+    // result: 'applied' or 'refused'. reason: 'ok', 'top_at_limit' (the top
+    // is at or above hotWaterLimit), 'invalid_until' or 'unknown_mode'.
+    const commandResult = (mode, result, reason) => {
+      currentState.lastCommand = {
+        // A mode that is not a text is not kept; a long one is cut
+        mode: typeof mode === 'string' ? mode.slice(0, 64) : null,
+        result,
+        reason,
+        top: currentState.temperatureTop,
+        limit: hotWaterLimit,
+        at: Date.now()
+      }
+    }
+    const refuseCommand = (mode, reason) => {
+      commandResult(mode, 'refused', reason)
+      publishControlModeStatus()
     }
 
     const backToAutomatic = (why) => {
@@ -771,7 +794,7 @@ module.exports = (name, {
         if (typeof payload === 'string') {
           // Direct mode string from HA select
           newMode = payload
-        } else if (typeof payload === 'object' && payload.mode) {
+        } else if (payload && typeof payload === 'object' && payload.mode) {
           // Object with mode and optional duration
           newMode = payload.mode
           duration = payload.duration || manualOverrideExpiry
@@ -801,6 +824,7 @@ module.exports = (name, {
           const now = Date.now()
           if (!Number.isFinite(until) || until <= now || until > now + MAX_VACATION_UNTIL_MS) {
             console.log(`[${name}] vacation_until refused: "until" must be a time in ms, in the future and at most 60 days ahead (got ${JSON.stringify(until)})`)
+            refuseCommand(newMode, 'invalid_until')
             return
           }
         }
@@ -809,6 +833,19 @@ module.exports = (name, {
         const validModes = ['automatic', 'boost', 'manual_on', 'manual_off', 'vacation_3d', 'vacation_5d', 'vacation_7d', 'vacation_10d', 'vacation_14d', 'vacation_until']
 
         if (validModes.includes(newMode)) {
+          const top = currentState.temperatureTop
+          const atLimit = top !== null && top >= hotWaterLimit
+          // A boost heats the top to hotWaterLimit and ends there. With the
+          // top already at the limit it would end at once, so it is refused
+          // and the mode and its end time stay as they were (#1975).
+          if (newMode === 'boost' && atLimit) {
+            console.log(`[${name}] boost refused: top ${top}°C is at or above hotWaterLimit ${hotWaterLimit}°C`)
+            refuseCommand(newMode, 'top_at_limit')
+            return
+          }
+          // manual_on at the limit is applied: it heats once the top falls
+          // under the limit. The result says why it does not heat now.
+          commandResult(newMode, 'applied', newMode === 'manual_on' && atLimit ? 'top_at_limit' : 'ok')
           currentState.controlMode = newMode
           // A mode command is the newest order: it ends an outside ON or OFF.
           externalOn = null
@@ -845,6 +882,7 @@ module.exports = (name, {
           if (verbose) {
             console.log(`[${name}] invalid control mode: ${newMode}`)
           }
+          refuseCommand(newMode, 'unknown_mode')
         }
       } catch (err) {
         if (verbose) {

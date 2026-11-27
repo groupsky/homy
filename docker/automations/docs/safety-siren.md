@@ -91,6 +91,45 @@ not silence a safety alert, unless both sounds play at the same time. If the
 door bot sounds while a safety alert is active, its sound replaces the safety
 sound until the next repeat.
 
+## An outside agent gateway
+
+An outside gateway on routy lets voice and chat assistants play short, gentle
+sounds on this siren: an alarm a person set, or a reminder. It
+is not part of this stack. It only sends to `z2m/house1/floor1-alarm/set`, like
+the bots here.
+
+**Reserved melodies.** The gateway uses only melodies **1, 2, 12 and 15**.
+Homy's own bots must never use them, so a sound with one of them is never an
+alert. The gateway never uses the melodies of the alert table, the test or the
+front door: **6, 7, 8, 10, 11, 14, 16**. It also avoids 18 (it sounds like the
+doorbell, so people would go to the front door) and 3, 9, 13 and 17.
+
+**Volume and length.** `low` or `medium` only, never `high` (high is for
+danger). 1 to 30 s per sound. The payload has `alarm` last:
+`{"melody": <n>, "volume": "<v>", "duration": <s>, "alarm": true}`.
+
+**Limits and hours.**
+
+- No sound in the quiet hours: by default 22:00 to 07:00, `Europe/Sofia`.
+- At most one sound a minute in all, 4 an hour per assistant, and 12 in 24
+  hours in all.
+- No sound while the maintenance mute is on, or while its state is not known.
+- No sound when the siren's state is older than 90 min or the siren is offline.
+
+**It never cuts another sound.**
+
+- It does not play while the siren sounds, whoever's sound it is.
+- It does not play for 10 min after any `alarm: true` that it did not send
+  itself. This covers a safety alert's pause and the front-door bot's steps.
+- It watches the `set` topic, not only the siren's state, because the state
+  changes only when the siren reports back.
+- It sends `{"alarm": false}` only while its own last sound still plays, and
+  only when the last command on the `set` topic was its own. It never stops or
+  mutes a safety or front-door sound. It never writes the mute switch, the stop
+  button or the test button.
+- If a bot here sounds while a gateway sound plays, the bot's sound replaces it.
+  That is wanted.
+
 ## Commands
 
 The bot sends `{"alarm": true, "melody": <n>, "volume": "<v>", "duration": <s>}`

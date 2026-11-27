@@ -10,20 +10,21 @@
   },
   "scripts": {
     "start": "index.js",
-    "test": "jest"
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest"
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.35.0",
     "async-mutex": "^0.5.0",
     "ieee754": "^1.1.13",
     "modbus-serial": "^8.0.25",
-    "mongodb": "^7.8.0",
+    "mongodb": "^7.9.0",
     "mqtt": "^5.16.1",
     "yargs": "^18.2.0"
   },
   "devDependencies": {
     "jest": "^30.5.2",
     "js-yaml": "^5.5.0",
+    "msw": "^3.0.7",
     "nunjucks": "^3.2.4"
   }
 }

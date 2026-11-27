@@ -1,4 +1,4 @@
-FROM ghcr.io/groupsky/homy/mosquitto:2.0.22
+FROM ghcr.io/groupsky/homy/mosquitto:2.0.23
 
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
