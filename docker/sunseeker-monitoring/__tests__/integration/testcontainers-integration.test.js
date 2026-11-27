@@ -33,7 +33,7 @@ describe('Sunseeker Service Integration Tests', () => {
     network = await new Network().start();
 
     // Start Eclipse Mosquitto MQTT broker
-    mosquittoContainer = await new GenericContainer('ghcr.io/groupsky/homy/mosquitto:2.0.22')
+    mosquittoContainer = await new GenericContainer('ghcr.io/groupsky/homy/mosquitto:2.0.23')
       .withNetwork(network)
       .withNetworkAliases('mqtt-broker')
       .withExposedPorts(1883)
