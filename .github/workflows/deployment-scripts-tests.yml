@@ -94,6 +94,11 @@ jobs:
           cd scripts/tests
           ./bats-core/bin/bats ndjson-overlap.bats
 
+      - name: Run check-subnets.sh tests
+        run: |
+          cd scripts/tests
+          ./bats-core/bin/bats check-subnets.bats
+
       - name: Run CI master base ref tests
         run: |
           cd scripts/tests
@@ -129,6 +134,18 @@ jobs:
 
       - name: Run tests on the Node version it runs with on routy
         run: docker run --rm -v "$PWD":/w -w /w ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 node --test scripts/energy-backfill/lib.test.mjs
+
+  check-subnets:
+    name: Test check-subnets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.1
+
+      - name: Run tests on the Node image the script falls back to on routy
+        run: docker run --rm -v "$PWD":/w -w /w ghcr.io/groupsky/homy/node:22.22.0-alpine3.23 node --test scripts/lib/cidr.test.mjs scripts/check-subnets/lib.test.mjs scripts/check-subnets/cli.test.mjs
 
   ndjson-overlap:
     name: Test ndjson-overlap

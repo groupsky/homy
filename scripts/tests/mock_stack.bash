@@ -18,6 +18,7 @@
 #   fail-inspect        `docker inspect` exits 1
 #   fail-config-hash    `docker compose config --hash` exits 1
 #   stop-noop           `docker compose stop` leaves the containers running
+#   networks.json       `docker network inspect` objects (default: none); `network ls -q` lists their Ids
 #   provision.out       output of `docker run` (ha-provision; default: up to date)
 #   provision-dry.out   the same for a run with --dry-run (default: provision.out)
 #   provision.fail      `docker run` without --dry-run exits 1 (always when
@@ -174,6 +175,15 @@ case "$1" in
             exit 1
         fi
         echo "$out"
+        ;;
+    network)
+        shift
+        nets="$MOCK_DIR/networks.json"
+        [ -f "$nets" ] || echo '[]' > "$nets"
+        case "$1" in
+            ls) [ -e "$MOCK_DIR/fail-network-ls" ] && exit 1; jq -r '.[].Id' "$nets" ;;
+            inspect) cat "$nets" ;;
+        esac
         ;;
     image)
         shift

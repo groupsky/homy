@@ -95,6 +95,10 @@ if [ "$1" = "compose" ]; then
             echo "Docker Compose version v2.24.0"
             exit 0
             ;;
+        config)
+            echo '{"name": "test", "services": {}}'
+            exit 0
+            ;;
         pull)
             echo "Error response from daemon: manifest unknown" >&2
             exit 1
@@ -117,6 +121,8 @@ EOF
 
     cp "${BATS_TEST_DIRNAME}/../docker-helper.sh" "$PROJECT_DIR/scripts/docker-helper.sh"
     cp "${BATS_TEST_DIRNAME}/../deploy.sh" "$PROJECT_DIR/scripts/deploy.sh"
+    cp "${BATS_TEST_DIRNAME}/../check-subnets.sh" "$PROJECT_DIR/scripts/check-subnets.sh"
+    cp -r "${BATS_TEST_DIRNAME}/../check-subnets" "${BATS_TEST_DIRNAME}/../lib" "$PROJECT_DIR/scripts/"
     chmod +x "$PROJECT_DIR/scripts/docker-helper.sh" "$PROJECT_DIR/scripts/deploy.sh"
 }
 

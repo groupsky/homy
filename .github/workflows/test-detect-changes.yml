@@ -19,12 +19,16 @@ on:
       # not slip past the guard.
       - 'docker-compose.yml'
       - 'example.env'
+      # The proxy-pinning test imports the shared CIDR helpers from here (#1559)
+      - 'scripts/lib/**'
   pull_request:
     paths:
       - '.github/scripts/detect-changes/**'
       - '.github/workflows/test-detect-changes.yml'
       - 'docker-compose.yml'
       - 'example.env'
+      # The proxy-pinning test imports the shared CIDR helpers from here (#1559)
+      - 'scripts/lib/**'
   workflow_dispatch:
 
 jobs:
