@@ -86,7 +86,7 @@ the `monitoring` bus) is read exactly as before.
       defaultState: false,
       outputs: {
         out9: {},                    // the board-wide values
-        out14: {defaultState: true}, // an override for one output
+        out15: {defaultState: true}, // an override for one output
       },
     },
   },
@@ -106,20 +106,23 @@ the `monitoring` bus) is read exactly as before.
   the wait, so the next poll reads the board at once.
 - **Restore**, at the first good contact after a restart, per listed output:
   if the board was gone (last good contact before, to first good contact
-  after) no longer than `restoreWithinMs`, its wanted value: the last command
-  since the last full report, even one whose write failed, else the last
-  reported value. Otherwise `defaultState`; with no `defaultState` the output
+  after) no longer than `restoreWithinMs`, its wanted value: the last value
+  written with success since the last full report, else the last reported
+  value. A command whose write failed is never written back later.
+  Otherwise `defaultState`; with no `defaultState` the output
   stays as the board came up. The driver reads register 0x33 and writes only
   the outputs that differ, one coil each, in the same hold of the bus. Then it
   publishes a full report at once. One log line per restart:
-  `relays00-15 restarted (received packets 40020 -> 4), gone 4104 ms: wrote out9=true (last report), out14=false (last command)`.
+  `relays00-15 restarted (received packets 40020 -> 4), gone 4104 ms: wrote out9=true (last report), out13=false (last written value)`.
 - **Power-up state:** at the first full report after the reader starts, the
   driver compares register 0x0C (`defaultOutputState`) with each listed
   output's `defaultState` and writes only the `def*` coils that differ, with a
   log line each (`relays00-15 power-up state: def14 (out14) false -> true`).
   It writes none in normal running: the board keeps them in a memory that
   wears.
-- An output that is not listed is never written.
+- An output that is not listed is never written. The boiler contactor
+  (`relays00-15` out14) is not listed: the boiler controller owns it, and the
+  reader never restores it.
 
 Tests: `devices/aspar-mod-16ro.test.js` (the driver on a fake board) and
 `relay-restore.test.js` (the real `index.js` with the deployed config on a

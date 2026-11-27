@@ -245,7 +245,7 @@ async function restoreOutputs (client, name, state) {
     if (restoreWithinMs != null && goneMs <= restoreWithinMs) {
       if (key in commands) {
         value = commands[key]
-        why = 'last command'
+        why = 'last written value'
       } else if (state.reported != null) {
         value = bitOf(state.reported, bit)
         why = 'last report'
@@ -388,22 +388,15 @@ const REGISTERS_MAP = {
  * @returns {Promise<void>}
  */
 async function write (client, values, config, state = {}) {
-  // The wanted value of each output, kept before the write so that a write
-  // that fails (the board is restarting) is what a restore writes back.
-  if (config?.options?.restore) {
-    // in the order of the writes below: the outN coils, then the outputs word
-    const commands = state.commands = state.commands || {}
-    for (const key of OUTPUT_NAMES) {
-      if (key in values) commands[key] = !!values[key]
-    }
-    if ('outputs' in values) {
-      for (const [bit, key] of OUTPUT_NAMES.entries()) commands[key] = bitOf(values.outputs, bit)
-    }
-  }
+  // Only a value that was written with success is kept for a restore: a
+  // command whose write failed is never written back later.
+  const restore = !!config?.options?.restore
+  const commands = restore ? (state.commands = state.commands || {}) : null
 
   for (const key in COIL_MAP) {
     if (key in values) {
       await client.writeCoil(COIL_MAP[key], !!values[key])
+      if (restore && OUTPUT_NAMES.includes(key)) commands[key] = !!values[key]
       // force new report
       state.lastReport = 0
     }
@@ -420,6 +413,9 @@ async function write (client, values, config, state = {}) {
   for (const key in REGISTERS_MAP) {
     if (key in values) {
       await client.writeRegister(REGISTERS_MAP[key], values[key])
+      if (restore && key === 'outputs') {
+        for (const [bit, name] of OUTPUT_NAMES.entries()) commands[name] = bitOf(values.outputs, bit)
+      }
       // force new report
       state.lastReport = 0
     }

@@ -95,7 +95,7 @@ describe('restore after a board restart', () => {
       restore: {
         restoreWithinMs: 15 * MIN,
         defaultState: false,
-        outputs: {out8: {}, out9: {}, out10: {}, out11: {}, out13: {}, out14: {}, out15: {}},
+        outputs: {out8: {}, out9: {}, out10: {}, out11: {}, out13: {}, out15: {}},
         ...restore,
       },
     },
@@ -128,7 +128,8 @@ describe('restore after a board restart', () => {
     .map(([addr, value]) => `out${addr - 0x330}=${value}`)
 
   it('notices a restart within about 1 s and writes back the wanted outputs, then reports', async () => {
-    // out9, out13 (lights) and out14 (boiler contactor) on; out3 has no config
+    // out9, out13 (lights) and out14 (boiler contactor) on; out3 has no config,
+    // out14 is not in the restore list
     const board = fakeBoard({outputs: (1 << 9) | (1 << 13) | (1 << 14) | (1 << 3)})
     const config = restoreConfig()
     const state = {}
@@ -139,13 +140,13 @@ describe('restore after a board restart', () => {
 
     expect(reports).toHaveLength(1)
     expect(reports[0].at - restartAt).toBeLessThanOrEqual(1100)
-    expect(reports[0].outputs).toBe((1 << 9) | (1 << 13) | (1 << 14))
-    expect(outputWrites(board)).toEqual(['out9=true', 'out13=true', 'out14=true'])
+    expect(reports[0].outputs).toBe((1 << 9) | (1 << 13))
+    expect(outputWrites(board)).toEqual(['out9=true', 'out13=true'])
     const restoreLog = logs.filter((l) => l.includes('restart'))
     expect(restoreLog).toHaveLength(1)
     expect(restoreLog[0]).toMatch(/^relays00-15 restarted/)
     expect(restoreLog[0]).toContain('out9=true')
-    expect(restoreLog[0]).toContain('out14=true')
+    expect(restoreLog[0]).not.toContain('out14')
   })
 
   it('reads 0x33 and writes all outputs in one call, and the report follows at once', async () => {
@@ -197,23 +198,37 @@ describe('restore after a board restart', () => {
     expect(outputWrites(board)).toEqual([])
   })
 
-  it('restores a command that failed while the board was down, not the older report', async () => {
-    const board = fakeBoard({outputs: (1 << 14) | (1 << 9)})
+  it('never restores a command whose write failed; the last report wins', async () => {
+    const board = fakeBoard({outputs: (1 << 13) | (1 << 9)})
     const config = restoreConfig()
     const state = {}
     await poll(board, config, state, 2000)
     board.up = false
     await poll(board, config, state, 3000)
-    await expect(write(board.client, {out14: false}, config, state)).rejects.toThrow('Timed out')
+    await expect(write(board.client, {out13: false}, config, state)).rejects.toThrow('Timed out')
     await expect(write(board.client, {out11: true}, config, state)).rejects.toThrow('Timed out')
-    // the board comes up with every output on (to show out14 is written off)
     board.defaults = 0xFFFF
     board.restart()
     board.up = true
     const reports = await poll(board, config, state, 61 * 1000, 100)
 
-    expect(outputWrites(board).sort()).toEqual(['out10=false', 'out13=false', 'out14=false', 'out15=false', 'out8=false'])
-    expect(reports[0].outputs & 0xFF00).toBe((1 << 9) | (1 << 11) | (1 << 12))
+    expect(outputWrites(board).sort()).toEqual(['out10=false', 'out11=false', 'out15=false', 'out8=false'])
+    expect(reports[0].outputs & 0xFF00).toBe((1 << 9) | (1 << 12) | (1 << 13) | (1 << 14))
+  })
+
+  it('restores the last value that was written with success, not a later failed one', async () => {
+    const board = fakeBoard({outputs: 0})
+    const config = restoreConfig()
+    const state = {}
+    await poll(board, config, state, 2000)
+    await write(board.client, {out11: true}, config, state)
+    board.up = false
+    await poll(board, config, state, 1000)
+    await expect(write(board.client, {out11: false}, config, state)).rejects.toThrow('Timed out')
+    board.restart()
+    board.up = true
+    await poll(board, config, state, 61 * 1000, 100)
+    expect(outputWrites(board).filter((w) => w.startsWith('out11='))).toEqual(['out11=true', 'out11=true'])
   })
 
   it('a command before the last report does not count: the report wins', async () => {

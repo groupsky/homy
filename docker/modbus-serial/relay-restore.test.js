@@ -132,16 +132,17 @@ describe('relay board restore in the dry-switches reader', () => {
     const before = reader.reports('relays00-15').length
     await reader.run(10000)
 
-    expect(boards[RELAYS00].outputs).toBe((1 << 9) | (1 << 14))
+    // the boiler contactor (out14) is never written back: it stays off
+    expect(boards[RELAYS00].outputs).toBe(1 << 9)
     expect(boards[RELAYS16].outputs).toBe(1 << 8)
     const report = reader.reports('relays00-15')[before]
-    expect(report.outputs).toBe((1 << 9) | (1 << 14))
+    expect(report.outputs).toBe(1 << 9)
     // the back-off after 3 s down: tries at 1, 2 and 4 s, so the next try
     // after the board is back is at most 4 s later; then it is noticed at once
     expect(report.at - backAt).toBeLessThanOrEqual(4100)
     const lines = reader.logs.filter((l) => l.includes('restarted'))
     expect(lines).toHaveLength(2)
-    expect(lines.find((l) => l.startsWith('relays00-15'))).toMatch(/gone \d+ ms: wrote out9=true \(last report\), out14=true \(last report\)$/)
+    expect(lines.find((l) => l.startsWith('relays00-15'))).toMatch(/gone \d+ ms: wrote out9=true \(last report\)$/)
     expect(lines.find((l) => l.startsWith('relays16-31'))).toMatch(/wrote out8=true/)
   })
 
@@ -180,21 +181,34 @@ describe('relay board restore in the dry-switches reader', () => {
     expect(reader.reports('relays00-15').every((r) => r.outputs === 1 << 13)).toBe(true)
   })
 
-  it('restores a command that failed while the board was down', async () => {
-    const boards = {[RELAYS00]: fakeBoard(1 << 14), [RELAYS16]: fakeBoard()}
+  it('never restores a command whose write failed: the last report wins', async () => {
+    const boards = {[RELAYS00]: fakeBoard(1 << 13), [RELAYS16]: fakeBoard()}
     const reader = startReader({boards})
     await reader.run(2000)
     boards[RELAYS00].up = false
     await reader.run(2000)
-    await reader.command('relays00-15', {out14: false})
+    await reader.command('relays00-15', {out13: false})
     expect(reader.logs.some((l) => l.startsWith('Error writing to device relays00-15'))).toBe(true)
-    // the board comes up with out14 on, as its power-up state
-    boards[RELAYS00].defaults = 1 << 14
     boards[RELAYS00].restart()
     boards[RELAYS00].up = true
     await reader.run(10000)
-    expect(boards[RELAYS00].writes).toEqual(['out14=false'])
-    expect(reader.logs.find((l) => l.includes('restarted'))).toMatch(/wrote out14=false \(last command\)$/)
+    expect(boards[RELAYS00].writes).toEqual(['out13=true'])
+    expect(reader.logs.find((l) => l.includes('restarted'))).toMatch(/wrote out13=true \(last report\)$/)
+    expect(boards[RELAYS00].outputs).toBe(1 << 13)
+  })
+
+  it('never writes the boiler contactor (out14) after a restart', async () => {
+    const boards = {[RELAYS00]: fakeBoard(), [RELAYS16]: fakeBoard()}
+    const reader = startReader({boards})
+    await reader.run(2000)
+    await reader.command('relays00-15', {out14: true})
+    const before = boards[RELAYS00].writes.length
+    boards[RELAYS00].up = false
+    await reader.run(2000)
+    boards[RELAYS00].restart()
+    boards[RELAYS00].up = true
+    await reader.run(10000)
+    expect(boards[RELAYS00].writes.slice(before)).toEqual([])
     expect(boards[RELAYS00].outputs).toBe(0)
   })
 
