@@ -364,7 +364,9 @@ Each rule's `annotations.description` should carry the first action. Summary tab
   clean enough to bound home charges by a relative power threshold. Now used by the `ioniq-sessions` bot
   (design spec `docs/superpowers/specs/2026-07-18-ioniq-session-segmentation-bot-design.md` §3.3, §0.1) as
   the preferred `bounds:meter` source for AC-side charge energy/efficiency. (OVMS, which previously covered
-  this, is dead as of ~2025-09-24.)
+  this, no longer reaches InfluxDB: the copy stopped on ~2025-09-24 with the old `telegraf-ovms` service. The OVMS
+  module itself kept reporting to its server until 2026-03-06. The old OVMS measurements, tag `bus = 'ovms'`,
+  stay in InfluxDB because ev-journal still reads them.)
 - **`brakes_on` is unreliable** (logger #9) — don't build braking alerts on it; use `brake_lamp`.
 - **New signals unlock new alerts** once logger tickets land: motor/inverter over-temp (#5), cabin over-temp / preconditioning verify (#6), direct LDC current/temp (#8), body/security (door-left-unlocked, window-open) (#13).
 - **Decide** dedicated vs shared Telegram channel (§3) before wide rollout.
