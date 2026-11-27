@@ -208,6 +208,7 @@ The script:
    Then it **waits for a green CI run**: the images exist as soon as CI has built them, before its tests run, so they say nothing about the tests. It reads the commit's `ci-unified` runs from the public GitHub API (no token needed) every `CI_WAIT_INTERVAL` (120 s). It goes on when one run succeeded (a green re-run or `force_rebuild` counts); it stops when the runs failed, or when no run is green after `CI_WAIT_SECONDS` (3600 s, also when GitHub does not answer). Both stops are before the snapshot: nothing was changed. `--allow-red-ci` skips this check; `--tag latest` skips it too, because CI moves `latest` only after all tests passed. A tag that is not a known commit is refused without `--allow-red-ci` (#1550).
 3. **Checks that a snapshot can be taken** (`snapshot.sh --check`). If it cannot, the deploy stops here: nothing was changed. (The check runs with the old code; the real snapshot, step 4b, runs with the new code, so a commit that changes the mounts can still fail there.)
 4. Updates the code to `origin/master` and pulls the images for that commit, **one image at a time** (`COMPOSE_PARALLEL_LIMIT` defaults to 1) and **tried again** when a pull fails (`PULL_ATTEMPTS`, default 4, with `PULL_RETRY_DELAY` seconds between tries, default 10). GHCR sometimes answers many parallel requests with a TLS handshake timeout (#1698). If the pull still fails, the code is put back and nothing is restarted. No snapshot exists yet, so a failed pull leaves none.
+4a. Between the code update and the pull of step 4, runs [`check-subnets.sh`](#network-topology-changes-need-a-manual-network-recreate) on the updated code and this host's `.env`: a pinned subnet that overlaps a Docker network, a host route or another pinned subnet stops the deploy there, before the pull, the snapshot or any restart, and the code is put back (#1559).
 4b. **Takes the snapshot** (`snapshot.sh`), after the pull. If it fails, the code is put back and nothing is restarted.
 5. Writes `docker-compose.deploy.yml` (not in git): every service pinned to its image **digest** and labelled with a hash of the host files it mounts (see [Recreating only what changed](#recreating-only-what-changed)).
 6. Refuses (before restarting anything) when a service has more than one container, for example a leftover `<id>_<name>` container from an interrupted recreate: neither the change detection nor the gate could tell which one counts. Remove the leftover by hand.
@@ -443,8 +444,12 @@ user specified IP address is supported only when connecting to networks with use
 change cannot be applied that way. Deploy such a change by hand instead:
 
 ```bash
-# 1. Add any new variables to .env FIRST, and confirm nothing is unset.
-docker compose config >/dev/null   # aborts on a missing required variable
+# 1. Add any new variables to .env FIRST, then check THIS host. It reads the
+#    host's own .env (not example.env), runs `docker compose config` (aborts on
+#    a missing required variable), and fails if a pinned subnet overlaps an
+#    existing Docker network, a host route or another pinned subnet.
+#    It stops and changes nothing.
+./scripts/check-subnets.sh
 
 # 2. Stop only the services attached to the network being changed.
 docker compose stop ingress ha grafana z2m-home1 mongo-express
@@ -452,15 +457,32 @@ docker compose stop ingress ha grafana z2m-home1 mongo-express
 # 3. Remove it. This succeeds once its containers are stopped.
 docker network rm homy_ingress
 
-# 4. Bring them back; compose recreates the network from the compose file.
-docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d
+# 4. Bring them back, with --force-recreate; compose recreates the network
+#    from the compose file.
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d --force-recreate ingress ha grafana z2m-home1 mongo-express
 ```
+
+Step 1 matters because the CI guards read `example.env`, and a host's `.env`
+does not have to match it. A subnet that is fine in `example.env` can sit inside
+a bigger network on the host, and then `docker network create` fails in step 4,
+when the services are already stopped (#1559). `deploy.sh` runs the same check
+after the code update and before the pull, the snapshot or any restart, and
+stops the deploy when it fails. The overlap logic is `scripts/lib/cidr.mjs`,
+shared with the CI test.
 
 Required variables use the `${VAR:?message}` form, so step 1 fails loudly and
 touches nothing if `.env` is incomplete. Do not skip it: with the network still
 present from a previous deploy, an empty value would otherwise be accepted
 silently, leaving the network unpinned and the stack green but broken — this is
 exactly how issue #1555 happened.
+
+**Why `--force-recreate` in step 4.** Right after `docker network rm`, a plain
+`up -d --no-deps` can start some containers and fail the others with
+`Error response from daemon: network <old-network-id> not found`: those
+containers still exist, created against the removed network's ID, and compose
+does not see a reason to recreate them. If you see this, run the same `up -d`
+again with `--force-recreate` and the names of the failed services. Passing it
+from the start avoids the failed run.
 
 HA trusts the proxy at `PROXY_BACKEND_ADDRESS`. HA keeps this in its
 `.storage`, not in YAML; `scripts/ha-provision` sets it after a deploy that

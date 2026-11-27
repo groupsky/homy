@@ -24,6 +24,8 @@ setup() {
 
     cp "${BATS_TEST_DIRNAME}/../docker-helper.sh" "$PROJECT_DIR/scripts/docker-helper.sh"
     cp "${BATS_TEST_DIRNAME}/../deploy.sh" "$PROJECT_DIR/scripts/deploy.sh"
+    cp "${BATS_TEST_DIRNAME}/../check-subnets.sh" "$PROJECT_DIR/scripts/check-subnets.sh"
+    cp -r "${BATS_TEST_DIRNAME}/../check-subnets" "${BATS_TEST_DIRNAME}/../lib" "$PROJECT_DIR/scripts/"
     cp "${BATS_TEST_DIRNAME}/../snapshot.sh" "$PROJECT_DIR/scripts/snapshot.sh"
     chmod +x "$PROJECT_DIR/scripts/"*.sh
 
@@ -167,6 +169,36 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
     assert_equal "$(cat "$MOCK_DIR/head")" "$OLD"
     run cat "$MOCK_DIR/notify.log"
     assert_output --partial "the pre-deploy snapshot failed. Nothing was restarted."
+}
+
+@test "deploy.sh: a pinned subnet that overlaps a host network stops the deploy before the pull (#1559)" {
+    jq '.networks = {ingress: {name: "homy_ingress", ipam: {config: [{subnet: "10.28.29.0/24"}]}}}' \
+        "$MOCK_DIR/config.json" > "$MOCK_DIR/config.tmp" && mv "$MOCK_DIR/config.tmp" "$MOCK_DIR/config.json"
+    echo '[{"Id": "n1", "Name": "homy_dmz", "IPAM": {"Config": [{"Subnet": "10.28.0.0/16"}]}}]' > "$MOCK_DIR/networks.json"
+
+    run deploy
+    assert_failure
+    assert_output --partial "overlaps the existing Docker network homy_dmz"
+    assert_output --partial "The subnet check failed; nothing was restarted"
+
+    run calls
+    refute_output --partial "compose pull"
+    refute_output --partial "compose up"
+    refute_output --partial "compose stop"
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "0"
+    assert_equal "$(cat "$MOCK_DIR/head")" "$OLD"
+    run cat "$MOCK_DIR/notify.log"
+    assert_output --partial "a pinned subnet overlaps"
+}
+
+@test "deploy.sh: pinned subnets that fit the host's networks do not stop the deploy (#1559)" {
+    jq '.networks = {ingress: {name: "homy_ingress", ipam: {config: [{subnet: "10.28.29.0/24"}]}}}' \
+        "$MOCK_DIR/config.json" > "$MOCK_DIR/config.tmp" && mv "$MOCK_DIR/config.tmp" "$MOCK_DIR/config.json"
+    echo '[{"Id": "n1", "Name": "homy_ingress", "IPAM": {"Config": [{"Subnet": "10.28.29.0/24"}]}}]' > "$MOCK_DIR/networks.json"
+
+    run deploy
+    assert_success
+    assert_output --partial "Subnet check passed"
 }
 
 @test "deploy.sh: a failed pull leaves no snapshot" {

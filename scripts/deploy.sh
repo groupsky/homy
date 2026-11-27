@@ -425,6 +425,17 @@ fi
 export IMAGE_TAG="$NEW_VERSION"
 log "Using IMAGE_TAG: $IMAGE_TAG"
 
+# The subnets this code pins must not collide with what this host already has
+# (Docker networks, routes). example.env is not the host's .env, so only the
+# host can tell; fail now, before the pull, the snapshot or any restart (#1559).
+log "Checking the pinned subnets against this host..."
+if ! "$SCRIPT_DIR/check-subnets.sh"; then
+    error "The subnet check failed; nothing was restarted."
+    restore_previous_code || true
+    notify "Deployment of $(format_version_short "$NEW_VERSION") stopped: a pinned subnet overlaps a Docker network or route on this host. Nothing was restarted."
+    exit 1
+fi
+
 # Pull prebuilt images from GHCR (while services are still running)
 log "Pulling prebuilt images from GHCR..."
 if ! pull_images "$LOG_FILE"; then
