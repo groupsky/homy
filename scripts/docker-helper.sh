@@ -491,9 +491,9 @@ dc_base() {
 # Usage: pull_images <log file>
 pull_images() {
     local log_file="$1" attempts="${PULL_ATTEMPTS:-4}" delay="${PULL_RETRY_DELAY:-10}" n=1 rc
-    export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
+    local limit="${COMPOSE_PARALLEL_LIMIT:-1}"
     while :; do
-        dc_base pull 2>&1 | tee -a "$log_file"
+        COMPOSE_PARALLEL_LIMIT="$limit" dc_base pull 2>&1 | tee -a "$log_file"
         rc=${PIPESTATUS[0]}
         [ "$rc" -eq 0 ] && return 0
         if [ "$n" -ge "$attempts" ]; then
