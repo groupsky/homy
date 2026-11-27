@@ -10,7 +10,7 @@ This directory contains technical documentation for the home automation system.
   - **IMPORTANT**: Always keep the specification and diagram synchronized when making changes
 
 ### Vehicle Telemetry
-- **[Car-only MQTT user](mqtt-car-user.md)** - The login-only broker listener (port 1884) for the car app, its ACL, the password file the deploy provides and how to add the car user
+- **[MQTT logins](mqtt-car-user.md)** - The broker listeners: anonymous 1883, login-only 1884 (car app) and 1885 (server clients); the clients and their ACLs, the password files the deploy provides and how to add users
 - **[Kitchen oven](oven.md)** - The Home Connect oven: MQTT topics of the hcpy bridge, the `oven` InfluxDB measurement, and the parents-only oven card (it only hides the card)
 - **[Ioniq EV Monitoring & Alerting](ioniq-monitoring-alerting-spec.md)** - Monitoring and alerting specification for the Hyundai Ioniq Electric (battery / 12 V / tires / DTC alerts, Grafana rules, and automations bots over the OBD-logger telemetry)
 

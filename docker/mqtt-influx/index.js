@@ -35,6 +35,7 @@ const converters = {
     'ioniq-session': require('./converters/ioniq-session'),
     mbsl32di: require('./converters/mbsl32di'),
     'or-we-514': require('./converters/or-we-514'),
+    'power-dip': require('./converters/power-dip'),
     sdm630: require('./converters/sdm630'),
     zigbee: require('./converters/zigbee'),
 }

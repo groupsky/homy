@@ -3,6 +3,7 @@
 const { Mutex, withTimeout } = require('async-mutex')
 const ModbusRTU = require('modbus-serial')
 const readWithRetry = require('./read-with-retry')
+const { createPowerDipGuard } = require('./power-dip-guard')
 const {
   modbus: {
     type = 'rtu', // 'rtu' or 'tcp'
@@ -14,6 +15,7 @@ const {
   },
   devices: devicesConfig,
   integrations: integrationsConfig,
+  powerDipGuard: powerDipGuardConfig,
 } = require(process.env.CONFIG)
 let modbusClient
 const modbusMutex = withTimeout(new Mutex(), msCommunicationTimeout)
@@ -36,7 +38,38 @@ const integrations = Object.entries(integrationsConfig).map(
   }
 )
 
+const publish = (val, device, skip = []) => {
+  integrations.forEach(({client, name}) => {
+    if (skip.includes(name)) return
+    try {
+      client.publish(val, device)
+    } catch (e) {
+      console.error(`Error publishing to ${name}`)
+    }
+  })
+}
+
+// Optional, per bus: holds back the readings of input modules that restart
+// in a power dip (#2007, see power-dip-guard.js). Without it every reading is
+// published at once.
+const powerDipDevice = {name: 'power-dip', config: {type: 'power-dip'}}
+const powerDipGuard = powerDipGuardConfig ? createPowerDipGuard(powerDipGuardConfig, {
+  publishReading: publish,
+  // The bus's own influxdb measurement holds device readings only; the dip
+  // event reaches InfluxDB through mqtt-influx (measurement power_dip).
+  publishEvent: (event) => publish(event, powerDipDevice, ['influxdb']),
+}) : null
+for (const name of powerDipGuardConfig?.devices || []) {
+  if (!devices.some((device) => device.name === name)) {
+    throw new Error(`powerDipGuard: no device named ${name}`)
+  }
+}
+const isGuarded = (device) => powerDipGuard != null && powerDipGuard.has(device.name)
+
 const deviceErrors = new Map()
+
+// Set when the service is stopping: the poll loop does not start another round.
+let stopped = false
 
 // Wait before each reconnect: 5 s, doubled after each failure, at most 60 s.
 // Reset by the next good read.
@@ -87,7 +120,18 @@ const reconnectLoop = async () => {
   }
 }
 
-const pollDevice = async (device) => {
+// Reads in progress, so a stop can wait until their points are published.
+const reading = new Set()
+const pollDevice = (device) => {
+  // Also stops the reads that an MQTT command starts after the stop: their
+  // points would be published after the final flush began (#1971).
+  if (stopped) return Promise.resolve()
+  const promise = pollDeviceNow(device).finally(() => reading.delete(promise))
+  reading.add(promise)
+  return promise
+}
+
+const pollDeviceNow = async (device) => {
   let val = null
   let start
   let end
@@ -127,6 +171,9 @@ const pollDevice = async (device) => {
         return
       }
 
+      // Since #1368 this path reconnects inside the process and does not
+      // exit, so the points in the InfluxDB batch stay in memory and are sent
+      // with the next batch. No flush is needed here (#1971).
       console.error('Too many errors, reconnecting', e)
       deviceErrors.clear()
       await reconnect()
@@ -134,25 +181,32 @@ const pollDevice = async (device) => {
     }
     end = Date.now()
   })
-  if (val == null) return
-  val._tz = Math.round((start + end) / 2)
-  val._ms = end - start
-  val._addr = device.config.address
-  val._type = device.config.type
-  val.device = device.name
-  integrations.forEach(({client, name}) => {
-    try {
-      client.publish(val, device)
-    } catch (e) {
-      console.error(`Error publishing to ${name}`)
+  if (isGuarded(device)) {
+    // The guard must see every read, also a failed one or one with no change.
+    if (end === undefined) {
+      powerDipGuard.onReadError(device, Date.now())
+    } else {
+      powerDipGuard.onRead(device, val, readingMeta(device, start, end))
     }
-  })
+    return
+  }
+  if (val == null) return
+  publish(Object.assign(val, readingMeta(device, start, end)), device)
 }
+
+const readingMeta = (device, start, end) => ({
+  _tz: Math.round((start + end) / 2),
+  _ms: end - start,
+  _addr: device.config.address,
+  _type: device.config.type,
+  device: device.name,
+})
 
 const poll = async () => {
   try {
     // get value of all meters
     for (const device of devices) {
+      if (stopped) break
       await pollDevice(device)
       await sleep(msDelayBetweenDevices)
     }
@@ -161,7 +215,7 @@ const poll = async () => {
     console.error(e)
   } finally {
     // after get all data from slave repeat it again
-    setImmediate(poll)
+    if (!stopped) setImmediate(poll)
   }
 }
 
@@ -194,9 +248,14 @@ connect().then(async () => {
 // Node as PID 1 ignores SIGTERM unless it has a handler, so `docker stop`
 // waited out the grace period and then killed the service (#1680). The raw
 // file is written with writeSync, so nothing in it is lost, and the OS closes
-// the port and the files. Points still in the InfluxDB batch are dropped, as
-// they were by the kill.
-process.on('SIGTERM', () => {
-  console.error('Received SIGTERM, exiting')
-  process.exit(0)
+// the port and the files. Points still in the InfluxDB batch are sent first
+// (#1971): the integrations' close() flushes them, with a timeout.
+const shutdown = require('./shutdown')({
+  integrations,
+  stopPolling: () => {
+    stopped = true
+    return Promise.allSettled([...reading])
+  },
 })
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

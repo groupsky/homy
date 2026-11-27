@@ -85,7 +85,7 @@ All bridges below run in the one `mqtt-influx` container. Each name is a bridge'
 - **mqtt-influx-primary**: `/modbus/main/+/+` → InfluxDB (bridges main bus MQTT to InfluxDB)
 - **mqtt-influx-secondary**: `/modbus/secondary/+/+` → InfluxDB (bridges secondary bus MQTT to InfluxDB)
 - **mqtt-influx-tetriary**: `/modbus/tetriary/+/+` → InfluxDB (bridges tetriary bus MQTT to InfluxDB)
-- **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
+- **mqtt-influx-dry-switches**: `/modbus/dry-switches/+/reading` → InfluxDB (`dry_switch_input` / `dry_switch_relay` / `power_dip` measurements; decomposes packed input/output words into per-bit boolean fields for diagnostics)
 - **mqtt-influx-ioniq**: `ioniq/parsed/#` → InfluxDB (`ioniq` measurement; decoded Hyundai Ioniq OBD telemetry, tags `group`/`state`)
 - **mqtt-influx-ioniq-sessions**: `ioniq/derived/#` → InfluxDB (`ioniq_sessions` measurement; one record per closed trip/charge/park session from the `ioniq-sessions` bot, tag `kind`)
 - **mqtt-influx-oven**: `homeconnect/+/state/+`, `homeconnect/+/event/+`, `homeconnect/+/LWT` → InfluxDB (`oven` measurement; the kitchen oven via the Home Connect bridge, tag `device`)
@@ -286,6 +286,15 @@ because it is the sensor that fails — issue #1472)
 - `bit0`..`bit31` (boolean): Per-input electrical state (e.g. mbsl32di1 `bit0` is the front-door contact; the feature layer inverts this into door open/closed)
 - `read_ms` (int): Modbus read duration
 **Use Cases**: Diagnosing flaky/stuck contact sensors and false door-open events — plot or alert on an individual bit directly without bitwise math
+
+#### `power_dip` Measurement
+**Source**: mqtt-influx-dry-switches → `/modbus/dry-switches/power-dip/reading` (`_type: 'power-dip'`, converter `power-dip`). The dry-switches reader's power dip guard publishes it at the start and the end of a dip of the input modules (#2007, see `docker/automations/docs/power-dip.md`).
+**Tag Structure**: `bus: "dry-switches"`, `state` (`start` or `end`)
+**Fields**:
+- `duration_ms` (int): `0` at the start; at the end the time from the dip start to the last module being back
+- `reading_count` (int): How many raw readings the guard held back (at most 20 are kept)
+- `readings` (string): The held raw readings as JSON, `[{"device", "inputs", "_tz"}, ...]`; `inputs` is unsigned
+**Use Cases**: Count and study power dips; the partial readings of a dip stay here, not in `dry_switch_input`
 
 #### `dry_switch_relay` Measurement
 **Source**: mqtt-influx-dry-switches → `/modbus/dry-switches/+/reading` (aspar-mod-16ro devices)

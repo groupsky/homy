@@ -1,0 +1,39 @@
+# Rights of the users on the login-only listener for servers (port 1885,
+# #1964). A user not named here may do nothing. No passwords here: those are
+# in servers.passwd, which the deploy provides (docs/mqtt-car-user.md).
+# The user names are the client ids these clients use today.
+
+# The fleet checkers on the hosts other than routy: alerts and metric lines
+# for their own host. All hosts share this user.
+user fleet-checker
+topic write fleet/+/alert
+topic write fleet/+/influx
+topic write fleet/+/health
+
+# Reads the checkers' messages and forwards them (Telegram, InfluxDB).
+user fleet-relay
+topic read fleet/#
+
+# Reads the zigbee2mqtt availability messages.
+user fleet-zigbee-availability
+topic read z2m/house1/#
+
+# The living room media volume: publishes the state, reads the commands.
+user fleet-media-volume
+topic write homy/media/living/volume/state
+topic read homy/media/living/volume/command
+
+# Values made from the oven's readings, with their HA discovery and its will
+# (homeconnect/oven/derived/status). Its deploy check reads a derived value
+# back, so derived/# is readwrite.
+user fleet-homeconnect-derived
+topic readwrite homeconnect/oven/derived/#
+topic write homeassistant/sensor/homeconnect_oven_derived/#
+topic read homeconnect/oven/LWT
+topic read homeconnect/oven/state/bsh_common_status_operationstate
+topic read homeconnect/oven/state/cooking_oven_status_cavity_001_currenttemperature
+topic read /modbus/secondary/oven/reading
+
+# Reads the wall tablet's Fully Kiosk messages.
+user fleet-fully-metrics
+topic read fully/#
