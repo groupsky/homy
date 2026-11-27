@@ -417,7 +417,7 @@ describe('write', () => {
             scroll_time: 15,
         })
         expect(mockWriteRegisters).toHaveBeenCalledTimes(1)
-        expect(mockWriteRegisters).toHaveBeenCalledWith(0x100C, [15])
+        expect(mockWriteRegisters).toHaveBeenCalledWith(0x100B, [15])
     })
 })
 
