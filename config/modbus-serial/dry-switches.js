@@ -38,6 +38,17 @@ module.exports = {
     // could time out a relay write queued behind a few of those.
     msCommunicationTimeout: 1000,
   },
+  // The input modules restart in a mains dip (their 12 V supply is not on the
+  // UPS) and first send a reading with many inputs dropped. The guard holds
+  // each change for one poll pass and drops the readings of a dip (#2007,
+  // docker/modbus-serial/power-dip-guard.js).
+  powerDipGuard: {
+    devices: ['mbsl32di1', 'mbsl32di2'],
+    // a reading with this many inputs changed starts a dip
+    minChangedBits: 3,
+    // a dip ends when a non-zero reading has not changed for this long
+    stableMs: 1000,
+  },
   devices: [
     {
       name: 'relays00-15',

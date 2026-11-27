@@ -3,6 +3,7 @@
 const { Mutex, withTimeout } = require('async-mutex')
 const ModbusRTU = require('modbus-serial')
 const readWithRetry = require('./read-with-retry')
+const { createPowerDipGuard } = require('./power-dip-guard')
 const {
   modbus: {
     type = 'rtu', // 'rtu' or 'tcp'
@@ -14,6 +15,7 @@ const {
   },
   devices: devicesConfig,
   integrations: integrationsConfig,
+  powerDipGuard: powerDipGuardConfig,
 } = require(process.env.CONFIG)
 let modbusClient
 const modbusMutex = withTimeout(new Mutex(), msCommunicationTimeout)
@@ -35,6 +37,34 @@ const integrations = Object.entries(integrationsConfig).map(
     }
   }
 )
+
+const publish = (val, device, skip = []) => {
+  integrations.forEach(({client, name}) => {
+    if (skip.includes(name)) return
+    try {
+      client.publish(val, device)
+    } catch (e) {
+      console.error(`Error publishing to ${name}`)
+    }
+  })
+}
+
+// Optional, per bus: holds back the readings of input modules that restart
+// in a power dip (#2007, see power-dip-guard.js). Without it every reading is
+// published at once.
+const powerDipDevice = {name: 'power-dip', config: {type: 'power-dip'}}
+const powerDipGuard = powerDipGuardConfig ? createPowerDipGuard(powerDipGuardConfig, {
+  publishReading: publish,
+  // The bus's own influxdb measurement holds device readings only; the dip
+  // event reaches InfluxDB through mqtt-influx (measurement power_dip).
+  publishEvent: (event) => publish(event, powerDipDevice, ['influxdb']),
+}) : null
+for (const name of powerDipGuardConfig?.devices || []) {
+  if (!devices.some((device) => device.name === name)) {
+    throw new Error(`powerDipGuard: no device named ${name}`)
+  }
+}
+const isGuarded = (device) => powerDipGuard != null && powerDipGuard.has(device.name)
 
 const deviceErrors = new Map()
 
@@ -151,20 +181,26 @@ const pollDeviceNow = async (device) => {
     }
     end = Date.now()
   })
-  if (val == null) return
-  val._tz = Math.round((start + end) / 2)
-  val._ms = end - start
-  val._addr = device.config.address
-  val._type = device.config.type
-  val.device = device.name
-  integrations.forEach(({client, name}) => {
-    try {
-      client.publish(val, device)
-    } catch (e) {
-      console.error(`Error publishing to ${name}`)
+  if (isGuarded(device)) {
+    // The guard must see every read, also a failed one or one with no change.
+    if (end === undefined) {
+      powerDipGuard.onReadError(device, Date.now())
+    } else {
+      powerDipGuard.onRead(device, val, readingMeta(device, start, end))
     }
-  })
+    return
+  }
+  if (val == null) return
+  publish(Object.assign(val, readingMeta(device, start, end)), device)
 }
+
+const readingMeta = (device, start, end) => ({
+  _tz: Math.round((start + end) / 2),
+  _ms: end - start,
+  _addr: device.config.address,
+  _type: device.config.type,
+  device: device.name,
+})
 
 const poll = async () => {
   try {
