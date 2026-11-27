@@ -298,3 +298,6 @@ Configure Grafana alerts for:
    - InfluxDB schema documentation
    - Grafana dashboard configurations
    - Home Assistant integration examples
+## Shutdown
+
+On SIGTERM or SIGINT the service stops reading MQTT, closes the InfluxDB write API (this sends the points still in the memory batch), then exits. The flush is cut off after 5 s, under the 10 s that `docker stop` waits. See `shutdown.js`.

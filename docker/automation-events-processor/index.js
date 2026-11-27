@@ -4,6 +4,7 @@
 const mqtt = require('mqtt')
 const {InfluxDB} = require('@influxdata/influxdb-client')
 const {processAutomationDecisionEvent} = require('./processor')
+const createShutdown = require('./shutdown')
 
 // Utility function to read Docker secrets or environment variables
 function loadSecret(name) {
@@ -70,6 +71,10 @@ const writeApi = new InfluxDB({url: influxUrl, token: influxToken})
     })
 
 
+// Set once a stop signal arrives, so closing the MQTT connection is not taken
+// for a connection failure and late messages are not written.
+let stopping = false
+
 // MQTT connection handlers
 client.on('connect', function () {
     console.log('Connected to MQTT broker:', mqttUrl)
@@ -87,27 +92,32 @@ client.on('reconnect', function () {
 })
 
 client.on('close', function () {
+    if (stopping) return
     console.log('MQTT connection closed')
     process.exit(1)
 })
 
 client.on('disconnect', function () {
+    if (stopping) return
     console.log('MQTT disconnected')
     process.exit(1)
 })
 
 client.on('error', function (err) {
+    if (stopping) return
     console.error('MQTT error:', err)
     process.exit(1)
 })
 
 client.on('offline', function () {
+    if (stopping) return
     console.log('MQTT offline')
     process.exit(1)
 })
 
 // Process automation decision events
 client.on('message', function (topic, message) {
+    if (stopping) return
     try {
         const data = JSON.parse(message.toString())
 
@@ -126,13 +136,17 @@ client.on('message', function (topic, message) {
     }
 })
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-    console.log('Shutting down automation events processor...')
-    writeApi.close()
-    client.end()
-    process.exit(0)
+// Graceful shutdown. docker stop sends SIGTERM. The write API is flushed and
+// awaited before exit so pending points are kept.
+const shutdown = createShutdown({
+    writeApis: [writeApi],
+    stop: () => {
+        stopping = true
+        return new Promise((resolve) => client.end(true, {}, resolve))
+    },
 })
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
 
 console.log('Automation Events Processor starting...')
 console.log('MQTT Broker:', mqttUrl)

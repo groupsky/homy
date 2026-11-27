@@ -5,6 +5,7 @@ const mqtt = require('mqtt')
 const {InfluxDB} = require('@influxdata/influxdb-client')
 
 const {parseInstances} = require('./instances')
+const createShutdown = require('./shutdown')
 
 const mqttUrl = process.env.BROKER
 // One or more bridges, each with its own topics, converter and tags. TOPIC may
@@ -64,6 +65,11 @@ for (const {clientId, converter} of instances) {
     }
 }
 
+// Set once a stop signal arrives, so closing the MQTT connections is not taken
+// for a connection failure and late messages are not written.
+let stopping = false
+const bridges = []
+
 /**
  * Runs one bridge: subscribes to its topics and writes converted points with
  * its tags. Any MQTT connection problem exits the whole process, so Docker
@@ -77,6 +83,7 @@ function startBridge({clientId, topics, converter, tags}) {
     })
     // mqtt 5.16+ stops reconnecting after a refused login unless this is set.
     const client = mqtt.connect(mqttUrl, {clientId, reconnectOnConnackError: true})
+    bridges.push({client, writeApi})
 
     client.on('connect', function () {
         console.log(log, 'connected to', mqttUrl)
@@ -92,23 +99,28 @@ function startBridge({clientId, topics, converter, tags}) {
         console.log(log, 'reconnected to', mqttUrl)
     })
     client.on('close', function () {
+        if (stopping) return
         console.log(log, 'closed', mqttUrl)
         process.exit(1)
     })
     client.on('disconnect', function () {
+        if (stopping) return
         console.log(log, 'disconnect', mqttUrl)
         process.exit(1)
     })
     client.on('error', function (err) {
+        if (stopping) return
         console.log(log, 'error from mqtt', err)
         process.exit(1)
     })
     client.on('offline', function () {
+        if (stopping) return
         console.log(log, 'offline', mqttUrl)
         process.exit(1)
     })
 
     client.on('message', function (topic, message) {
+        if (stopping) return
         try {
             // Some producers (the Home Connect bridge) send plain text such as
             // `Inactive` or `True`. Only a named converter that says it takes
@@ -139,3 +151,15 @@ function startBridge({clientId, topics, converter, tags}) {
 }
 
 instances.forEach(startBridge)
+
+// docker stop sends SIGTERM; as PID 1 the process would ignore it without a
+// handler. The write APIs are flushed before exit so pending points are kept.
+const shutdown = createShutdown({
+    writeApis: bridges.map(({writeApi}) => writeApi),
+    stop: () => {
+        stopping = true
+        return Promise.all(bridges.map(({client}) => new Promise((resolve) => client.end(true, {}, resolve))))
+    },
+})
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

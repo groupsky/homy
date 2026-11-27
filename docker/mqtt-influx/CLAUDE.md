@@ -244,3 +244,7 @@ MQTT messages should include:
 - Monitor InfluxDB storage growth after adding new converters
 - Use appropriate retention policies for different data types
 - Consider data compression for high-frequency measurements
+
+## Shutdown
+
+On SIGTERM or SIGINT the service stops reading MQTT, closes the InfluxDB write API (this sends the points still in the memory batch), then exits. The flush is cut off after 5 s, under the 10 s that `docker stop` waits. See `shutdown.js`.
