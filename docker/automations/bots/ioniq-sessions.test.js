@@ -441,6 +441,76 @@ describe('ioniq-sessions bot', () => {
       expect(c.connector_confirmed).toBe(true)
     })
 
+    // #1915: a slow overnight charge while the car logger sleeps. The car sends a
+    // few samples after it parks, then nothing for ~9.6 h, and drives away about a
+    // minute after the meter load stops. The meter OFF edge needs 120 s of low
+    // readings, so it is not there yet when the rest closes. The charge must still
+    // be bounded by the meter.
+    describe('sparse car samples, car leaves right after the charge (#1915)', () => {
+      const H = 3600000
+      const ON = 180000 // meter load starts
+      const END = ON + 9.6 * H // meter load stops
+      const parkAndSleep = () => {
+        bms(0, { ignition: 1, speed_kph: 40, soc: 40, cum_out_kwh: 100, cum_in_kwh: 20, cum_chg_ah: 100 })
+        bms(60000, { ignition: 1, speed_kph: 40, soc: 40, cum_out_kwh: 102, cum_in_kwh: 20, cum_chg_ah: 100 })
+        bms(120000, { ignition: 1, speed_kph: 40, soc: 40, cum_out_kwh: 104, cum_in_kwh: 20, cum_chg_ah: 100 })
+        vmcu(122000, { gear: 'P', speed_kph: 0 })
+        off(122000)
+        conn(123000, 1)
+        bms(150000, { ignition: 0, speed_kph: 0, soc: 40, cum_out_kwh: 104, cum_in_kwh: 20, cum_chg_ah: 100 })
+        // meter: 1.23 kW from ON, one reading every 10 min, 11.75 kWh in total
+        for (let t = ON; t < END; t += 600000) meter(t, 1230, 1000 + 11.75 * (t - ON) / (END - ON))
+        // the car wakes after a ~9.6 h gap, still standing
+        bms(END - 60000, { ignition: 1, speed_kph: 0, soc: 80, cum_out_kwh: 104, cum_in_kwh: 30.6, cum_chg_ah: 128 })
+      }
+
+      it('links the charge to the meter when the OFF edge is still pending', () => {
+        parkAndSleep()
+        meter(END, 0, 1011.75) // load stops; OFF edge needs 120 s more
+        bms(END + 60000, { ignition: 1, speed_kph: 10, soc: 80, cum_out_kwh: 104, cum_in_kwh: 30.6, cum_chg_ah: 128 })
+        meter(END + 130000, 0, 1011.75) // OFF edge confirmed only now, after the rest closed
+
+        const charges = published(CHARGE)
+        expect(charges).toHaveLength(1)
+        const c = charges[0]
+        expect(c.max_gap_sec).toBeGreaterThan(9 * 3600) // the logger slept
+        expect(c.bounds).toBe('meter')
+        expect(c.duration_is_charge).toBe(true)
+        expect(c.duration_sec).toBe((END - ON) / 1000)
+        expect(c.ac_energy_kwh).toBeCloseTo(11.75, 5)
+        expect(c.power_avg_kw).toBeCloseTo(10.6 / 9.6, 5)
+      })
+
+      it('links the charge to the meter when the meter still shows load at the rest close', () => {
+        parkAndSleep()
+        const lastAct = 1000 + 11.75 * (END - 600000 - ON) / (END - ON)
+        meter(END - 30000, 1230, lastAct + 0.01) // last reading with load
+        bms(END + 60000, { ignition: 1, speed_kph: 10, soc: 80, cum_out_kwh: 104, cum_in_kwh: 30.6, cum_chg_ah: 128 })
+
+        const c = published(CHARGE)[0]
+        expect(c.bounds).toBe('meter')
+        expect(c.duration_sec).toBe((END - 30000 - ON) / 1000)
+        expect(c.ac_energy_kwh).toBeCloseTo(lastAct + 0.01 - 1000, 5)
+      })
+
+      it('does not reuse the meter charge for the next rest', () => {
+        parkAndSleep()
+        meter(END, 0, 1011.75)
+        bms(END + 60000, { ignition: 1, speed_kph: 10, soc: 80, cum_out_kwh: 104, cum_in_kwh: 30.6, cum_chg_ah: 128 })
+        meter(END + 130000, 0, 1011.75)
+        // a short drive, then a park-only rest with no meter load
+        bms(END + 120000, { ignition: 1, speed_kph: 30, soc: 79, cum_out_kwh: 105, cum_in_kwh: 30.6, cum_chg_ah: 128 })
+        vmcu(END + 180000, { gear: 'P', speed_kph: 0 })
+        off(END + 180000)
+        meter(END + 400000, 0, 1011.75)
+        bms(END + 2 * H, { ignition: 1, speed_kph: 10, soc: 79, cum_out_kwh: 105, cum_in_kwh: 30.6, cum_chg_ah: 128 })
+
+        expect(published(CHARGE)).toHaveLength(1)
+        expect(published(PARK)).toHaveLength(1)
+        expect(persistedCache.meterEdges).toEqual([])
+      })
+    })
+
     it('does not fabricate a rate on a realistic overnight charge (stationary wake before motion)', () => {
       // The logger boots ~1-2 min AFTER ignition, so the first post-sleep sample
       // is STATIONARY (driver has not pulled away yet). That trailing wake sample

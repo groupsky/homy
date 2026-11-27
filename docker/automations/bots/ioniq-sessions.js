@@ -101,7 +101,9 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
   const config = { ...DEFAULTS, ...userConfig }
   const log = (...args) => { if (config.verbose) console.log(`[${name}]`, ...args) }
 
-  const emptyMeterState = () => ({ on: false, aboveSince: null, aboveAct: null, belowSince: null, belowAct: null })
+  // lastTs / lastAct: the newest meter reading, used to bound a charge that is
+  // still on (or not yet confirmed off) when its rest closes.
+  const emptyMeterState = () => ({ on: false, aboveSince: null, aboveAct: null, belowSince: null, belowAct: null, lastTs: null, lastAct: null })
 
   // A monotonic-counter delta that refuses to fabricate. Returns null when a
   // boundary is missing (incomplete), the delta is negative (a counter reset or
@@ -560,8 +562,21 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
         const onEdge = edges.find((e) => e.type === 'on' && e.ts >= startTs - tol && e.ts <= endTs + tol)
         if (!onEdge) return null
         const offEdge = edges.find((e) => e.type === 'off' && e.ts > onEdge.ts && e.ts <= endTs + tol)
-        if (!offEdge) return null
-        return { onEdge, offEdge }
+        if (offEdge) return { onEdge, offEdge }
+        // No OFF edge yet, but the meter is still in its ON state from this edge.
+        // This happens when the car drives away soon after the charge ends: the
+        // OFF edge needs chargerMeterOffMinMs of low readings, and the logger,
+        // asleep during the charge, wakes only when the driver comes (#1915).
+        // Bound the charge by the first low reading (a pending OFF edge), or by
+        // the newest reading when the meter still shows load.
+        const ms = persistedCache.meterState
+        const later = edges.some((e) => e.ts > onEdge.ts)
+        if (!ms || !ms.on || later) return null
+        const pending = isFiniteNum(ms.belowSince)
+          ? { type: 'off', ts: ms.belowSince, act: ms.belowAct }
+          : { type: 'off', ts: ms.lastTs, act: ms.lastAct }
+        if (!isFiniteNum(pending.ts) || pending.ts <= onEdge.ts || pending.ts > endTs + tol) return null
+        return { onEdge, offEdge: pending }
       }
 
       const buildCharge = (rest, closedBy) => {
@@ -969,6 +984,8 @@ module.exports = function createIoniqSessions (name, userConfig = {}) {
             ms.belowSince = null
           }
         }
+        ms.lastTs = ts
+        ms.lastAct = act
         // Persist the mutated meterState (reactivity tracks the assignment).
         persistedCache.meterState = ms
 
