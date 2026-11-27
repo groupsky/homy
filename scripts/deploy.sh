@@ -5,8 +5,10 @@
 # Deploys the homy stack from prebuilt GHCR images while it keeps running:
 #   0. wait until CI has pushed the images of the new version and its
 #      ci-unified run is green (--allow-red-ci skips the second part)
-#   1. one ZFS snapshot of all the stack's data (about a second, nothing stops)
-#   2. update the code and pull the images
+#   1. update the code and pull the images (one at a time, tried again when a
+#      pull fails)
+#   2. one ZFS snapshot of all the stack's data (about a second, nothing
+#      stops), taken after the pull so a failed pull leaves no snapshot
 #   3. pin every service to its image digest and a hash of the config files it
 #      mounts, so compose recreates only the services that really changed
 #   4. health-gate the recreated services
@@ -225,12 +227,12 @@ if [ "$ALLOW_RED_CI" -eq 0 ]; then
 else
     echo "       NOT checking that its ci-unified run is green (--allow-red-ci)"
 fi
+echo "    1. Update the code and pull the new images from GHCR"
 if [ "$SKIP_SNAPSHOT" -eq 0 ]; then
-    echo "    1. Snapshot the stack's data (ZFS; nothing is stopped)"
+    echo "    2. Snapshot the stack's data (ZFS; nothing is stopped)"
 else
-    echo "    1. NOT snapshot the data (--skip-snapshot)"
+    echo "    2. NOT snapshot the data (--skip-snapshot)"
 fi
-echo "    2. Update the code and pull the new images from GHCR"
 echo "    3. Recreate only the services whose image or configuration changed"
 echo "    4. Health-check the recreated services; on failure roll code and"
 echo "       images back (data is never rolled back automatically)"
@@ -365,18 +367,14 @@ else
     done
 fi
 
-# 1. Snapshot, before anything is touched
-SNAPSHOT_NAME=""
+# 1. Check that a snapshot can be taken, before anything is touched. The
+#    snapshot itself comes after the pull (2b).
 if [ "$SKIP_SNAPSHOT" -eq 0 ]; then
-    log "Taking the pre-deploy snapshot..."
-    if ! SNAPSHOT_NAME=$("$SCRIPT_DIR/snapshot.sh" --sha "$(deploy_short_sha "$NEW_VERSION")"); then
-        error "Snapshot failed; nothing was changed. Fix it, or deploy with --skip-snapshot."
-        notify "Deployment of $(format_version_short "$NEW_VERSION") stopped: the pre-deploy snapshot failed. Nothing was changed."
+    if ! "$SCRIPT_DIR/snapshot.sh" --check; then
+        error "A snapshot cannot be taken; nothing was changed. Fix it, or deploy with --skip-snapshot."
+        notify "Deployment of $(format_version_short "$NEW_VERSION") stopped: a pre-deploy snapshot cannot be taken. Nothing was changed."
         exit 1
     fi
-    log "Snapshot: $SNAPSHOT_NAME"
-else
-    log "Skipping the snapshot (as requested)..."
 fi
 
 # 2. Code and images
@@ -429,7 +427,7 @@ log "Using IMAGE_TAG: $IMAGE_TAG"
 
 # Pull prebuilt images from GHCR (while services are still running)
 log "Pulling prebuilt images from GHCR..."
-if ! dc_base pull 2>&1 | tee -a "$LOG_FILE"; then
+if ! pull_images "$LOG_FILE"; then
     error "Failed to pull images from GHCR"
     log "This usually means:"
     log "  - Images for tag '$IMAGE_TAG' don't exist in GHCR"
@@ -443,6 +441,24 @@ if ! dc_base pull 2>&1 | tee -a "$LOG_FILE"; then
     restore_previous_code || true
     notify "Deployment failed: Could not pull images for tag $IMAGE_TAG. Nothing was restarted."
     exit 1
+fi
+
+# 2b. Snapshot, after the pull: a pull that fails (registry trouble) must not
+#    leave a snapshot behind, and the deploy user cannot destroy snapshots
+#    (#1698). The pull changes no data, so the snapshot still holds the data
+#    as it was before anything is restarted.
+SNAPSHOT_NAME=""
+if [ "$SKIP_SNAPSHOT" -eq 0 ]; then
+    log "Taking the pre-deploy snapshot..."
+    if ! SNAPSHOT_NAME=$("$SCRIPT_DIR/snapshot.sh" --sha "$(deploy_short_sha "$NEW_VERSION")"); then
+        error "Snapshot failed; nothing was restarted. Fix it, or deploy with --skip-snapshot."
+        restore_previous_code || true
+        notify "Deployment of $(format_version_short "$NEW_VERSION") stopped: the pre-deploy snapshot failed. Nothing was restarted."
+        exit 1
+    fi
+    log "Snapshot: $SNAPSHOT_NAME"
+else
+    log "Skipping the snapshot (as requested)..."
 fi
 
 # 3. Pin images by digest and label config hashes; compose then recreates
@@ -763,7 +779,7 @@ fi
 
 export IMAGE_TAG="$CURRENT_VERSION"
 log "Using IMAGE_TAG: $IMAGE_TAG"
-if ! dc_base pull 2>&1 | tee -a "$LOG_FILE"; then
+if ! pull_images "$LOG_FILE"; then
     warn "Pulling the previous images failed; using the images already on this host"
 fi
 

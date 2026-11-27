@@ -154,23 +154,72 @@ up_count() { cat "$MOCK_DIR/up-count" 2>/dev/null || echo 0; }
 
 # --- snapshot first -----------------------------------------------------------
 
-@test "deploy.sh: a failed snapshot stops before pulling, updating code or recreating anything" {
+@test "deploy.sh: a failed snapshot restarts nothing and puts the code back" {
     touch "$MOCK_DIR/zfs/fail-snapshot"
 
     run deploy
     assert_failure
-    assert_output --partial "Snapshot failed; nothing was changed"
+    assert_output --partial "Snapshot failed; nothing was restarted"
 
     run calls
-    refute_output --partial "compose pull"
     refute_output --partial "compose up"
     refute_output --partial "compose stop"
-    run cat "$GIT_CALLS"
-    refute_output --partial "checkout"
-    refute_output --partial "pull origin"
-    assert_equal "$(cat "$VERSION_FILE")" "$OLD"
+    assert_equal "$(cat "$MOCK_DIR/head")" "$OLD"
     run cat "$MOCK_DIR/notify.log"
-    assert_output --partial "the pre-deploy snapshot failed. Nothing was changed."
+    assert_output --partial "the pre-deploy snapshot failed. Nothing was restarted."
+}
+
+@test "deploy.sh: a failed pull leaves no snapshot" {
+    touch "$MOCK_DIR/fail-pull"
+    export PULL_RETRY_DELAY=0
+
+    run deploy
+    assert_failure
+    assert_output --partial "Failed to pull images from GHCR"
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "0"
+    run grep -sc "^zfs snapshot" "$MOCK_DIR/zfs/calls.log"
+    assert_output --regexp "^0?$"
+    assert_equal "$(up_count)" "0"
+}
+
+@test "deploy.sh: a pull that fails twice on a TLS timeout is tried again and the deploy goes on" {
+    echo 2 > "$MOCK_DIR/fail-pull-times"
+    export PULL_RETRY_DELAY=0
+    recreate_on_up 1 automations img-a2
+
+    run deploy
+    assert_success
+    run grep -c "compose pull" "$MOCK_DIR/calls.log"
+    assert_output "3"
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "1"
+}
+
+@test "deploy.sh: a pull that keeps failing is tried PULL_ATTEMPTS times, then the deploy stops" {
+    echo 99 > "$MOCK_DIR/fail-pull-times"
+    export PULL_RETRY_DELAY=0 PULL_ATTEMPTS=3
+
+    run deploy
+    assert_failure
+    run grep -c "compose pull" "$MOCK_DIR/calls.log"
+    assert_output "3"
+    assert_equal "$(wc -l < "$MOCK_DIR/zfs/snapshots")" "0"
+    assert_equal "$(cat "$MOCK_DIR/head")" "$OLD"
+}
+
+@test "deploy.sh: pulls one image at a time unless COMPOSE_PARALLEL_LIMIT is set" {
+    unset COMPOSE_PARALLEL_LIMIT
+    run deploy
+    assert_success
+    run head -n 1 "$MOCK_DIR/pull-limit.log"
+    assert_output "1"
+}
+
+@test "deploy.sh: keeps a COMPOSE_PARALLEL_LIMIT the operator set" {
+    export COMPOSE_PARALLEL_LIMIT=2
+    run deploy
+    assert_success
+    run head -n 1 "$MOCK_DIR/pull-limit.log"
+    assert_output "2"
 }
 
 # --- images CI has not pushed yet (#1748) --------------------------------------

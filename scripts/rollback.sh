@@ -211,7 +211,7 @@ log "Using IMAGE_TAG: $IMAGE_TAG"
 rm -f "$DEPLOY_OVERRIDE_FILE"
 
 log "Pulling previous version images..."
-if ! dc_base pull 2>&1 | tee -a "$ROLLBACK_LOG"; then
+if ! pull_images "$ROLLBACK_LOG"; then
     log "WARNING: Some images may not be available; up will fail for any image missing on this host (it never builds)."
 fi
 
