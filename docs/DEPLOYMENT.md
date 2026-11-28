@@ -351,7 +351,7 @@ Every service with state keeps it in a host directory under `${DATA_PATH}` (a bi
 | Service | Host directory | Container path |
 |---|---|---|
 | `mongo` | `${DATA_PATH}/mongodb/db`, `${DATA_PATH}/mongodb/configdb` (owned by 999:999) | `/data/db`, `/data/configdb` |
-| `broker` | `${DATA_PATH}/mosquitto/data`, `${DATA_PATH}/mosquitto/log`; reads `${SECRETS_PATH}/mosquitto` (password file, [mqtt-car-user.md](mqtt-car-user.md)) | `/mosquitto/data`, `/mosquitto/log`; `/mosquitto/secrets` |
+| `broker` | `${DATA_PATH}/mosquitto/data`, `${DATA_PATH}/mosquitto/log`; reads `${SECRETS_PATH}/mosquitto` (password files, [mqtt-car-user.md](mqtt-car-user.md)) | `/mosquitto/data`, `/mosquitto/log`; `/mosquitto/secrets` |
 | every `modbus-serial` service, every ya-modbus adapter (`tetriary-adapter`, `main-adapter`) and `mqtt-ndjson-ioniq` (raw readings, #1622) | `${RAW_DATA_PATH}` = `${DATA_PATH}/raw`, owned by 1000:1000, shared by all of them | `/data/raw` |
 
 **The raw directory must be a plain subdirectory of `${DATA_PATH}`, on the same ZFS dataset — not a dataset of its own**, even though it grows by about 770 MB a day. `snapshot.sh` stops when the writable mounts are on more than one dataset, and it counts a child dataset as a different one: a separate dataset for it would stop every deploy at the snapshot step.
@@ -504,6 +504,8 @@ Each push to master creates images with multiple tags:
 - `ghcr.io/groupsky/homy/SERVICE:latest` - Most recent build
 
 A service whose image did not change is retagged with the new SHA; the retag copies the manifest, so its digest stays the same. `deploy.sh` relies on that.
+
+The retag copies from the previous master tip, so it waits until that tip's CI run has finished. A few merges close together are fine; a long burst can still fail the retag. See "Which commit is the base, and rapid merges" in `.github/workflows/CLAUDE.md`.
 
 ### Manual Image Pull
 

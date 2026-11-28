@@ -8,14 +8,11 @@ const INTER_COMM_DELAY = 25
 /**
  * @typedef {'none'|'even'} PARITY
  */
-/**
- * @typedef {1|2} STOP_BITS
- */
 
 /**
  * @typedef {{
  *   address: number,
- *   stopBits: STOP_BITS,
+ *   nineBitMode: boolean,
  *   parity: PARITY,
  *   baudRate: BAUD_RATE,
  *   broadcast: boolean,
@@ -241,20 +238,20 @@ const readCommunicationState = async (client, state = {}, force = false) => {
     await sleep(INTER_COMM_DELAY)
     const {
       data: [
-        stopBits,
+        nineBitMode,
         parity,
         baudRate,
-        broadcast,
+        noBroadcast,
       ]
     } = await client.readCoils(1000, 4)
     await sleep(INTER_COMM_DELAY)
     const { data: [address] } = await client.readHoldingRegisters(127, 1)
     state.communication = {
       address,
-      stopBits: stopBits ? 1 : 2,
-      parity: parity ? 'none' : 'even',
+      nineBitMode: Boolean(nineBitMode),
+      parity: parity ? 'even' : 'none',
       baudRate: baudRate ? 19200 : 9600,
-      broadcast
+      broadcast: !noBroadcast
     }
   }
   return state.communication

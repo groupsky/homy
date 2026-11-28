@@ -800,7 +800,7 @@ async function write(client, values, config, state = {}) {
         ])
     }
     if (values.scroll_time != null) {
-        await client.writeRegisters(0x100C, [values.scroll_time])
+        await client.writeRegisters(0x100B, [values.scroll_time])
     }
 }
 

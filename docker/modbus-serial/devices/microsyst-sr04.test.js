@@ -65,7 +65,7 @@ describe('write', () => {
   })
 
   it('makes the next poll read the configuration again, and keeps the rest of the state', async () => {
-    const communication = {address: 1, stopBits: 1, parity: 'none', baudRate: 9600, broadcast: false}
+    const communication = {address: 1, nineBitMode: false, parity: 'none', baudRate: 9600, broadcast: false}
     const state = {configuration: {spT1: 60}, communication}
 
     await write(fakeClient(), {timer: TIMER}, {}, state)
@@ -137,5 +137,26 @@ describe('write', () => {
       expect(client.calls).toEqual([])
       expect(state.configuration).toEqual({spT1: 60})
     })
+  })
+})
+
+describe('read, serial settings', () => {
+  // Coils 1000..1003: 9-bit mode, parity (1 = even), baud (1 = 19200), no broadcast
+  const withCoils = (coils) => {
+    const client = fakeClient()
+    const answer = client.readCoils.getMockImplementation()
+    client.readCoils.mockImplementation(async (address, length) =>
+      address === 1000 ? {data: coils} : answer(address, length))
+    return client
+  }
+
+  it('reports all coils off as 8N1 style settings: 9600, no parity, broadcast on', async () => {
+    const {communication} = await read(withCoils([false, false, false, false]), {}, {})
+    expect(communication).toEqual({address: 0, nineBitMode: false, parity: 'none', baudRate: 9600, broadcast: true})
+  })
+
+  it('reports all coils on as 9-bit, even parity, 19200, broadcast off', async () => {
+    const {communication} = await read(withCoils([true, true, true, true]), {}, {})
+    expect(communication).toEqual({address: 0, nineBitMode: true, parity: 'even', baudRate: 19200, broadcast: false})
   })
 })
