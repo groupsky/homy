@@ -482,6 +482,29 @@ dc_base() {
     COMPOSE_FILE="$(compose_base_files)" dc_run "$@"
 }
 
+# Pull the images of the committed compose files, one at a time, and try again
+# when a pull fails. GHCR sometimes answers a burst of parallel requests with a
+# TLS handshake timeout; one pull of ~40 started together then fails the whole
+# deploy (#1698). COMPOSE_PARALLEL_LIMIT=1 worked on the host, 4 did not.
+# Set by the caller or the environment: COMPOSE_PARALLEL_LIMIT (default 1),
+# PULL_ATTEMPTS (default 4), PULL_RETRY_DELAY seconds (default 10).
+# Usage: pull_images <log file>
+pull_images() {
+    local log_file="$1" attempts="${PULL_ATTEMPTS:-4}" delay="${PULL_RETRY_DELAY:-10}" n=1 rc
+    local limit="${COMPOSE_PARALLEL_LIMIT:-1}"
+    while :; do
+        COMPOSE_PARALLEL_LIMIT="$limit" dc_base pull 2>&1 | tee -a "$log_file"
+        rc=${PIPESTATUS[0]}
+        [ "$rc" -eq 0 ] && return 0
+        if [ "$n" -ge "$attempts" ]; then
+            return "$rc"
+        fi
+        log "Pull failed (try $n of $attempts); trying again in ${delay} s..."
+        sleep "$delay"
+        n=$((n + 1))
+    done
+}
+
 # Compose with the generated digest/config-hash override on top
 # Usage: dc_deploy [docker compose args...]
 dc_deploy() {

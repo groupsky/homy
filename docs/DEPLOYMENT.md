@@ -34,8 +34,8 @@ The deployment system uses prebuilt Docker images stored in GitHub Container Reg
 │                      Production Server                           │
 ├─────────────────────────────────────────────────────────────────┤
 │  ./scripts/deploy.sh          (the stack keeps running)          │
-│    1. ZFS snapshot of all data (about a second)                  │
-│    2. Update code, pull new images                               │
+│    1. Update code, pull new images (one at a time, with retries) │
+│    2. ZFS snapshot of all data (about a second)                  │
 │    3. Pin images by digest, hash mounted config files            │
 │    4. docker compose up: only changed services are recreated    │
 │    5. Health gate on the recreated services                      │
@@ -206,8 +206,9 @@ The script:
 2. Shows the deployment plan and asks for confirmation. Then **waits for the images**: CI pushes the images of a commit some minutes after the merge. Every homy image that the new commit's `docker-compose.yml` names with `${IMAGE_TAG}` is checked in the registry (`docker manifest inspect`, in parallel, each with a 60 s timeout); while one is missing, the missing ones are checked again every `IMAGE_WAIT_INTERVAL` (30 s), for up to `IMAGE_WAIT_SECONDS` (1800 s). If one is still missing then, it stops with the image and tag in the message, before the snapshot: nothing was changed (#1748).
 
    Then it **waits for a green CI run**: the images exist as soon as CI has built them, before its tests run, so they say nothing about the tests. It reads the commit's `ci-unified` runs from the public GitHub API (no token needed) every `CI_WAIT_INTERVAL` (120 s). It goes on when one run succeeded (a green re-run or `force_rebuild` counts); it stops when the runs failed, or when no run is green after `CI_WAIT_SECONDS` (3600 s, also when GitHub does not answer). Both stops are before the snapshot: nothing was changed. `--allow-red-ci` skips this check; `--tag latest` skips it too, because CI moves `latest` only after all tests passed. A tag that is not a known commit is refused without `--allow-red-ci` (#1550).
-3. **Takes the snapshot** (`snapshot.sh`) before anything else. If it fails, the deploy stops here: the code, the images and every container are untouched.
-4. Updates the code to `origin/master` and pulls the images for that commit. If the pull fails, the code is put back and nothing is restarted.
+3. **Checks that a snapshot can be taken** (`snapshot.sh --check`). If it cannot, the deploy stops here: nothing was changed. (The check runs with the old code; the real snapshot, step 4b, runs with the new code, so a commit that changes the mounts can still fail there.)
+4. Updates the code to `origin/master` and pulls the images for that commit, **one image at a time** (`COMPOSE_PARALLEL_LIMIT` defaults to 1) and **tried again** when a pull fails (`PULL_ATTEMPTS`, default 4, with `PULL_RETRY_DELAY` seconds between tries, default 10). GHCR sometimes answers many parallel requests with a TLS handshake timeout (#1698). If the pull still fails, the code is put back and nothing is restarted. No snapshot exists yet, so a failed pull leaves none.
+4b. **Takes the snapshot** (`snapshot.sh`), after the pull. If it fails, the code is put back and nothing is restarted.
 5. Writes `docker-compose.deploy.yml` (not in git): every service pinned to its image **digest** and labelled with a hash of the host files it mounts (see [Recreating only what changed](#recreating-only-what-changed)).
 6. Refuses (before restarting anything) when a service has more than one container, for example a leftover `<id>_<name>` container from an interrupted recreate: neither the change detection nor the gate could tell which one counts. Remove the leftover by hand.
 7. Works out which services to recreate: those whose config hash (`docker compose config --hash`) differs from the `com.docker.compose.config-hash` label of their container, those with no container, and those whose container is stopped. It logs them and runs `docker compose up -d --no-build --pull never --no-deps` for **only those services**, under a time limit (`COMPOSE_TIMEOUT`, 600 s; a timeout is a failed `up`). If nothing changed, `up` is not run at all. Nothing is stopped first.

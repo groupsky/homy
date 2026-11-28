@@ -50,6 +50,15 @@ if [ "$1" = "compose" ]; then
     shift
     sub="$1"
     shift
+    # fail-pull-times: the first N pulls fail, then they work (a flaky registry)
+    if [ "$sub" = pull ]; then
+        echo "${COMPOSE_PARALLEL_LIMIT:-unset}" >> "$MOCK_DIR/pull-limit.log"
+        if [ -s "$MOCK_DIR/fail-pull-times" ] && [ "$(cat "$MOCK_DIR/fail-pull-times")" -gt 0 ]; then
+            echo $(($(cat "$MOCK_DIR/fail-pull-times") - 1)) > "$MOCK_DIR/fail-pull-times"
+            echo "mock: net/http: TLS handshake timeout" >&2
+            exit 1
+        fi
+    fi
     if [ -e "$MOCK_DIR/fail-$sub" ]; then
         echo "mock: docker compose $sub failed" >&2
         exit 1
