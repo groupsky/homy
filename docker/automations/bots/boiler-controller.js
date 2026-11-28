@@ -1,5 +1,6 @@
 const { watchInputAge, DEFAULT_MAX_INPUT_AGE_MS } = require('../lib/input-age')
 const telegramAlert = require('../lib/telegram-alert')
+const boilerTank = require('../lib/boiler-tank')
 
 // The longest vacation_until: 60 days (#1756)
 const MAX_VACATION_UNTIL_MS = 60 * 24 * 60 * 60 * 1000
@@ -77,9 +78,14 @@ module.exports = (name, {
   hysteresis = 3,
   nightTariff,
   // The tank top reaches the taps unmixed while there is no thermostatic
-  // mixing valve (#1473). The top-up, boost and draw rules never heat the top
-  // above this, whatever their own targets say.
+  // mixing valve (#1473). The automatic rules (top-up, night boost, draw)
+  // never heat the top above this, whatever their own targets say.
   hotWaterLimit = 55,
+  // The `boost` and `manual_on` modes heat the whole tank (#1976): they heat
+  // while the bottom is under boostBottomTarget, and never let the top reach
+  // boostTopLimit. Both in °C.
+  boostBottomTarget = 50,
+  boostTopLimit = 60,
   // Night tariff extras (#1911), all off unless set; they need `nightTariff`.
   // nightBoostTarget: from the end of the hold to the end of the night zone,
   // heat the top to this (°C).
@@ -113,13 +119,34 @@ module.exports = (name, {
   externalOnMaxMs = 2 * 60 * 60 * 1000,
   // After an OFF that the controller did not send, no restart for this long.
   externalOffHoldMs = 30 * 60 * 1000,
-  // The `boost` mode heats the top to hotWaterLimit for at most this long.
+  // The longest `boost`.
   boostDurationMs = 2 * 60 * 60 * 1000,
   // A status that matches a command sent within this time is that command
   // coming back. A contactor that still differs after it gets the command again.
   commandConfirmMs = 60 * 1000,
   // When the first status goes out after start
   startupStatusDelayMs = 10 * 1000,
+  // Baths ready (#1984), only computed and published, never used to switch
+  // the element. A bath is bathLitres of water at bathTempC at the tap.
+  bathLitres = 65,
+  bathTempC = 40,
+  // Cold water °C by month, January first
+  coldWaterByMonth = [11.6, 9.8, 13.3, 12.9, 17.2, 19.9, 23.0, 23.9, 19.1, 17.1, 14.6, 13.1],
+  // Mean element power (kW) by the water temperature at the element: the
+  // first row with the temperature under `belowC`; the last row has none.
+  elementPowerByTempKw = [
+    { belowC: 30, kw: 2.6 },
+    { belowC: 35, kw: 2.1 },
+    { belowC: 40, kw: 1.55 },
+    { belowC: 45, kw: 1.05 },
+    { kw: 0.75 }
+  ],
+  // The layer geometry of the tank model; see lib/boiler-tank.js
+  tankModel = boilerTank.DEFAULT_TANK,
+  // The month of the cold water table is taken on this wall clock
+  timeZone = 'Europe/Sofia',
+  // The name of the boost button in the sentence
+  boostButtonName = 'Загрей целия бойлер',
   telegramWebhookUrl,
   httpPost,
   verbose
@@ -343,7 +370,8 @@ module.exports = (name, {
     // Keeps the result of a mode command for the mode status (#1975), so
     // any client that sends a command can see what became of it and why.
     // result: 'applied' or 'refused'. reason: 'ok', 'top_at_limit' (the top
-    // is at or above hotWaterLimit), 'invalid_until' or 'unknown_mode'.
+    // is at or above boostTopLimit), 'bottom_at_target' (the bottom is at or
+    // above boostBottomTarget), 'invalid_until' or 'unknown_mode'.
     const commandResult = (mode, result, reason) => {
       currentState.lastCommand = {
         // A mode that is not a text is not kept; a long one is cut
@@ -351,7 +379,9 @@ module.exports = (name, {
         result,
         reason,
         top: currentState.temperatureTop,
-        limit: hotWaterLimit,
+        bottom: currentState.temperatureBottom,
+        limit: boostTopLimit,
+        bottomTarget: boostBottomTarget,
         at: Date.now()
       }
     }
@@ -374,6 +404,14 @@ module.exports = (name, {
       if (verbose) console.log(`[${name}] outside ON ends: ${why}`)
     }
 
+    // Why boost and manual_on cannot heat now (#1976), or null: the top at
+    // boostTopLimit wins over the bottom at boostBottomTarget.
+    const boostLimitReason = (top, bottom) => {
+      if (top !== null && top >= boostTopLimit) return 'top_at_limit'
+      if (bottom !== null && bottom >= boostBottomTarget) return 'bottom_at_target'
+      return null
+    }
+
     const makeDecision = () => {
       const now = Date.now()
 
@@ -384,6 +422,7 @@ module.exports = (name, {
       }
 
       const top = currentState.temperatureTop
+      const bottom = currentState.temperatureBottom
       const stale = temperatures.isStale()
       const overheated = top !== null && top >= maxSafe
       const atLimit = top !== null && top >= hotWaterLimit
@@ -418,20 +457,25 @@ module.exports = (name, {
         drawSeenAt = null
       }
 
-      // boost: heat the top to hotWaterLimit now, whatever the night hold and
-      // the load gates say, then go back to automatic.
+      // boost: heat the whole tank now, whatever the night hold and the load
+      // gates say (#1976): until the bottom reaches boostBottomTarget, but
+      // never the top to boostTopLimit; then go back to automatic. Old
+      // readings and maxSafe stop it first.
       if (mode === 'boost') {
         if (stale) return { decision: false, reason: 'input_stale' }
-        if (!overheated && !atLimit) return { decision: true, reason: 'manual_boost' }
-        backToAutomatic(`boost done: top ${top}°C`)
+        const done = overheated ? 'top_at_max_safe' : boostLimitReason(top, bottom)
+        if (!done) return { decision: true, reason: 'manual_boost' }
+        backToAutomatic(`boost done (${done}): top ${top}°C, bottom ${bottom}°C`)
       }
 
       if (mode === 'manual_on') {
-        // On, but never above hotWaterLimit or maxSafe; it starts again below
-        // hotWaterLimit - hysteresis. Old readings do not stop it (#1743): the
-        // limits use the last reading.
+        // The same limits as boost (#1976): on while the bottom is under
+        // boostBottomTarget, never with the top at boostTopLimit or maxSafe.
+        // Once off it starts again when both are hysteresis under them. Old
+        // readings do not stop it (#1743): the limits use the last reading.
         if (overheated) return { decision: false, reason: 'safety_shutoff_overheated' }
-        if (atLimit || (top !== null && top >= hotWaterLimit - hysteresis && !heaterOn())) {
+        const band = heaterOn() ? 0 : hysteresis
+        if ((top !== null && top >= boostTopLimit - band) || (bottom !== null && bottom >= boostBottomTarget - band)) {
           return { decision: false, reason: `manual_on_limit_reached${expires}` }
         }
         return { decision: true, reason: `manual_on${expires}` }
@@ -484,14 +528,6 @@ module.exports = (name, {
         return { decision: true, reason: 'emergency_heating_bottom_cold' }
       }
 
-      // Night tariff: no heating in the last part of the day zone, so the
-      // element tops the tank up in the cheaper night zone instead. A top
-      // under the floor still heats, up to the floor plus the hysteresis.
-      const holdFrom = nightTariff && nightTariff.floor + (heaterOn() ? hysteresis : 0)
-      if (temperatureTop !== null && periodsAt(now).hold && temperatureTop >= holdFrom) {
-        return { decision: false, reason: 'night_tariff_hold' }
-      }
-
       // The top the draw rule heats to now.
       const target = heatWindow ? heatWindow.target : comfortMin + hysteresis
       // A draw ends when the element has heated the top to the target. A draw
@@ -502,6 +538,18 @@ module.exports = (name, {
       if (drawSeenAt !== null && temperatureTop !== null) {
         if (heaterOn() && temperatureTop >= target) drawSeenAt = null
         else if (!heaterOn() && now - drawSeenAt > drawLatchMinutes * 60 * 1000) drawSeenAt = null
+      }
+      const drawStart = drawSeenAt !== null && temperatureTop !== null && temperatureTop < target
+
+      // Night tariff: no heating in the last part of the day zone, so the
+      // element tops the tank up in the cheaper night zone instead. A top
+      // under the floor still heats, up to the floor plus the hysteresis.
+      // A draw in the hold still starts the element (#1976): the evening
+      // baths fall in the hold. The load gates apply to it.
+      const holdFrom = nightTariff && nightTariff.floor + (heaterOn() ? hysteresis : 0)
+      if (temperatureTop !== null && periodsAt(now).hold && temperatureTop >= holdFrom) {
+        if (drawStart) return { decision: true, reason: 'draw_heating' }
+        return { decision: false, reason: 'night_tariff_hold' }
       }
 
       // Comfort heating
@@ -526,7 +574,7 @@ module.exports = (name, {
 
       // Start on a draw, before the top cools: the element is then already
       // running while the tank empties (#1911). The load gates apply.
-      if (drawSeenAt !== null && temperatureTop !== null && temperatureTop < target) {
+      if (drawStart) {
         return { decision: true, reason: 'draw_heating' }
       }
 
@@ -554,6 +602,34 @@ module.exports = (name, {
       }
     }
 
+    // Baths ready and minutes to one more (#1984). Old or missing top or
+    // bottom readings give no number at all, never an old one.
+    const bathStatus = () => {
+      const top = currentState.temperatureTop
+      const bottom = currentState.temperatureBottom
+      const fresh = !temperatures.isStale() && Number.isFinite(top) && Number.isFinite(bottom)
+      const cold = boilerTank.coldWaterAt(coldWaterByMonth, Date.now(), timeZone)
+      const heating = heaterOn()
+      const estimate = fresh
+        ? boilerTank.bathEstimate({
+          top,
+          bottom,
+          cold,
+          heating,
+          boostAllowed: boostLimitReason(top, bottom) === null,
+          bathLitres,
+          bathTempC,
+          elementPowerByTempKw,
+          tank: tankModel
+        })
+        : boilerTank.bathEstimate({})
+      return {
+        ...estimate,
+        bathText: boilerTank.bathSentence(estimate, boostButtonName),
+        bathInputs: estimate.bathsReady === null ? null : { top, bottom, cold }
+      }
+    }
+
     // The status for monitoring: heaterState is the real state of the element
     // (see heaterOn), contactorState the last contactor status (null: none
     // yet, or no feedback configured).
@@ -571,7 +647,8 @@ module.exports = (name, {
         ambient: currentState.ambientTemperature
       },
       solarCirculation: currentState.solarCirculation,
-      load: loadStatus()
+      load: loadStatus(),
+      ...bathStatus()
     })
 
     const updateHeaterState = () => {
@@ -834,18 +911,20 @@ module.exports = (name, {
 
         if (validModes.includes(newMode)) {
           const top = currentState.temperatureTop
-          const atLimit = top !== null && top >= hotWaterLimit
-          // A boost heats the top to hotWaterLimit and ends there. With the
-          // top already at the limit it would end at once, so it is refused
-          // and the mode and its end time stay as they were (#1975).
-          if (newMode === 'boost' && atLimit) {
-            console.log(`[${name}] boost refused: top ${top}°C is at or above hotWaterLimit ${hotWaterLimit}°C`)
-            refuseCommand(newMode, 'top_at_limit')
+          const bottom = currentState.temperatureBottom
+          const limitReason = boostLimitReason(top, bottom)
+          // A boost ends when the bottom reaches boostBottomTarget or the top
+          // boostTopLimit. Already there, it would end at once, so it is
+          // refused and the mode and its end time stay as they were (#1975,
+          // #1976).
+          if (newMode === 'boost' && limitReason) {
+            console.log(`[${name}] boost refused (${limitReason}): top ${top}°C (limit ${boostTopLimit}°C), bottom ${bottom}°C (target ${boostBottomTarget}°C)`)
+            refuseCommand(newMode, limitReason)
             return
           }
-          // manual_on at the limit is applied: it heats once the top falls
-          // under the limit. The result says why it does not heat now.
-          commandResult(newMode, 'applied', newMode === 'manual_on' && atLimit ? 'top_at_limit' : 'ok')
+          // manual_on at a limit is applied: it heats once the readings fall
+          // under the limits. The result says why it does not heat now.
+          commandResult(newMode, 'applied', newMode === 'manual_on' && limitReason ? limitReason : 'ok')
           currentState.controlMode = newMode
           // A mode command is the newest order: it ends an outside ON or OFF.
           externalOn = null
@@ -936,6 +1015,8 @@ module.exports = (name, {
         hysteresis,
         nightTariff,
         hotWaterLimit,
+        boostBottomTarget,
+        boostTopLimit,
         nightBoostTarget: boostTarget,
         dayTopUp: topUpTarget === null ? null : { minutesBeforeHold: dayTopUp.minutesBeforeHold, target: topUpTarget },
         drawDropK,
