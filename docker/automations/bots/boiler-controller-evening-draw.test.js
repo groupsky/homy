@@ -335,7 +335,9 @@ describe('boiler-controller evening draw rules (#1911)', () => {
       expect(boiler.relay()).toMatchObject({ state: false, reason: 'hysteresis_zone_maintain_false' })
     })
 
-    test('the night hold still applies; the boost starts at 22:15', () => {
+    // A draw in the hold starts the element only with the top under the draw
+    // target (#1976); see boiler-controller-whole-tank.test.js.
+    test('in the night hold, a draw with the top at the draw target waits; the boost starts at 22:15', () => {
       const boiler = startAt('2026-11-02T21:40:00+02:00')
       boiler.temperatures({ top: 54, bottom: 52 })
       fall(boiler, '2026-11-02T21:40:00+02:00', 52, 4, 1)

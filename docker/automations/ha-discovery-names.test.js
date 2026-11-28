@@ -109,7 +109,7 @@ describe('boiler control from Home Assistant (#1912)', () => {
     const button = load().boilerBoostHaDiscovery
     expect(button.output.params.topic).toBe('homeassistant/button/boiler_boost/config')
     expect(button.input.params.payload).toMatchObject({
-      name: 'Загрей до 55 °C',
+      name: 'Загрей целия бойлер',
       command_topic: controlModeSet,
       device: { identifiers: 'boiler_eldom_200l' },
     })

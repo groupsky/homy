@@ -879,7 +879,7 @@ const config = {
     }),
 
     // Read only (#1912): the boiler controller owns the contactor. To heat by
-    // hand use the controller's mode or the button "Загрей до 55 °C". The old
+    // hand use the controller's mode or the button "Загрей целия бойлер". The old
     // switch entity is removed by haBoilerContactorSwitchRemoved in config.js.
     ...haBinarySensor({
       name: 'serviceBoilerContactor',
@@ -1037,13 +1037,14 @@ const config = {
       }
     }),
 
-    // Heat the top to 55 °C now, for at most 2 h, whatever the night hold and
-    // the load gates say; then the controller goes back to automatic (#1912).
+    // Heat the whole tank now: until the bottom is at 50 °C, never the top
+    // to 60 °C, for at most 2 h, whatever the night hold and the load gates
+    // say; then the controller goes back to automatic (#1912, #1976).
     ...haButton({
       name: 'boilerBoost',
       feature: 'boiler_boost',
       config: {
-        name: 'Загрей до 55 °C',
+        name: 'Загрей целия бойлер',
         device: devices.boiler,
         object_id: 'boiler_boost',
         icon: 'mdi:water-boiler-alert',
@@ -1083,13 +1084,15 @@ const config = {
         state_topic: `${featuresPrefix}/control_mode/boiler_controller/status`,
         value_template: [
           '{%- set c = value_json.lastCommand -%}',
-          "{%- set modes = {'automatic': 'автоматичен режим', 'boost': 'загряване до границата', 'manual_on': 'ръчно включен', 'manual_off': 'ръчно изключен', 'vacation_3d': 'отпуска 3 дни', 'vacation_5d': 'отпуска 5 дни', 'vacation_7d': 'отпуска 7 дни', 'vacation_10d': 'отпуска 10 дни', 'vacation_14d': 'отпуска 14 дни', 'vacation_until': 'отпуска до дата'} -%}",
+          "{%- set modes = {'automatic': 'автоматичен режим', 'boost': 'загряване на целия бойлер', 'manual_on': 'ръчно включен', 'manual_off': 'ръчно изключен', 'vacation_3d': 'отпуска 3 дни', 'vacation_5d': 'отпуска 5 дни', 'vacation_7d': 'отпуска 7 дни', 'vacation_10d': 'отпуска 10 дни', 'vacation_14d': 'отпуска 14 дни', 'vacation_until': 'отпуска до дата'} -%}",
           "{%- if not c -%}Още няма команда.",
           "{%- elif c.result == 'refused' and c.reason == 'top_at_limit' -%}Загряването не започна: горе е {{ c.top }} °C, границата е {{ c.limit }} °C.",
+          "{%- elif c.result == 'refused' and c.reason == 'bottom_at_target' -%}Загряването не започна: долу е {{ c.bottom }} °C, целта е {{ c.bottomTarget }} °C.",
           "{%- elif c.result == 'refused' and c.reason == 'invalid_until' -%}Отпуската не започна: няма валиден час за край.",
           "{%- elif c.result == 'refused' and c.reason == 'unknown_mode' -%}Командата не е приета: непознат режим.",
           "{%- elif c.result == 'refused' -%}Командата не е приета.",
           "{%- elif c.reason == 'top_at_limit' -%}Ръчно включен, но горе е {{ c.top }} °C, границата е {{ c.limit }} °C. Ще грее, когато горе падне под границата.",
+          "{%- elif c.reason == 'bottom_at_target' -%}Ръчно включен, но долу е {{ c.bottom }} °C, целта е {{ c.bottomTarget }} °C. Ще грее, когато долу падне под целта.",
           "{%- else -%}Прието: {{ modes.get(c.mode, c.mode) }}.",
           '{%- endif -%}'
         ].join(''),
