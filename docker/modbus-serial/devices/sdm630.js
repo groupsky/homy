@@ -35,7 +35,7 @@ async function read (client) {
   // Average line to neutral volts (Volts)
   const average_v = r(in1, 0x2A)
   // Average line current (Amps)
-  const average_c = r(in1, 0x2C)
+  const average_c = r(in1, 0x2E)
   // Sum of line currents (Amps)
   const sum_c = r(in1, 0x30)
   // Total system power (Watts)

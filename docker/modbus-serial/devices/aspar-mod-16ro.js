@@ -33,7 +33,7 @@ const readParity = (val) => READ_PARITY_MAP[val]
 const writeParity = (val) => WRITE_PARITY_MAP[val]
 
 const readStopBits = (val) => val & 0xFF
-const writeStopBits = (val, prev) => (prev & 0xFF00) | (val && 0xFF)
+const writeStopBits = (val, prev) => (prev & 0xFF00) | (val & 0xFF)
 
 const readDataBits = (val) => (val & 0xFF00) >> 8
 const writeDataBits = (val, prev) => (prev & 0xFF) | (val << 8)
@@ -464,6 +464,7 @@ async function setup (client, newConfig) {
 }
 
 module.exports = {
+  writeStopBits,
   read,
   write,
   setup

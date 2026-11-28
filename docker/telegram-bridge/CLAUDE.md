@@ -96,8 +96,8 @@ The safety label is set on these rules in `config/grafana/provisioning/alerting/
 | Car HV battery | Ioniq HV Isolation Low and Critical, Pack Temperature Critical |
 
 Everything else is silent at night, for example the dishwasher and washing machine reminders, the
-mower, the other boiler alerts, Main Power (over 10 kW use), AC voltage, the other Ioniq alerts and
-the `ioniq-dtc` bot. There is no UPS alert yet; a future UPS low-battery alert must carry the label.
+mower, the other boiler alerts, Main Power (over 10 kW use), AC voltage, the other Ioniq alerts,
+the `ioniq-dtc` bot and the `ioniq-notices` bot (ev-journal's car notices). There is no UPS alert yet; a future UPS low-battery alert must carry the label.
 
 **To change the list**, add or remove `safety: "true"` in the rule's `labels` and deploy (Grafana
 reloads its provisioning on restart). Then update the table above. The window and the time zone are
@@ -284,7 +284,7 @@ Every Bot API call writes one JSON line to stdout (`docker logs telegram-bridge`
 {"event":"telegram.sent","sender":"telegram-bridge","source":"grafana","origin_host":"routy","silent":false,"ok":true,"message_id":4711,"error":null,"text":"<full text as sent>"}
 ```
 
-- `source` is what asked for the message: a `source` string in the JSON body, or a `?source=` query parameter; default `grafana`. The `ioniq-dtc` bot sends `source: "ioniq-dtc"`.
+- `source` is what asked for the message: a `source` string in the JSON body, or a `?source=` query parameter; default `grafana`. The `ioniq-dtc` bot sends `source: "ioniq-dtc"`; the `ioniq-notices` bot sends `source: "ioniq-notices"`.
 - `silent` is true when the message was sent without sound ([Quiet hours](#quiet-hours)).
 - `error` is the Bot API `description`, or the transport error. No chat id, and the bot token is stripped from errors.
 - Code: `src/sent-log.js`. Search: `docker logs telegram-bridge | grep '"event":"telegram.sent"'`.

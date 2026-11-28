@@ -464,6 +464,10 @@ can still go past 55 minutes or the account's limit of parallel jobs; then 5B fa
 loudly, as before. Recovery is `force_rebuild=true` on the tip (above). Still merge large
 batches one at a time.
 
+To test the wait: merge two small doc-only PRs within 30 s. A master push always runs,
+so both runs reach 5B. The second run's `wait-for-base-run` job must wait for the first
+run, and both runs must end green.
+
 Decision: a wait, not a queue-by-branch concurrency group. With `cancel-in-progress:
 false` GitHub keeps only one *pending* run per group and cancels the others. A cancelled
 run tags nothing, so a burst of merges would again leave commits with no images.

@@ -900,3 +900,13 @@ module.exports.bots.leavingHomeCheck = {
   maxValueAgeMs: 24 * 60 * 60 * 1000,
   telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
 }
+
+// ev-journal's car notices (homy/ioniq/notice) go to Telegram as source
+// `ioniq-notices` (#1954). ev-journal decides when to send one.
+module.exports.bots.ioniqNotices = {
+  type: 'ioniq-notices',
+  topic: 'homy/ioniq/notice',
+  // Sent ids kept to drop a redelivered notice
+  maxIds: 200,
+  telegramWebhookUrl: 'http://telegram-bridge:3000/webhook',
+}

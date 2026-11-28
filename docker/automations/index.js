@@ -159,7 +159,8 @@ playground.bots.forEach(async bot => {
   const startParams = {
     isEnabled: () => bot.enabled,
     mqtt: {
-      subscribe: async (topic, cb) => new Promise((resolve, reject) => {
+      // qos is set by the first bot that subscribes to the topic
+      subscribe: async (topic, cb, { qos = 0 } = {}) => new Promise((resolve, reject) => {
         console.log(`[${bot.config.type}] subscribing to ${topic}`)
         if (mqttSubscriptions[topic]) {
           // Wrap callback to check enabled state
@@ -178,7 +179,7 @@ playground.bots.forEach(async bot => {
             }
           }
           mqttSubscriptions[topic] = [wrappedCb]
-          playground.gates.mqtt.subscribe(topic, (err) => {
+          playground.gates.mqtt.subscribe(topic, { qos }, (err) => {
             if (err) {
               console.error(`[${bot.config.type}] failure subscribing to ${topic}`, err)
               reject(err)
