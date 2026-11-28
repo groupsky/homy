@@ -242,6 +242,9 @@ is robust even across a total sleep gap.
   energy_in_kwh / ac_energy_kwh` (verified overnight case: 10.1 kWh pack / 12.46 kWh AC = 81%). A **relative**
   threshold (not tier-hardcoded) keeps this correct across all three tiers and any future one.
   `duration_is_charge: true`. (Meter and car share the same server clock; edges aligned within ~5–9 min.)
+  When the rest closes while the meter is still in its on state (the car drove away less than 2 min after
+  the load stopped, so the off edge is not confirmed yet), the charge ends at the first low reading, or at
+  the newest reading if the meter still shows load (#1915).
 - **`bounds: connector` / `bounds: awake`.** No meter match (away-from-home charge, or meter gap), but the
   rest contains captured `charge_connector` `0→1`/`1→0` edges or intermediate awake samples → bound the
   charge at those edges. `duration_is_charge: true` (`ac_energy_kwh`/`charge_efficiency` null — no meter).
