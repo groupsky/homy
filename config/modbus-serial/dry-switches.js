@@ -56,6 +56,26 @@ module.exports = {
       type: 'aspar-mod-16ro',
       options: {
         maxMsBetweenReports: 7 * 60 * 1000, // 7 minutes
+        // The relay boards restart in a mains dip and come back with their
+        // outputs in the power-up state (#2008, see aspar-mod-16ro.js). After
+        // a restart each listed output gets back the last value written with success if the
+        // board was gone no longer than restoreWithinMs, else defaultState.
+        // defaultState is also the board's own power-up state (def* coils).
+        // An output that is not listed is never written. {} = the board-wide
+        // values; an output can override them, e.g. {defaultState: true}.
+        restore: {
+          restoreWithinMs: 15 * 60 * 1000, // 15 minutes
+          defaultState: false,
+          outputs: {
+            out8: {}, // lights
+            out9: {},
+            out10: {},
+            out11: {},
+            out13: {},
+            // out14 (boiler contactor) is not listed: the boiler controller owns it
+            out15: {}, // outside lights
+          },
+        },
       }
     },
     {
@@ -64,6 +84,20 @@ module.exports = {
       type: 'aspar-mod-16ro',
       options: {
         maxMsBetweenReports: 11 * 60 * 1000, // 11 minutes
+        restore: {
+          restoreWithinMs: 15 * 60 * 1000, // 15 minutes
+          defaultState: false,
+          outputs: {
+            out8: {}, // lights
+            out9: {},
+            out10: {},
+            out11: {},
+            out12: {},
+            out13: {},
+            out14: {},
+            out15: {},
+          },
+        },
       }
     },
     {

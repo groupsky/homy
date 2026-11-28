@@ -66,6 +66,68 @@ undocumented low byte. After a write the next poll reads the settings again, so
 the readings show them before and after the write. The `sr04-sync-clock`
 automation sends these writes (#1752).
 
+### Aspar MOD-16RO relay boards: restore after a restart
+
+The `dry-switches` relay boards (`relays00-15`, `relays16-31`) restart in a
+mains dip and come back with their outputs in the power-up state (#2008). A
+board with `options.restore` in its config gets these extra steps in
+`devices/aspar-mod-16ro.js`; a board without it (for example `relays32-47` on
+the `monitoring` bus) is read exactly as before.
+
+```js
+{
+  name: 'relays00-15',
+  address: 1,
+  type: 'aspar-mod-16ro',
+  options: {
+    maxMsBetweenReports: 7 * 60 * 1000,
+    restore: {
+      restoreWithinMs: 15 * 60 * 1000, // board-wide values for each listed output
+      defaultState: false,
+      outputs: {
+        out9: {},                    // the board-wide values
+        out15: {defaultState: true}, // an override for one output
+      },
+    },
+  },
+}
+```
+
+- **Restart check:** about every 1 s the driver reads only the
+  received-packets counter (input registers 0x20-0x21). It publishes nothing,
+  unless the counter is lower than its last value: the board restarted (a
+  counter overflow looks the same and then writes nothing). The full report
+  stays at `maxMsBetweenReports`, and after each write.
+- **A board that does not answer** is tried again after 1 s, then 2, 4, 8 ...
+  up to 60 s (`relays00-15 does not answer (...), next try in N ms`). The
+  driver logs these errors and does not throw them, so they do not make the
+  reader reopen the port; the other devices on the bus keep their normal poll.
+  Only a closed port (`PortNotOpenError`) is thrown. A write that works ends
+  the wait, so the next poll reads the board at once.
+- **Restore**, at the first good contact after a restart, per listed output:
+  if the board was gone (last good contact before, to first good contact
+  after) no longer than `restoreWithinMs`, its wanted value: the last value
+  written with success since the last full report, else the last reported
+  value. A command whose write failed is never written back later.
+  Otherwise `defaultState`; with no `defaultState` the output
+  stays as the board came up. The driver reads register 0x33 and writes only
+  the outputs that differ, one coil each, in the same hold of the bus. Then it
+  publishes a full report at once. One log line per restart:
+  `relays00-15 restarted (received packets 40020 -> 4), gone 4104 ms: wrote out9=true (last report), out13=false (last written value)`.
+- **Power-up state:** at the first full report after the reader starts, the
+  driver compares register 0x0C (`defaultOutputState`) with each listed
+  output's `defaultState` and writes only the `def*` coils that differ, with a
+  log line each (`relays00-15 power-up state: def14 (out14) false -> true`).
+  It writes none in normal running: the board keeps them in a memory that
+  wears.
+- An output that is not listed is never written. The boiler contactor
+  (`relays00-15` out14) is not listed: the boiler controller owns it, and the
+  reader never restores it.
+
+Tests: `devices/aspar-mod-16ro.test.js` (the driver on a fake board) and
+`relay-restore.test.js` (the real `index.js` with the deployed config on a
+fake bus and clock: restarts, a 5-minute outage, the bus load).
+
 ## Configuration
 
 ### Environment Variables
@@ -265,6 +327,9 @@ inside the process (#1368):
 - at once on `PortNotOpenError` (the TCP peer dropped the session);
 - after 11 identical errors in a row from one device (`Too many errors,
   reconnecting`).
+
+A relay board with restore config does not count here: its driver backs off on
+its own (see the MOD-16RO section above).
 
 It waits 5 s before the first try, doubles the wait after each failed try, up
 to 60 s, and starts again at 5 s after the next good read. A bus that dies
