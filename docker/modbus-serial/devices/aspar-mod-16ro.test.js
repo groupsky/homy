@@ -36,3 +36,12 @@ describe('read', () => {
     expect(await read(client(), config, state, true)).toMatchObject({outputs: 0})
   })
 })
+
+describe('writeStopBits', () => {
+  const {writeStopBits} = require('./aspar-mod-16ro')
+
+  it('puts the stop-bit count in the low byte and keeps the data bits', () => {
+    expect(writeStopBits(1, 0x0800)).toBe(0x0801)
+    expect(writeStopBits(2, 0x0800)).toBe(0x0802)
+  })
+})

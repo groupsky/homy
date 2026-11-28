@@ -227,6 +227,36 @@ A device driver's `write` must still validate the *shape* of what it receives:
 valid JSON is not necessarily the command the driver expects, and `null` is valid
 JSON.
 
+## Power Dip Guard (dry-switches)
+
+The `dry-switches` input modules (`mbsl32di1`, `mbsl32di2`) restart in a mains
+dip: first a reading with many inputs dropped, then `inputs: 0` for seconds
+(#2007). The optional bus-level `powerDipGuard` config
+(`config/modbus-serial/dry-switches.js`) makes `index.js` pass every read of
+the listed devices, also failed ones and ones with no change, to
+`power-dip-guard.js`:
+
+- a change is held for one poll pass of all listed modules, and published
+  only if no dip starts (0, or `minChangedBits` or more inputs changed);
+- in a dip nothing is published for these modules; each ends when it reads
+  its value from before again, or a non-zero value stable for `stableMs`;
+- a dip event `{state, _tz, durationMs, readings}` goes to
+  `/modbus/dry-switches/power-dip/reading` (not to the reader's own
+  `influxdb` integration; mqtt-influx stores it as `power_dip`);
+- a false dip (no module read 0) only delays: when it ends, the held changes
+  are published late, in read order, each with its own `_tz`; in a real dip
+  (a module read 0) they are dropped;
+- held dip readings are only in the dip event, not in the raw archives;
+- a listed module that never answers delays the other's changes by `stableMs`,
+  and no change is held longer than `maxHoldMs` (10 s);
+- log lines `power dip start ...`, `power dip end after <N> ms ...`, and
+  `power dip still on ...` every 5 minutes.
+
+Without `powerDipGuard` every reading is published at once, as before. The
+full rules are in `docker/automations/docs/power-dip.md`. Tests:
+`power-dip.test.js` runs `index.js` with the deployed config on a fake bus and
+fake timers.
+
 ## Read Errors and Reconnect
 
 `index.js` does not exit on read errors. It closes the port and opens it again,
@@ -340,3 +370,12 @@ The modbus-serial service provides authoritative data for:
 - ✅ Solar production data
 
 This data is the source of truth for system monitoring and automation decisions.
+
+## Stopping
+
+On `SIGTERM` or `SIGINT`, `shutdown.js` stops the poll loop, calls `close()` on
+every integration that has one (the InfluxDB integration sends its pending
+points), and exits. The flush is cut off after 5 s, below the 10 s that
+`docker stop` waits. Exit code 0 on a clean flush, 1 if a close failed or timed
+out (#1971). The "Too many errors" path does not exit: it reconnects inside the
+process (#1368), so the pending points stay in the batch and no flush is needed.

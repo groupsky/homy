@@ -3,7 +3,7 @@
 # stands in for every webhook and logs each request it gets.
 services:
   broker:
-    image: ghcr.io/groupsky/homy/mosquitto:2.0.22
+    image: ghcr.io/groupsky/homy/mosquitto:2.0.23
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
