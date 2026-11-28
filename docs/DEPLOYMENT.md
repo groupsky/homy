@@ -505,6 +505,8 @@ Each push to master creates images with multiple tags:
 
 A service whose image did not change is retagged with the new SHA; the retag copies the manifest, so its digest stays the same. `deploy.sh` relies on that.
 
+The retag copies from the previous master tip, so it waits until that tip's CI run has finished. A few merges close together are fine; a long burst can still fail the retag. See "Which commit is the base, and rapid merges" in `.github/workflows/CLAUDE.md`.
+
 ### Manual Image Pull
 
 To manually pull a specific version:
