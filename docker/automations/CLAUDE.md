@@ -212,6 +212,10 @@ Key patterns:
 - **Inputs**: `homy/ioniq/home` (retained home place from ev-journal), `ioniq/parsed/gps`, light and contact feature status, oven and stove power meters
 - **State**: `home` or `away`, in the persistent cache; the last values in memory (retained topics fill them at start)
 
+#### `ioniq-notices` - ev-journal's car notices to Telegram
+- **Purpose**: `ioniqNotices` (#1954): each message on `homy/ioniq/notice` (QoS 1, payload `{id, kind, time, text}`) is sent to Telegram as source `ioniq-notices`. ev-journal decides when to send one (for example the evening plug check). Quiet hours are telegram-bridge's: these are not safety messages.
+- **State**: the last 200 sent ids are in the persistent cache, so a redelivered or repeated id is not sent again, also after a restart. A message without `id` or `text` is dropped with one log line.
+
 #### `solar-emitter` - Night lights from sunset to sunrise
 - **Dark sky switch** (#1751): the night light bots `nightExternalLights` and `nightExternalLightsZ2M` (`solar-emitter`) can be held off for one night by the HA switch `dark_sky_tonight`. Details: [docs/dark-sky-switch.md](docs/dark-sky-switch.md)
 

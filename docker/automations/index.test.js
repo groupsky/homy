@@ -28,7 +28,10 @@ describe('index.js MQTT message handler', () => {
   const createClient = () => {
     const emitter = new EventEmitter()
     emitter.setMaxListeners(1000)
-    emitter.subscribe = jest.fn((topic, cb) => cb && cb(null))
+    emitter.subscribe = jest.fn((topic, options, cb) => {
+      const done = typeof options === 'function' ? options : cb
+      if (done) done(null)
+    })
     emitter.publish = jest.fn((topic, message, options, cb) => cb && cb(null))
     emitter.endAsync = jest.fn(async () => {})
     return emitter
