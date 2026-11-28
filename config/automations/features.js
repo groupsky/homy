@@ -164,18 +164,18 @@ const config = {
       topic: 'open/living_window_open',
     }),
     ...drySwitch({
-      name: 'cabinetSouthWindowOpen',
+      name: 'cabinetWestWindowOpen',
       device: 'mbsl32di1',
       bit: 3,
       invert: true,
-      topic: 'open/cabinet_south_window_open',
+      topic: 'open/cabinet_west_window_open',
     }),
     ...drySwitch({
-      name: 'cabinetWestWindowOpen',
+      name: 'cabinetSouthWindowOpen',
       device: 'mbsl32di1',
       bit: 4,
       invert: true,
-      topic: 'open/cabinet_west_window_open',
+      topic: 'open/cabinet_south_window_open',
     }),
     ...drySwitch({
       name: 'bath1DoorLock',

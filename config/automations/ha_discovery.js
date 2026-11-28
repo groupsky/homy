@@ -499,7 +499,7 @@ const config = {
       feature: 'cabinet_south_window_open',
       type: 'window',
       config: {
-        name: 'Прозорец запад',
+        name: 'Прозорец юг',
         device: devices.cabinet,
         object_id: 'cabinet_south_window_open',
         unique_id: 'homy_cabinet_south_window_open',
@@ -511,7 +511,7 @@ const config = {
       feature: 'cabinet_west_window_open',
       type: 'window',
       config: {
-        name: 'Прозорец юг',
+        name: 'Прозорец запад',
         device: devices.cabinet,
         object_id: 'cabinet_west_window_open',
         unique_id: 'homy_cabinet_west_window_open',
