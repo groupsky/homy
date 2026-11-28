@@ -56,6 +56,11 @@ This dashboard provides comprehensive monitoring and analysis of the boiler cont
 - `input_stale` - Boiler temperatures older than 10 min, element off (#1743)
 - `day_top_up` / `day_top_up_reached` - Heating the top to 55 °C before the hold / target reached (#1911)
 - `night_boost` / `night_boost_reached` - Heating the top to 55 °C in the night zone / target reached (#1911)
+- The two above run only without the evening plan; with it (#1985):
+  - `plan_night` / `plan_night_reached` / `plan_night_met` - Night-price heating for the coming evening /
+    top at the night limit / nothing missing
+  - `plan_day` / `plan_day_reached` / `plan_day_met` - Day-price heating before the evening and during the
+    first baths / top at the day limit / nothing missing
 - `draw_heating` - Started early on a hot-water draw (bottom fell 3 K in 10 min, #1911)
 - `safety_shutoff_overheated` - Safety temperature exceeded
 - `hysteresis_zone_maintain_*` - Maintaining current state

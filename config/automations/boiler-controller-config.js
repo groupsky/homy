@@ -39,17 +39,13 @@ module.exports = {
         marginMinutes: 15,
         floor: 40
       },
-      // Evening draw (#1911): a big draw soon after the hold ends emptied the
-      // tank on many evenings. So the top is heated to 55 °C before the hold
-      // (19:30-21:00 in winter, 20:30-22:00 in summer, at day price) and again
-      // from the end of the hold to the end of the night zone. 55 °C is the
-      // limit while there is no mixing valve (#1473); `hotWaterLimit` caps
-      // these targets.
+      // 55 °C is the limit at the top while there is no mixing valve (#1473):
+      // no automatic rule heats the top above `hotWaterLimit`, whatever its
+      // own target says. A draw in the hold also starts the element (#1976).
       hotWaterLimit: 55,
-      dayTopUp: { minutesBeforeHold: 90, target: 55 },
-      nightBoostTarget: 55,
       // The evening plan (#1985) heats only the hot water the coming evening
-      // is missing.
+      // is missing. It replaces the fixed day top-up and night boost of #1911.
+      // See docker/automations/docs/boiler-controller.md, "Evening plan".
       eveningPlan: {
         // The plan = the need of the evening + this many baths (a back-test
         // over 2024-01 to 2026-11: +1 bath was short on 1 evening in 5, by
@@ -116,15 +112,23 @@ module.exports = {
       maxLoadInputAgeMs: 10 * 60 * 1000, // newer reading than this or the input is ignored
       // Contactor feedback (#1912): the real state of the element. An ON the
       // controller did not send is kept until the top reaches the stop target
-      // in force (50 °C, 55 °C in the top-up and boost windows), for at most
+      // in force (50 °C, 55 °C in the plan windows), for at most
       // 2 h; only maxSafe, hotWaterLimit and old readings stop it earlier. After
       // an OFF it did not send, the controller waits 30 min before it starts
       // the element again.
       contactorStatusTopic: `${featuresPrefix}/relay/service_boiler_contactor/status`,
       externalOnMaxMs: 2 * 60 * 60 * 1000,
       externalOffHoldMs: 30 * 60 * 1000,
-      // The `boost` mode (the Home Assistant button "Загрей до 55 °C") heats the
-      // top to hotWaterLimit now, for at most 2 h, then goes back to automatic.
+      // The `boost` mode (the Home Assistant button "Загрей целия бойлер") and
+      // `manual_on` heat the whole tank (#1976): they heat until the bottom
+      // reaches `boostBottomTarget` and stop when the top reaches
+      // `boostTopLimit`. The top may get hotter than the 55 °C of the
+      // automatic rules, so only a person starts it; 60 °C is the hard cap at
+      // the top. Boost runs at most 2 h, then goes back to automatic. The
+      // bottom sensor sits in the solar coil: while the solar pump runs it
+      // reads the coil, so a boost may end early then.
+      boostBottomTarget: 50,
+      boostTopLimit: 60,
       boostDurationMs: 2 * 60 * 60 * 1000,
       // Baths ready (#1984): the status says how many baths the tank holds
       // now and the minutes to one more. Only computed and published; no
@@ -163,6 +167,8 @@ module.exports = {
         inletMixLayers: 1.07,
         maxTopC: 75
       },
+      timeZone: 'Europe/Sofia', // the month of coldWaterByMonth
+      boostButtonName: 'Загрей целия бойлер', // the button below, in the sentence
       verbose: true
     }
   },

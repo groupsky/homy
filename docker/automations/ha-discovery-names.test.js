@@ -35,7 +35,11 @@ const identity = (bots) => Object.fromEntries(Object.entries(bots).map(([key, bo
 // Without it the identity still hashed to 8064950a…a110.
 // Changed on purpose again (#1975): the boiler last command sensor was
 // added. Without it the identity still hashed to b0fde0e1…7ed9.
-const BASELINE_SHA256 = '3f3d847b1a14a531eb1130704fc8f72ac6a38d53e668eb113e625fefb926f8b3'
+// Changed on purpose again (#1984): the boiler baths ready sensor was added.
+// Without it the identity still hashed to 3f3d847b…f8b3.
+// Changed on purpose again (#1985): the boiler evening baths number was
+// added. Without it the identity still hashed to 9de271aa…0b50.
+const BASELINE_SHA256 = '8d28fd5b0bddbf75536482d6c7524d720bccadae6ce8d2240884449364278157'
 const canonical = (ids) => JSON.stringify(Object.keys(ids).sort().map((k) => [k, ids[k]]))
 const sha256 = (text) => require('crypto').createHash('sha256').update(text).digest('hex')
 
@@ -109,7 +113,7 @@ describe('boiler control from Home Assistant (#1912)', () => {
     const button = load().boilerBoostHaDiscovery
     expect(button.output.params.topic).toBe('homeassistant/button/boiler_boost/config')
     expect(button.input.params.payload).toMatchObject({
-      name: 'Загрей до 55 °C',
+      name: 'Загрей целия бойлер',
       command_topic: controlModeSet,
       device: { identifiers: 'boiler_eldom_200l' },
     })

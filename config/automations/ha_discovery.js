@@ -173,6 +173,38 @@ const haText = (
   }
 })
 
+// A number box. Home Assistant sends the number as plain text, so the
+// command template wraps it as JSON: {"value": 2.5}. The bot that owns it
+// publishes {"value": ...} as status; a null value shows as unknown (the
+// default payload_reset of an MQTT number is "None").
+const haNumber = (
+  {
+    name,
+    feature_type,
+    feature,
+    config
+  }
+) => ({
+  [`${name}HaDiscovery`]: {
+    type: 'transform',
+    input: {
+      name: 'inputs/static', params: {
+        payload: {
+          command_topic: `${featuresPrefix}/${feature_type}/${feature}/set`,
+          command_template: `{"value": {{ value }}, "_src": "ha"}`,
+          state_topic: `${featuresPrefix}/${feature_type}/${feature}/status`,
+          value_template: `{{ value_json.value if value_json.value is not none else 'None' }}`,
+          unique_id: `homy_${feature_type}_${feature}`,
+          ...config,
+          ...(config.object_id && { default_entity_id: `number.${config.object_id}` })
+        }
+      }
+    },
+    transform: [],
+    output: { name: 'outputs/mqtt', params: { topic: `${haPrefix}/number/${feature}/config`, retain: true } }
+  }
+})
+
 const haAutomationSwitch = (
   {
     name,
@@ -879,7 +911,7 @@ const config = {
     }),
 
     // Read only (#1912): the boiler controller owns the contactor. To heat by
-    // hand use the controller's mode or the button "Загрей до 55 °C". The old
+    // hand use the controller's mode or the button "Загрей целия бойлер". The old
     // switch entity is removed by haBoilerContactorSwitchRemoved in config.js.
     ...haBinarySensor({
       name: 'serviceBoilerContactor',
@@ -1037,13 +1069,14 @@ const config = {
       }
     }),
 
-    // Heat the top to 55 °C now, for at most 2 h, whatever the night hold and
-    // the load gates say; then the controller goes back to automatic (#1912).
+    // Heat the whole tank now: until the bottom is at 50 °C, never the top
+    // to 60 °C, for at most 2 h, whatever the night hold and the load gates
+    // say; then the controller goes back to automatic (#1912, #1976).
     ...haButton({
       name: 'boilerBoost',
       feature: 'boiler_boost',
       config: {
-        name: 'Загрей до 55 °C',
+        name: 'Загрей целия бойлер',
         device: devices.boiler,
         object_id: 'boiler_boost',
         icon: 'mdi:water-boiler-alert',
@@ -1067,6 +1100,46 @@ const config = {
       },
     }),
 
+    // Baths ready now and the minutes to one more, as a short Bulgarian
+    // sentence that the controller writes (#1984). Unknown while the boiler
+    // readings are old or missing: the controller then sends no sentence.
+    ...haSensor({
+      name: 'boilerBathsReady',
+      feature: 'boiler_baths_ready',
+      type: null,
+      config: {
+        name: 'Готова вода',
+        device: devices.boiler,
+        object_id: 'boiler_baths_ready',
+        unique_id: 'homy_boiler_baths_ready',
+        icon: 'mdi:shower-head',
+        state_topic: `homy/automation/boiler_controller/status`,
+        value_template: '{{ value_json.bathText if value_json.bathText else None }}',
+        json_attributes_topic: `homy/automation/boiler_controller/status`,
+        json_attributes_template: '{{ {"bathsReady": value_json.bathsReady, "usableLitres": value_json.usableLitres, "minutesToNextBath": value_json.minutesToNextBath, "boostMinutesToNextBath": value_json.boostMinutesToNextBath, "bathInputs": value_json.bathInputs} | tojson }}'
+      },
+    }),
+
+    // "Бани довечера" (#1985): the baths of this evening, set by hand. It
+    // replaces the learned need of the boiler controller's evening plan for
+    // this evening only; the controller clears it at midnight.
+    ...haNumber({
+      name: 'boilerEveningBaths',
+      feature_type: 'number',
+      feature: 'boiler_evening_baths',
+      config: {
+        name: 'Бани довечера',
+        device: devices.boiler,
+        object_id: 'boiler_evening_baths',
+        icon: 'mdi:shower',
+        min: 0,
+        max: 10,
+        step: 0.5,
+        mode: 'box',
+        unit_of_measurement: 'бани',
+      }
+    }),
+
     // The result of the last mode command as a short Bulgarian sentence, so
     // a refused boost or a manual_on that cannot heat yet says why (#1975).
     // The fields of lastCommand are the attributes.
@@ -1083,13 +1156,15 @@ const config = {
         state_topic: `${featuresPrefix}/control_mode/boiler_controller/status`,
         value_template: [
           '{%- set c = value_json.lastCommand -%}',
-          "{%- set modes = {'automatic': 'автоматичен режим', 'boost': 'загряване до границата', 'manual_on': 'ръчно включен', 'manual_off': 'ръчно изключен', 'vacation_3d': 'отпуска 3 дни', 'vacation_5d': 'отпуска 5 дни', 'vacation_7d': 'отпуска 7 дни', 'vacation_10d': 'отпуска 10 дни', 'vacation_14d': 'отпуска 14 дни', 'vacation_until': 'отпуска до дата'} -%}",
+          "{%- set modes = {'automatic': 'автоматичен режим', 'boost': 'загряване на целия бойлер', 'manual_on': 'ръчно включен', 'manual_off': 'ръчно изключен', 'vacation_3d': 'отпуска 3 дни', 'vacation_5d': 'отпуска 5 дни', 'vacation_7d': 'отпуска 7 дни', 'vacation_10d': 'отпуска 10 дни', 'vacation_14d': 'отпуска 14 дни', 'vacation_until': 'отпуска до дата'} -%}",
           "{%- if not c -%}Още няма команда.",
           "{%- elif c.result == 'refused' and c.reason == 'top_at_limit' -%}Загряването не започна: горе е {{ c.top }} °C, границата е {{ c.limit }} °C.",
+          "{%- elif c.result == 'refused' and c.reason == 'bottom_at_target' -%}Загряването не започна: долу е {{ c.bottom }} °C, целта е {{ c.bottomTarget }} °C.",
           "{%- elif c.result == 'refused' and c.reason == 'invalid_until' -%}Отпуската не започна: няма валиден час за край.",
           "{%- elif c.result == 'refused' and c.reason == 'unknown_mode' -%}Командата не е приета: непознат режим.",
           "{%- elif c.result == 'refused' -%}Командата не е приета.",
           "{%- elif c.reason == 'top_at_limit' -%}Ръчно включен, но горе е {{ c.top }} °C, границата е {{ c.limit }} °C. Ще грее, когато горе падне под границата.",
+          "{%- elif c.reason == 'bottom_at_target' -%}Ръчно включен, но долу е {{ c.bottom }} °C, целта е {{ c.bottomTarget }} °C. Ще грее, когато долу падне под целта.",
           "{%- else -%}Прието: {{ modes.get(c.mode, c.mode) }}.",
           '{%- endif -%}'
         ].join(''),
